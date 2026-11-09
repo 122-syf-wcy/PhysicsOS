@@ -1,7 +1,7 @@
 import type { Quantity } from '@physicsos/physics-units'
 
 import type { DomainError, PhysicsDomain } from './common.ts'
-import type { PhysicsEventLike, SimulationRequest, SimulationResult } from './simulation.ts'
+import type { PhysicsEventLike, SimulationPlan, SimulationRequest, SimulationResult } from './simulation.ts'
 import type { SimulationState } from './simulation-state.ts'
 import type { VerificationResult } from './verification.ts'
 
@@ -69,6 +69,9 @@ export interface PhysicsEngine<TScene, TEvent extends PhysicsEventLike = Physics
 
   /** Closed-form state at an arbitrary time; the timeline uses this for seeking. */
   stateAt(scene: TScene, time: Quantity<'time'>): SimulationState
+
+  /** Exact engine-owned defaults and workload bounds; does not compute a result. */
+  prepareSimulationPlan?(scene: TScene, request: SimulationRequest): SimulationPlan
 
   /** Runs the simulation and returns sampled states plus derived quantities. */
   simulate(scene: TScene, request: SimulationRequest): SimulationResult<TEvent>

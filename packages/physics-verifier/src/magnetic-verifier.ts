@@ -8,18 +8,20 @@ import {
   withinTolerance,
   type ObjectState,
   type PhysicsTolerance,
+  type SimulationRequest,
   type SimulationResult,
   type SimulationState,
   type VerificationCheck,
   type VerificationIssue,
   type VerificationResult,
 } from '@physicsos/physics-core'
-import { cross, dot, magnitude, scale, subtract, type Vector3 } from '@physicsos/physics-math'
+import { add, cross, dot, magnitude, scale, subtract, type Vector3 } from '@physicsos/physics-math'
 import {
   canonicalValue,
   dimensionOf,
   isCanonicalUnit,
   isKnownUnit,
+  validateQuantity,
   type PhysicalDimension,
   type Quantity,
 } from '@physicsos/physics-units'
@@ -42,6 +44,8 @@ export type MagneticVerifierAssumption = (typeof MAGNETIC_VERIFIER_ASSUMPTIONS)[
 
 export interface MagneticVerifierOptions {
   readonly tolerance?: PhysicsTolerance
+  /** The exact engine request; only its requested window is required to contain evidence. */
+  readonly request?: SimulationRequest
 }
 
 export type MagneticVerifierConfiguration = MagneticVerifierOptions | PhysicsTolerance
@@ -86,6 +90,11 @@ const SAMPLE_POINTS: readonly SamplePoint[] = [
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null
 
+const TRACE_IDENTIFIERS = ['traceId', 'userId', 'sessionId', 'runId', 'turnId', 'toolCallId', 'physicsEventId'] as const
+const traceIdentifiersValid = (trace: unknown): trace is Record<string, unknown> => isRecord(trace) &&
+  typeof trace.traceId === 'string' && trace.traceId.trim().length > 0 &&
+  TRACE_IDENTIFIERS.every(key => trace[key] === undefined || (typeof trace[key] === 'string' && trace[key].trim().length > 0))
+
 const makeDetails = (
   expected: unknown,
   actual: unknown,
@@ -126,6 +135,15 @@ const finiteNumber = (value: unknown): value is number =>
 
 const vectorDistance = (left: Vector3, right: Vector3): number =>
   Math.hypot(left.x - right.x, left.y - right.y, left.z - right.z)
+
+const rotateAroundAxis = (vector: Vector3, axis: Vector3, angle: number): Vector3 => {
+  const cosine = Math.cos(angle)
+  const sine = Math.sin(angle)
+  return add(
+    add(scale(vector, cosine), scale(cross(axis, vector), sine)),
+    scale(axis, dot(axis, vector) * (1 - cosine)),
+  )
+}
 
 const quantitiesWithinTolerance = (
   actual: number,
@@ -189,7 +207,7 @@ const canonicalStateVector = (
   if (state === undefined) return undefined
   const object = findParticleObject(state, particleId)
   const value = object?.[kind]
-  if (value === undefined) return undefined
+  if (value === undefined || value.dimension !== (kind === 'position' ? 'length' : 'velocity')) return undefined
   try {
     return toCanonicalVector(value).vectorSI
   } catch {
@@ -212,7 +230,7 @@ const forceVectorSources = (
   const object = findParticleObject(state, particleId)
   const derived = state.derived.find((entry) => entry.key === 'lorentz_force_vector')
   let derivedVector: Vector3 | undefined
-  if (derived !== undefined && isQuantityVector(derived.value)) {
+  if (derived !== undefined && isQuantityVector(derived.value) && derived.value.dimension === 'force') {
     try {
       derivedVector = toCanonicalVector(derived.value).vectorSI
     } catch {
@@ -221,7 +239,7 @@ const forceVectorSources = (
   }
   const objectValue = object?.values?.lorentz_force
   let objectVector: Vector3 | undefined
-  if (objectValue !== undefined && isQuantityVector(objectValue)) {
+  if (objectValue !== undefined && isQuantityVector(objectValue) && objectValue.dimension === 'force') {
     try {
       objectVector = toCanonicalVector(objectValue).vectorSI
     } catch {
@@ -249,6 +267,16 @@ const canonicalScalar = (value: Quantity | undefined): number | undefined => {
   try {
     const result = canonicalValue(value)
     return finiteNumber(result) ? result : undefined
+  } catch {
+    return undefined
+  }
+}
+
+const canonicalTime = (value: Quantity | undefined): number | undefined => {
+  if (value === undefined) return undefined
+  try {
+    const seconds = canonicalValue(validateQuantity(value, 'time'))
+    return finiteNumber(seconds) ? seconds : undefined
   } catch {
     return undefined
   }
@@ -338,20 +366,24 @@ const findStateAt = (
   result: SimulationResult,
   timeSeconds: number | undefined,
   tolerance: PhysicsTolerance,
-): SimulationState | undefined => {
-  if (timeSeconds === undefined || !finiteNumber(timeSeconds)) return undefined
+  absoluteTimeTolerance?: number,
+): SimulationState | undefined => {  if (timeSeconds === undefined || !finiteNumber(timeSeconds)) return undefined
   let closest: SimulationState | undefined
   let closestDistance = Number.POSITIVE_INFINITY
   for (const state of result.states) {
     try {
-      const stateTime = canonicalValue(state.time)
+      const stateTime = canonicalTime(state.time)
+      if (stateTime === undefined) continue
       const distance = Math.abs(stateTime - timeSeconds)
       /* Linear scan per requested key time. The analytical engines emit a bounded
          trajectory (docs/02 §124 decimation), so verifying one result stays
          O(states × keyTimes); a future stream of unboundedly long trajectories
          should carry decimated states into this verifier rather than pushing the
          scan cost back here (docs/02 §150). */
-      if (withinTolerance(stateTime, timeSeconds, tolerance) && distance < closestDistance) {
+      const timeMatches = absoluteTimeTolerance === undefined
+        ? withinTolerance(stateTime, timeSeconds, tolerance)
+        : distance <= absoluteTimeTolerance
+      if (timeMatches && distance < closestDistance) {
         closest = state
         closestDistance = distance
       }
@@ -403,10 +435,69 @@ const assumptionsFromResult = (result: SimulationResult): string[] => {
   return assumptions
 }
 
+const canonicalSceneParticleVector = (
+  scene: PhysicsScene,
+  kind: 'position' | 'velocity',
+): Vector3 | undefined => {
+  if (scene.particles.length !== 1) return undefined
+  const vector = scene.particles[0]?.[kind]
+  if (vector === undefined || vector.dimension !== (kind === 'position' ? 'length' : 'velocity')) return undefined
+  try {
+    return toCanonicalVector(vector).vectorSI
+  } catch {
+    return undefined
+  }
+}
+
+interface RequestedWindow {
+  readonly startTime: number
+  readonly endTime: number
+}
+
+const canonicalRequestedTime = (value: unknown): number | undefined => {
+  if (!isRecord(value) || Array.isArray(value) || typeof value.value !== 'number' ||
+    typeof value.unit !== 'string' || value.dimension !== 'time') return undefined
+  try {
+    return canonicalValue(validateQuantity({ value: value.value, unit: value.unit, dimension: 'time' }, 'time'))
+  } catch { return undefined }
+}
+
+const requestedWindowOf = (request: SimulationRequest, fallbackEnd: number | undefined): RequestedWindow | undefined => {
+  try {
+    if (!isRecord(request.options) || Array.isArray(request.options)) return undefined
+    const startTime = request.options.startTime === undefined
+      ? 0
+      : canonicalRequestedTime(request.options.startTime)
+    const endTime = request.options.endTime === undefined
+      ? fallbackEnd
+      : canonicalRequestedTime(request.options.endTime)
+    return finiteNumber(startTime) && finiteNumber(endTime) && startTime >= 0 && endTime >= startTime
+      ? { startTime, endTime }
+      : undefined
+  } catch {
+    return undefined
+  }
+}
+
+const timeInWindow = (time: number, window: RequestedWindow): boolean =>
+  time >= window.startTime && time <= window.endTime
+
+const requestedTimeTolerance = (
+  period: number | undefined,
+  window: RequestedWindow | undefined,
+  tolerance: PhysicsTolerance,
+): number => {
+  const periodScale = period !== undefined && period > 0 ? period : Number.POSITIVE_INFINITY
+  const windowSpan = window === undefined ? Number.POSITIVE_INFINITY : window.endTime - window.startTime
+  const scale = Math.min(periodScale, windowSpan > 0 ? windowSpan : periodScale)
+  return Number.isFinite(scale) ? scale * Math.min(tolerance.relative, 1e-6) : 0
+}
+
 const modelValues = (
   scene: PhysicsScene,
   result: SimulationResult,
   tolerance: PhysicsTolerance,
+  requestAware = false,
 ): ModelValues => {
   const particle = scene.particles.length === 1 ? scene.particles[0] : undefined
   const field = scene.fields.find(
@@ -428,7 +519,9 @@ const modelValues = (
             return undefined
           }
         })()
-  const speedVector = canonicalStateVector(initialState, particle?.id, 'velocity')
+  const speedVector = requestAware
+    ? canonicalSceneParticleVector(scene, 'velocity')
+    : canonicalStateVector(initialState, particle?.id, 'velocity')
   const speed = speedVector === undefined ? undefined : magnitude(speedVector)
   const fieldMagnitude = magneticField === undefined ? undefined : magnitude(magneticField)
   return {
@@ -462,6 +555,7 @@ const validateTolerance = (tolerance: PhysicsTolerance): void => {
  */
 export class MagneticPhysicsVerifier {
   readonly tolerance: PhysicsTolerance
+  private readonly request: SimulationRequest | undefined
 
   constructor(options: MagneticVerifierConfiguration = {}) {
     const configuredTolerance =
@@ -469,6 +563,7 @@ export class MagneticPhysicsVerifier {
         ? options
         : options.tolerance
     this.tolerance = configuredTolerance ?? DEFAULT_TOLERANCE
+    this.request = 'request' in options ? options.request : undefined
     validateTolerance(this.tolerance)
   }
 
@@ -575,13 +670,47 @@ export class MagneticPhysicsVerifier {
       ),
     )
 
-    const model = modelValues(scene, result, tolerance)
+    const request = this.request
+    const requestAware = request !== undefined
+    if (request !== undefined) {
+      const trace = isRecord(request.trace) ? request.trace : undefined
+      const identityValid =
+        request.schemaVersion === 'simulation-request/1.0' &&
+        typeof request.simulationId === 'string' && request.simulationId.trim().length > 0 &&
+        request.sceneId === scene.id &&
+        Number.isSafeInteger(request.sceneRevision) && request.sceneRevision >= 0 &&
+        request.sceneRevision === scene.revision &&
+        request.simulationId === result.simulationId &&
+        (request.requestedDomain === undefined || request.requestedDomain === 'magnetic') &&
+        traceIdentifiersValid(trace) && traceIdentifiersValid(result.trace) &&
+        trace.traceId === result.trace.traceId &&
+        TRACE_IDENTIFIERS.every(key => trace[key] === undefined || result.trace[key] === undefined || trace[key] === result.trace[key]) &&
+        (trace.sceneId === undefined || trace.sceneId === scene.id) &&
+        (trace.sceneRevision === undefined || trace.sceneRevision === scene.revision)
+      checks.push(makeCheck(
+        'request_scene_result_identity', 'schema', identityValid,
+        'The supplied request must reference this exact scene and simulation result.',
+        { sceneId: scene.id, sceneRevision: scene.revision, simulationId: result.simulationId },
+        { sceneId: request.sceneId, sceneRevision: request.sceneRevision, simulationId: request.simulationId },
+        tolerance,
+      ))
+    }
+    checks.push(makeCheck(
+      'result_trace_scene_match', 'schema',
+      traceIdentifiersValid(result.trace) &&
+        (result.trace.sceneId === undefined || result.trace.sceneId === scene.id) &&
+        (result.trace.sceneRevision === undefined || result.trace.sceneRevision === scene.revision),
+      'Any supplied result trace scene identity and revision must match the scene.',
+      { sceneId: scene.id, sceneRevision: scene.revision },
+      result.trace ?? {},
+      tolerance,
+    ))
+
+    const model = modelValues(scene, result, tolerance, requestAware)
     const magneticField = model.magneticField
-    const speedVector = canonicalStateVector(
-      findStateAt(result, 0, tolerance),
-      model.particleId,
-      'velocity',
-    )
+    const speedVector = requestAware
+      ? canonicalSceneParticleVector(scene, 'velocity')
+      : canonicalStateVector(findStateAt(result, 0, tolerance), model.particleId, 'velocity')
     const fieldInPlaneRatio =
       magneticField === undefined ||
       model.fieldMagnitude === undefined ||
@@ -783,27 +912,8 @@ export class MagneticPhysicsVerifier {
         ? chargeMagnitude * model.speed * model.fieldMagnitude
         : undefined
 
-    const sceneParticle = scene.particles.length === 1 ? scene.particles[0] : undefined
-    const scenePosition =
-      sceneParticle === undefined
-        ? undefined
-        : (() => {
-            try {
-              return toCanonicalVector(sceneParticle.position).vectorSI
-            } catch {
-              return undefined
-            }
-          })()
-    const sceneVelocity =
-      sceneParticle === undefined
-        ? undefined
-        : (() => {
-            try {
-              return toCanonicalVector(sceneParticle.velocity).vectorSI
-            } catch {
-              return undefined
-            }
-          })()
+    const scenePosition = canonicalSceneParticleVector(scene, 'position')
+    const sceneVelocity = canonicalSceneParticleVector(scene, 'velocity')
     const expectedCenter =
       scenePosition !== undefined &&
       sceneVelocity !== undefined &&
@@ -947,22 +1057,106 @@ export class MagneticPhysicsVerifier {
       ),
     )
 
+    const window = request === undefined ? undefined : requestedWindowOf(request, expectedPeriod)
+    const timeTolerance = requestAware ? requestedTimeTolerance(expectedPeriod, window, tolerance) : undefined
+    if (requestAware) {
+      checks.push(makeCheck(
+        'requested_window_valid', 'schema', window !== undefined,
+        'The requested window must use finite time quantities with 0 <= start <= end.',
+        'finite ordered non-negative time window', window ?? 'invalid', tolerance,
+      ))
+      const sampleTimes = result.states.map(state => canonicalTime(state.time))
+      const samplesInRange = window !== undefined && result.states.length > 0 && sampleTimes.every(
+        time => time !== undefined && timeInWindow(time, window),
+      )
+      checks.push(makeCheck(
+        'requested_window_samples', 'trajectory', samplesInRange,
+        'Every supplied state must be timed inside the actual requested window.',
+        window ?? 'valid requested window', sampleTimes, tolerance,
+      ))
+      const firstEndpoint = window === undefined ? undefined : findStateAt(result, window.startTime, tolerance, timeTolerance)
+      const lastEndpoint = window === undefined ? undefined : findStateAt(result, window.endTime, tolerance, timeTolerance)
+      checks.push(makeCheck(
+        'requested_window_endpoints', 'boundary', window !== undefined &&
+          firstEndpoint !== undefined && lastEndpoint !== undefined &&
+          (window.startTime === window.endTime || firstEndpoint !== lastEndpoint),
+        'The result must contain the requested start and end states.',
+        window ?? 'valid requested window',
+        { first: sampleTimes[0], last: sampleTimes.at(-1) }, tolerance,
+      ))
+      const expectedStates = result.states.map(state => {
+        const time = canonicalTime(state.time)
+        if (
+          time === undefined || scenePosition === undefined || sceneVelocity === undefined ||
+          expectedCenter === undefined || magneticField === undefined || model.fieldMagnitude === undefined ||
+          model.fieldMagnitude <= 0 || mass === undefined || mass <= 0 || model.charge === undefined
+        ) return undefined
+        const axis = scale(magneticField, 1 / model.fieldMagnitude)
+        const angle = -model.charge * model.fieldMagnitude * time / mass
+        const velocity = rotateAroundAxis(sceneVelocity, axis, angle)
+        return {
+          position: add(expectedCenter, rotateAroundAxis(subtract(scenePosition, expectedCenter), axis, angle)),
+          velocity,
+          acceleration: scale(cross(velocity, magneticField), model.charge / mass),
+        }
+      })
+      const stateMatches = result.states.map((state, index) => {
+        const expected = expectedStates[index]
+        const position = canonicalStateVector(state, model.particleId, 'position')
+        const velocity = canonicalStateVector(state, model.particleId, 'velocity')
+        const suppliedAcceleration = findParticleObject(state, model.particleId)?.acceleration
+        let accelerationMatches = suppliedAcceleration === undefined
+        if (suppliedAcceleration !== undefined && expected !== undefined && suppliedAcceleration.dimension === 'acceleration') {
+          try {
+            accelerationMatches = directedVectorsWithinTolerance(toCanonicalVector(suppliedAcceleration).vectorSI, expected.acceleration, tolerance)
+          } catch {
+            accelerationMatches = false
+          }
+        }
+        return expected !== undefined && position !== undefined && velocity !== undefined && accelerationMatches &&
+          vectorsWithinTolerance(position, expected.position, tolerance) &&
+          directedVectorsWithinTolerance(velocity, expected.velocity, tolerance)
+      })
+      checks.push(makeCheck(
+        'requested_window_analytic_states', 'trajectory', result.states.length > 0 && stateMatches.every(Boolean),
+        'Each supplied position, velocity and optional acceleration must match the magnetic trajectory at its absolute sample time.',
+        'analytical state at each supplied time', stateMatches, tolerance,
+        { sampleCount: result.states.length, formula: 'r(t) = c + R_B(-qBt/m)(r0-c); v(t) = R_B(-qBt/m)v0' },
+      ))
+    }
+
     const sampleStates: Array<{
-      readonly point: SamplePoint
+      readonly point: { readonly id: string; readonly label: string }
       readonly state: SimulationState | undefined
     }> = []
     for (const point of SAMPLE_POINTS) {
-      const time = period === undefined ? undefined : period * point.fraction
-      sampleStates.push({ point, state: findStateAt(result, time, tolerance) })
+      const time = (requestAware ? expectedPeriod : period) === undefined
+        ? undefined
+        : (requestAware ? expectedPeriod : period)! * point.fraction
+      if (requestAware && (window === undefined || time === undefined || !timeInWindow(time, window))) {
+        warnings.push({
+          code: `magnetic_checkpoint_not_requested:${point.id}`,
+          severity: 'warning',
+          message: `Checkpoint t=${point.label} was not evaluated because it is outside the requested window.`,
+          details: makeDetails('checkpoint inside requested window', 'not requested', tolerance, { time, window, evaluated: false }),
+        })
+        continue
+      }
+      sampleStates.push({ point, state: findStateAt(result, time, tolerance, timeTolerance) })
+    }
+    if (requestAware) {
+      // Actual window samples supply conservation and force evidence even when no canonical checkpoint was requested.
+      result.states.forEach((state, index) => sampleStates.push({
+        point: { id: `sample${index}`, label: String(canonicalTime(state.time)) }, state,
+      }))
     }
 
-    const initialSpeed =
-      sampleStates[0]?.state === undefined
-        ? undefined
-        : (() => {
-            const vector = canonicalStateVector(sampleStates[0].state, model.particleId, 'velocity')
-            return vector === undefined ? undefined : magnitude(vector)
-          })()
+    const initialSpeed = requestAware
+      ? model.speed
+      : (() => {
+          const vector = canonicalStateVector(sampleStates[0]?.state, model.particleId, 'velocity')
+          return vector === undefined ? undefined : magnitude(vector)
+        })()
     const speedActuals: Array<number | undefined> = []
     for (const sample of sampleStates) {
       const velocity = canonicalStateVector(sample.state, model.particleId, 'velocity')
@@ -989,15 +1183,17 @@ export class MagneticPhysicsVerifier {
       makeCheck(
         'speed_conservation',
         'conservation',
-        initialSpeed !== undefined &&
+        initialSpeed !== undefined && sampleStates.length > 0 &&
           speedActuals.every(
             (speed) => speed !== undefined && withinTolerance(speed, initialSpeed, tolerance),
           ),
-        'Speed must be conserved at 0, T/4, T/2, 3T/4 and T.',
+        requestAware
+          ? 'Speed must equal the scene initial speed at every requested verification sample.'
+          : 'Speed must be conserved at 0, T/4, T/2, 3T/4 and T.',
         initialSpeed,
         speedActuals,
         tolerance,
-        { sampleTimes: SAMPLE_POINTS.map((point) => point.label) },
+        { sampleTimes: sampleStates.map((sample) => sample.point.label) },
       ),
     )
 
@@ -1042,7 +1238,7 @@ export class MagneticPhysicsVerifier {
       makeCheck(
         'force_state_representations',
         'semantic',
-        forceRepresentations.every((entry) => entry.consistent === true),
+        sampleStates.length > 0 && forceRepresentations.every((entry) => entry.consistent === true),
         'Duplicate state force representations must agree when both are present.',
         true,
         forceRepresentations,
@@ -1051,12 +1247,12 @@ export class MagneticPhysicsVerifier {
       makeCheck(
         'lorentz_force_vector_samples',
         'constraint',
-        forceVectorMatches.every((matches) => matches),
+        sampleStates.length > 0 && forceVectorMatches.every((matches) => matches),
         'Sampled Lorentz force vectors must satisfy F = q(v × B).',
         expectedForceVectors,
         actualForceVectors,
         tolerance,
-        { sampleTimes: SAMPLE_POINTS.map((point) => point.label), formula: 'F = q(v × B)' },
+        { sampleTimes: sampleStates.map((sample) => sample.point.label), formula: 'F = q(v × B)' },
       ),
     )
 
@@ -1084,13 +1280,13 @@ export class MagneticPhysicsVerifier {
       makeCheck(
         'force_velocity_orthogonality',
         'constraint',
-        orthogonalityActuals.every((value) => value !== undefined && value <= tolerance.angular),
+        sampleStates.length > 0 && orthogonalityActuals.every((value) => value !== undefined && value <= tolerance.angular),
         'Lorentz force must satisfy F · v ≈ 0 at every verification sample.',
         0,
         orthogonalityActuals,
         tolerance,
         {
-          sampleTimes: SAMPLE_POINTS.map((point) => point.label),
+          sampleTimes: sampleStates.map((sample) => sample.point.label),
           angularTolerance: tolerance.angular,
         },
       ),
@@ -1106,7 +1302,7 @@ export class MagneticPhysicsVerifier {
       makeCheck(
         'force_magnitude_samples',
         'constraint',
-        expectedForceMagnitude !== undefined &&
+        expectedForceMagnitude !== undefined && sampleStates.length > 0 &&
           forceMagnitudeActuals.every(
             (value) =>
               value !== undefined && withinTolerance(value, expectedForceMagnitude, tolerance),
@@ -1115,55 +1311,59 @@ export class MagneticPhysicsVerifier {
         expectedForceMagnitude,
         forceMagnitudeActuals,
         tolerance,
-        { sampleTimes: SAMPLE_POINTS.map((point) => point.label) },
+        { sampleTimes: sampleStates.map((sample) => sample.point.label) },
       ),
     )
 
-    const initialState = sampleStates[0]?.state
-    const finalState = sampleStates[4]?.state
+    const initialState = sampleStates.find(sample => sample.point.id === 't0')?.state
+    const finalState = sampleStates.find(sample => sample.point.id === 'tPeriod')?.state
     const initialPosition = canonicalStateVector(initialState, model.particleId, 'position')
     const finalPosition = canonicalStateVector(finalState, model.particleId, 'position')
     const initialVelocity = canonicalStateVector(initialState, model.particleId, 'velocity')
     const finalVelocity = canonicalStateVector(finalState, model.particleId, 'velocity')
-    const initialMatchesScene =
-      scenePosition !== undefined &&
-      sceneVelocity !== undefined &&
-      initialPosition !== undefined &&
-      initialVelocity !== undefined &&
-      vectorsWithinTolerance(initialPosition, scenePosition, tolerance) &&
-      vectorsWithinTolerance(initialVelocity, sceneVelocity, tolerance)
-    checks.push(
-      makeCheck(
-        'initial_state_matches_scene',
-        'boundary',
-        initialMatchesScene,
+    const initialRequested = !requestAware || (window !== undefined && timeInWindow(0, window))
+    if (initialRequested) {
+      const initialMatchesScene =
+        scenePosition !== undefined &&
+        sceneVelocity !== undefined &&
+        initialPosition !== undefined &&
+        initialVelocity !== undefined &&
+        vectorsWithinTolerance(initialPosition, scenePosition, tolerance) &&
+        vectorsWithinTolerance(initialVelocity, sceneVelocity, tolerance)
+      checks.push(makeCheck(
+        'initial_state_matches_scene', 'boundary', initialMatchesScene,
         'The supplied t=0 state must match the particle initial position and velocity in the scene.',
         { position: scenePosition, velocity: sceneVelocity },
-        { position: initialPosition, velocity: initialVelocity },
-        tolerance,
+        { position: initialPosition, velocity: initialVelocity }, tolerance,
         { source: 'PhysicsScene and SimulationResult.states' },
-      ),
-    )
-    const positionClosed =
-      initialPosition !== undefined &&
-      finalPosition !== undefined &&
-      vectorsWithinTolerance(finalPosition, initialPosition, tolerance)
-    const velocityClosed =
-      initialVelocity !== undefined &&
-      finalVelocity !== undefined &&
-      vectorsWithinTolerance(finalVelocity, initialVelocity, tolerance)
-    checks.push(
-      makeCheck(
-        'state_at_period_matches_initial',
-        'trajectory',
-        positionClosed && velocityClosed,
+      ))
+    } else {
+      warnings.push({
+        code: 'initial_state_not_requested', severity: 'warning',
+        message: 'The t=0 initial-state check was not executed because t=0 is outside the requested window.',
+        details: makeDetails('requested t=0 state', 'not requested', tolerance, { evaluated: false }),
+      })
+    }
+    const periodRequested = !requestAware || (window !== undefined && expectedPeriod !== undefined && timeInWindow(expectedPeriod, window))
+    if (initialRequested && periodRequested) {
+      const positionClosed = initialPosition !== undefined && finalPosition !== undefined &&
+        vectorsWithinTolerance(finalPosition, initialPosition, tolerance)
+      const velocityClosed = initialVelocity !== undefined && finalVelocity !== undefined &&
+        vectorsWithinTolerance(finalVelocity, initialVelocity, tolerance)
+      checks.push(makeCheck(
+        'state_at_period_matches_initial', 'trajectory', positionClosed && velocityClosed,
         'The supplied state at T must return to the supplied initial position and velocity.',
         { position: initialPosition, velocity: initialVelocity },
-        { position: finalPosition, velocity: finalVelocity },
-        tolerance,
+        { position: finalPosition, velocity: finalVelocity }, tolerance,
         { positionClosed, velocityClosed, source: 'SimulationResult.states' },
-      ),
-    )
+      ))
+    } else {
+      warnings.push({
+        code: 'period_closure_not_requested', severity: 'warning',
+        message: 'Period closure was not executed because the requested window does not contain both 0 and T.',
+        details: makeDetails('supplied states at 0 and T', 'not requested', tolerance, { evaluated: false, window }),
+      })
+    }
 
     return summarizeVerification(checks, warnings, errors)
   }

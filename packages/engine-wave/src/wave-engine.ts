@@ -10,6 +10,7 @@ import {
   type ObjectState,
   type PhysicsEngine,
   type PhysicsEventLike,
+  type SimulationPlan,
   type SimulationRequest,
   type SimulationResult,
   type SimulationState,
@@ -1219,6 +1220,50 @@ export function createWaveSimulationRequest(
   }
 }
 
+/** Resolve time sampling only; rope profiles and node positions are spatial objects. */
+const prepareWaveSimulation = (scene: PhysicsScene, request: SimulationRequest) => {
+  if (request.sceneId !== scene.id || request.sceneRevision !== scene.revision) {
+    throw new PhysicsOSError(
+      'SIMULATION_SCENE_MISMATCH',
+      'SimulationRequest must reference the exact PhysicsScene revision being simulated.',
+      {
+        details: {
+          requestSceneId: request.sceneId,
+          sceneId: scene.id,
+          requestRevision: request.sceneRevision,
+          sceneRevision: scene.revision,
+        },
+      },
+    )
+  }
+
+  const model = resolveWaveModel(scene)
+  const sceneDuration =
+    scene.timeline.endTime === undefined
+      ? DEFAULT_DURATION_SECONDS
+      : canonicalValue(scene.timeline.endTime)
+  const startTime =
+    request.options.startTime === undefined ? 0 : canonicalValue(request.options.startTime)
+  const endTime =
+    request.options.endTime === undefined
+      ? sceneDuration
+      : canonicalValue(request.options.endTime)
+  if (
+    !Number.isFinite(startTime) ||
+    !Number.isFinite(endTime) ||
+    startTime < 0 ||
+    endTime < startTime
+  ) {
+    throw new PhysicsOSError(
+      'INVALID_SIMULATION_RANGE',
+      'Wave simulation range must satisfy 0 <= startTime <= endTime.',
+    )
+  }
+
+  const storageSampleCount = trajectoryStorageSampleCount(request.options, TRAJECTORY_SEGMENTS + 1)
+  return { model, startTime, endTime, storageSampleCount }
+}
+
 export class WaveEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLike> {
   readonly engineId = WAVE_ENGINE_ID
   readonly engineVersion = WAVE_ENGINE_VERSION
@@ -1350,51 +1395,33 @@ export class WaveEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLike>
     return stateOf(resolveWaveModel(scene), timeSeconds, true)
   }
 
-  simulate(scene: PhysicsScene, request: SimulationRequest): SimulationResult<PhysicsEventLike> {
-    if (request.sceneId !== scene.id || request.sceneRevision !== scene.revision) {
-      throw new PhysicsOSError(
-        'SIMULATION_SCENE_MISMATCH',
-        'SimulationRequest must reference the exact PhysicsScene revision being simulated.',
-        {
-          details: {
-            requestSceneId: request.sceneId,
-            sceneId: scene.id,
-            requestRevision: request.sceneRevision,
-            sceneRevision: scene.revision,
-          },
-        },
-      )
-    }
-
-    const startedAt = new Date().toISOString()
-    const model = resolveWaveModel(scene)
-    const sceneDuration =
-      scene.timeline.endTime === undefined
-        ? DEFAULT_DURATION_SECONDS
-        : canonicalValue(scene.timeline.endTime)
-    const startTime =
-      request.options.startTime === undefined ? 0 : canonicalValue(request.options.startTime)
-    const endTime =
-      request.options.endTime === undefined
-        ? sceneDuration
-        : canonicalValue(request.options.endTime)
-    if (
-      !Number.isFinite(startTime) ||
-      !Number.isFinite(endTime) ||
-      startTime < 0 ||
-      endTime < startTime
-    ) {
-      throw new PhysicsOSError(
-        'INVALID_SIMULATION_RANGE',
-        'Wave simulation range must satisfy 0 <= startTime <= endTime.',
-      )
-    }
-
-    const times = trajectorySampleTimes(
+  prepareSimulationPlan(scene: PhysicsScene, request: SimulationRequest): SimulationPlan {
+    const { model, startTime, endTime, storageSampleCount } = prepareWaveSimulation(scene, request)
+    return {
+      schemaVersion: 'simulation-plan/1.0',
+      engineId: this.engineId,
+      engineVersion: this.engineVersion,
+      simulationId: request.simulationId,
+      sceneId: scene.id,
+      sceneRevision: scene.revision,
+      modelId: model.subModel,
+      kind: 'analytic',
       startTime,
       endTime,
-      trajectoryStorageSampleCount(request.options, TRAJECTORY_SEGMENTS + 1),
-    )
+      storageSampleCountBound: storageSampleCount,
+      // Profile construction samples closed forms, not an iterative numerical solver.
+      numericalIterationCountBound: 0,
+      metadata: {
+        numericalIterationAccounting:
+          'Closed-form wave samples; spatial profiles, nodes and antinodes are objects within states, not numerical solver iterations.',
+      },
+    }
+  }
+
+  simulate(scene: PhysicsScene, request: SimulationRequest): SimulationResult<PhysicsEventLike> {
+    const { model, startTime, endTime, storageSampleCount } = prepareWaveSimulation(scene, request)
+    const startedAt = new Date().toISOString()
+    const times = trajectorySampleTimes(startTime, endTime, storageSampleCount)
     const states = times.map((time) => stateOf(model, time))
 
     return {

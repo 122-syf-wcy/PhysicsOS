@@ -1,7 +1,9 @@
 /** PhysicsOS overlay copy. */
 import type { ObservableKey } from './physics/scene-visual-model.ts'
+import { canvasEn, canvasZh } from './canvas/locales.ts'
 
 export const zh = {
+  ...canvasZh,
   'brand.name': 'PhysicsOS',
   'brand.tagline': '探索一个物理世界',
   'brand.support': '描述一个物理现象、创建实验，或直接输入一道试题。',
@@ -407,7 +409,14 @@ export const zh = {
   'lab.picker.freeBuild.hint': '自己选器材，自己接线，搭完直接求解。',
   'lab.picker.freeBuild.cta': '开始搭建',
   'lab.builder.parts': '器材',
-  'lab.builder.placeHint': '点一下器材放到画布上；按住一个接线柱拖到另一个接线柱即可接线。',
+  'lab.builder.placeHint': '点击添加，或将器材拖到实验区；拖动接线柱，或依次点击两个端子接线。',
+  'lab.builder.group.power': '电源选型',
+  'lab.builder.powerHint': '每个搭建台使用一个电源；选择电源可更换规格。',
+  'lab.builder.group.control': '控制',
+  'lab.builder.group.loads': '负载',
+  'lab.builder.group.meters': '测量',
+  'lab.builder.disconnect': '断开 {terminal} 接线',
+  'lab.builder.editFailed': '器材修改未保存，请重试。',
   'lab.builder.placed': '已放置',
   'lab.builder.empty': '还没有器材。先从上面选一件放上来。',
   'lab.builder.selected': '选中的器材',
@@ -1154,6 +1163,7 @@ export type PhysicsosKey = keyof typeof zh
 
 /** The English table, keyed by `PhysicsosKey`. */
 export const en = {
+  ...canvasEn,
   'brand.name': 'PhysicsOS',
   'brand.tagline': 'Explore a physics world',
   'brand.support': 'Describe a phenomenon, create an experiment, or enter a problem.',
@@ -1560,7 +1570,14 @@ export const en = {
   'lab.picker.freeBuild.hint': 'Pick your own parts, wire them up, and solve it as you go.',
   'lab.picker.freeBuild.cta': 'Start building',
   'lab.builder.parts': 'Parts',
-  'lab.builder.placeHint': 'Tap a part to place it; drag one terminal onto another to wire them.',
+  'lab.builder.placeHint': 'Click to add or drag a part onto the bench. Drag between terminals, or click two terminals to connect.',
+  'lab.builder.group.power': 'Power',
+  'lab.builder.powerHint': 'One supply per bench. Select a supply to change its rating.',
+  'lab.builder.group.control': 'Controls',
+  'lab.builder.group.loads': 'Loads',
+  'lab.builder.group.meters': 'Meters',
+  'lab.builder.disconnect': 'Disconnect {terminal}',
+  'lab.builder.editFailed': 'The apparatus change was not saved. Try again.',
   'lab.builder.placed': 'Placed',
   'lab.builder.empty': 'Nothing placed yet. Pick a part above to start.',
   'lab.builder.selected': 'Selected part',

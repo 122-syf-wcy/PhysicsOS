@@ -1,5 +1,6 @@
 import { simulationTimeRange, eventsInSimulationRange, quantityVector } from '@physicsos/physics-core'
 import {
+  assertSimulationPlan,
   check,
   invalidModelCondition,
   summarizeVerification,
@@ -10,6 +11,7 @@ import {
   type PhysicsEngine,
   type PhysicsEventLike,
   type QuantityVector,
+  type SimulationPlan,
   type SimulationRequest,
   type SimulationResult,
   type SimulationState,
@@ -281,6 +283,26 @@ export function createEnergySimulationRequest(
   }
 }
 
+function resolveEnergySimulation(scene: PhysicsScene, request: SimulationRequest) {
+  if (request.sceneId !== scene.id || request.sceneRevision !== scene.revision) {
+    throw new PhysicsOSError(
+      'SIMULATION_SCENE_MISMATCH',
+      'SimulationRequest must reference the exact PhysicsScene revision being simulated.',
+      {
+        details: {
+          requestSceneId: request.sceneId,
+          sceneId: scene.id,
+          requestRevision: request.sceneRevision,
+          sceneRevision: scene.revision,
+        },
+      },
+    )
+  }
+  const model = resolveEnergyModel(scene)
+  return { model, range: simulationTimeRange(request.options, energyMotionAt(model, 0).duration),
+    storageSampleCount: trajectoryStorageSampleCount(request.options, 65) }
+}
+
 /* ----------------------------------------------------------- the engine -- */
 
 export class EnergyEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLike> {
@@ -386,27 +408,30 @@ export class EnergyEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLik
     return stateOf(resolveEnergyModel(scene), timeSeconds)
   }
 
-  simulate(scene: PhysicsScene, request: SimulationRequest): SimulationResult<PhysicsEventLike> {
-    if (request.sceneId !== scene.id || request.sceneRevision !== scene.revision) {
-      throw new PhysicsOSError(
-        'SIMULATION_SCENE_MISMATCH',
-        'SimulationRequest must reference the exact PhysicsScene revision being simulated.',
-        {
-          details: {
-            requestSceneId: request.sceneId,
-            sceneId: scene.id,
-            requestRevision: request.sceneRevision,
-            sceneRevision: scene.revision,
-          },
-        },
-      )
+  prepareSimulationPlan(scene: PhysicsScene, request: SimulationRequest): SimulationPlan {
+    const { range, storageSampleCount } = resolveEnergySimulation(scene, request)
+    const plan: SimulationPlan = {
+      schemaVersion: 'simulation-plan/1.0',
+      engineId: this.engineId,
+      engineVersion: this.engineVersion,
+      simulationId: request.simulationId,
+      sceneId: scene.id,
+      sceneRevision: scene.revision,
+      modelId: MECHANICAL_ENERGY_MODEL,
+      kind: range.endTime === range.startTime ? 'static' : 'analytic',
+      startTime: range.startTime,
+      endTime: range.endTime,
+      storageSampleCountBound: storageSampleCount,
+      numericalIterationCountBound: 0,
     }
+    assertSimulationPlan(plan)
+    return plan
+  }
 
+  simulate(scene: PhysicsScene, request: SimulationRequest): SimulationResult<PhysicsEventLike> {
+    const { model, range, storageSampleCount } = resolveEnergySimulation(scene, request)
     const startedAt = new Date().toISOString()
-    const model = resolveEnergyModel(scene)
-
-    const range = simulationTimeRange(request.options, energyMotionAt(model, 0).duration)
-    const times = trajectorySampleTimes(range.startTime, range.endTime, trajectoryStorageSampleCount(request.options, 65))
+    const times = trajectorySampleTimes(range.startTime, range.endTime, storageSampleCount)
 
     return {
       schemaVersion: 'simulation-result/1.0',

@@ -9,6 +9,7 @@ import {
   type ModelSupport,
   type PhysicsEngine,
   type PhysicsEventLike,
+  type SimulationPlan,
   type SimulationRequest,
   type SimulationResult,
   type SimulationState,
@@ -68,6 +69,8 @@ const volts = (value: number): Quantity<'electric_potential'> =>
 const amperes = (value: number): Quantity<'electric_current'> =>
   quantity(value, 'A', 'electric_current')
 const webers = (value: number): Quantity<'magnetic_flux'> => quantity(value, 'Wb', 'magnetic_flux')
+const webersPerSecond = (value: number): Quantity<'magnetic_flux_rate'> =>
+  quantity(value, 'Wb/s', 'magnetic_flux_rate')
 const metres = (value: number): Quantity<'length'> => quantity(value, 'm', 'length')
 const metresPerSecond = (value: number): Quantity<'velocity'> => quantity(value, 'm/s', 'velocity')
 const seconds = (value: number): Quantity<'time'> => quantity(value, 's', 'time')
@@ -161,8 +164,8 @@ const derivedOf = (model: ResolvedInductionModel, atTime?: number): DerivedQuant
       {
         key: 'flux_rate',
         targetId: model.benchId,
-        value: webers(model.magneticFluxDensity * model.barLength * model.barVelocity),
-        formula: { expression: 'dΦ/dt = BLv / dt (per unit swept area)' },
+        value: webersPerSecond(model.magneticFluxDensity * model.barLength * model.barVelocity),
+        formula: { expression: 'dΦ/dt = BLv' },
         assumptions,
       },
     )
@@ -186,7 +189,7 @@ const derivedOf = (model: ResolvedInductionModel, atTime?: number): DerivedQuant
       {
         key: 'flux_rate',
         targetId: model.benchId,
-        value: webers(fluxRate),
+        value: webersPerSecond(fluxRate),
         formula: { expression: 'dΦ/dt' },
         assumptions,
       },
@@ -696,6 +699,50 @@ export function createInductionSimulationRequest(
   }
 }
 
+/** Resolve the exact analytical run without generating states or probe samples. */
+const prepareInductionSimulation = (scene: PhysicsScene, request: SimulationRequest) => {
+  if (request.sceneId !== scene.id || request.sceneRevision !== scene.revision) {
+    throw new PhysicsOSError(
+      'SIMULATION_SCENE_MISMATCH',
+      'SimulationRequest must reference the exact PhysicsScene revision being simulated.',
+      {
+        details: {
+          requestSceneId: request.sceneId,
+          sceneId: scene.id,
+          requestRevision: request.sceneRevision,
+          sceneRevision: scene.revision,
+        },
+      },
+    )
+  }
+
+  const model = resolveInductionModel(scene)
+  const sceneDuration =
+    scene.timeline.endTime === undefined
+      ? DEFAULT_DURATION_SECONDS
+      : canonicalValue(scene.timeline.endTime)
+  const startTime =
+    request.options.startTime === undefined ? 0 : canonicalValue(request.options.startTime)
+  const endTime =
+    request.options.endTime === undefined
+      ? sceneDuration
+      : canonicalValue(request.options.endTime)
+  if (
+    !Number.isFinite(startTime) ||
+    !Number.isFinite(endTime) ||
+    startTime < 0 ||
+    endTime < startTime
+  ) {
+    throw new PhysicsOSError(
+      'INVALID_SIMULATION_RANGE',
+      'Induction simulation range must satisfy 0 <= startTime <= endTime.',
+    )
+  }
+
+  const storageSampleCount = trajectoryStorageSampleCount(request.options, TRAJECTORY_SEGMENTS + 1)
+  return { model, startTime, endTime, storageSampleCount }
+}
+
 export class InductionEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLike> {
   readonly engineId = INDUCTION_ENGINE_ID
   readonly engineVersion = INDUCTION_ENGINE_VERSION
@@ -806,51 +853,33 @@ export class InductionEngine implements PhysicsEngine<PhysicsScene, PhysicsEvent
     return stateOf(resolveInductionModel(scene), timeSeconds)
   }
 
-  simulate(scene: PhysicsScene, request: SimulationRequest): SimulationResult<PhysicsEventLike> {
-    if (request.sceneId !== scene.id || request.sceneRevision !== scene.revision) {
-      throw new PhysicsOSError(
-        'SIMULATION_SCENE_MISMATCH',
-        'SimulationRequest must reference the exact PhysicsScene revision being simulated.',
-        {
-          details: {
-            requestSceneId: request.sceneId,
-            sceneId: scene.id,
-            requestRevision: request.sceneRevision,
-            sceneRevision: scene.revision,
-          },
-        },
-      )
-    }
-
-    const startedAt = new Date().toISOString()
-    const model = resolveInductionModel(scene)
-    const sceneDuration =
-      scene.timeline.endTime === undefined
-        ? DEFAULT_DURATION_SECONDS
-        : canonicalValue(scene.timeline.endTime)
-    const startTime =
-      request.options.startTime === undefined ? 0 : canonicalValue(request.options.startTime)
-    const endTime =
-      request.options.endTime === undefined
-        ? sceneDuration
-        : canonicalValue(request.options.endTime)
-    if (
-      !Number.isFinite(startTime) ||
-      !Number.isFinite(endTime) ||
-      startTime < 0 ||
-      endTime < startTime
-    ) {
-      throw new PhysicsOSError(
-        'INVALID_SIMULATION_RANGE',
-        'Induction simulation range must satisfy 0 <= startTime <= endTime.',
-      )
-    }
-
-    const times = trajectorySampleTimes(
+  prepareSimulationPlan(scene: PhysicsScene, request: SimulationRequest): SimulationPlan {
+    const { model, startTime, endTime, storageSampleCount } = prepareInductionSimulation(scene, request)
+    return {
+      schemaVersion: 'simulation-plan/1.0',
+      engineId: this.engineId,
+      engineVersion: this.engineVersion,
+      simulationId: request.simulationId,
+      sceneId: scene.id,
+      sceneRevision: scene.revision,
+      modelId: model.subModel,
+      kind: 'analytic',
       startTime,
       endTime,
-      trajectoryStorageSampleCount(request.options, TRAJECTORY_SEGMENTS + 1),
-    )
+      storageSampleCountBound: storageSampleCount,
+      // The double-bar exponential and Joule-heat integral are closed forms too.
+      numericalIterationCountBound: 0,
+      metadata: {
+        numericalIterationAccounting:
+          'Closed-form induction samples, including double-bar motion and Joule heat; no numerical integration or solver loops.',
+      },
+    }
+  }
+
+  simulate(scene: PhysicsScene, request: SimulationRequest): SimulationResult<PhysicsEventLike> {
+    const { model, startTime, endTime, storageSampleCount } = prepareInductionSimulation(scene, request)
+    const startedAt = new Date().toISOString()
+    const times = trajectorySampleTimes(startTime, endTime, storageSampleCount)
     const states = times.map((time) => stateOf(model, time))
 
     return {

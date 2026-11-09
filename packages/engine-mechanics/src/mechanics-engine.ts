@@ -2,6 +2,7 @@ import { add, scale, magnitude, vec3, type Vector3 } from '@physicsos/physics-ma
 import { canonicalValue, quantity, type Quantity } from '@physicsos/physics-units'
 import { asSimulationId, asTraceId, asPhysicsEventId, PhysicsOSError } from '@physicsos/shared'
 import {
+  assertSimulationPlan,
   check,
   quantityVector,
   summarizeVerification,
@@ -15,6 +16,7 @@ import {
   type ModelSupport,
   type PhysicsEngine,
   type PhysicsEventLike,
+  type SimulationPlan,
   type SimulationRequest,
   type SimulationResult,
   type SimulationState,
@@ -601,6 +603,51 @@ function computeSimulationDuration(model: MechanicsModel): number {
   return 10
 }
 
+function resolveMechanicsSimulation(scene: PhysicsScene, request: SimulationRequest) {
+  if (request.sceneId !== scene.id || request.sceneRevision !== scene.revision) {
+    throw new PhysicsOSError(
+      'SIMULATION_SCENE_MISMATCH',
+      'SimulationRequest must reference the exact PhysicsScene revision being simulated.',
+      {
+        details: {
+          requestSceneId: request.sceneId,
+          sceneId: scene.id,
+          requestRevision: request.sceneRevision,
+          sceneRevision: scene.revision,
+        },
+      },
+    )
+  }
+
+  const model = resolveMechanicsModel(scene)
+  const startTime = request.options.startTime ? canonicalValue(request.options.startTime) : 0
+  const endTime = request.options.endTime
+    ? canonicalValue(request.options.endTime)
+    : computeSimulationDuration(model)
+  if (
+    !Number.isFinite(startTime) ||
+    !Number.isFinite(endTime) ||
+    startTime < 0 ||
+    endTime < startTime
+  ) {
+    throw new PhysicsOSError(
+      'INVALID_SIMULATION_RANGE',
+      'Simulation range must satisfy 0 <= startTime <= endTime.',
+    )
+  }
+
+  const storageSampleCount = trajectoryStorageSampleCount(
+    request.options,
+    DEFAULT_TRAJECTORY_SEGMENTS + 1,
+  )
+  return {
+    model,
+    startTime,
+    endTime,
+    storageSampleCountBound: storageSampleCount,
+  }
+}
+
 function buildVerification(
   model: MechanicsModel,
   scene: PhysicsScene,
@@ -1030,44 +1077,35 @@ export class MechanicsEngine implements PhysicsEngine<PhysicsScene, PhysicsEvent
     return stateAtForModel(model, canonicalValue(time))
   }
 
-  simulate(scene: PhysicsScene, request: SimulationRequest): SimulationResult<PhysicsEventLike> {
-    if (request.sceneId !== scene.id || request.sceneRevision !== scene.revision) {
-      throw new PhysicsOSError(
-        'SIMULATION_SCENE_MISMATCH',
-        'SimulationRequest must reference the exact PhysicsScene revision being simulated.',
-        {
-          details: {
-            requestSceneId: request.sceneId,
-            sceneId: scene.id,
-            requestRevision: request.sceneRevision,
-            sceneRevision: scene.revision,
-          },
-        },
-      )
-    }
-
-    const model = resolveMechanicsModel(scene)
-    const duration = computeSimulationDuration(model)
-
-    const startTime = request.options.startTime ? canonicalValue(request.options.startTime) : 0
-    const endTime = request.options.endTime ? canonicalValue(request.options.endTime) : duration
-    if (
-      !Number.isFinite(startTime) ||
-      !Number.isFinite(endTime) ||
-      startTime < 0 ||
-      endTime < startTime
-    ) {
-      throw new PhysicsOSError(
-        'INVALID_SIMULATION_RANGE',
-        'Simulation range must satisfy 0 <= startTime <= endTime.',
-      )
-    }
-
-    const trajectoryTimes = trajectorySampleTimes(
+  prepareSimulationPlan(scene: PhysicsScene, request: SimulationRequest): SimulationPlan {
+    const { model, startTime, endTime, storageSampleCountBound } = resolveMechanicsSimulation(
+      scene,
+      request,
+    )
+    const plan: SimulationPlan = {
+      schemaVersion: 'simulation-plan/1.0',
+      engineId: this.engineId,
+      engineVersion: this.engineVersion,
+      simulationId: request.simulationId,
+      sceneId: scene.id,
+      sceneRevision: scene.revision,
+      modelId: model.modelId,
+      kind: model.modelId === 'spring_statics' ? 'static' : 'analytic',
       startTime,
       endTime,
-      trajectoryStorageSampleCount(request.options, DEFAULT_TRAJECTORY_SEGMENTS + 1),
+      storageSampleCountBound,
+      numericalIterationCountBound: 0,
+    }
+    assertSimulationPlan(plan)
+    return plan
+  }
+
+  simulate(scene: PhysicsScene, request: SimulationRequest): SimulationResult<PhysicsEventLike> {
+    const { model, startTime, endTime, storageSampleCountBound } = resolveMechanicsSimulation(
+      scene,
+      request,
     )
+    const trajectoryTimes = trajectorySampleTimes(startTime, endTime, storageSampleCountBound)
 
     const states = trajectoryTimes.map((t) => stateAtForModel(model, t))
     const derivedQuantities = computeDerivedAtTime(model, endTime, startTime)

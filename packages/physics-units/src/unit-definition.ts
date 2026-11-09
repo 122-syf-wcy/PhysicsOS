@@ -10,6 +10,7 @@ export type UnitKey =
   | 'meter'
   | 'centimeter'
   | 'millimeter'
+  | 'nanometer'
   | 'kilometer'
   | 'second'
   | 'millisecond'
@@ -29,6 +30,7 @@ export type UnitKey =
   | 'meter_per_second_squared'
   | 'newton'
   | 'joule'
+  | 'electron_volt'
   | 'watt'
   | 'volt_per_meter'
   | 'volt'
@@ -99,6 +101,8 @@ export const UNIT_DEFINITIONS: readonly UnitDefinition[] = [
   define('meter', 'length', 'm', 1, true, ['metre', 'meters']),
   define('centimeter', 'length', 'cm', 1e-2, false, ['centimetre']),
   define('millimeter', 'length', 'mm', 1e-3, false, ['millimetre']),
+  // Photoelectric wavelengths retain their authored nm while engines use SI metres.
+  define('nanometer', 'length', 'nm', 1e-9, false, ['nanometre']),
   define('kilometer', 'length', 'km', 1e3, false, ['kilometre']),
 
   define('second', 'time', 's', 1, true, ['sec', 'seconds']),
@@ -124,6 +128,8 @@ export const UNIT_DEFINITIONS: readonly UnitDefinition[] = [
 
   define('newton', 'force', 'N', 1, true),
   define('joule', 'energy', 'J', 1, true),
+  // One electron-volt is exactly the elementary charge times one volt in SI.
+  define('electron_volt', 'energy', 'eV', 1.602176634e-19, false),
   define('watt', 'power', 'W', 1, true),
   define('watt_per_square_meter', 'intensity', 'W/m^2', 1, true, ['W/m²', 'W*m^-2']),
   define('volt_per_meter', 'electric_field', 'V/m', 1, true, ['N/C']),

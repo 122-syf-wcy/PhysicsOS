@@ -10,6 +10,7 @@ import {
   type PhysicsEngine,
   type PhysicsEventLike,
   type QuantityVector,
+  type SimulationPlan,
   type SimulationRequest,
   type SimulationResult,
   type SimulationState,
@@ -241,6 +242,28 @@ export function createTransformerSimulationRequest(
   }
 }
 
+/** A static reading uses the request range, never the scene timeline as a fallback. */
+const prepareTransformerSimulation = (scene: PhysicsScene, request: SimulationRequest) => {
+  if (request.sceneId !== scene.id || request.sceneRevision !== scene.revision) {
+    throw new PhysicsOSError(
+      'SIMULATION_SCENE_MISMATCH',
+      'SimulationRequest must reference the exact PhysicsScene revision being simulated.',
+      {
+        details: {
+          requestSceneId: request.sceneId,
+          sceneId: scene.id,
+          requestRevision: request.sceneRevision,
+          sceneRevision: scene.revision,
+        },
+      },
+    )
+  }
+
+  const model = resolveTransformerModel(scene)
+  const range = simulationTimeRange(request.options)
+  return { model, ...range }
+}
+
 /* ----------------------------------------------------------- the engine -- */
 
 export class TransformerEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLike> {
@@ -348,26 +371,31 @@ export class TransformerEngine implements PhysicsEngine<PhysicsScene, PhysicsEve
     return stateOf(resolveTransformerModel(scene), timeSeconds)
   }
 
-  simulate(scene: PhysicsScene, request: SimulationRequest): SimulationResult<PhysicsEventLike> {
-    if (request.sceneId !== scene.id || request.sceneRevision !== scene.revision) {
-      throw new PhysicsOSError(
-        'SIMULATION_SCENE_MISMATCH',
-        'SimulationRequest must reference the exact PhysicsScene revision being simulated.',
-        {
-          details: {
-            requestSceneId: request.sceneId,
-            sceneId: scene.id,
-            requestRevision: request.sceneRevision,
-            sceneRevision: scene.revision,
-          },
-        },
-      )
+  prepareSimulationPlan(scene: PhysicsScene, request: SimulationRequest): SimulationPlan {
+    const { startTime, endTime } = prepareTransformerSimulation(scene, request)
+    return {
+      schemaVersion: 'simulation-plan/1.0',
+      engineId: this.engineId,
+      engineVersion: this.engineVersion,
+      simulationId: request.simulationId,
+      sceneId: scene.id,
+      sceneRevision: scene.revision,
+      modelId: IDEAL_TRANSFORMER_MODEL,
+      kind: 'static',
+      startTime,
+      endTime,
+      storageSampleCountBound: 1,
+      numericalIterationCountBound: 0,
+      metadata: {
+        numericalIterationAccounting:
+          'One settled static transformer reading; no numerical integration or solver loops.',
+      },
     }
+  }
 
+  simulate(scene: PhysicsScene, request: SimulationRequest): SimulationResult<PhysicsEventLike> {
+    const { model, ...range } = prepareTransformerSimulation(scene, request)
     const startedAt = new Date().toISOString()
-    const model = resolveTransformerModel(scene)
-
-    const range = simulationTimeRange(request.options)
 
     return {
       schemaVersion: 'simulation-result/1.0',

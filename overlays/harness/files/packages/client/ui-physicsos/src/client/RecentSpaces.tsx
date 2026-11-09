@@ -1,5 +1,6 @@
 import { sceneRefOf } from './surface-store.ts'
 import { useMemo } from 'react'
+import { IconPlusOutlineMedium, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SessionId, SessionSummary, SnapshotStore } from './runtime-compat.ts'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
@@ -20,6 +21,7 @@ export interface RecentSpacesInjected {
   }
   openSurface: (surface: PhysicsSurfaceId, sceneRef?: PhysicsSceneRef) => void
   removeRecent: (sceneId: string) => void
+  requestSceneInCanvas: (sceneRef: PhysicsSceneRef) => void
   /** Reopen a past conversation session in place. */
   openSession: (sessionId: SessionId) => void
   /** Archive a session — Harness's only removal verb; the row hides on the state echo. */
@@ -42,7 +44,7 @@ const HISTORY_LIMIT = 8
 
 export function RecentSpaces({
   wide, useRecentExperiments, useSessions, useWorkspaces, openSurface,
-  removeRecent, openSession, archiveSession, t,
+  removeRecent, requestSceneInCanvas, openSession, archiveSession, t,
 }: RecentSpacesProps) {
   const items = useRecentExperiments(s => s.items)
   const sessions = useSessions(s => s)
@@ -89,6 +91,9 @@ export function RecentSpaces({
                 </span>
                 <span className={css.time}>{formatUpdatedAt(entry.updatedAt)}</span>
               </button>
+              <Tooltip label={t('canvas.addToCanvas')} portal><button type="button" className={css.remove}
+                aria-label={`${t('canvas.addToCanvas')} · ${entry.title}`}
+                onClick={() => { requestSceneInCanvas(sceneRefOf(entry)) }}><IconPlusOutlineMedium size={14} /></button></Tooltip>
               <button
                 type="button"
                 className={css.remove}

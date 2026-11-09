@@ -23,7 +23,12 @@ import {
   solidPressureOf,
   type ResolvedPressureModel,
 } from '@physicsos/engine-fluid'
-import { isScalarQuantity, type SimulationResult } from '@physicsos/physics-core'
+import {
+  isScalarQuantity,
+  type SimulationRequest,
+  type SimulationResult,
+} from '@physicsos/physics-core'
+import type { CapturedResult } from '@physicsos/physics-workbench'
 import { quantity } from '@physicsos/physics-units'
 import {
   SceneRuntime,
@@ -40,6 +45,7 @@ import {
   requiresExperimentalFork,
 } from './experimental-branch.ts'
 import { fmtFluidValue } from './fluid-visual-bridge.ts'
+import { pressureCaptureEvidence } from './subbench-capture-bridge.ts'
 import { emptyVisualModel } from './scene-visual-model.ts'
 import { runtimeStatusOf } from './verified-result.ts'
 import { pressureObservableKeyOf, pressureSceneVisual } from './pressure-visual-bridge.ts'
@@ -154,7 +160,12 @@ export class PressureWorkspaceRuntime implements WorkspaceRuntime {
   private commandSequence = 0
   private highlighted: readonly string[] = []
   private failure: string | undefined
+  private request: SimulationRequest | undefined
+  private result: SimulationResult | undefined
+  private evidence: ReturnType<typeof pressureCaptureEvidence> = {}
+  private captureDiagnostics: CapturedResult['diagnostics'] = []
   private computed: Computed | undefined
+  private committedModel: ResolvedPressureModel | undefined
   /** The scene as the source stated it, kept so an experimental branch can be discarded. */
   private readonly origin: PhysicsScene | undefined
 
@@ -166,28 +177,43 @@ export class PressureWorkspaceRuntime implements WorkspaceRuntime {
 
   private recompute(): void {
     const scene = this.sceneRuntime.getScene()
+    this.request = undefined
+    this.result = undefined
+    this.evidence = {}
+    this.captureDiagnostics = []
+    this.committedModel = undefined
     try {
       const support = this.engine.canHandle(scene)
       if (!support.supported) {
         this.failure = support.failedConditions.map(entry => entry.message).join(' ')
+        this.captureDiagnostics = support.failedConditions.map(entry => ({ code: entry.condition, message: entry.message }))
         this.computed = undefined
         return
       }
-      const simulation = this.engine.simulate(
+      const model = resolvePressureModel(scene)
+      this.committedModel = model
+      this.request = createPressureSimulationRequest(
         scene,
-        createPressureSimulationRequest(
-          scene,
-          `pressure-lab-${String(scene.id)}-${scene.revision}`,
-          `pressure-lab-trace-${String(scene.id)}-${scene.revision}`,
-        ),
+        `pressure-lab-${String(scene.id)}-${scene.revision}`,
+        `pressure-lab-trace-${String(scene.id)}-${scene.revision}`,
       )
+      const simulation = this.engine.simulate(scene, this.request)
+      this.result = simulation
+      try {
+        this.evidence = pressureCaptureEvidence({ scene, result: simulation, model })
+      } catch (error: unknown) {
+        this.captureDiagnostics = [{
+          code: 'PRESSURE_CAPTURE_ANALYSIS_UNAVAILABLE',
+          message: error instanceof Error ? error.message : 'Raw pressure analysis is unavailable.',
+        }]
+      }
       if (simulation.verification.status === 'failed') {
         this.failure = simulation.verification.errors.map(entry => entry.message).join(' ')
         this.computed = undefined
         return
       }
       this.failure = undefined
-      this.computed = { simulation, model: resolvePressureModel(scene) }
+      this.computed = { simulation, model }
     } catch (error: unknown) {
       this.failure = error instanceof Error ? error.message : '压强 Runtime 无法启动。'
       this.computed = undefined
@@ -198,14 +224,13 @@ export class PressureWorkspaceRuntime implements WorkspaceRuntime {
     /* Changing a physical fact on a question scene forks first: the reading the
        student just verified was derived from the original conditions. Observable
        toggles are NOT facts and never fork. */
-    if (requiresExperimentalFork(this.sceneRuntime.getScene(), type)) {
-      this.sceneRuntime = new SceneRuntime(
-        forkExperimentalScene({ scene: this.sceneRuntime.getScene() }),
-      )
-    }
-    const scene = this.sceneRuntime.getScene()
+    const currentScene = this.sceneRuntime.getScene()
+    const runtime = requiresExperimentalFork(currentScene, type)
+      ? new SceneRuntime(forkExperimentalScene({ scene: currentScene }))
+      : this.sceneRuntime
+    const scene = runtime.getScene()
     this.commandSequence += 1
-    const result = this.sceneRuntime.execute(
+    const result = runtime.execute(
       createSceneCommand<T>({
         commandId: `pressure-ui-command-${this.commandSequence}`,
         sceneId: String(scene.id),
@@ -219,11 +244,38 @@ export class PressureWorkspaceRuntime implements WorkspaceRuntime {
       this.failure = result.error.message
       return
     }
+    this.sceneRuntime = runtime
     this.recompute()
   }
 
   getScene(): PhysicsScene {
     return this.sceneRuntime.getScene()
+  }
+
+  captureRaw(): CapturedResult {
+    const scene = this.sceneRuntime.getScene()
+    const state = this.result?.states[0]
+    const release = scene.metadata.experimentRelease
+    return {
+      scene,
+      ...(this.request === undefined ? {} : { request: this.request }),
+      ...(this.result === undefined ? {} : { result: this.result }),
+      ...(state === undefined ? {} : { state }),
+      ...this.evidence,
+      clock: { time: 0, total: 0, running: false, rate: 1 },
+      cursor: { kind: 'static', identity: `${this.engine.engineId}:settled-reading` },
+      engineInfo: {
+        id: this.result?.metadata.engineId ?? this.engine.engineId,
+        version: this.result?.metadata.engineVersion ?? this.engine.engineVersion,
+        ...(this.result?.metadata.solver === undefined ? {} : { model: this.result.metadata.solver }),
+        ...(release === undefined ? {} : { release }),
+      },
+      diagnostics: [
+        ...(this.evidence.diagnostics ?? []),
+        ...(this.captureDiagnostics ?? []),
+        ...(this.failure === undefined ? [] : [{ code: 'PRESSURE_RUNTIME_FAILED', message: this.failure }]),
+      ],
+    }
   }
 
   getSnapshot(): WorkspaceSnapshot {
@@ -240,8 +292,8 @@ export class PressureWorkspaceRuntime implements WorkspaceRuntime {
         sceneRevision: scene.revision,
         view: emptyVisualModel('fluid'),
         ariaLabel: title,
-        tree: this.treeOf(scene, undefined),
-        inspector: this.inspectorOf(undefined),
+        tree: this.treeOf(scene, this.committedModel),
+        inspector: this.inspectorOf(this.committedModel),
         charts: [],
         table: { columns: [], rows: [] },
         derivation: [],
@@ -351,11 +403,11 @@ export class PressureWorkspaceRuntime implements WorkspaceRuntime {
 
   private inspectorOf(model: ResolvedPressureModel | undefined): readonly InspectorSection[] {
     if (model === undefined) return []
-    return [parametersOf(model), derivedSectionOf(this.computed?.simulation, model)]
+    return [parametersOf(model), derivedSectionOf(this.result, model)]
   }
 
   editParameter(id: string, value: number): WorkspaceSnapshot {
-    const model = this.computed?.model
+    const model = this.committedModel
     if (model !== undefined) {
       for (const [parameterId, dispatch] of PARAMETER_COMMANDS) {
         if (parameterId !== id) continue
@@ -368,7 +420,7 @@ export class PressureWorkspaceRuntime implements WorkspaceRuntime {
   }
 
   setChoice(id: string, value: string): WorkspaceSnapshot {
-    const model = this.computed?.model
+    const model = this.committedModel
     if (model === undefined) return this.getSnapshot()
     if (id === 'liquid-density' && model.type === 'liquid') {
       const density = LIQUID_DENSITIES[value]

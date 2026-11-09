@@ -75,20 +75,33 @@ export interface ResolvedCircuitModel {
 
 class UnionFind {
   private readonly parent = new Map<string, string>()
+  findIterationCount = 0
 
   add(id: string): void {
     if (!this.parent.has(id)) this.parent.set(id, id)
   }
 
   find(id: string): string {
-    const parent = this.parent.get(id)
-    if (parent === undefined) {
-      this.add(id)
-      return id
+    let root = id
+    for (;;) {
+      this.findIterationCount += 1
+      const parent = this.parent.get(root)
+      if (parent === undefined) {
+        this.add(root)
+        break
+      }
+      if (parent === root) break
+      root = parent
     }
-    if (parent === id) return id
-    const root = this.find(parent)
-    this.parent.set(id, root)
+    // Iterative path compression preserves representatives without risking a
+    // call-stack overflow for an authored chain of connected terminals.
+    let current = id
+    while (current !== root) {
+      this.findIterationCount += 1
+      const next = this.parent.get(current) as string
+      this.parent.set(current, root)
+      current = next
+    }
     return root
   }
 
@@ -132,21 +145,28 @@ export const sliderPositionAt = (
  * Throws when the scene has no circuit; physical preconditions live in the
  * engine's `canHandle`.
  */
-export const resolveCircuitModel = (scene: PhysicsScene, time: number): ResolvedCircuitModel => {
+export const prepareCircuitModel = (scene: PhysicsScene, time: number): {
+  model: ResolvedCircuitModel
+  iterationCount: number
+} => {
   const circuit: Circuit | undefined = scene.circuits[0]
   if (circuit === undefined) {
     throw new PhysicsOSError('CIRCUIT_MISSING', 'The scene carries no circuit to model.')
   }
 
+  let iterationCount = circuit.components.length
   const enabled = circuit.components.filter(isEnabled)
   const unionFind = new UnionFind()
 
   for (const component of enabled) {
+    iterationCount += 1
     for (const key of terminalKeysOf(component)) {
+      iterationCount += 1
       unionFind.add(circuitTerminalId(String(component.id), key))
     }
   }
   for (const connection of circuit.connections) {
+    iterationCount += 1
     unionFind.union(
       circuitTerminalId(String(connection.from.componentId), connection.from.terminalKey),
       circuitTerminalId(String(connection.to.componentId), connection.to.terminalKey),
@@ -155,12 +175,18 @@ export const resolveCircuitModel = (scene: PhysicsScene, time: number): Resolved
 
   const nodeOfTerminal = new Map<string, string>()
   const nodeIds: string[] = []
+  const knownNodes = new Set<string>()
   for (const component of enabled) {
+    iterationCount += 1
     for (const key of terminalKeysOf(component)) {
+      iterationCount += 1
       const terminal = circuitTerminalId(String(component.id), key)
       const node = unionFind.find(terminal)
       nodeOfTerminal.set(terminal, node)
-      if (!nodeIds.includes(node)) nodeIds.push(node)
+      if (!knownNodes.has(node)) {
+        knownNodes.add(node)
+        nodeIds.push(node)
+      }
     }
   }
 
@@ -183,6 +209,7 @@ export const resolveCircuitModel = (scene: PhysicsScene, time: number): Resolved
   let primarySourceId: string | undefined
 
   for (const component of enabled) {
+    iterationCount += 1
     const componentId = String(component.id)
     switch (component.type) {
       case 'resistor': {
@@ -238,7 +265,10 @@ export const resolveCircuitModel = (scene: PhysicsScene, time: number): Resolved
             nodeB: positive,
             resistance: internal,
           })
-          if (!nodeIds.includes(internalNode)) nodeIds.push(internalNode)
+          if (!knownNodes.has(internalNode)) {
+            knownNodes.add(internalNode)
+            nodeIds.push(internalNode)
+          }
         } else {
           branches.push({
             kind: 'source',
@@ -324,13 +354,20 @@ export const resolveCircuitModel = (scene: PhysicsScene, time: number): Resolved
   }
 
   return {
-    circuitId: circuit.id,
-    components: enabled,
-    nodeOfTerminal,
-    nodeIds,
-    branches,
-    primarySourceId,
-    variableResistors,
-    sweepDuration,
+    model: {
+      circuitId: circuit.id,
+      components: enabled,
+      nodeOfTerminal,
+      nodeIds,
+      branches,
+      primarySourceId,
+      variableResistors,
+      sweepDuration,
+    },
+    iterationCount: iterationCount + unionFind.findIterationCount,
   }
 }
+
+/** Public model shape stays independent of structural-work accounting. */
+export const resolveCircuitModel = (scene: PhysicsScene, time: number): ResolvedCircuitModel =>
+  prepareCircuitModel(scene, time).model

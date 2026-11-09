@@ -113,7 +113,11 @@
     "@deepseek-ai/cordis": "workspace:^",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "@types/three": "0.180.0"
+    "@types/three": "0.180.0",
+    "@xyflow/react": "12.12.1",
+    "idb": "8.0.4",
+    "fake-indexeddb": "6.2.7",
+    "@physicsos/physics-workbench": "link:../../../../../packages/physics-workbench"
   },
   "files": [
     "lib/index.js",

@@ -3,6 +3,7 @@ import { OpticsRenderer } from '../physics/optics-renderer.tsx'
 import type { RendererProjection } from '../physics/renderer-registry.tsx'
 import type { ScenePoint } from '../physics/scene-visual-model.ts'
 import { lensBounds, lensParameter, type LensBenchProps } from './lens-bench.ts'
+import { svgPointFromClient } from '../physics/svg-screen-point.ts'
 import css from './ExperimentPage.module.css'
 
 /** The same engine ray geometry, framed as a bench rather than a general coordinate editor. */
@@ -14,6 +15,11 @@ export function LensBench2D({ snapshot, preview, commit, cancel }: LensBenchProp
     undefined,
   )
   const uid = useId().replaceAll(':', '')
+  const latestCancel = useRef(cancel)
+  latestCancel.current = cancel
+  useEffect(() => () => {
+    if (drag.current !== undefined) { drag.current = undefined; latestCancel.current() }
+  }, [])
   useEffect(() => {
     if (svg.current === null || typeof ResizeObserver === 'undefined') return
     const observer = new ResizeObserver((entries) => {
@@ -50,8 +56,9 @@ export function LensBench2D({ snapshot, preview, commit, cancel }: LensBenchProp
   )
   const move = (event: PointerEvent<SVGSVGElement>): void => {
     if (drag.current === undefined || svg.current === null) return
-    const box = svg.current.getBoundingClientRect()
-    const sceneX = projection.sx(((event.clientX - box.left) * width) / box.width)
+    const at = svgPointFromClient(svg.current, event)
+    if (at === undefined) return
+    const sceneX = projection.sx(at.x)
     const value =
       Math.round(
         Math.max(1, Math.min(200, drag.current.id === 'object-distance' ? -sceneX : sceneX)) * 2,
@@ -82,7 +89,7 @@ export function LensBench2D({ snapshot, preview, commit, cancel }: LensBenchProp
       aria-valuenow={lensParameter(snapshot, id)}
       aria-valuetext={`${lensParameter(snapshot, id)} cm`}
       onKeyDown={(event) => {
-        if (event.key === 'Escape') abort()
+        if (event.key === 'Escape' && drag.current !== undefined) { event.preventDefault(); event.stopPropagation(); abort() }
         if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
           event.preventDefault()
           commit(

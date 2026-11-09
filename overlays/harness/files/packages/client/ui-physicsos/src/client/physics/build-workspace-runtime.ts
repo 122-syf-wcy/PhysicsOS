@@ -128,8 +128,18 @@ export function buildWorkspaceRuntime(
   return new Proxy(current, {
     get(_target, property) {
       if (property === 'restoreOrigin') return () => {
-        const restored = createWorkspaceRuntime(domain, originScene)
-        if (restored !== null) current = restored
+        const committed = current.getScene?.()
+        if (committed === undefined) return current.getSnapshot()
+        const restoredScene = {
+          ...structuredClone(originScene), id: committed.id, revision: committed.revision + 1,
+          metadata: {
+            ...structuredClone(originScene.metadata),
+            ...(committed.metadata.experimentRelease === undefined ? {} : { experimentRelease: structuredClone(committed.metadata.experimentRelease) }),
+            ...(committed.metadata.experimentNotebook === undefined ? {} : { experimentNotebook: structuredClone(committed.metadata.experimentNotebook) }),
+          },
+        }
+        const restored = createWorkspaceRuntime(domain, restoredScene)
+        if (restored !== null) { current.dispose?.(); current = restored }
         return current.getSnapshot()
       }
       const value: unknown = Reflect.get(current, property)

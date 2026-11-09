@@ -28,6 +28,31 @@ describe('quantity canonicalization', () => {
     expect(canonicalValue(quantity(250, 'cm', 'length'))).toBeCloseTo(2.5, 15)
   })
 
+  it('converts nanometer wavelengths to SI and back while rejecting unknown look-alike units', () => {
+    const wavelength = quantity(400, 'nm', 'length')
+    expect(wavelength).toEqual({ value: 400, unit: 'nm', dimension: 'length' })
+    expect(canonicalValue(wavelength)).toBeCloseTo(4e-7, 20)
+    expect(convert(wavelength, 'cm').value).toBeCloseTo(0.00004, 17)
+    const roundtrip = convert(convert(wavelength, 'm'), 'nm')
+    expect(roundtrip.unit).toBe('nm')
+    expect(roundtrip.value).toBeCloseTo(400, 11)
+    expect(wavelength.value).toBe(400)
+    expect(() => parseQuantity(400, 'nm-ish')).toThrow(UnknownUnitError)
+    expect(() => quantity(400, 'nm', 'energy')).toThrow(DimensionMismatchError)
+  })
+
+  it('converts electron-volt work functions using the exact SI charge and rejects unknown look-alike units', () => {
+    const workFunction = quantity(2, 'eV', 'energy')
+    expect(workFunction).toEqual({ value: 2, unit: 'eV', dimension: 'energy' })
+    expect(canonicalValue(workFunction)).toBeCloseTo(3.204353268e-19, 32)
+    expect(convert(workFunction, 'J').value).toBeCloseTo(3.204353268e-19, 32)
+    expect(convert(quantity(1.602176634e-19, 'J', 'energy'), 'eV')).toEqual({ value: 1, unit: 'eV', dimension: 'energy' })
+    expect(convert(convert(workFunction, 'J'), 'eV').value).toBe(2)
+    expect(workFunction.value).toBe(2)
+    expect(() => parseQuantity(2, 'eV-ish')).toThrow(UnknownUnitError)
+    expect(() => quantity(2, 'eV', 'electric_potential')).toThrow(DimensionMismatchError)
+  })
+
   it('converts ms to s', () => {
     expect(canonicalValue(quantity(500, 'ms', 'time'))).toBeCloseTo(0.5, 15)
     expect(canonicalValue(quantity(2, 'ms', 'time'))).toBeCloseTo(0.002, 15)

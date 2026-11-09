@@ -7,7 +7,9 @@
  * adding a runtime adapter and a renderer — never another workspace page.
  */
 
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
+import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { AddCanvasExperiment } from './canvas/types.ts'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SnapshotStore } from './runtime-compat.ts'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
@@ -67,6 +69,9 @@ export interface PhysicsSurfaceInjected {
   /** `/physicsos/model-pool` client — absent in stripped test compositions. */
   modelPoolApi?: ModelPoolApi
   openSurface?: (id: PhysicsSurfaceId, sceneRef?: PhysicsSceneRef) => void
+  newCanvas?: (title: string) => Promise<string>
+  requestSceneInCanvas?: (sceneRef: PhysicsSceneRef) => void
+  requestCanvasSource?: (input: AddCanvasExperiment) => void
   /** Open the Lab assembling a circuit from scratch (实验中心 → 自由搭建). */
   updateScene?: (scene: PhysicsScene) => void
   openBuilder?: (sceneRef: PhysicsSceneRef) => void
@@ -100,6 +105,9 @@ export function PhysicsSurface({
   openBuilder,
   updateScene,
   openExperimentPicker,
+  newCanvas,
+  requestSceneInCanvas,
+  requestCanvasSource,
   recordAttempt,
   practiceQuestion,
   useSessions,
@@ -132,14 +140,15 @@ export function PhysicsSurface({
   /* Only an explicit scene handover replaces the runtime. Discrete write-backs
      update the saved revision while the same runtime and its clock stay alive. */
   const runtimeKey =
-    scene === undefined ? 'lab-empty' : String(surfaceState.sceneGeneration ?? `${domain}:${String(scene.id)}:${scene.revision}`)
+    surface !== 'lab' || scene === undefined ? 'lab-empty' : String(surfaceState.sceneGeneration ?? `${domain}:${String(scene.id)}:${scene.revision}`)
   const runtime = useMemo<WorkspaceRuntime | null>(
-    () => buildWorkspaceRuntime(domain, scene, surfaceState.sceneRef?.originScene),
+    () => surface !== 'lab' ? null : buildWorkspaceRuntime(domain, scene, surfaceState.sceneRef?.originScene),
     /* Persisting an edit and opening the picker must not recreate this runtime. */
     [runtimeKey],
   )
+  useEffect(() => () => { runtime?.dispose?.() }, [runtime])
 
-  if (surface === 'home') return null
+  if (surface === 'home' || surface === 'canvas') return null
   /* 出卷专区 is a teacher workflow over the host REST surface, not a lab
      scene: it renders without the physics runtime and covers the composer. */
   if (surface === 'paper') {
@@ -214,7 +223,8 @@ export function PhysicsSurface({
         openExperiment={(experimentId: string) => {
           const template = findExperimentTemplate(experimentId)
           if (template === undefined || template.comingSoon === true) return
-          openSurface?.('lab', createExperimentSceneRef(template, t(template.label)))
+          openSurface?.('lab', { ...createExperimentSceneRef(template, t(template.label)), canvasTemplateId: template.id,
+            canvasSource: { kind: 'template', id: template.id, title: t(template.label) } })
         }}
         useSessions={useSessions}
         useWorkspaces={useWorkspaces}
@@ -232,6 +242,12 @@ export function PhysicsSurface({
         openSurface={openSurface ?? (() => {})}
         useRecentExperiments={useRecentExperiments}
         useLearningRecord={useLearningRecord}
+        {...(newCanvas === undefined ? {} : { onNewCanvas: () => { void newCanvas(t('canvas.untitled')).catch(() => undefined) } })}
+        {...(requestSceneInCanvas === undefined ? {} : { onAddScene: requestSceneInCanvas })}
+        {...(requestCanvasSource === undefined ? {} : { onAddTemplate: (template, ref) => {
+          requestCanvasSource({ scene: ref.scene, ...(ref.originScene === undefined ? {} : { originScene: ref.originScene }), templateId: template.id,
+            title: t(template.label), source: { kind: 'template', id: template.id, title: t(template.label) } })
+        } })}
         {...(resumable === undefined
           ? {}
           : {
@@ -271,7 +287,7 @@ export function PhysicsSurface({
      scene id — free builds and question hand-overs match no template and
      simply get no summary. */
   const sceneId = surfaceState.sceneRef?.sceneId
-  const templateId = sceneId === undefined ? undefined : artTemplateIdOfSceneId(sceneId)
+  const templateId = surfaceState.sceneRef?.canvasTemplateId ?? (sceneId === undefined ? undefined : artTemplateIdOfSceneId(sceneId))
   const experimentMeta = templateId === undefined ? undefined : experimentMetaOf(templateId)
 
   const bench = scene === undefined ? undefined : opticalBenchOf(scene)
@@ -281,7 +297,23 @@ export function PhysicsSurface({
   const Workspace = questionCodeVisualization === undefined && domain === 'optics' && bench?.elements.length === 1 && element?.type === 'thin_lens' && element.focalLength.value > 0
     ? ConvexLensPage : PhysicsWorkspace
   return (<>
-    {surfaceState.routeNotice ? <div role="status" className={pageCss.routeNotice}>{surfaceState.routeNotice}</div> : null}
+    {requestSceneInCanvas === undefined || surfaceState.sceneRef === undefined ? null : <div className={pageCss.routeNotice}>
+      {surfaceState.routeNotice ? <span role="status">{surfaceState.routeNotice}</span> : null}
+      <Button variant="outline" onClick={() => {
+        const current = runtime.getScene?.() ?? surfaceState.sceneRef!.scene
+        const ref: PhysicsSceneRef = { ...surfaceState.sceneRef!, scene: current,
+          ...(surfaceState.buildMode === true ? { buildMode: true } : {}) }
+        if (requestCanvasSource !== undefined && templateId !== undefined && questionCodeVisualization === undefined) {
+          requestCanvasSource({ scene: current, ...(ref.originScene === undefined ? {} : { originScene: ref.originScene }), templateId,
+            title: current.metadata.title ?? ref.sceneId, source: ref.canvasSource ?? { kind: 'template', id: templateId, title: current.metadata.title ?? ref.sceneId },
+            ...(ref.canvasTemplateRelease === undefined ? {} : { templateRelease: ref.canvasTemplateRelease }),
+            ...(current.metadata.experimentRelease === undefined ? {} : { rendererRelease: current.metadata.experimentRelease }),
+            buildMode: surfaceState.buildMode === true ? 'construct' : 'inspect' })
+        } else requestSceneInCanvas(ref)
+      }}>{t('canvas.addToCanvas')}</Button>
+    </div>}
+    {surfaceState.routeNotice && (requestSceneInCanvas === undefined || surfaceState.sceneRef === undefined) ?
+      <div role="status" className={pageCss.routeNotice}>{surfaceState.routeNotice}</div> : null}
     <Workspace
       key={runtimeKey}
       runtime={runtime}

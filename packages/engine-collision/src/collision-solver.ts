@@ -1,4 +1,4 @@
-import { trajectorySampleTimes, trajectoryStorageSampleCount } from '@physicsos/physics-scene'
+import { trajectoryStorageSampleCount } from '@physicsos/physics-scene'
 import { canonicalValue, quantity } from '@physicsos/physics-units'
 import {
   quantityVector,
@@ -6,7 +6,7 @@ import {
   type QuantityVector,
   type PhysicsEventLike,
 } from '@physicsos/physics-core'
-import { asPhysicsEventId } from '@physicsos/shared'
+import { asPhysicsEventId, PhysicsOSError } from '@physicsos/shared'
 import type { PhysicsScene } from '@physicsos/physics-scene'
 import type { SimulationState } from '@physicsos/physics-core'
 
@@ -39,6 +39,7 @@ export interface CollisionSimulationOptions {
   readonly subDt?: number
   readonly startTime?: number
   readonly endTime?: number
+  /** Requested persisted state count, not samples per second. */
   readonly outputSampleRate?: number
 }
 
@@ -49,12 +50,120 @@ export interface CollisionSimulation {
      wall. A wall applies an external impulse, so total-momentum conservation
      is only verifiable before this instant. */
   readonly firstWallContactAt: number | null
+  /** Substep dispatches, body updates, contact passes/pair inspections/resolutions, and wall checks. */
+  readonly numericalIterationCount: number
 }
 
 const DEFAULT_DT = 1 / 120
 const DEFAULT_SUB_DT = 1 / 2000
 /** How many sweep passes a substep may run before accepting residual overlap. */
 const MAX_CONTACT_PASSES = 12
+
+export interface CollisionExecutionBounds {
+  readonly startTime: number
+  readonly endTime: number
+  readonly subDt: number
+  readonly storageSampleCountBound: number
+  readonly substepCountBound: number
+  readonly numericalIterationsPerSubstepBound: number
+  readonly numericalIterationCountBound: number
+}
+
+const collisionAdvanceStepCount = (startTime: number, endTime: number, subDt: number): number => {
+  const count = endTime === startTime ? 0 : Math.max(1, Math.ceil((endTime - startTime) / subDt))
+  if (!Number.isSafeInteger(count) || count < 0) {
+    throw new PhysicsOSError(
+      'INVALID_SIMULATION_ITERATION_BOUND',
+      'Collision integration requires a representable non-negative integer step count.',
+    )
+  }
+  return count
+}
+
+const collisionSampleTime = (
+  startTime: number,
+  endTime: number,
+  count: number,
+  index: number,
+): number => {
+  if (index === 0 || count === 1) return startTime
+  if (index === count - 1) return endTime
+  return startTime + (endTime - startTime) * (index / (count - 1))
+}
+
+const collisionIterationsPerSubstepBound = (bodyCount: number): number => {
+  if (!Number.isSafeInteger(bodyCount) || bodyCount < 0) {
+    throw new PhysicsOSError(
+      'INVALID_COLLISION_BODY_COUNT',
+      'Collision planning requires the actual non-negative integer body count.',
+    )
+  }
+  const pairCount = bodyCount * (bodyCount - 1) / 2
+  // One dispatch, every body update, all capped pass/body/pair work (including
+  // resolvePair + separate for an overlap), and up to four wall checks per body.
+  const count = 1 + bodyCount + MAX_CONTACT_PASSES * (1 + bodyCount + 3 * pairCount) + 4 * bodyCount
+  if (!Number.isSafeInteger(count)) {
+    throw new PhysicsOSError(
+      'INVALID_SIMULATION_ITERATION_BOUND',
+      'Collision body-pair work exceeds the representable integer step budget.',
+    )
+  }
+  return count
+}
+
+/** Pure counts for the same fixed-step schedule and entity loops the solver executes. */
+export const collisionExecutionBounds = (
+  options: CollisionSimulationOptions,
+  bodyCount: number,
+): CollisionExecutionBounds => {
+  const dt = options.dt ?? DEFAULT_DT
+  const subDt = Math.min(options.subDt ?? DEFAULT_SUB_DT, dt)
+  const startTime = options.startTime ?? 0
+  const endTime = options.endTime ?? 10
+  if (!Number.isFinite(dt) || dt <= 0 || !Number.isFinite(subDt) || subDt <= 0) {
+    throw new PhysicsOSError(
+      'INVALID_COLLISION_TIME_STEP',
+      'Collision storage and integration steps must be positive finite seconds.',
+    )
+  }
+  if (!Number.isFinite(startTime) || !Number.isFinite(endTime) || startTime < 0 || endTime < startTime) {
+    throw new PhysicsOSError(
+      'INVALID_SIMULATION_RANGE',
+      'Simulation range must satisfy 0 <= startTime <= endTime.',
+    )
+  }
+
+  const count = trajectoryStorageSampleCount(
+    options.outputSampleRate === undefined ? {} : { outputSampleRate: options.outputSampleRate },
+    Math.ceil((endTime - startTime) / dt) + 1,
+  )
+  const storageSampleCountBound = startTime === endTime ? 1 : count
+  let substepCountBound = collisionAdvanceStepCount(0, startTime, subDt)
+  let previousTime = startTime
+  // Only scalar counts over the storage cap; no states, integration or time array.
+  for (let index = 1; index < storageSampleCountBound; index += 1) {
+    const target = collisionSampleTime(startTime, endTime, storageSampleCountBound, index)
+    substepCountBound += collisionAdvanceStepCount(previousTime, target, subDt)
+    previousTime = target
+  }
+  const numericalIterationsPerSubstepBound = collisionIterationsPerSubstepBound(bodyCount)
+  const numericalIterationCountBound = substepCountBound * numericalIterationsPerSubstepBound
+  if (!Number.isSafeInteger(numericalIterationCountBound)) {
+    throw new PhysicsOSError(
+      'INVALID_SIMULATION_ITERATION_BOUND',
+      'Collision integration, body-pair work and wall checks exceed the representable integer step budget.',
+    )
+  }
+  return {
+    startTime,
+    endTime,
+    subDt,
+    storageSampleCountBound,
+    substepCountBound,
+    numericalIterationsPerSubstepBound,
+    numericalIterationCountBound,
+  }
+}
 
 export interface ResolvedCollisionScene {
   readonly scene: PhysicsScene
@@ -165,10 +274,12 @@ const substep = (
   time: number,
   events: CollisionPhysicsEvent[],
   wall: { count: number; firstAt: number | null },
-): void => {
+): number => {
   const { bodies, gravity, boundary } = scene
+  let numericalIterationCount = 1
 
   for (const body of bodies) {
+    numericalIterationCount += 1
     if (gravity.x !== 0 || gravity.y !== 0) {
       body.vx += gravity.x * dt
       body.vy += gravity.y * dt
@@ -180,11 +291,14 @@ const substep = (
   /* Sweep contacts to convergence: a new collision created by a resolved one
      (three bodies collapsing at once) is caught by the next pass. */
   for (let pass = 0; pass < MAX_CONTACT_PASSES; pass += 1) {
+    numericalIterationCount += 1
     let resolvedAny = false
     for (let i = 0; i < bodies.length; i += 1) {
+      numericalIterationCount += 1
       const a = bodies[i]
       if (a === undefined) continue
       for (let j = i + 1; j < bodies.length; j += 1) {
+        numericalIterationCount += 1
         const b = bodies[j]
         if (b === undefined) continue
         const dx = b.x - a.x
@@ -195,6 +309,7 @@ const substep = (
         const nx = dx / d
         const ny = dy / d
         if (d < minD) {
+          numericalIterationCount += 2
           const impactSpeed = resolvePair(a, b, nx, ny)
           if (impactSpeed > 0) {
             events.push({
@@ -223,23 +338,31 @@ const substep = (
     for (const body of bodies) {
       const { halfW, halfH, e } = boundary
       let reflected = false
+      numericalIterationCount += 1
       if (body.x - body.r < -halfW) {
         body.x = -halfW + body.r
         body.vx = Math.abs(body.vx) * e
         reflected = true
-      } else if (body.x + body.r > halfW) {
-        body.x = halfW - body.r
-        body.vx = -Math.abs(body.vx) * e
-        reflected = true
+      } else {
+        numericalIterationCount += 1
+        if (body.x + body.r > halfW) {
+          body.x = halfW - body.r
+          body.vx = -Math.abs(body.vx) * e
+          reflected = true
+        }
       }
+      numericalIterationCount += 1
       if (body.y - body.r < -halfH) {
         body.y = -halfH + body.r
         body.vy = Math.abs(body.vy) * e
         reflected = true
-      } else if (body.y + body.r > halfH) {
-        body.y = halfH - body.r
-        body.vy = -Math.abs(body.vy) * e
-        reflected = true
+      } else {
+        numericalIterationCount += 1
+        if (body.y + body.r > halfH) {
+          body.y = halfH - body.r
+          body.vy = -Math.abs(body.vy) * e
+          reflected = true
+        }
       }
       if (reflected) {
         wall.count += 1
@@ -247,6 +370,7 @@ const substep = (
       }
     }
   }
+  return numericalIterationCount
 }
 
 const derivedOf = (bodies: readonly SolverBody[]): DerivedQuantity[] => {
@@ -312,24 +436,37 @@ export const simulateCollision = (
   scene: ResolvedCollisionScene,
   options: CollisionSimulationOptions,
 ): CollisionSimulation => {
-  const dt = options.dt ?? DEFAULT_DT
-  const subDt = Math.min(options.subDt ?? DEFAULT_SUB_DT, dt)
-  const startTime = options.startTime ?? 0
-  const endTime = options.endTime ?? 10
-
+  const bounds = collisionExecutionBounds(options, scene.bodies.length)
+  const { startTime, endTime, subDt, storageSampleCountBound } = bounds
   const events: CollisionPhysicsEvent[] = []
   const states: SimulationState[] = []
   const wall = { count: 0, firstAt: null as number | null }
+  let numericalIterationCount = 0
+  let substepCount = 0
 
   // Initial conditions belong to scene time zero. Advance to a later window
   // without storing the discarded prefix, then land precisely on every sample.
   let time = 0
   const advanceTo = (target: number): void => {
-    while (time < target) {
-      const step = Math.min(subDt, target - time)
-      if (step <= 0) break
-      const nextTime = Math.min(target, time + step)
-      substep(scene, nextTime - time, nextTime, events, wall)
+    const fromTime = time
+    const steps = collisionAdvanceStepCount(fromTime, target, subDt)
+    for (let index = 1; index <= steps; index += 1) {
+      const nextTime = index === steps ? target : Math.min(target, fromTime + index * subDt)
+      if (nextTime <= time) {
+        if (time === target) break
+        throw new PhysicsOSError(
+          'COLLISION_TIME_RESOLUTION_EXCEEDED',
+          'The collision integration step cannot advance the requested scene clock.',
+        )
+      }
+      if (substepCount >= bounds.substepCountBound) {
+        throw new PhysicsOSError(
+          'COLLISION_ITERATION_BOUND_EXCEEDED',
+          'Collision integration exceeded its engine-owned step budget.',
+        )
+      }
+      numericalIterationCount += substep(scene, nextTime - time, nextTime, events, wall)
+      substepCount += 1
       time = nextTime
     }
   }
@@ -337,16 +474,11 @@ export const simulateCollision = (
   events.length = 0
   wall.firstAt = null
   wall.count = 0
-  const count = trajectoryStorageSampleCount(
-    options.outputSampleRate === undefined ? {} : { outputSampleRate: options.outputSampleRate },
-    Math.ceil((endTime - startTime) / dt) + 1,
-  )
-  const times =
-    endTime === startTime ? [startTime] : trajectorySampleTimes(startTime, endTime, count)
-  for (const sampleTime of times) {
+  for (let index = 0; index < storageSampleCountBound; index += 1) {
+    const sampleTime = collisionSampleTime(startTime, endTime, storageSampleCountBound, index)
     advanceTo(sampleTime)
     states.push(stateOf(scene, sampleTime))
   }
 
-  return { states, events, firstWallContactAt: wall.firstAt }
+  return { states, events, firstWallContactAt: wall.firstAt, numericalIterationCount }
 }

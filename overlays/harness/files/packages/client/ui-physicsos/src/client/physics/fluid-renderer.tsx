@@ -19,6 +19,7 @@ import { useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import type { RendererProps } from './renderer-registry.tsx'
 import type { ScenePoint } from './scene-visual-model.ts'
+import { svgPointFromClient } from './svg-screen-point.ts'
 import { ArrowMarkers, Dimension, Vectors, clsxJoin } from './primitives.tsx'
 import { PressureRenderer } from './pressure-renderer.tsx'
 import css from './renderers.module.css'
@@ -131,13 +132,8 @@ function BuoyancyRenderer({ view, projection, componentDrag }: RendererProps) {
   const sceneAt = (event: ReactPointerEvent<SVGGElement>): ScenePoint | undefined => {
     const svg = event.currentTarget.ownerSVGElement
     if (svg === null) return undefined
-    const rect = svg.getBoundingClientRect()
-    if (rect.width === 0 || rect.height === 0) return undefined
-    const viewBox = svg.viewBox.baseVal
-    if (viewBox.width === 0 || viewBox.height === 0) return undefined
-    const viewX = viewBox.x + ((event.clientX - rect.left) / rect.width) * viewBox.width
-    const viewY = viewBox.y + ((event.clientY - rect.top) / rect.height) * viewBox.height
-    return { x: projection.sx(viewX), y: projection.sy(viewY) }
+    const at = svgPointFromClient(svg, event)
+    return at === undefined ? undefined : { x: projection.sx(at.x), y: projection.sy(at.y) }
   }
 
   const onBlockPointerDown = (event: ReactPointerEvent<SVGGElement>) => {
@@ -171,9 +167,10 @@ function BuoyancyRenderer({ view, projection, componentDrag }: RendererProps) {
     if (drag === null || event.pointerId !== drag.pointerId) return
     dragRef.current = null
     setDragging(false)
-    if (!drag.moved || block === undefined) return
+    if (!drag.moved) return
+    if (block === undefined) { componentDrag?.cancel(); return }
     const at = sceneAt(event)
-    if (at === undefined) return
+    if (at === undefined) { componentDrag?.cancel(); return }
     componentDrag?.commit(block.id, { x: block.at.x, y: at.y - drag.grabY })
   }
 
@@ -330,6 +327,7 @@ function BuoyancyRenderer({ view, projection, componentDrag }: RendererProps) {
           onPointerMove={componentDrag === undefined ? undefined : onBlockPointerMove}
           onPointerUp={componentDrag === undefined ? undefined : endBlockDrag}
           onPointerCancel={componentDrag === undefined ? undefined : cancelBlockDrag}
+          onLostPointerCapture={componentDrag === undefined ? undefined : cancelBlockDrag}
         >
           {componentDrag === undefined ? null : <title>拖动物块改变浸入深度，读数实时跟随</title>}
           <rect

@@ -1,4 +1,8 @@
-import { simulationTimeRange, eventsInSimulationRange } from '@physicsos/physics-core'
+import {
+  assertSimulationPlan,
+  eventsInSimulationRange,
+  simulationTimeRange,
+} from '@physicsos/physics-core'
 import { trajectorySampleTimes, trajectoryStorageSampleCount } from '@physicsos/physics-scene'
 import {
   check,
@@ -10,6 +14,7 @@ import {
   type ModelSupport,
   type PhysicsEngine,
   type PhysicsEventLike,
+  type SimulationPlan,
   type SimulationRequest,
   type SimulationResult,
   type SimulationState,
@@ -358,7 +363,7 @@ export class FluidEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLike
     return stateOf(resolveFluidModel(scene), timeSeconds)
   }
 
-  simulate(scene: PhysicsScene, request: SimulationRequest): SimulationResult<PhysicsEventLike> {
+  private prepareSimulation(scene: PhysicsScene, request: SimulationRequest) {
     if (request.sceneId !== scene.id || request.sceneRevision !== scene.revision) {
       throw new PhysicsOSError(
         'SIMULATION_SCENE_MISMATCH',
@@ -374,16 +379,44 @@ export class FluidEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLike
       )
     }
 
-    const startedAt = new Date().toISOString()
     const model = resolveFluidModel(scene)
-    const { floats, settleTime } = equilibriumOf(model)
+    const equilibrium = equilibriumOf(model)
+    if (!Number.isFinite(equilibrium.settleTime)) {
+      throw new PhysicsOSError('INVALID_SIMULATION_RANGE', 'Immersion protocol duration must be finite.')
+    }
+    const plan: SimulationPlan = {
+      schemaVersion: 'simulation-plan/1.0',
+      engineId: this.engineId,
+      engineVersion: this.engineVersion,
+      simulationId: request.simulationId,
+      sceneId: scene.id,
+      sceneRevision: scene.revision,
+      modelId: BUOYANCY_MODEL,
+      kind: 'analytic',
+      ...simulationTimeRange(request.options, equilibrium.settleTime),
+      storageSampleCountBound: trajectoryStorageSampleCount(request.options, TRAJECTORY_SEGMENTS + 1),
+      numericalIterationCountBound: 0,
+      metadata: {
+        numericalIterationAccounting:
+          'No numerical integration; closed-form sampling. Fixed buoyancy verification probes are excluded.',
+      },
+    }
+    assertSimulationPlan(plan)
+    return { model, equilibrium, plan }
+  }
 
-    const { startTime, endTime } = simulationTimeRange(request.options, settleTime)
-    const states = trajectorySampleTimes(
-      startTime,
-      endTime,
-      trajectoryStorageSampleCount(request.options, TRAJECTORY_SEGMENTS + 1),
-    ).map((time) => stateOf(model, time))
+  prepareSimulationPlan(scene: PhysicsScene, request: SimulationRequest): SimulationPlan {
+    return this.prepareSimulation(scene, request).plan
+  }
+
+  simulate(scene: PhysicsScene, request: SimulationRequest): SimulationResult<PhysicsEventLike> {
+    const { model, equilibrium, plan } = this.prepareSimulation(scene, request)
+    const startedAt = new Date().toISOString()
+    const { floats, settleTime } = equilibrium
+    const { startTime, endTime, storageSampleCountBound } = plan
+    const states = trajectorySampleTimes(startTime, endTime, storageSampleCountBound).map((time) =>
+      stateOf(model, time),
+    )
 
     const events: PhysicsEventLike[] = [
       {

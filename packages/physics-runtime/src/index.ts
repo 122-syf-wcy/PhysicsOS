@@ -12,9 +12,14 @@
 import type {
   PhysicsEngine,
   PhysicsEventLike,
+  SimulationOptions,
+  SimulationPlan,
   SimulationRequest,
   SimulationResult,
+  VerificationCheck,
 } from '@physicsos/physics-core'
+import { canonicalValue, validateQuantity, type Quantity } from '@physicsos/physics-units'
+import { PhysicsOSError } from '@physicsos/shared'
 import type { PhysicsScene } from '@physicsos/physics-scene'
 import { verifyMagneticScene, verifyMechanicsSimulation } from '@physicsos/physics-verifier'
 import { MagneticEngine, createMagneticSimulationRequest } from '@physicsos/engine-magnetic'
@@ -46,7 +51,7 @@ import { InductionEngine, createInductionSimulationRequest } from '@physicsos/en
 import { TransformerEngine, createTransformerSimulationRequest } from '@physicsos/engine-induction'
 import { WaveEngine, createWaveSimulationRequest } from '@physicsos/engine-wave'
 import { ModernPhysicsEngine, createModernSimulationRequest } from '@physicsos/engine-modern'
-import { check, summarizeVerification } from '@physicsos/physics-core'
+import { assertSimulationPlan, check, summarizeVerification } from '@physicsos/physics-core'
 
 type AnyEngine = PhysicsEngine<PhysicsScene, PhysicsEventLike>
 type RequestBuilder = (
@@ -147,7 +152,253 @@ export const domainOfEngine = (engine: AnyEngine): string => {
 export interface SimulatedScene {
   readonly engineId: string
   readonly domain: string
+  /** The exact request passed to the selected engine, including the accepted options. */
+  readonly request: SimulationRequest
   readonly simulation: SimulationResult<PhysicsEventLike>
+}
+
+const recordOf = (value: unknown, path: string): Record<string, unknown> => {
+  if (
+    value === null ||
+    typeof value !== 'object' ||
+    Array.isArray(value) ||
+    (Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null)
+  ) {
+    throw new PhysicsOSError('INVALID_SIMULATION_REQUEST', `${path} must be a plain object.`)
+  }
+  return value as Record<string, unknown>
+}
+
+const exactKeys = (value: Record<string, unknown>, allowed: readonly string[], path: string): void => {
+  for (const key of Reflect.ownKeys(value)) {
+    if (typeof key !== 'string' || !allowed.includes(key)) {
+      throw new PhysicsOSError('INVALID_SIMULATION_REQUEST', `${path} contains an unknown property.`)
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(value, key)
+    if (descriptor?.get !== undefined || descriptor?.set !== undefined || descriptor?.enumerable !== true) {
+      throw new PhysicsOSError('INVALID_SIMULATION_REQUEST', `${path}.${key} must be an enumerable data property.`)
+    }
+  }
+}
+
+const nonemptyString = (value: unknown): value is string =>
+  typeof value === 'string' && value.trim().length > 0
+
+const revisionValid = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+
+const timeOption = (value: unknown, path: string, positive: boolean): number => {
+  const input = recordOf(value, path)
+  exactKeys(input, ['value', 'unit', 'dimension'], path)
+  if (typeof input.value !== 'number' || typeof input.unit !== 'string' || input.dimension !== 'time') {
+    throw new PhysicsOSError('INVALID_SIMULATION_OPTIONS', `${path} must be a time Quantity.`)
+  }
+  const seconds = canonicalValue(validateQuantity(input as unknown as Quantity, 'time'))
+  if (positive ? seconds <= 0 : seconds < 0) {
+    throw new PhysicsOSError('INVALID_SIMULATION_OPTIONS', `${path} must be ${positive ? 'positive' : 'non-negative'}.`)
+  }
+  return seconds
+}
+
+const validateOptions = (options: unknown): void => {
+  const value = recordOf(options, 'request.options')
+  exactKeys(value, ['startTime', 'endTime', 'timeStep', 'outputSampleRate', 'solver', 'tolerance', 'maxIterations', 'randomSeed'], 'request.options')
+  const start = value.startTime === undefined ? 0 : timeOption(value.startTime, 'request.options.startTime', false)
+  const end = value.endTime === undefined ? undefined : timeOption(value.endTime, 'request.options.endTime', false)
+  if (end !== undefined && end < start) {
+    throw new PhysicsOSError('INVALID_SIMULATION_RANGE', 'Simulation endTime cannot precede startTime.')
+  }
+  if (value.timeStep !== undefined) timeOption(value.timeStep, 'request.options.timeStep', true)
+  if (value.outputSampleRate !== undefined && (typeof value.outputSampleRate !== 'number' || !Number.isFinite(value.outputSampleRate) || value.outputSampleRate <= 0)) {
+    throw new PhysicsOSError('INVALID_SIMULATION_OPTIONS', 'outputSampleRate must be a finite positive number.')
+  }
+  if (value.solver !== undefined && !nonemptyString(value.solver)) {
+    throw new PhysicsOSError('INVALID_SIMULATION_OPTIONS', 'solver must be a non-empty string.')
+  }
+  if (value.tolerance !== undefined) {
+    const tolerance = recordOf(value.tolerance, 'request.options.tolerance')
+    exactKeys(tolerance, ['absolute', 'relative'], 'request.options.tolerance')
+    for (const key of ['absolute', 'relative']) {
+      const component = tolerance[key]
+      if (typeof component !== 'number' || !Number.isFinite(component) || component < 0) {
+        throw new PhysicsOSError('INVALID_SIMULATION_OPTIONS', `tolerance.${key} must be finite and non-negative.`)
+      }
+    }
+  }
+  if (value.maxIterations !== undefined && (typeof value.maxIterations !== 'number' || !Number.isSafeInteger(value.maxIterations) || value.maxIterations < 1)) {
+    throw new PhysicsOSError('INVALID_SIMULATION_OPTIONS', 'maxIterations must be a positive safe integer.')
+  }
+  if (value.randomSeed !== undefined && (typeof value.randomSeed !== 'number' || !Number.isSafeInteger(value.randomSeed))) {
+    throw new PhysicsOSError('INVALID_SIMULATION_OPTIONS', 'randomSeed must be a safe integer.')
+  }
+}
+
+const TRACE_KEYS = ['traceId', 'userId', 'sessionId', 'runId', 'turnId', 'toolCallId', 'sceneId', 'sceneRevision', 'physicsEventId'] as const
+
+const validateRequest = (scene: PhysicsScene, selected: EngineEntry, input: unknown): void => {
+  const request = recordOf(input, 'request')
+  exactKeys(request, ['schemaVersion', 'simulationId', 'sceneId', 'sceneRevision', 'requestedDomain', 'options', 'trace'], 'request')
+  if (request.schemaVersion !== 'simulation-request/1.0' || !nonemptyString(request.simulationId)) {
+    throw new PhysicsOSError('INVALID_SIMULATION_REQUEST', 'SimulationRequest needs its supported schema and a non-empty simulationId.')
+  }
+  if (!nonemptyString(scene.id) || !revisionValid(scene.revision) || !nonemptyString(request.sceneId) || !revisionValid(request.sceneRevision) || request.sceneId !== scene.id || request.sceneRevision !== scene.revision) {
+    throw new PhysicsOSError('SIMULATION_SCENE_MISMATCH', 'SimulationRequest must reference the exact legal PhysicsScene identity and revision.')
+  }
+  // Engine domains are physics domains, not teaching shelves (echo is wave; fluid statics is mechanics).
+  if (request.requestedDomain !== undefined && request.requestedDomain !== selected.engine.domain) {
+    throw new PhysicsOSError('SIMULATION_DOMAIN_MISMATCH', 'requestedDomain does not match the selected engine physics domain.')
+  }
+  const trace = recordOf(request.trace, 'request.trace')
+  exactKeys(trace, TRACE_KEYS, 'request.trace')
+  if (!nonemptyString(trace.traceId)) {
+    throw new PhysicsOSError('INVALID_SIMULATION_REQUEST', 'SimulationRequest traceId must be a non-empty string.')
+  }
+  for (const key of TRACE_KEYS) {
+    if (key === 'sceneRevision') continue
+    if (trace[key] !== undefined && !nonemptyString(trace[key])) {
+      throw new PhysicsOSError('INVALID_SIMULATION_REQUEST', `SimulationRequest trace.${key} must be a non-empty string.`)
+    }
+  }
+  if ((trace.sceneId !== undefined && trace.sceneId !== scene.id) || (trace.sceneRevision !== undefined && (!revisionValid(trace.sceneRevision) || trace.sceneRevision !== scene.revision))) {
+    throw new PhysicsOSError('SIMULATION_TRACE_MISMATCH', 'SimulationRequest trace must conform to its scene identity and revision when present.')
+  }
+  validateOptions(request.options)
+}
+
+const CHECK_TYPES = new Set(['schema', 'dimension', 'symbolic', 'numerical', 'constraint', 'conservation', 'boundary', 'trajectory', 'continuity', 'semantic'])
+
+const plainData = (value: unknown): value is Record<string, unknown> => {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false
+  const prototype = Object.getPrototypeOf(value)
+  if (prototype !== Object.prototype && prototype !== null) return false
+  return Reflect.ownKeys(value).every(key => {
+    if (typeof key !== 'string') return false
+    const descriptor = Object.getOwnPropertyDescriptor(value, key)
+    return descriptor !== undefined && 'value' in descriptor && descriptor.enumerable
+  })
+}
+
+const plainTree = (value: unknown, ancestors = new Set<object>(), depth = 0): boolean => {
+  if (depth > 512) return false
+  if (value === null || value === undefined || typeof value === 'string' || typeof value === 'boolean') return true
+  if (typeof value === 'number') return true
+  if (typeof value !== 'object' || ancestors.has(value)) return false
+  ancestors.add(value)
+  try {
+    if (Array.isArray(value)) {
+      return Object.getPrototypeOf(value) === Array.prototype &&
+        Reflect.ownKeys(value).every(key => key === 'length' || (typeof key === 'string' && /^(0|[1-9]\d*)$/.test(key) && Number(key) < value.length)) &&
+        Array.from({ length: value.length }, (_, index) => Object.getOwnPropertyDescriptor(value, String(index))).every(
+          descriptor => descriptor !== undefined && 'value' in descriptor && descriptor.enumerable && plainTree(descriptor.value, ancestors, depth + 1),
+        )
+    }
+    if (!plainData(value)) return false
+    return Object.values(value).every(child => plainTree(child, ancestors, depth + 1))
+  } finally {
+    ancestors.delete(value)
+  }
+}
+
+const scalarShape = (value: unknown): boolean => plainData(value) &&
+  typeof value.value === 'number' &&
+  typeof value.unit === 'string' && typeof value.dimension === 'string'
+
+const vectorShape = (value: unknown): boolean => plainData(value) &&
+  typeof value.unit === 'string' && typeof value.dimension === 'string' &&
+  plainData(value.vector) && ['x', 'y', 'z'].every(key => {
+    const components = value.vector as Record<string, unknown>
+    return typeof components[key] === 'number'
+  })
+
+const derivedShape = (value: unknown): boolean => plainData(value) && typeof value.key === 'string' &&
+  (scalarShape(value.value) || vectorShape(value.value))
+
+const stateShape = (value: unknown): boolean => plainData(value) && scalarShape(value.time) &&
+  Array.isArray(value.objects) && value.objects.every(object => plainData(object) && nonemptyString(object.id) &&
+    ['position', 'velocity', 'acceleration'].every(key => object[key] === undefined || vectorShape(object[key])) &&
+    (object.values === undefined || (plainData(object.values) && Object.values(object.values).every(item => scalarShape(item) || vectorShape(item))))) &&
+  Array.isArray(value.derived) && value.derived.every(derivedShape)
+
+const traceShape = (value: unknown): boolean => plainData(value) && nonemptyString(value.traceId) &&
+  TRACE_KEYS.every(key => value[key] === undefined || (key === 'sceneRevision' ? revisionValid(value[key]) : nonemptyString(value[key])))
+
+const resultShapeValid = (value: unknown): value is SimulationResult => {
+  if (!plainData(value)) return false
+  const verification = value.verification
+  const metadata = value.metadata
+  return typeof value.schemaVersion === 'string' && nonemptyString(value.simulationId) &&
+    nonemptyString(value.sceneId) && revisionValid(value.sceneRevision) &&
+    Array.isArray(value.states) && value.states.every(stateShape) &&
+    Array.isArray(value.events) && value.events.every(event => plainData(event) && nonemptyString(event.eventId) && nonemptyString(event.sceneId) && revisionValid(event.revision) && typeof event.type === 'string') &&
+    Array.isArray(value.measurements) && value.measurements.every(measurement => plainData(measurement) &&
+      nonemptyString(measurement.id) && (measurement.definitionId === undefined || nonemptyString(measurement.definitionId)) &&
+      (scalarShape(measurement.value) || vectorShape(measurement.value))) &&
+    Array.isArray(value.derivedQuantities) && value.derivedQuantities.every(derivedShape) &&
+    plainData(verification) && typeof verification.status === 'string' && ['passed', 'passed_with_warnings', 'failed'].includes(verification.status) &&
+    Array.isArray(verification.checks) && verification.checks.every(entry => plainData(entry) &&
+      nonemptyString(entry.id) && typeof entry.type === 'string' && CHECK_TYPES.has(entry.type) && typeof entry.passed === 'boolean') &&
+    ['warnings', 'errors'].every(key => Array.isArray(verification[key]) && verification[key].every(issue =>
+      plainData(issue) && nonemptyString(issue.code) && typeof issue.message === 'string' && issue.severity === (key === 'warnings' ? 'warning' : 'error'))) &&
+    plainData(metadata) && nonemptyString(metadata.engineId) && nonemptyString(metadata.engineVersion) &&
+    typeof metadata.startedAt === 'string' && typeof metadata.finishedAt === 'string' &&
+    typeof metadata.durationMs === 'number' && metadata.durationMs >= 0 && typeof metadata.deterministic === 'boolean' &&
+    traceShape(value.trace) && plainTree(value)
+}
+
+function assertResultShape(scene: PhysicsScene, selected: EngineEntry, request: SimulationRequest, value: unknown): asserts value is SimulationResult {
+  if (!resultShapeValid(value)) {
+    throw new PhysicsOSError('INVALID_SIMULATION_RESULT', 'The engine returned a malformed SimulationResult; it cannot be verified.', {
+      details: { rawResult: value, sceneId: scene.id, sceneRevision: scene.revision, simulationId: request.simulationId, engineId: selected.engine.engineId },
+    })
+  }
+}
+
+const hasNonFiniteNumber = (value: unknown): boolean => {
+  if (typeof value === 'number') return !Number.isFinite(value)
+  if (value === null || typeof value !== 'object') return false
+  return Object.values(value).some(hasNonFiniteNumber)
+}
+
+const resultContractChecks = (scene: PhysicsScene, selected: EngineEntry, request: SimulationRequest, result: SimulationResult): VerificationCheck[] => {
+  const trace = result.trace
+  const conditions = [
+    ['simulation_result_schema', result.schemaVersion === 'simulation-result/1.0'],
+    ['simulation_result_identity', result.simulationId === request.simulationId && result.sceneId === scene.id && result.sceneRevision === scene.revision],
+    ['simulation_result_trace', trace !== undefined && trace !== null && trace.traceId === request.trace.traceId && (trace.sceneId === undefined || trace.sceneId === scene.id) && (trace.sceneRevision === undefined || trace.sceneRevision === scene.revision) && TRACE_KEYS.every(key => trace[key] === undefined || request.trace[key] === undefined || trace[key] === request.trace[key])],
+    ['simulation_result_engine', result.metadata?.engineId === selected.engine.engineId && result.metadata.engineVersion === selected.engine.engineVersion],
+  ] as const
+  // Contract failures are schema evidence, never numerical proof or a replacement for engine checks.
+  return conditions.filter(([, passed]) => !passed).map(([id]) => check(id, 'schema', false, {
+    message: 'SimulationResult does not conform to the scene, request, trace or selected engine.',
+    details: { sceneId: scene.id, sceneRevision: scene.revision, simulationId: request.simulationId, engineId: selected.engine.engineId },
+  }))
+}
+
+/** Exact engine-owned preflight bounds for an unchanged, legal request; never computes a result. */
+export const getSimulationPlan = (scene: PhysicsScene, selected: EngineEntry, request: SimulationRequest): SimulationPlan => {
+  validateRequest(scene, selected, request)
+  const prepare = selected.engine.prepareSimulationPlan
+  if (prepare === undefined) {
+    throw new PhysicsOSError('SIMULATION_PLAN_UNAVAILABLE', 'The selected engine does not expose execution bounds.')
+  }
+  const plan = prepare.call(selected.engine, scene, request)
+  if (!plainData(plan)) {
+    throw new PhysicsOSError('INVALID_SIMULATION_PLAN', 'An engine plan must be a plain data object.')
+  }
+  assertSimulationPlan(plan)
+  const requestedStart = request.options.startTime === undefined ? 0 : canonicalValue(request.options.startTime)
+  const requestedEnd = request.options.endTime === undefined ? undefined : canonicalValue(request.options.endTime)
+  if (
+    plan.startTime !== requestedStart || (requestedEnd !== undefined && plan.endTime !== requestedEnd) ||
+    (plan.endTimeExact === false && (requestedEnd !== undefined || plan.kind !== 'iterative')) ||
+    plan.engineId !== selected.engine.engineId || plan.engineVersion !== selected.engine.engineVersion ||
+    plan.sceneId !== scene.id || plan.sceneRevision !== scene.revision || plan.simulationId !== request.simulationId ||
+    !['static', 'analytic', 'iterative'].includes(plan.kind) ||
+    (plan.modelId !== undefined && !nonemptyString(plan.modelId))
+  ) {
+    throw new PhysicsOSError('SIMULATION_PLAN_MISMATCH', 'The engine plan must match the exact selected engine, scene and request identities.')
+  }
+  return plan
 }
 
 /**
@@ -155,21 +406,68 @@ export interface SimulatedScene {
  * Independent mechanics/magnetic checks supplement engine checks; an existing
  * failed engine verdict can never be erased by a successful external verifier.
  */
-export const simulateScene = (
+export function simulateScene(
   scene: PhysicsScene,
   entryFor: EngineEntry,
   simulationId: string,
   traceId: string,
-): SimulatedScene => {
-  const request = entryFor.createRequest(scene, simulationId, traceId)
+  options?: SimulationOptions,
+): SimulatedScene
+export function simulateScene(
+  scene: PhysicsScene,
+  entryFor: EngineEntry,
+  request: SimulationRequest,
+): SimulatedScene
+export function simulateScene(
+  scene: PhysicsScene,
+  entryFor: EngineEntry,
+  simulationIdOrRequest: string | SimulationRequest,
+  traceId?: string,
+  options?: SimulationOptions,
+): SimulatedScene {
+  let request: SimulationRequest
+  if (typeof simulationIdOrRequest === 'string') {
+    if (!nonemptyString(traceId)) throw new PhysicsOSError('INVALID_SIMULATION_REQUEST', 'A non-empty traceId is required.')
+    request = entryFor.createRequest(scene, simulationIdOrRequest, traceId)
+    if (options !== undefined) {
+      validateOptions(options)
+      request = { ...request, options: { ...request.options, ...options } }
+    }
+  } else {
+    if (traceId !== undefined || options !== undefined) {
+      throw new PhysicsOSError('INVALID_SIMULATION_REQUEST', 'A supplied SimulationRequest cannot be combined with extra request arguments.')
+    }
+    request = simulationIdOrRequest
+  }
+  validateRequest(scene, entryFor, request)
   let simulation = entryFor.engine.simulate(scene, request)
+  assertResultShape(scene, entryFor, request, simulation)
+  const contractChecks = resultContractChecks(scene, entryFor, request, simulation)
+  if (hasNonFiniteNumber(simulation)) {
+    contractChecks.push(check('simulation_result_finite', 'schema', false, { message: 'SimulationResult contains non-finite numeric evidence and cannot be accepted as valid.' }))
+  }
+  const verdictHasFailures = simulation.verification.checks.some(entry => !entry.passed) || simulation.verification.errors.length > 0
+  if (verdictHasFailures && simulation.verification.status !== 'failed') {
+    contractChecks.push(check('simulation_result_verdict', 'schema', false, { message: 'SimulationResult status contradicts its failed checks or errors.' }))
+  }
+  if (contractChecks.length > 0) {
+    // Keep the returned states and failed evidence inspectable, but never verify a mismatched result.
+    simulation = {
+      ...simulation,
+      verification: summarizeVerification(
+        [...simulation.verification.checks, ...contractChecks],
+        simulation.verification.warnings,
+        simulation.verification.errors,
+      ),
+    }
+  }
   if (
     entryFor.engine.engineId === 'engine-magnetic' ||
     entryFor.engine.engineId === 'engine-mechanics'
   ) {
     const independent =
       entryFor.engine.engineId === 'engine-magnetic'
-        ? verifyMagneticScene(scene, simulation)
+        ? verifyMagneticScene(scene, simulation, { request })
         : verifyMechanicsSimulation(scene, simulation)
     simulation = {
       ...simulation,
@@ -177,14 +475,15 @@ export const simulateScene = (
         [
           ...simulation.verification.checks,
           ...independent.checks,
-          check('engine_verification', 'numerical', simulation.verification.status !== 'failed'),
+          ...(simulation.verification.status === 'failed' ? [check('engine_verification', 'schema', false)] : []),
+          ...(independent.status === 'failed' ? [check('independent_verification', 'schema', false)] : []),
         ],
         [...simulation.verification.warnings, ...independent.warnings],
         [...simulation.verification.errors, ...independent.errors],
       ),
     }
   }
-  return { engineId: entryFor.engine.engineId, domain: domainOfEngine(entryFor.engine), simulation }
+  return { engineId: entryFor.engine.engineId, domain: domainOfEngine(entryFor.engine), request, simulation }
 }
 
 /** Question parsing deliberately exposes fewer models than the exploratory Lab. */
@@ -206,7 +505,22 @@ const QUESTION_MODELS: Readonly<Record<string, { domain?: string; models?: reado
     models: ['charged_particle_uniform_electric_field', 'point_charge_electrostatic_field'],
   },
   'engine-magnetic': { domain: 'magnetic', models: ['charged_particle_uniform_magnetic_field'] },
-  'engine-mechanics': { domain: 'mechanics' },
+  'engine-mechanics': {
+    domain: 'mechanics',
+    models: [
+      'uniform_linear_motion',
+      'uniformly_accelerated_motion',
+      'projectile_motion',
+      'newton_second_law',
+      'inclined_plane',
+      'spring_oscillator',
+      'spring_statics',
+      'simple_pendulum',
+      'horizontal_friction',
+      'circular_orbit',
+    ],
+  },
+  'engine-collision': { domain: 'mechanics', models: ['one_dimensional_collision'] },
   'engine-optics': { domain: 'optics' },
   'engine-circuit': { domain: 'circuit', models: ['dc_steady_state_mna'] },
   'engine-induction': { domain: 'induction', models: ['bar_motion_emf', 'flux_change_emf'] },

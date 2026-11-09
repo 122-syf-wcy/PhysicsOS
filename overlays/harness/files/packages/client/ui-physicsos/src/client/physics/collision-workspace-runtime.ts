@@ -10,6 +10,8 @@
 
 import { COLLISION_MODEL_LABELS, detectCollisionModel } from '@physicsos/engine-collision'
 import type { PhysicsScene, CollisionSceneInput } from '@physicsos/physics-scene'
+import type { CapturedResult } from '@physicsos/physics-workbench/types'
+import { publicCapturedResult } from '@physicsos/physics-workbench/data'
 
 import { CollisionRuntimeBridge, type CollisionRuntimeSnapshot } from './collision-runtime-bridge.ts'
 import { branchBadgeOf } from './experimental-branch.ts'
@@ -29,6 +31,13 @@ const fmt = formatSignificant
  */
 export class CollisionWorkspaceRuntime implements WorkspaceRuntime {
   private readonly bridge: CollisionRuntimeBridge
+  /** This adapter owns the engine run; only its validated publication copy is reused. */
+  private publishedRun: {
+    sourceResult: NonNullable<CapturedResult['result']>
+    sourceRequest: CapturedResult['request']
+    result: NonNullable<CapturedResult['result']>
+    request: CapturedResult['request']
+  } | undefined
   /** The scene as the source stated it, kept so a branch can be discarded. */
   private readonly origin: PhysicsScene | undefined
 
@@ -95,6 +104,28 @@ export class CollisionWorkspaceRuntime implements WorkspaceRuntime {
 
   getSnapshot(): WorkspaceSnapshot {
     return this.toWorkspace(this.bridge.getSnapshot())
+  }
+
+  captureRaw(): CapturedResult {
+    return this.bridge.captureRaw()
+  }
+
+  capturePublished(): CapturedResult {
+    const raw = this.bridge.captureRaw()
+    const cached = raw.result !== undefined && this.publishedRun?.sourceResult === raw.result &&
+      this.publishedRun.sourceRequest === raw.request ? this.publishedRun : undefined
+    const capture = publicCapturedResult({
+      ...raw,
+      ...(cached === undefined ? {} : {
+        result: cached.result,
+        ...(cached.request === undefined ? {} : { request: cached.request }),
+      }),
+    })
+    if (raw.result !== undefined && capture.result !== undefined) this.publishedRun = {
+      sourceResult: raw.result, sourceRequest: raw.request,
+      result: capture.result, request: capture.request,
+    }
+    return capture
   }
 
   editParameter(id: string, value: number): WorkspaceSnapshot {

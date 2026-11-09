@@ -22,9 +22,13 @@ import {
   toCanonicalVector,
   type DerivedQuantity,
   type PhysicsEventLike,
+  type SimulationRequest,
   type SimulationResult,
   type SimulationState,
 } from '@physicsos/physics-core'
+import { publicCapturedResult } from '@physicsos/physics-workbench/data'
+import type { CapturedResult } from '@physicsos/physics-workbench/types'
+import { canonicalValue, quantity } from '@physicsos/physics-units'
 import { observeCompositeScene } from '@physicsos/physics-observation'
 import { verifyCompositeApparatus } from '@physicsos/physics-verifier'
 import {
@@ -221,11 +225,24 @@ export class CompositeWorkspaceRuntime implements WorkspaceRuntime {
   private highlighted: readonly string[] = []
   private failure: string | undefined
   private computed: Computed | undefined
+  /** The submitted run is retained even when verification rejects its result. */
+  private retainedRun: Pick<CapturedResult, 'scene' | 'request' | 'result'> | undefined
+  /** A detached validated copy of this owner's run, retained until a new solve. */
+  private publishedRun: {
+    sourceResult: SimulationResult
+    sourceRequest: SimulationRequest | undefined
+    result: SimulationResult
+    request: SimulationRequest | undefined
+  } | undefined
+  private retainedEndTime: number | undefined
+  private engineInfo: CapturedResult['engineInfo'] = { id: this.engine.engineId, version: this.engine.engineVersion }
   /** The full run for the current revision; a composite simulate is the costliest call in the Lab. */
   private simulationCache: {
     key: string
+    request: SimulationRequest
     simulation: SimulationResult
-    projectVisual: CompositeVisualProjector
+    engineInfo: CapturedResult['engineInfo']
+    projectVisual?: CompositeVisualProjector
   } | undefined
   /** The scene as the source stated it, kept so an experimental branch can be discarded. */
   private readonly origin: PhysicsScene | undefined
@@ -245,32 +262,45 @@ export class CompositeWorkspaceRuntime implements WorkspaceRuntime {
    */
   private recompute(): void {
     const scene = this.sceneRuntime.peekScene()
+    this.retainedRun = { scene }
+    this.retainedEndTime = undefined
+    this.engineInfo = {
+      id: this.engine.engineId,
+      version: this.engine.engineVersion,
+      ...(scene.metadata.experimentRelease === undefined ? {} : { release: scene.metadata.experimentRelease }),
+    }
     try {
       const key = `${String(scene.id)}:${scene.revision}`
       const cached = this.simulationCache?.key === key ? this.simulationCache : undefined
       if (cached === undefined) {
         const support = this.engine.canHandle(scene)
+        if (support.modelId !== undefined) this.engineInfo = { ...this.engineInfo, model: support.modelId }
         if (!support.supported) {
           this.failure = support.failedConditions.map(entry => entry.message).join(' ')
           this.computed = undefined
           return
         }
       }
-      const simulation = cached?.simulation ?? this.engine.simulate(
+      if (cached !== undefined) this.engineInfo = cached.engineInfo
+      const request = cached?.request ?? createCompositeSimulationRequest(
         scene,
-        createCompositeSimulationRequest(
-          scene,
-          `composite-lab-${String(scene.id)}-${scene.revision}`,
-          `composite-lab-trace-${String(scene.id)}-${scene.revision}`,
-        ),
+        `composite-lab-${String(scene.id)}-${scene.revision}`,
+        `composite-lab-trace-${String(scene.id)}-${scene.revision}`,
       )
+      this.retainedRun = { scene, request }
+      const simulation = cached?.simulation ?? this.engine.simulate(scene, request)
+      this.retainedRun = { scene, request, result: simulation }
+      const lastTime = simulation.states.at(-1)?.time
+      this.retainedEndTime = lastTime === undefined ? undefined : canonicalValue(lastTime)
+      this.engineInfo = { ...this.engineInfo, id: simulation.metadata.engineId, version: simulation.metadata.engineVersion }
+      this.simulationCache = { key, request, simulation, engineInfo: this.engineInfo }
       if (simulation.verification.status === 'failed') {
         this.failure = simulation.verification.errors.map(entry => entry.message).join(' ')
         this.computed = undefined
         return
       }
       const projectVisual = cached?.projectVisual ?? createCompositeVisualProjector(scene, simulation)
-      this.simulationCache = { key, simulation, projectVisual }
+      this.simulationCache = { key, request, simulation, projectVisual, engineInfo: this.engineInfo }
       const startTime = simulation.states[0]?.time.value ?? 0
       const endTime = simulation.states.at(-1)?.time.value ?? 0
       if (this.currentTime > endTime) this.currentTime = endTime
@@ -305,16 +335,13 @@ export class CompositeWorkspaceRuntime implements WorkspaceRuntime {
     /* Changing a physical fact on a question scene forks first: the solution the
        student just read was verified against the original conditions. Playback,
        seeking and observable toggles are NOT facts and never fork. */
-    if (requiresExperimentalFork(this.sceneRuntime.getScene(), type)) {
-      this.sceneRuntime = new SceneRuntime(
-        forkExperimentalScene({ scene: this.sceneRuntime.getScene() }),
-      )
-      this.currentTime = 0
-      this.running = false
-    }
-    const scene = this.sceneRuntime.getScene()
+    const current = this.sceneRuntime.getScene()
+    const prospective = requiresExperimentalFork(current, type)
+      ? new SceneRuntime(forkExperimentalScene({ scene: current }))
+      : this.sceneRuntime
+    const scene = prospective.getScene()
     this.commandSequence += 1
-    const result = this.sceneRuntime.execute(
+    const result = prospective.execute(
       createSceneCommand<T>({
         commandId: `composite-ui-command-${this.commandSequence}`,
         sceneId: String(scene.id),
@@ -328,6 +355,7 @@ export class CompositeWorkspaceRuntime implements WorkspaceRuntime {
       this.failure = result.error.message
       return
     }
+    this.sceneRuntime = prospective
     /* A parameter change makes the previous playhead physically meaningless. */
     this.currentTime = 0
     this.running = false
@@ -336,6 +364,36 @@ export class CompositeWorkspaceRuntime implements WorkspaceRuntime {
 
   getScene(): PhysicsScene {
     return this.sceneRuntime.getScene()
+  }
+
+  captureRaw(): CapturedResult {
+    const run = this.retainedRun ?? { scene: this.sceneRuntime.peekScene() }
+    const computed = this.computed
+    const total = computed?.endTime ?? this.retainedEndTime
+    const clock = total === undefined
+      ? { time: 0, total: 0, running: false, rate: this.rate }
+      : { time: Math.min(total, Math.max(0, this.currentTime)), total, running: computed !== undefined && this.running, rate: this.rate }
+    const cached = run.result !== undefined && this.publishedRun?.sourceResult === run.result &&
+      this.publishedRun.sourceRequest === run.request ? this.publishedRun : undefined
+    const capture = publicCapturedResult({
+      ...run,
+      ...(cached === undefined ? {} : {
+        result: cached.result,
+        ...(cached.request === undefined ? {} : { request: cached.request }),
+      }),
+      ...(computed === undefined ? {} : { state: computed.state }),
+      clock,
+      cursor: total === undefined
+        ? { kind: 'static', identity: `${String(run.scene.id)}:${run.scene.revision}` }
+        : { kind: 'time', time: quantity(clock.time, 's', 'time') },
+      engineInfo: this.engineInfo,
+      ...(this.failure === undefined ? {} : { diagnostics: [{ code: 'COMPOSITE_RUNTIME_DIAGNOSTIC', message: this.failure }] }),
+    })
+    if (run.result !== undefined && capture.result !== undefined) this.publishedRun = {
+      sourceResult: run.result, sourceRequest: run.request,
+      result: capture.result, request: capture.request,
+    }
+    return capture
   }
 
   getSnapshot(): WorkspaceSnapshot {
@@ -763,7 +821,10 @@ export class CompositeWorkspaceRuntime implements WorkspaceRuntime {
   setRunning(running: boolean): WorkspaceSnapshot {
     const end = this.computed?.endTime ?? 0
     /* Replay contract: run pressed at the end restarts from t = 0. */
-    if (running && end > 0 && this.currentTime >= end) this.currentTime = 0
+    if (running && end > 0 && this.currentTime >= end) {
+      this.currentTime = 0
+      this.recompute()
+    }
     this.running = running && end > 0
     return this.getSnapshot()
   }
@@ -787,7 +848,7 @@ export class CompositeWorkspaceRuntime implements WorkspaceRuntime {
 
   advance(wallClockSeconds: number): WorkspaceSnapshot {
     const end = this.computed?.endTime ?? 0
-    if (this.running && Number.isFinite(wallClockSeconds) && end > 0) {
+    if (this.running && Number.isFinite(wallClockSeconds) && wallClockSeconds >= 0 && end > 0) {
       /* A composite run spans nanoseconds–microseconds, so raw wall seconds would
          jump past the whole window inside one frame. The wall→scene mapping paces
          the full window over MICRO_WINDOW_WALL_SECONDS — the same presentation-only

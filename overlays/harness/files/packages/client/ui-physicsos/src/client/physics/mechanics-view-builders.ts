@@ -86,6 +86,9 @@ export interface BuiltSnapshot {
  */
 type StaticPanels = Pick<BuiltSnapshot, 'tree' | 'charts' | 'table' | 'derivation' | 'verification' | 'events' | 'trajectoryTimes'>
 const staticPanels = new WeakMap<SimulationResult, StaticPanels>()
+const latestInspector = new WeakMap<SimulationResult, readonly InspectorSection[]>()
+const sameInspector = (left: readonly InspectorSection[], right: readonly InspectorSection[]): boolean =>
+  JSON.stringify(left) === JSON.stringify(right)
 
 export function buildSnapshot(input: SnapshotInput): BuiltSnapshot {
   const { scene, model, simulation, state, clock, status, modelId } = input
@@ -127,6 +130,12 @@ export function buildSnapshot(input: SnapshotInput): BuiltSnapshot {
     state,
   })
 
+  const nextInspector = inspectorOf(scene, modelId, dq)
+  const previousInspector = latestInspector.get(simulation)
+  const inspector = previousInspector !== undefined && sameInspector(previousInspector, nextInspector)
+    ? previousInspector : nextInspector
+  latestInspector.set(simulation, inspector)
+
   return {
     scene,
     sceneRevision: scene.revision,
@@ -137,7 +146,7 @@ export function buildSnapshot(input: SnapshotInput): BuiltSnapshot {
     ...(view.incline === undefined ? {} : {
       trajectoryTimes: mechanicsTrajectorySamples(input.observations.observations, view.incline).times,
     }),
-    inspector: inspectorOf(scene, modelId, dq),
+    inspector,
     clock,
   }
 }
@@ -273,9 +282,14 @@ export function inspectorOf(
     return [{ id: 'initial', title: '圆轨道：保持中心天体，调速联动半径', parameters: [
       { id: 'mass', label: '卫星质量', symbol: 'm', unit: 'kg', value: mass, min: 0.1, step: 1 },
       { id: 'speed', label: '轨道速度（r = GM/v²）', symbol: 'v', unit: 'm/s', value: Math.sqrt(gm / radius), min: 0.1, step: Math.max(0.1, Math.sqrt(gm / radius) / 50) },
+      { id: 'orbitRadius', label: '轨道半径', symbol: 'r', unit: 'm', value: radius, min: 1, step: 100000, highlights: 'obs-orbit' },
+      { id: 'gravitationalParameter', label: '中心天体引力参数', symbol: 'GM', unit: 'm³/s²', value: gm, min: 1, step: 1e12, highlights: 'obs-orbit' },
     ], derived: [
       derivedRow('orbit-radius', '联动轨道半径', 'r', radius, 'm'),
       derivedRow('orbit-period', '物理周期', 'T', 2 * Math.PI * radius / Math.sqrt(gm / radius), 's'),
+      derivedRow('orbital_speed', '轨道速度', 'v', scalar(dq ?? [], 'orbital_speed'), 'm/s'),
+      derivedRow('orbital_period', '公转周期', 'T', scalar(dq ?? [], 'orbital_period'), 's'),
+      derivedRow('orbital_force', '引力', 'F', scalar(dq ?? [], 'gravitational_force'), 'N'),
     ] }]
   }
 

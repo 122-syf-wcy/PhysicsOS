@@ -27,7 +27,7 @@ const builtDay = [
 ].join('-')
 
 /** Each optional entry is its own inline factory. No relative require/chunk graph. */
-const optionalEntries = ['workspace', 'admin', 'pdf', 'optics3d'] as const
+const optionalEntries = ['workspace', 'admin', 'pdf', 'optics3d', 'canvas'] as const
 const pluginId = '@deepseek-ai/dsh-client-ui-physicsos'
 
 export default (inlineConfig: Pick<UserConfig, 'env'>): UserConfig[] =>

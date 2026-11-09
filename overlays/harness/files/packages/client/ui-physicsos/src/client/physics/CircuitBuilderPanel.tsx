@@ -11,17 +11,18 @@
  * panel deliberately offers no "connect" form: the gesture is the feature.
  */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { clsxJoin } from './primitives.tsx'
 import {
   BUILDER_PARTS,
-  addPart,
+  disconnectTerminal,
   moveComponent,
   removeComponent,
   rotateComponent,
   setParams,
   type BuilderComponent,
+  type BuilderPartSpec,
   type CircuitDraft,
   type TerminalRef,
 } from './circuit-builder.ts'
@@ -32,6 +33,7 @@ import {
   spriteIdFor,
 } from './circuit-builder-labels.ts'
 import { PARTS3D, part3dUrl } from './parts3d-catalog.ts'
+import { CIRCUIT_PART_MIME, placeBuilderPart } from './circuit-part-drag.ts'
 import css from './CircuitBuilderPanel.module.css'
 import type { PhysicsosKey } from '../locales.ts'
 
@@ -39,7 +41,7 @@ type Translate = (key: PhysicsosKey) => string
 
 /** Edits the panel can apply; every one is a pure draft transform. */
 export interface BuilderEditing {
-  readonly apply: (edit: (draft: CircuitDraft) => CircuitDraft) => void
+  readonly apply: (edit: (draft: CircuitDraft) => CircuitDraft) => void | Promise<void>
   readonly undo: () => void
   readonly redo: () => void
   readonly canUndo: boolean
@@ -57,7 +59,18 @@ export interface CircuitBuilderPanelProps {
   readonly pendingTerminal?: TerminalRef | undefined
   /** Whether the current draft solves; drives the readout tone, not the edit. */
   readonly solvable: boolean
+  /** Optional shared selection connects the shelf inspector to canvas body presses. */
+  readonly selectedComponentId?: string | undefined
+  readonly onSelectComponent?: ((id: string | undefined) => void) | undefined
+  readonly variant?: 'default' | 'compact'
 }
+
+const PART_GROUPS = [
+  { key: 'power', types: ['voltage_source'] },
+  { key: 'control', types: ['switch', 'variable_resistor'] },
+  { key: 'loads', types: ['resistor'] },
+  { key: 'meters', types: ['ammeter', 'voltmeter'] },
+] as const
 
 /** A numeric field that commits on blur/Enter rather than per keystroke, so a
     half-typed number never becomes a physical value. */
@@ -239,8 +252,40 @@ export function CircuitBuilderPanel({
   editing,
   pendingTerminal,
   solvable,
+  selectedComponentId,
+  onSelectComponent,
+  variant = 'default',
 }: CircuitBuilderPanelProps) {
-  const [selected, setSelected] = useState<string | undefined>(undefined)
+  const [localSelected, setLocalSelected] = useState<string | undefined>(undefined)
+  const controlled = onSelectComponent !== undefined || selectedComponentId !== undefined
+  const selected = controlled ? selectedComponentId : localSelected
+  const select = (id: string | undefined): void => {
+    if (onSelectComponent !== undefined) onSelectComponent(id)
+    else if (!controlled) setLocalSelected(id)
+  }
+  const [applying, setApplying] = useState(false)
+  const [editFailed, setEditFailed] = useState(false)
+  const mounted = useRef(true)
+  const pendingEdits = useRef(0)
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
+  /** Keep synchronous Lab edits synchronous; queued canvas edits select only after settlement. */
+  const apply = (edit: (draft: CircuitDraft) => CircuitDraft, after?: () => void): void => {
+    pendingEdits.current += 1
+    setApplying(true)
+    setEditFailed(false)
+    const finish = (success: boolean): void => {
+      pendingEdits.current -= 1
+      if (!mounted.current) return
+      if (success) after?.()
+      else setEditFailed(true)
+      setApplying(pendingEdits.current > 0)
+    }
+    try {
+      const result = editing.apply(edit)
+      if (result === undefined) finish(true)
+      else void result.then(() => { finish(true) }, () => { finish(false) })
+    } catch { finish(false) }
+  }
   const selectedComponent = useMemo(
     () => draft.components.find(component => component.id === selected),
     [draft, selected],
@@ -260,43 +305,41 @@ export function CircuitBuilderPanel({
     }
   }, [draft.components])
 
+  const partButton = (part: BuilderPartSpec) => (
+    <button key={part.id} type="button" className={css.part} data-testid={`builder-add-${part.id}`}
+      disabled={applying} draggable={!applying}
+      onDragStart={(event) => {
+        if (applying) { event.preventDefault(); return }
+        event.stopPropagation()
+        event.dataTransfer.setData(CIRCUIT_PART_MIME, part.id)
+        event.dataTransfer.effectAllowed = 'copy'
+      }}
+      onClick={() => {
+        let placedId: string | undefined
+        apply((current) => {
+          const existingSource = part.type === 'voltage_source' && current.components.some(component => component.type === 'voltage_source')
+          const added = placeBuilderPart(current, part, existingSource ? undefined : nextSpot)
+          placedId = added.componentId
+          return added.draft
+        }, () => { if (placedId !== undefined) select(placedId) })
+      }}>
+      <PartThumbnail sprite={spriteIdFor(part.type, ratingOfParams(part.type, part.params), part.params.state !== 'open')} />
+      <span className={css.partLabel}>{t(`lab.builder.part.${part.id}` as PhysicsosKey)}</span>
+      {CIRCUIT_METER_KINDS.includes(part.type) ? <span className={css.partNote}>{t('lab.builder.part.ideal')}</span> : null}
+    </button>
+  )
+
   return (
-    <div className={css.builder} data-testid="circuit-builder">
+    <div className={clsxJoin(css.builder, variant === 'compact' ? css.compact : undefined)} data-testid="circuit-builder" data-builder-variant={variant} aria-busy={applying}>
       <section className={css.section}>
         <h4 className={css.heading}>{t('lab.builder.parts')}</h4>
-        <div className={css.palette}>
-          {BUILDER_PARTS.map(part => (
-            <button
-              key={part.id}
-              type="button"
-              className={css.part}
-              data-testid={`builder-add-${part.id}`}
-              onClick={() => {
-                let placedId: string | undefined
-                editing.apply((current) => {
-                  const added = addPart(current, part, nextSpot)
-                  placedId = added.componentId
-                  return added.draft
-                })
-                if (placedId !== undefined) setSelected(placedId)
-              }}
-            >
-              <PartThumbnail
-                sprite={spriteIdFor(
-                  part.type,
-                  ratingOfParams(part.type, part.params),
-                  part.params.state !== 'open',
-                )}
-              />
-              <span className={css.partLabel}>
-                {t(`lab.builder.part.${part.id}` as PhysicsosKey)}
-              </span>
-              {CIRCUIT_METER_KINDS.includes(part.type) ? (
-                <span className={css.partNote}>{t('lab.builder.part.ideal')}</span>
-              ) : null}
-            </button>
-          ))}
-        </div>
+        {variant === 'compact' ? <div className={css.paletteGroups}>{PART_GROUPS.map(group => <section key={group.key} className={css.paletteGroup}>
+          <h5 className={css.groupHeading}>{t(`lab.builder.group.${group.key}`)}</h5>
+          <div className={css.palette}>
+            {BUILDER_PARTS.filter(part => (group.types as readonly string[]).includes(part.type)).map(partButton)}
+          </div>
+          {group.key === 'power' ? <p className={css.hint}>{t('lab.builder.powerHint')}</p> : null}
+        </section>)}</div> : <div className={css.palette}>{BUILDER_PARTS.map(partButton)}</div>}
         <p className={css.hint}>{t('lab.builder.placeHint')}</p>
       </section>
 
@@ -318,8 +361,9 @@ export function CircuitBuilderPanel({
                     className={css.row}
                     aria-pressed={selected === component.id}
                     data-testid={`builder-row-${component.id}`}
+                    disabled={applying}
                     onClick={() => {
-                      setSelected(selected === component.id ? undefined : component.id)
+                      select(selected === component.id ? undefined : component.id)
                     }}
                   >
                     <span className={css.rowId}>{component.id}</span>
@@ -343,7 +387,7 @@ export function CircuitBuilderPanel({
       </section>
 
       {selectedComponent === undefined ? null : (
-        <section className={css.section} data-testid={`builder-inspector-${selectedComponent.id}`}>
+        <section className={clsxJoin(css.section, css.selectedSection)} data-testid={`builder-inspector-${selectedComponent.id}`}>
           <h4 className={css.heading}>
             {t('lab.builder.selected')}
             <span className={css.count}>{selectedComponent.id}</span>
@@ -353,7 +397,7 @@ export function CircuitBuilderPanel({
               t={t}
               component={selectedComponent}
               onCommit={(params) => {
-                editing.apply(current => setParams(current, selectedComponent.id, params))
+                apply(current => setParams(current, selectedComponent.id, params))
               }}
             />
           </div>
@@ -362,8 +406,9 @@ export function CircuitBuilderPanel({
               type="button"
               className={css.action}
               data-testid={`builder-rotate-${selectedComponent.id}`}
+              disabled={applying}
               onClick={() => {
-                editing.apply(current => rotateComponent(current, selectedComponent.id))
+                apply(current => rotateComponent(current, selectedComponent.id))
               }}
             >
               {t('lab.builder.rotate')}
@@ -372,8 +417,9 @@ export function CircuitBuilderPanel({
               type="button"
               className={css.action}
               data-testid={`builder-nudge-${selectedComponent.id}`}
+              disabled={applying}
               onClick={() => {
-                editing.apply(current =>
+                apply(current =>
                   moveComponent(current, selectedComponent.id, {
                     x: selectedComponent.placement.x + 1,
                     y: selectedComponent.placement.y,
@@ -387,13 +433,26 @@ export function CircuitBuilderPanel({
               type="button"
               className={clsxJoin(css.action, css.danger)}
               data-testid={`builder-remove-${selectedComponent.id}`}
+              disabled={applying}
               onClick={() => {
-                editing.apply(current => removeComponent(current, selectedComponent.id))
-                setSelected(undefined)
+                apply(current => removeComponent(current, selectedComponent.id), () => { select(undefined) })
               }}
             >
               {t('lab.builder.remove')}
             </button>
+          </div>
+          <div className={css.terminalActions}>
+            {Object.entries(selectedComponent.nets).map(([terminalKey, net]) => {
+              const connected = draft.components.reduce(
+                (count, component) => count + Object.values(component.nets).filter(value => value === net).length,
+                0,
+              ) > 1
+              return <button key={terminalKey} type="button" className={css.action} disabled={applying || !connected}
+                data-testid={`builder-disconnect-${selectedComponent.id}-${terminalKey}`}
+                onClick={() => { apply(current => disconnectTerminal(current, { componentId: selectedComponent.id, terminalKey })) }}>
+                {t('lab.builder.disconnect').replace('{terminal}', TERMINAL_LABELS[terminalKey] ?? terminalKey)}
+              </button>
+            })}
           </div>
         </section>
       )}
@@ -403,7 +462,7 @@ export function CircuitBuilderPanel({
           <button
             type="button"
             className={css.action}
-            disabled={!editing.canUndo}
+            disabled={applying || !editing.canUndo}
             data-testid="builder-undo"
             onClick={editing.undo}
           >
@@ -412,13 +471,14 @@ export function CircuitBuilderPanel({
           <button
             type="button"
             className={css.action}
-            disabled={!editing.canRedo}
+            disabled={applying || !editing.canRedo}
             data-testid="builder-redo"
             onClick={editing.redo}
           >
             {t('lab.builder.redo')}
           </button>
         </div>
+        {editFailed ? <p className={css.hint} role="alert">{t('lab.builder.editFailed')}</p> : null}
         <p
           className={clsxJoin(css.status, solvable ? undefined : css.statusOpen)}
           data-testid="builder-status"

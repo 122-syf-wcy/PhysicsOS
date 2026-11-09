@@ -9,26 +9,33 @@
  * was solved in.
  */
 
-import { useEffect, useSyncExternalStore } from 'react'
+import { useEffect } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 /* Type-only: pulls the Chat target's SlotMap entry and the turn-tail seat's
    owner props (`turn`, `seq`, `openFile`). */
 import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { SceneChatCardInjected } from './SceneChatCard.tsx'
 import { OptionalSceneCardBody as SceneCardBody } from './optional-surfaces.tsx'
-import { PHYSICS_SCENE_TURN_KEY } from './scene-chat-node.ts'
+import type { PhysicsSceneCardData } from './scene-chat-node.ts'
+import type { CanvasObservable } from './canvas/types.ts'
+
+export interface SceneTurnInjected {
+  readonly keyedHooks: {
+    readonly physicsSceneTurn: (key: string) => CanvasObservable<PhysicsSceneCardData | undefined>
+  }
+}
 
 export type SceneTurnCardProps =
   PropsRuntime<'conversation.chat.turnTail'>
   & InjectFace<SceneChatCardInjected>
+  & InjectFace<SceneTurnInjected>
   & PropsLocale<'physicsos'>
 
 /** Render this Turn's newest scene beside its answer, or nothing when it had none. */
 export function SceneTurnCard({
-  turn, t, openSceneInLab, recordAttempt, regenerateQuestionCode, questionCodeOwner, endTurnHygiene,
-}: SceneTurnCardProps): React.ReactNode {
-  const source = turn.data.source(PHYSICS_SCENE_TURN_KEY)
-  const data = useSyncExternalStore(source.subscribe, source.getSnapshot)
+  turn, t, openSceneInLab, requestSceneInCanvas, recordAttempt, regenerateQuestionCode, questionCodeOwner, endTurnHygiene, usePhysicsSceneTurn,
+}: SceneTurnCardProps) {
+  const data = usePhysicsSceneTurn(String(turn.turn))
   /* The turn closed — this seat only exists once `turn/end` is in the log. That
      is a fallback trigger for the Lab hygiene: the primary one is the
      Conversation binding's `openTurn`, which also fires while the Lab has
@@ -40,6 +47,7 @@ export function SceneTurnCard({
       data={data}
       t={t}
       openSceneInLab={openSceneInLab}
+      {...requestSceneInCanvas === undefined ? {} : { requestSceneInCanvas }}
       {...questionCodeOwner === undefined ? {} : { questionCodeOwner }}
       {...regenerateQuestionCode === undefined ? {} : { regenerateQuestionCode }}
       {...recordAttempt === undefined ? {} : { recordAttempt }}

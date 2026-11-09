@@ -39,11 +39,13 @@ import type {
   InductionBench,
   LeverBench,
   OpticalBench,
+  ObservableDefinition,
   PhysicsScene,
   PressureBench,
   CurrentBench,
   EnergyBench,
   LightBench,
+  ModernPhysicsBench,
   TransformerBench,
   ThermometerBench,
   NoiseBench,
@@ -59,7 +61,7 @@ export const SCENE_REVISION_CONFLICT = 'SCENE_REVISION_CONFLICT' as const
 
 export type ElectricFieldDirection = 'right' | 'left' | 'up' | 'down'
 
-/** docs/03 §69 — command names frozen for the Magnetic + Mechanics + Electric + Circuit + Optics + Acoustics Runtime slices. */
+/** docs/03 §69 — revisioned physical edits and observable commands supported by the scene runtime. */
 export type SceneCommandType =
   | 'SetParticleCharge'
   | 'SetParticleMass'
@@ -79,8 +81,9 @@ export type SceneCommandType =
   | 'SetSpringConstant'
   | 'SetPendulumLength'
   | 'SetAppliedForce'
-  | 'SetOrbitRadius'
   | 'SetGroundLevel'
+  | 'SetOrbitRadius'
+  | 'SetOrbitalGravitationalParameter'
   | 'SetComponentResistance'
   | 'SetSourceVoltage'
   | 'SetSourceInternalResistance'
@@ -158,6 +161,11 @@ export type SceneCommandType =
   | 'SetNoiseSourceLevel'
   | 'SetListenerDistance'
   | 'SetBarrierAttenuation'
+  | 'SetPhotoelectricWorkFunction'
+  | 'SetPhotonWavelength'
+  | 'SetLightIntensity'
+  | 'SetCathodeArea'
+  | 'SetQuantumEfficiency'
 
 /** docs/03 §69 — each discriminant has exactly one payload shape. */
 export interface SceneCommandPayloadMap {
@@ -241,14 +249,22 @@ export interface SceneCommandPayloadMap {
     targetId: string
     vector: QuantityVector<'force'>
   }
-  SetOrbitRadius: {
-    observableId: ObservableId
-    radius: number
-  }
   SetGroundLevel: {
     observableId: ObservableId
     /** Ground height in scene length units (SI metres). */
     groundY: number
+  }
+  SetOrbitRadius: {
+    /** The geometry observable whose kind is orbit. */
+    observableId: ObservableId
+    /** Distance from the central body; a length Quantity or legacy positive SI metres. */
+    radius: Quantity<'length'> | number
+  }
+  SetOrbitalGravitationalParameter: {
+    /** The geometry observable whose kind is orbit. */
+    observableId: ObservableId
+    /** Central-body GM, explicitly in SI m³/s²; finite and > 0. */
+    gravitationalParameter: number
   }
   SetComponentResistance: {
     circuitId: string
@@ -665,6 +681,31 @@ export interface SceneCommandPayloadMap {
     /** Insertion loss of the barrier; finite and >= 0 (noise bench). */
     attenuation: Quantity<'dimensionless'>
   }
+  SetPhotoelectricWorkFunction: {
+    benchId: string
+    /** Cathode work function; finite and > 0. */
+    workFunction: Quantity<'energy'>
+  }
+  SetPhotonWavelength: {
+    benchId: string
+    /** Incident photon wavelength; finite and > 0. */
+    wavelength: Quantity<'length'>
+  }
+  SetLightIntensity: {
+    benchId: string
+    /** Incident power per unit area; finite and > 0. */
+    intensity: Quantity<'intensity'>
+  }
+  SetCathodeArea: {
+    benchId: string
+    /** Illuminated cathode area; finite and > 0. */
+    area: Quantity<'area'>
+  }
+  SetQuantumEfficiency: {
+    benchId: string
+    /** Collected electrons per incident photon; finite and in [0, 1]. */
+    efficiency: number
+  }
 }
 
 export type SceneCommandPayload<TType extends SceneCommandType> = SceneCommandPayloadMap[TType]
@@ -714,8 +755,9 @@ export type PhysicsEventType =
   | 'SpringConstantChanged'
   | 'PendulumLengthChanged'
   | 'AppliedForceChanged'
-  | 'OrbitRadiusChanged'
   | 'GroundLevelChanged'
+  | 'OrbitRadiusChanged'
+  | 'OrbitalGravitationalParameterChanged'
   | 'ComponentResistanceChanged'
   | 'SourceVoltageChanged'
   | 'SourceInternalResistanceChanged'
@@ -793,6 +835,11 @@ export type PhysicsEventType =
   | 'NoiseSourceLevelChanged'
   | 'ListenerDistanceChanged'
   | 'BarrierAttenuationChanged'
+  | 'PhotoelectricWorkFunctionChanged'
+  | 'PhotonWavelengthChanged'
+  | 'LightIntensityChanged'
+  | 'CathodeAreaChanged'
+  | 'QuantumEfficiencyChanged'
 
 export interface PhysicsEventPayloadMap {
   ParticleChargeChanged: SceneCommandPayloadMap['SetParticleCharge']
@@ -820,8 +867,9 @@ export interface PhysicsEventPayloadMap {
   SpringConstantChanged: SceneCommandPayloadMap['SetSpringConstant']
   PendulumLengthChanged: SceneCommandPayloadMap['SetPendulumLength']
   AppliedForceChanged: SceneCommandPayloadMap['SetAppliedForce']
-  OrbitRadiusChanged: SceneCommandPayloadMap['SetOrbitRadius']
   GroundLevelChanged: SceneCommandPayloadMap['SetGroundLevel']
+  OrbitRadiusChanged: SceneCommandPayloadMap['SetOrbitRadius']
+  OrbitalGravitationalParameterChanged: SceneCommandPayloadMap['SetOrbitalGravitationalParameter']
   ComponentResistanceChanged: SceneCommandPayloadMap['SetComponentResistance']
   SourceVoltageChanged: SceneCommandPayloadMap['SetSourceVoltage']
   SourceInternalResistanceChanged: SceneCommandPayloadMap['SetSourceInternalResistance']
@@ -899,6 +947,11 @@ export interface PhysicsEventPayloadMap {
   NoiseSourceLevelChanged: SceneCommandPayloadMap['SetNoiseSourceLevel']
   ListenerDistanceChanged: SceneCommandPayloadMap['SetListenerDistance']
   BarrierAttenuationChanged: SceneCommandPayloadMap['SetBarrierAttenuation']
+  PhotoelectricWorkFunctionChanged: SceneCommandPayloadMap['SetPhotoelectricWorkFunction']
+  PhotonWavelengthChanged: SceneCommandPayloadMap['SetPhotonWavelength']
+  LightIntensityChanged: SceneCommandPayloadMap['SetLightIntensity']
+  CathodeAreaChanged: SceneCommandPayloadMap['SetCathodeArea']
+  QuantumEfficiencyChanged: SceneCommandPayloadMap['SetQuantumEfficiency']
 }
 
 export type PhysicsEventPayload<TType extends PhysicsEventType> = PhysicsEventPayloadMap[TType]
@@ -1049,6 +1102,7 @@ const NOT_FOUND_CODES = {
   transformer_bench: 'TRANSFORMER_BENCH_NOT_FOUND',
   thermometer_bench: 'THERMOMETER_BENCH_NOT_FOUND',
   noise_bench: 'NOISE_BENCH_NOT_FOUND',
+  modern_physics_bench: 'MODERN_PHYSICS_BENCH_NOT_FOUND',
 } as const
 
 const notFound = (targetType: keyof typeof NOT_FOUND_CODES, id: string) =>
@@ -1072,6 +1126,55 @@ const baseEvent = (command: SceneCommand, context: EventContext) => ({
   occurredAt: context.occurredAt,
   trace: clone(command.trace),
 })
+
+const findOrbitObservable = (
+  scene: PhysicsScene,
+  observableId: ObservableId,
+): { ok: true; observable: ObservableDefinition } | { ok: false; error: DomainError } => {
+  if (typeof observableId !== 'string' || observableId.trim().length === 0) {
+    return { ok: false, error: invalidCommand('INVALID_ORBIT_OBSERVABLE_ID', 'observableId must be a non-empty string.') }
+  }
+  const observable = scene.observableDefinitions.find(entry => entry.id === observableId)
+  if (observable === undefined) return { ok: false, error: notFound('observable', observableId) }
+  if (observable.type !== 'geometry' || observable.parameters?.kind !== 'orbit') {
+    return { ok: false, error: invalidCommand('ORBIT_WRONG_SUBMODEL', 'This command requires an orbit geometry observable.') }
+  }
+  if (scene.bodies.length !== 1 || scene.observableDefinitions.filter(entry => entry.parameters?.kind === 'orbit').length !== 1) {
+    return { ok: false, error: invalidCommand('ORBIT_SINGLE_BODY', 'Circular orbit commands require one satellite and one orbit observable.') }
+  }
+  if (scene.constraints.some(constraint => constraint.type === 'spring' || constraint.type === 'rope') || scene.observableDefinitions.some(entry => entry.parameters?.kind === 'friction_surface')) {
+    return { ok: false, error: invalidCommand('ORBIT_WRONG_SUBMODEL', 'Orbit commands cannot edit a spring, pendulum or friction model.') }
+  }
+  return { ok: true, observable }
+}
+
+const setOrbitFacts = (
+  scene: PhysicsScene,
+  observable: ObservableDefinition,
+  radius: number,
+  gravitationalParameter: number,
+): DomainError | undefined => {
+  if (!Number.isFinite(radius) || radius <= 0 || !Number.isFinite(gravitationalParameter) || gravitationalParameter <= 0) {
+    return invalidCommand('INVALID_ORBIT_FACTS', 'Orbit radius and SI GM must both be finite and > 0.')
+  }
+  const speed = Math.sqrt(gravitationalParameter / radius)
+  const period = (2 * Math.PI * radius) / speed
+  const angularRate = speed / radius
+  const acceleration = gravitationalParameter / (radius * radius)
+  const body = scene.bodies[0]!
+  const force = canonicalValue(body.mass) * acceleration
+  if (![speed, period, angularRate, acceleration, force].every(value => Number.isFinite(value) && value > 0)) {
+    return invalidCommand('INVALID_ORBIT_FACTS', 'Orbit facts must produce finite positive speed, period, acceleration and force.')
+  }
+  observable.parameters = { ...observable.parameters, radius, gravitationalParameter }
+  // The scene factory publishes this t=0 geometry; GM and radius remain the solver's only sources.
+  body.position = quantityVector({ x: radius, y: 0, z: 0 }, 'm', 'length')
+  body.velocity = quantityVector({ x: 0, y: speed, z: 0 }, 'm/s', 'velocity')
+  if (body.acceleration !== undefined) {
+    body.acceleration = quantityVector({ x: -acceleration, y: 0, z: 0 }, 'm/s^2', 'acceleration')
+  }
+  return undefined
+}
 
 const findMagneticField = (
   scene: PhysicsScene,
@@ -1314,6 +1417,60 @@ const energyQuantityOf = <D extends PhysicalDimension>(
   return { ok: true, value: resolved }
 }
 
+type ModernPhysicsBenchLookup =
+  | { ok: true; bench: ModernPhysicsBench }
+  | { ok: false; error: DomainError }
+
+const findModernPhysicsBench = (
+  scene: PhysicsScene,
+  benchId: string,
+): ModernPhysicsBenchLookup => {
+  if (typeof benchId !== 'string' || benchId.trim().length === 0) {
+    return {
+      ok: false,
+      error: invalidCommand('INVALID_MODERN_PHYSICS_BENCH_ID', 'benchId must be a non-empty string.'),
+    }
+  }
+  const bench = (scene.modernPhysicsBenches ?? []).find((entry) => entry.id === benchId)
+  if (bench === undefined) return { ok: false, error: notFound('modern_physics_bench', benchId) }
+  if (bench.type !== 'photoelectric_effect') {
+    return {
+      ok: false,
+      error: invalidCommand(
+        'MODERN_PHYSICS_WRONG_SUBMODEL',
+        'This command requires a photoelectric-effect bench.',
+        { benchId, benchType: bench.type },
+      ),
+    }
+  }
+  return { ok: true, bench }
+}
+
+const photoelectricQuantityOf = <D extends PhysicalDimension>(
+  bench: ModernPhysicsBench,
+  value: Quantity,
+  dimension: D,
+  code: string,
+  message: string,
+): { ok: true; value: Quantity<D> } | { ok: false; error: DomainError } => {
+  if (
+    value === null ||
+    typeof value !== 'object' ||
+    Array.isArray(value) ||
+    typeof value.value !== 'number' ||
+    typeof value.unit !== 'string' ||
+    typeof value.dimension !== 'string'
+  ) {
+    return { ok: false, error: invalidCommand(code, message, { benchId: bench.id, value }) }
+  }
+  const resolved = validateQuantity(value, dimension)
+  const si = canonicalValue(resolved)
+  if (!Number.isFinite(si) || si <= 0) {
+    return { ok: false, error: invalidCommand(code, message, { benchId: bench.id, value }) }
+  }
+  return { ok: true, value: resolved }
+}
+
 type NoiseBenchLookup = { ok: true; bench: NoiseBench } | { ok: false; error: DomainError }
 
 const findNoiseBench = (scene: PhysicsScene, benchId: string): NoiseBenchLookup => {
@@ -1438,17 +1595,18 @@ const findLightBench = (scene: PhysicsScene, benchId: string): LightBenchLookup 
   return { ok: true, bench }
 }
 
-/** Every length on the light rig is simply positive: a zero would be no object. */
+/** Light-rig lengths and indices stay positive; only normal incidence permits a zero angle. */
 const lightQuantityOf = <D extends PhysicalDimension>(
   bench: LightBench,
   value: Quantity,
   dimension: D,
   code: string,
   message: string,
+  allowZero = false,
 ): { ok: true; value: Quantity<D> } | { ok: false; error: DomainError } => {
   const resolved = validateQuantity(value, dimension)
   const si = canonicalValue(resolved)
-  if (!Number.isFinite(si) || si <= 0) {
+  if (!Number.isFinite(si) || (allowZero ? si < 0 : si <= 0)) {
     return { ok: false, error: invalidCommand(code, message, { benchId: bench.id, value }) }
   }
   return { ok: true, value: resolved }
@@ -2147,21 +2305,6 @@ const applyCommand = (
       }
     }
 
-    case 'SetOrbitRadius': {
-      const { radius, observableId } = command.payload
-      const orbit = scene.observableDefinitions.find(entry => entry.id === observableId && entry.parameters?.['kind'] === 'orbit')
-      const body = scene.bodies[0]
-      const gm = Number(orbit?.parameters?.['gravitationalParameter'])
-      if (!Number.isFinite(radius) || radius <= 0 || !Number.isFinite(gm) || gm <= 0) {
-        return { ok: false, error: invalidCommand('INVALID_ORBIT_RADIUS', 'Circular orbit radius and GM must be positive and finite.', { radius }) }
-      }
-      if (orbit === undefined || body === undefined) return { ok: false, error: notFound('observable', String(observableId)) }
-      orbit.parameters = { ...orbit.parameters, radius }
-      body.position = quantityVector({ x: radius, y: 0, z: 0 }, 'm', 'length')
-      body.velocity = quantityVector({ x: 0, y: Math.sqrt(gm / radius), z: 0 }, 'm/s', 'velocity')
-      return { ok: true, event: { ...eventMetadata, type: 'OrbitRadiusChanged', payload: { observableId, radius } } }
-    }
-
     case 'SetAppliedForce': {
       const body = scene.bodies.find((entry) => entry.id === command.payload.targetId)
       if (body === undefined) {
@@ -2222,6 +2365,62 @@ const applyCommand = (
           ...eventMetadata,
           type: 'GroundLevelChanged',
           payload: { observableId: command.payload.observableId, groundY },
+        },
+      }
+    }
+
+    case 'SetOrbitRadius': {
+      const lookup = findOrbitObservable(scene, command.payload.observableId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      const input = command.payload.radius
+      let radius: Quantity<'length'> | number
+      let radiusSI: number
+      if (typeof input === 'number') {
+        radius = input
+        radiusSI = input
+      } else {
+        if (input === null || typeof input !== 'object' || Array.isArray(input) || typeof input.value !== 'number' || typeof input.unit !== 'string' || input.dimension !== 'length') {
+          return { ok: false, error: invalidCommand('INVALID_ORBIT_RADIUS', 'Orbit radius must be SI metres or a length Quantity.') }
+        }
+        radius = validateQuantity(input, 'length')
+        radiusSI = canonicalValue(radius)
+      }
+      if (!Number.isFinite(radiusSI) || radiusSI <= 0) return { ok: false, error: invalidCommand('INVALID_ORBIT_RADIUS', 'Orbit radius must be a finite length > 0.') }
+      const gravitationalParameter = lookup.observable.parameters?.gravitationalParameter
+      if (typeof gravitationalParameter !== 'number') {
+        return { ok: false, error: invalidCommand('INVALID_ORBIT_GRAVITATIONAL_PARAMETER', 'Orbit GM must be a finite positive SI number.') }
+      }
+      const error = setOrbitFacts(scene, lookup.observable, radiusSI, gravitationalParameter)
+      if (error !== undefined) return { ok: false, error }
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'OrbitRadiusChanged',
+          payload: { observableId: command.payload.observableId, radius: clone(radius) },
+        },
+      }
+    }
+
+    case 'SetOrbitalGravitationalParameter': {
+      const lookup = findOrbitObservable(scene, command.payload.observableId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      const gravitationalParameter = command.payload.gravitationalParameter
+      if (typeof gravitationalParameter !== 'number' || !Number.isFinite(gravitationalParameter) || gravitationalParameter <= 0) {
+        return { ok: false, error: invalidCommand('INVALID_ORBIT_GRAVITATIONAL_PARAMETER', 'Orbit GM must be a finite positive SI number in m³/s².') }
+      }
+      const radius = lookup.observable.parameters?.radius
+      if (typeof radius !== 'number') {
+        return { ok: false, error: invalidCommand('INVALID_ORBIT_RADIUS', 'Orbit radius must be a finite positive SI number.') }
+      }
+      const error = setOrbitFacts(scene, lookup.observable, radius, gravitationalParameter)
+      if (error !== undefined) return { ok: false, error }
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'OrbitalGravitationalParameterChanged',
+          payload: { observableId: command.payload.observableId, gravitationalParameter },
         },
       }
     }
@@ -4469,6 +4668,7 @@ const applyCommand = (
         'angle',
         'INVALID_INCIDENT_ANGLE',
         'Angle of incidence must be a finite angle in [0, 90) degrees.',
+        true,
       )
       if (!angle.ok) return { ok: false, error: angle.error }
       if (canonicalValue(angle.value) >= Math.PI / 2) {
@@ -4678,6 +4878,126 @@ const applyCommand = (
           ...eventMetadata,
           type: 'ThermometerBulbChanged',
           payload: { benchId: command.payload.benchId, volume: clone(volume.value) },
+        },
+      }
+    }
+
+    /* ------------------------------------------------------ photoelectric -- */
+
+    case 'SetPhotoelectricWorkFunction': {
+      const lookup = findModernPhysicsBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      const workFunction = photoelectricQuantityOf(
+        lookup.bench,
+        command.payload.workFunction,
+        'energy',
+        'INVALID_PHOTOELECTRIC_WORK_FUNCTION',
+        'Work function must be a finite energy > 0.',
+      )
+      if (!workFunction.ok) return { ok: false, error: workFunction.error }
+      lookup.bench.workFunction = clone(workFunction.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'PhotoelectricWorkFunctionChanged',
+          payload: { benchId: command.payload.benchId, workFunction: clone(workFunction.value) },
+        },
+      }
+    }
+
+    case 'SetPhotonWavelength': {
+      const lookup = findModernPhysicsBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      const wavelength = photoelectricQuantityOf(
+        lookup.bench,
+        command.payload.wavelength,
+        'length',
+        'INVALID_PHOTON_WAVELENGTH',
+        'Photon wavelength must be a finite length > 0.',
+      )
+      if (!wavelength.ok) return { ok: false, error: wavelength.error }
+      lookup.bench.photonWavelength = clone(wavelength.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'PhotonWavelengthChanged',
+          payload: { benchId: command.payload.benchId, wavelength: clone(wavelength.value) },
+        },
+      }
+    }
+
+    case 'SetLightIntensity': {
+      const lookup = findModernPhysicsBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      const intensity = photoelectricQuantityOf(
+        lookup.bench,
+        command.payload.intensity,
+        'intensity',
+        'INVALID_LIGHT_INTENSITY',
+        'Light intensity must be finite and > 0.',
+      )
+      if (!intensity.ok) return { ok: false, error: intensity.error }
+      lookup.bench.lightIntensity = clone(intensity.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'LightIntensityChanged',
+          payload: { benchId: command.payload.benchId, intensity: clone(intensity.value) },
+        },
+      }
+    }
+
+    case 'SetCathodeArea': {
+      const lookup = findModernPhysicsBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      const area = photoelectricQuantityOf(
+        lookup.bench,
+        command.payload.area,
+        'area',
+        'INVALID_CATHODE_AREA',
+        'Cathode area must be a finite area > 0.',
+      )
+      if (!area.ok) return { ok: false, error: area.error }
+      lookup.bench.cathodeArea = clone(area.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'CathodeAreaChanged',
+          payload: { benchId: command.payload.benchId, area: clone(area.value) },
+        },
+      }
+    }
+
+    case 'SetQuantumEfficiency': {
+      const lookup = findModernPhysicsBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      const efficiency = command.payload.efficiency
+      if (
+        typeof efficiency !== 'number' ||
+        !Number.isFinite(efficiency) ||
+        efficiency < 0 ||
+        efficiency > 1
+      ) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_QUANTUM_EFFICIENCY',
+            'Quantum efficiency must be a finite number in [0, 1].',
+            { benchId: command.payload.benchId, efficiency },
+          ),
+        }
+      }
+      lookup.bench.quantumEfficiency = efficiency
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'QuantumEfficiencyChanged',
+          payload: { benchId: command.payload.benchId, efficiency },
         },
       }
     }

@@ -32,6 +32,7 @@ import { canonicalValue, quantity, type Quantity } from '@physicsos/physics-unit
 import { asPhysicsEventId, asSimulationId, asTraceId, PhysicsOSError } from '@physicsos/shared'
 import {
   DEFAULT_TOLERANCE,
+  assertSimulationPlan,
   check,
   invalidModelCondition,
   quantityVector,
@@ -43,6 +44,7 @@ import {
   type ModelSupport,
   type PhysicsEngine,
   type PhysicsEventLike,
+  type SimulationPlan,
   type SimulationRequest,
   type SimulationResult,
   type SimulationState,
@@ -55,7 +57,6 @@ import {
   isCompositeFieldScene,
   isDeepFrozenSnapshot,
   memoizeOnFrozenScene,
-  sameFieldEnvironment,
   sampleFieldsAt,
   trajectorySampleTimes,
   trajectoryStorageSampleCount,
@@ -79,6 +80,12 @@ import {
   speedAfterCrossings,
   type CyclotronModel,
 } from './cyclotron-model.ts'
+import {
+  MAX_COMPOSITE_PHASES,
+  findCompositePhaseBoundary,
+  prepareCompositePhaseSearch,
+  type CompositePhaseSearchBudget,
+} from './phase-search.ts'
 
 export const COMPOSITE_ENGINE_ID = 'engine-composite'
 export const COMPOSITE_ENGINE_VERSION = '1.0.0'
@@ -86,12 +93,6 @@ export const COMPOSITE_FIELD_MODEL = 'charged_particle_composite_field'
 
 const DEFAULT_DURATION_SECONDS = 1e-6
 const TRAJECTORY_SAMPLES = 240
-/** A cyclotron crosses the gap twice per turn, so a long run is many phases. */
-const MAX_PHASES = 512
-/** Coarse steps per phase while hunting for the next environment change. */
-const PHASE_SCAN_STEPS = 400
-/** Bisection rounds once a change is bracketed; 40 halvings resolve to ~1e-12 of dt. */
-const BISECTION_ROUNDS = 40
 
 const ASSUMPTIONS = [
   'uniform fields within each region',
@@ -180,6 +181,7 @@ export const decomposePhases = (
   model: CompositeModel,
   endTime: number,
 ): { phases: readonly CompositePhase[]; truncated: boolean } => {
+  const budget = prepareCompositePhaseSearch(scene, model, endTime)
   const phases: CompositePhase[] = []
   let time = 0
   let position = model.position
@@ -187,55 +189,20 @@ export const decomposePhases = (
   let truncated = false
 
   while (time < endTime) {
-    if (phases.length >= MAX_PHASES) {
+    if (phases.length >= budget.phaseCountBound) {
       truncated = true
       break
     }
     const sample = sampleFieldsAt(scene, position)
-    const remaining = endTime - time
-    const step = remaining / PHASE_SCAN_STEPS
-
-    let crossedAt: number | undefined
-    let crossedSample: FieldSample | undefined
-    for (let i = 1; i <= PHASE_SCAN_STEPS; i += 1) {
-      const dt = step * i
-      const probe = compositeMotionAt(model.charge, model.mass, position, velocity, sample, dt)
-      const probeSample = sampleFieldsAt(scene, probe.position)
-      if (
-        !sameFieldEnvironment(sample, probeSample) ||
-        probeSample.regionIds.length !== sample.regionIds.length ||
-        probeSample.regionIds.some((id) => !sample.regionIds.includes(id))
-      ) {
-        /* Bracketed between (i-1) and i. Bisect on "is the environment still the
-           starting one" — a monotone predicate over this bracket. */
-        let low = step * (i - 1)
-        let high = dt
-        for (let round = 0; round < BISECTION_ROUNDS; round += 1) {
-          const mid = (low + high) / 2
-          const midMotion = compositeMotionAt(
-            model.charge,
-            model.mass,
-            position,
-            velocity,
-            sample,
-            mid,
-          )
-          const midSample = sampleFieldsAt(scene, midMotion.position)
-          const unchanged =
-            sameFieldEnvironment(sample, midSample) &&
-            midSample.regionIds.length === sample.regionIds.length &&
-            midSample.regionIds.every((id) => sample.regionIds.includes(id))
-          if (unchanged) low = mid
-          else high = mid
-        }
-        crossedAt = high
-        crossedSample = sampleFieldsAt(
-          scene,
-          compositeMotionAt(model.charge, model.mass, position, velocity, sample, high).position,
-        )
-        break
-      }
-    }
+    const { crossedAt, crossedSample } = findCompositePhaseBoundary(
+      scene,
+      model,
+      position,
+      velocity,
+      sample,
+      endTime - time,
+      budget,
+    )
 
     if (crossedAt === undefined || crossedSample === undefined) {
       phases.push({
@@ -546,10 +513,27 @@ const buildVerification = (
   model: CompositeModel,
   phases: readonly CompositePhase[],
   states: readonly SimulationState[],
+  endTime: number,
+  truncated: boolean,
 ): VerificationResult => {
   const sceneVerification = validateScene(scene)
   const checks: VerificationCheck[] = [...sceneVerification.checks]
   const tol = DEFAULT_TOLERANCE
+
+  checks.push(
+    check('composite_phase_horizon_complete', 'trajectory', !truncated, {
+      message: truncated
+        ? 'Composite phase decomposition did not resolve the requested horizon; later states are diagnostic extrapolations and are not verified.'
+        : 'Composite phase decomposition covers the requested absolute scene-time horizon.',
+      details: {
+        phaseCount: phases.length,
+        phaseCountLimit: MAX_COMPOSITE_PHASES,
+        resolvedEndTime: phases.at(-1)?.endTime ?? 0,
+        requestedEndTime: endTime,
+        truncated,
+      },
+    }),
+  )
 
   /* Superposition is the defining claim of a composite field: the net force the
      engine integrates must be exactly the sum of the three named parts, or the
@@ -981,31 +965,93 @@ const buildCyclotronVerification = (
   return summarizeVerification(checks, sceneVerification.warnings, sceneVerification.errors)
 }
 
+interface CompositeSimulationWindow {
+  readonly startTime: number
+  readonly endTime: number
+  readonly sampleCount: number
+}
+
+interface CyclotronCrossingWindow {
+  readonly first: number
+  readonly last: number
+  readonly count: number
+}
+
+type CompositeSimulationPreparation =
+  | (CompositeSimulationWindow & {
+      readonly modelId: typeof CYCLOTRON_TIME_VARYING_MODEL
+      readonly kind: 'analytic'
+      readonly model: CyclotronModel
+      readonly crossings: CyclotronCrossingWindow
+      readonly storageSampleCountBound: number
+      readonly numericalIterationCountBound: 0
+    })
+  | (CompositeSimulationWindow & {
+      readonly modelId: typeof COMPOSITE_FIELD_MODEL
+      readonly kind: 'analytic' | 'iterative'
+      readonly model: CompositeModel
+      readonly phaseSearchBudget: CompositePhaseSearchBudget
+      readonly storageSampleCountBound: number
+      readonly numericalIterationCountBound: number
+    })
+
+const cyclotronCrossingTime = (model: CyclotronModel, crossing: number): number =>
+  (crossing * model.period) / 2
+
+/** Inclusive crossing indices, using execution's exact floating-point time expression. */
+const prepareCyclotronCrossingWindow = (
+  model: CyclotronModel,
+  startTime: number,
+  endTime: number,
+): CyclotronCrossingWindow => {
+  const limit = Math.min(model.accelerationCount, MAX_COMPOSITE_PHASES)
+  if (!Number.isFinite(limit) || limit < 0 || !Number.isFinite(model.period)) {
+    return { first: 0, last: -1, count: 0 }
+  }
+  const firstMatchingIndex = (strictlyAfter: boolean, time: number): number => {
+    let low = 0
+    let high = Math.floor(limit)
+    while (low <= high) {
+      const mid = Math.floor((low + high) / 2)
+      const crossingTime = cyclotronCrossingTime(model, mid)
+      if (strictlyAfter ? crossingTime > time : crossingTime >= time) high = mid - 1
+      else low = mid + 1
+    }
+    return low
+  }
+  const first = firstMatchingIndex(false, startTime)
+  const last = firstMatchingIndex(true, endTime) - 1
+  return { first, last, count: Math.max(0, last - first + 1) }
+}
+
+const compositeSampleTimes = (
+  window: CompositeSimulationWindow,
+  phases: readonly CompositePhase[],
+): number[] => {
+  const { startTime, endTime, sampleCount } = window
+  const times = new Set<number>(trajectorySampleTimes(startTime, endTime, sampleCount))
+  for (const phase of phases) {
+    if (phase.startTime >= startTime && phase.startTime <= endTime) times.add(phase.startTime)
+    if (phase.endTime >= startTime && phase.endTime <= endTime) times.add(phase.endTime)
+  }
+  return [...times].sort((a, b) => a - b)
+}
+
 const simulateCyclotron = (
   scene: PhysicsScene,
   request: SimulationRequest,
-  startTime: number,
-  endTime: number,
+  preparation: Extract<CompositeSimulationPreparation, { modelId: typeof CYCLOTRON_TIME_VARYING_MODEL }>,
 ): SimulationResult<PhysicsEventLike> => {
-  const model = resolveCyclotronModel(scene)
-  const times = new Set<number>(
-    trajectorySampleTimes(
-      startTime,
-      endTime,
-      trajectoryStorageSampleCount(request.options, TRAJECTORY_SAMPLES + 1),
-    ),
-  )
-  const crossingLimit = Math.min(model.accelerationCount, MAX_PHASES)
-  for (let crossing = 0; crossing <= crossingLimit; crossing += 1) {
-    const time = (crossing * model.period) / 2
-    if (time >= startTime && time <= endTime) times.add(time)
+  const { model, crossings, startTime, endTime, sampleCount } = preparation
+  const times = new Set<number>(trajectorySampleTimes(startTime, endTime, sampleCount))
+  for (let crossing = crossings.first; crossing <= crossings.last; crossing += 1) {
+    times.add(cyclotronCrossingTime(model, crossing))
   }
   const states = [...times].sort((a, b) => a - b).map((time) => cyclotronStateAt(model, time))
 
   const events: PhysicsEventLike[] = []
-  for (let crossing = 1; crossing <= crossingLimit; crossing += 1) {
-    const time = (crossing * model.period) / 2
-    if (time < startTime || time > endTime) continue
+  for (let crossing = Math.max(1, crossings.first); crossing <= crossings.last; crossing += 1) {
+    const time = cyclotronCrossingTime(model, crossing)
     events.push({
       eventId: asPhysicsEventId(`event-cyclotron-crossing-${crossing}`),
       sceneId: scene.id,
@@ -1073,6 +1119,82 @@ const cachedPhases = (scene: PhysicsScene, model: CompositeModel, endTime: numbe
     byHorizon.set(endTime, decomposition)
   }
   return decomposition
+}
+
+/** Resolve execution's model, canonical window, and budgets without searching or sampling. */
+const prepareCompositeSimulation = (
+  scene: PhysicsScene,
+  request: SimulationRequest,
+): CompositeSimulationPreparation => {
+  if (request.sceneId !== scene.id || request.sceneRevision !== scene.revision) {
+    throw new PhysicsOSError(
+      'SIMULATION_SCENE_MISMATCH',
+      'SimulationRequest must reference the exact PhysicsScene revision being simulated.',
+      {
+        details: {
+          requestSceneId: request.sceneId,
+          sceneId: scene.id,
+          requestRevision: request.sceneRevision,
+          sceneRevision: scene.revision,
+        },
+      },
+    )
+  }
+  const startTime =
+    request.options.startTime === undefined ? 0 : canonicalValue(request.options.startTime)
+  const sceneDuration =
+    scene.timeline.endTime === undefined
+      ? DEFAULT_DURATION_SECONDS
+      : canonicalValue(scene.timeline.endTime)
+  const endTime =
+    request.options.endTime === undefined ? sceneDuration : canonicalValue(request.options.endTime)
+  if (
+    !Number.isFinite(startTime) ||
+    !Number.isFinite(endTime) ||
+    startTime < 0 ||
+    endTime < startTime
+  ) {
+    throw new PhysicsOSError(
+      'INVALID_SIMULATION_RANGE',
+      'Simulation range must satisfy 0 <= startTime <= endTime.',
+    )
+  }
+  const sampleCount = trajectoryStorageSampleCount(request.options, TRAJECTORY_SAMPLES + 1)
+  // Unlike the electric array samplers, both composite paths deduplicate their times.
+  const baseSampleCountBound = startTime === endTime ? 1 : sampleCount
+  if (cyclotronBenchOf(scene) !== undefined) {
+    const model = resolveCyclotronModel(scene)
+    const crossings = prepareCyclotronCrossingWindow(model, startTime, endTime)
+    return {
+      modelId: model.modelId,
+      kind: 'analytic',
+      model,
+      startTime,
+      endTime,
+      sampleCount,
+      crossings,
+      storageSampleCountBound:
+        startTime === endTime ? 1 : baseSampleCountBound + crossings.count,
+      numericalIterationCountBound: 0,
+    }
+  }
+
+  const model = cachedCompositeModel(scene)
+  const phaseSearchBudget = prepareCompositePhaseSearch(scene, model, endTime)
+  return {
+    modelId: model.modelId,
+    kind: phaseSearchBudget.numericalIterationCountBound === 0 ? 'analytic' : 'iterative',
+    model,
+    startTime,
+    endTime,
+    sampleCount,
+    phaseSearchBudget,
+    // Phases are contiguous: each next start repeats the preceding end. The
+    // initial zero is either outside the window or already in its base samples.
+    storageSampleCountBound:
+      startTime === endTime ? 1 : baseSampleCountBound + phaseSearchBudget.phaseCountBound,
+    numericalIterationCountBound: phaseSearchBudget.numericalIterationCountBound,
+  }
 }
 
 export class CompositeEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLike> {
@@ -1276,69 +1398,49 @@ export class CompositeEngine implements PhysicsEngine<PhysicsScene, PhysicsEvent
     return this.stateAt(scene, quantity(seconds, 's', 'time'))
   }
 
-  simulate(scene: PhysicsScene, request: SimulationRequest): SimulationResult<PhysicsEventLike> {
-    if (request.sceneId !== scene.id || request.sceneRevision !== scene.revision) {
-      throw new PhysicsOSError(
-        'SIMULATION_SCENE_MISMATCH',
-        'SimulationRequest must reference the exact PhysicsScene revision being simulated.',
-        {
-          details: {
-            requestSceneId: request.sceneId,
-            sceneId: scene.id,
-            requestRevision: request.sceneRevision,
-            sceneRevision: scene.revision,
+  prepareSimulationPlan(scene: PhysicsScene, request: SimulationRequest): SimulationPlan {
+    const preparation = prepareCompositeSimulation(scene, request)
+    const plan: SimulationPlan = {
+      schemaVersion: 'simulation-plan/1.0',
+      engineId: this.engineId,
+      engineVersion: this.engineVersion,
+      simulationId: request.simulationId,
+      sceneId: scene.id,
+      sceneRevision: scene.revision,
+      modelId: preparation.modelId,
+      kind: preparation.kind,
+      startTime: preparation.startTime,
+      endTime: preparation.endTime,
+      storageSampleCountBound: preparation.storageSampleCountBound,
+      numericalIterationCountBound: preparation.numericalIterationCountBound,
+      metadata: preparation.modelId === COMPOSITE_FIELD_MODEL
+        ? {
+            numericalIterationAccounting: 'coarse boundary probes plus bisection rounds',
+            phaseCountBound: preparation.phaseSearchBudget.phaseCountBound,
+            scanStepsPerPhase: preparation.phaseSearchBudget.scanStepsPerPhase,
+            bisectionRoundsPerBoundary: preparation.phaseSearchBudget.bisectionRoundsPerBoundary,
+          }
+        : {
+            numericalIterationAccounting: 'closed-form motion; no numerical solver rounds',
+            protectedCrossingSampleCountBound: preparation.crossings.count,
           },
-        },
-      )
     }
+    assertSimulationPlan(plan)
+    return plan
+  }
 
-    const startTime =
-      request.options.startTime === undefined ? 0 : canonicalValue(request.options.startTime)
-    const sceneDuration =
-      scene.timeline.endTime === undefined
-        ? DEFAULT_DURATION_SECONDS
-        : canonicalValue(scene.timeline.endTime)
-    const endTime =
-      request.options.endTime === undefined
-        ? sceneDuration
-        : canonicalValue(request.options.endTime)
-    if (
-      !Number.isFinite(startTime) ||
-      !Number.isFinite(endTime) ||
-      startTime < 0 ||
-      endTime < startTime
-    ) {
-      throw new PhysicsOSError(
-        'INVALID_SIMULATION_RANGE',
-        'Simulation range must satisfy 0 <= startTime <= endTime.',
-      )
+  simulate(scene: PhysicsScene, request: SimulationRequest): SimulationResult<PhysicsEventLike> {
+    const preparation = prepareCompositeSimulation(scene, request)
+    if (preparation.modelId === CYCLOTRON_TIME_VARYING_MODEL) {
+      return simulateCyclotron(scene, request, preparation)
     }
-
-    if (cyclotronBenchOf(scene) !== undefined) {
-      return simulateCyclotron(scene, request, startTime, endTime)
-    }
-
-    const model = cachedCompositeModel(scene)
-
+    const { model, startTime, endTime } = preparation
     const { phases, truncated } = cachedPhases(scene, model, endTime)
 
-    /* Uniform sampling plus every phase boundary. Without the boundaries a
-       gyration arc that starts and ends between two samples would be drawn as a
-       straight chord, and the region-crossing instant — which the timeline marks —
-       would be off by up to one sample interval. */
-    const times = new Set<number>(
-      trajectorySampleTimes(
-        startTime,
-        endTime,
-        trajectoryStorageSampleCount(request.options, TRAJECTORY_SAMPLES + 1),
-      ),
-    )
-    for (const phase of phases) {
-      if (phase.startTime >= startTime && phase.startTime <= endTime) times.add(phase.startTime)
-      if (phase.endTime >= startTime && phase.endTime <= endTime) times.add(phase.endTime)
-    }
-    const sortedTimes = [...times].sort((a, b) => a - b)
-    const states = sortedTimes.map((time) => stateAtForModel(scene, model, phases, time))
+    /* Uniform sampling plus every phase boundary keeps the crossing instant even
+       when a complete arc would otherwise fall between two stored samples. */
+    const states = compositeSampleTimes(preparation, phases)
+      .map((time) => stateAtForModel(scene, model, phases, time))
 
     const events: PhysicsEventLike[] = []
     for (const phase of phases) {
@@ -1373,7 +1475,7 @@ export class CompositeEngine implements PhysicsEngine<PhysicsScene, PhysicsEvent
       }
     }
 
-    const verification = buildVerification(scene, model, phases, states)
+    const verification = buildVerification(scene, model, phases, states, endTime, truncated)
     const startedAt = new Date().toISOString()
 
     return {
@@ -1394,7 +1496,7 @@ export class CompositeEngine implements PhysicsEngine<PhysicsScene, PhysicsEvent
         finishedAt: new Date().toISOString(),
         durationMs: 0,
         deterministic: true,
-        ...(truncated ? { notes: `phase decomposition truncated at ${MAX_PHASES} phases` } : {}),
+        ...(truncated ? { notes: `phase decomposition truncated at ${MAX_COMPOSITE_PHASES} phases` } : {}),
       },
       trace: request.trace,
     }

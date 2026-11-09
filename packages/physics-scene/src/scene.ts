@@ -1121,11 +1121,15 @@ export type ModernPhysicsBenchType = 'photoelectric_effect'
  */
 export interface ModernPhysicsBench extends PhysicsObjectBase {
   type: ModernPhysicsBenchType
+  /** Cathode work function; positive energy (canonical unit J). */
   workFunction: Quantity<'energy'>
+  /** Incident wavelength; positive length (canonical unit m), with frequency derived as c/λ. */
   photonWavelength: Quantity<'length'>
+  /** Incident power per area; positive intensity (canonical unit W/m²). */
   lightIntensity: Quantity<'intensity'>
+  /** Illuminated area; positive area (canonical unit m²). */
   cathodeArea: Quantity<'area'>
-  /** Fraction of incident photons that release a collected photoelectron. */
+  /** Fraction of incident photons that release a collected photoelectron, in [0, 1]. */
   quantumEfficiency: number
 }
 

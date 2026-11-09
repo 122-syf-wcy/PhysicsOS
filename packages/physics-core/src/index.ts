@@ -80,6 +80,8 @@ export {
   type SimulationError,
   type SimulationMetadata,
   type SimulationOptions,
+  type SimulationPlan,
+  assertSimulationPlan,
   type SimulationProgress,
   type SimulationRequest,
   type SimulationResult,

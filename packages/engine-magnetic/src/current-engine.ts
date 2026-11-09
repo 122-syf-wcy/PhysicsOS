@@ -10,6 +10,7 @@ import {
   type PhysicsEngine,
   type PhysicsEventLike,
   type QuantityVector,
+  type SimulationPlan,
   type SimulationRequest,
   type SimulationResult,
   type SimulationState,
@@ -954,7 +955,11 @@ export class CurrentFieldEngine implements PhysicsEngine<PhysicsScene, PhysicsEv
     return stateOf(resolveCurrentModel(scene), timeSeconds)
   }
 
-  simulate(scene: PhysicsScene, request: SimulationRequest): SimulationResult<PhysicsEventLike> {
+  private prepareExecution(scene: PhysicsScene, request: SimulationRequest): {
+    model: ResolvedCurrentModel
+    range: { startTime: number; endTime: number }
+    plan: SimulationPlan
+  } {
     if (request.sceneId !== scene.id || request.sceneRevision !== scene.revision) {
       throw new PhysicsOSError(
         'SIMULATION_SCENE_MISMATCH',
@@ -970,11 +975,36 @@ export class CurrentFieldEngine implements PhysicsEngine<PhysicsScene, PhysicsEv
       )
     }
 
-    const startedAt = new Date().toISOString()
     const model = resolveCurrentModel(scene)
-
     const range = simulationTimeRange(request.options)
+    return {
+      model,
+      range,
+      plan: {
+        schemaVersion: 'simulation-plan/1.0',
+        engineId: this.engineId,
+        engineVersion: this.engineVersion,
+        simulationId: request.simulationId,
+        sceneId: scene.id,
+        sceneRevision: scene.revision,
+        modelId: model.type,
+        kind: 'static',
+        startTime: range.startTime,
+        endTime: range.endTime,
+        storageSampleCountBound: 1,
+        numericalIterationCountBound: 0,
+        metadata: { numericalIterationAccounting: 'Static closed-form magnetostatics; no numerical integration or iterative solver. Fixed verifier cross-checks are bounded independently.' },
+      },
+    }
+  }
 
+  prepareSimulationPlan(scene: PhysicsScene, request: SimulationRequest): SimulationPlan {
+    return this.prepareExecution(scene, request).plan
+  }
+
+  simulate(scene: PhysicsScene, request: SimulationRequest): SimulationResult<PhysicsEventLike> {
+    const startedAt = new Date().toISOString()
+    const { model, range } = this.prepareExecution(scene, request)
     return {
       schemaVersion: 'simulation-result/1.0',
       simulationId: request.simulationId,

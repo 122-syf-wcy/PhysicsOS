@@ -59,10 +59,11 @@ export function HomeHero({ t }: HomeHeroProps) {
  * @param props - product quick actions and copy.
  * @returns the examples and entry cards.
  */
-export function HomeBelow({ useRecentExperiments, openSurface, t }: HomeBelowProps) {
+export function HomeBelow({ useRecentExperiments, openSurface, openCanvasView, newCanvas, requestSceneInCanvas, t }: HomeBelowProps) {
   return (
     <div className={css.below} data-physicsos-home-actions="">
-      <HomeActions useRecentExperiments={useRecentExperiments} openSurface={openSurface} t={t} />
+      <HomeActions useRecentExperiments={useRecentExperiments} openSurface={openSurface}
+        openCanvasView={openCanvasView} newCanvas={newCanvas} requestSceneInCanvas={requestSceneInCanvas} t={t} />
     </div>
   )
 }

@@ -26,9 +26,13 @@ import {
   toCanonicalVector,
   type DerivedQuantity,
   type PhysicsEventLike,
+  type SimulationRequest,
   type SimulationResult,
   type SimulationState,
 } from '@physicsos/physics-core'
+import { publicCapturedResult } from '@physicsos/physics-workbench/data'
+import type { CapturedResult } from '@physicsos/physics-workbench/types'
+import { canonicalValue, quantity } from '@physicsos/physics-units'
 import { observeElectricScene } from '@physicsos/physics-observation'
 import {
   SceneRuntime,
@@ -206,7 +210,16 @@ export class ElectricWorkspaceRuntime implements WorkspaceRuntime {
   private highlighted: readonly string[] = []
   private failure: string | undefined
   private computed: Computed | undefined
-  private simulationCache: { key: string; simulation: SimulationResult } | undefined
+  /** The submitted run is retained even when verification rejects its result. */
+  private retainedRun: Pick<CapturedResult, 'scene' | 'request' | 'result'> | undefined
+  private retainedEndTime: number | undefined
+  private engineInfo: CapturedResult['engineInfo'] = { id: this.engine.engineId, version: this.engine.engineVersion }
+  private simulationCache: {
+    key: string
+    request: SimulationRequest
+    simulation: SimulationResult
+    engineInfo: CapturedResult['engineInfo']
+  } | undefined
   /** The scene as the source stated it, kept so an experimental branch can be discarded. */
   private readonly origin: PhysicsScene | undefined
 
@@ -224,6 +237,14 @@ export class ElectricWorkspaceRuntime implements WorkspaceRuntime {
    */
   private recompute(): void {
     const scene = this.sceneRuntime.peekScene()
+    this.retainedRun = { scene }
+    this.retainedEndTime = undefined
+    const engine = isRegionScene(scene) ? electricRegionEngine : this.engine
+    this.engineInfo = {
+      id: engine.engineId,
+      version: engine.engineVersion,
+      ...(scene.metadata.experimentRelease === undefined ? {} : { release: scene.metadata.experimentRelease }),
+    }
     try {
       /* Parallel-plate (bounded field) scenes route to the Electric Region Engine,
          which is mutually exclusive with the unbounded ElectricEngine. */
@@ -232,24 +253,29 @@ export class ElectricWorkspaceRuntime implements WorkspaceRuntime {
         return
       }
       const key = `${String(scene.id)}:${scene.revision}`
-      const cached = this.simulationCache?.key === key ? this.simulationCache.simulation : undefined
+      const cached = this.simulationCache?.key === key ? this.simulationCache : undefined
       if (cached === undefined) {
         const support = this.engine.canHandle(scene)
+        if (support.modelId !== undefined) this.engineInfo = { ...this.engineInfo, model: support.modelId }
         if (!support.supported) {
           this.failure = support.failedConditions.map(entry => entry.message).join(' ')
           this.computed = undefined
           return
         }
       }
-      const simulation = cached ?? this.engine.simulate(
+      if (cached !== undefined) this.engineInfo = cached.engineInfo
+      const request = cached?.request ?? createElectricSimulationRequest(
         scene,
-        createElectricSimulationRequest(
-          scene,
-          `electric-lab-${String(scene.id)}-${scene.revision}`,
-          `electric-lab-trace-${String(scene.id)}-${scene.revision}`,
-        ),
+        `electric-lab-${String(scene.id)}-${scene.revision}`,
+        `electric-lab-trace-${String(scene.id)}-${scene.revision}`,
       )
-      this.simulationCache = { key, simulation }
+      this.retainedRun = { scene, request }
+      const simulation = cached?.simulation ?? this.engine.simulate(scene, request)
+      this.retainedRun = { scene, request, result: simulation }
+      const lastTime = simulation.states.at(-1)?.time
+      this.retainedEndTime = lastTime === undefined ? undefined : canonicalValue(lastTime)
+      this.engineInfo = { ...this.engineInfo, id: simulation.metadata.engineId, version: simulation.metadata.engineVersion }
+      this.simulationCache = { key, request, simulation, engineInfo: this.engineInfo }
       if (simulation.verification.status === 'failed') {
         this.failure = simulation.verification.errors.map(entry => entry.message).join(' ')
         this.computed = undefined
@@ -286,24 +312,29 @@ export class ElectricWorkspaceRuntime implements WorkspaceRuntime {
   /** Region-engine recompute: bounded (parallel-plate) uniform field scenes. */
   private recomputeRegion(scene: PhysicsScene): void {
     const key = `${String(scene.id)}:${scene.revision}`
-    const cached = this.simulationCache?.key === key ? this.simulationCache.simulation : undefined
+    const cached = this.simulationCache?.key === key ? this.simulationCache : undefined
     if (cached === undefined) {
       const support = electricRegionEngine.canHandle(scene)
+      if (support.modelId !== undefined) this.engineInfo = { ...this.engineInfo, model: support.modelId }
       if (!support.supported) {
         this.failure = support.failedConditions.map(entry => entry.message).join(' ')
         this.computed = undefined
         return
       }
     }
-    const simulation = cached ?? electricRegionEngine.simulate(
+    if (cached !== undefined) this.engineInfo = cached.engineInfo
+    const request = cached?.request ?? createElectricRegionSimulationRequest(
       scene,
-      createElectricRegionSimulationRequest(
-        scene,
-        `electric-region-${String(scene.id)}-${scene.revision}`,
-        `electric-region-trace-${String(scene.id)}-${scene.revision}`,
-      ),
+      `electric-region-${String(scene.id)}-${scene.revision}`,
+      `electric-region-trace-${String(scene.id)}-${scene.revision}`,
     )
-    this.simulationCache = { key, simulation }
+    this.retainedRun = { scene, request }
+    const simulation = cached?.simulation ?? electricRegionEngine.simulate(scene, request)
+    this.retainedRun = { scene, request, result: simulation }
+    const lastTime = simulation.states.at(-1)?.time
+    this.retainedEndTime = lastTime === undefined ? undefined : canonicalValue(lastTime)
+    this.engineInfo = { ...this.engineInfo, id: simulation.metadata.engineId, version: simulation.metadata.engineVersion }
+    this.simulationCache = { key, request, simulation, engineInfo: this.engineInfo }
     if (simulation.verification.status === 'failed') {
       this.failure = simulation.verification.errors.map(entry => entry.message).join(' ')
       this.computed = undefined
@@ -324,16 +355,13 @@ export class ElectricWorkspaceRuntime implements WorkspaceRuntime {
     /* Changing a physical fact on a question scene forks first: the solution the
        student just read was verified against the original conditions. Playback,
        seeking and observable toggles are NOT facts and never fork (experimental-branch.ts). */
-    if (requiresExperimentalFork(this.sceneRuntime.getScene(), type)) {
-      this.sceneRuntime = new SceneRuntime(
-        forkExperimentalScene({ scene: this.sceneRuntime.getScene() }),
-      )
-      this.currentTime = 0
-      this.running = false
-    }
-    const scene = this.sceneRuntime.getScene()
+    const current = this.sceneRuntime.getScene()
+    const prospective = requiresExperimentalFork(current, type)
+      ? new SceneRuntime(forkExperimentalScene({ scene: current }))
+      : this.sceneRuntime
+    const scene = prospective.getScene()
     this.commandSequence += 1
-    const result = this.sceneRuntime.execute(
+    const result = prospective.execute(
       createSceneCommand<T>({
         commandId: `electric-ui-command-${this.commandSequence}`,
         sceneId: String(scene.id),
@@ -347,6 +375,7 @@ export class ElectricWorkspaceRuntime implements WorkspaceRuntime {
       this.failure = result.error.message
       return
     }
+    this.sceneRuntime = prospective
     /* A parameter change makes the previous playhead physically meaningless. */
     this.currentTime = 0
     this.running = false
@@ -355,6 +384,31 @@ export class ElectricWorkspaceRuntime implements WorkspaceRuntime {
 
   getScene(): PhysicsScene {
     return this.sceneRuntime.getScene()
+  }
+
+  captureRaw(): CapturedResult {
+    const run = this.retainedRun ?? { scene: this.sceneRuntime.peekScene() }
+    const state = this.computed?.state
+    const staticRun = isPointChargeScene(run.scene) || this.retainedEndTime === undefined
+    const total = this.computed?.endTime ?? this.retainedEndTime
+    const clock = staticRun || total === undefined
+      ? { time: 0, total: 0, running: false, rate: this.rate }
+      : {
+        time: Math.min(total, Math.max(0, this.currentTime)),
+        total,
+        running: this.computed !== undefined && this.running,
+        rate: this.rate,
+      }
+    return publicCapturedResult({
+      ...run,
+      ...(state === undefined ? {} : { state }),
+      clock,
+      cursor: staticRun
+        ? { kind: 'static', identity: `${String(run.scene.id)}:${run.scene.revision}` }
+        : { kind: 'time', time: quantity(clock.time, 's', 'time') },
+      engineInfo: this.engineInfo,
+      ...(this.failure === undefined ? {} : { diagnostics: [{ code: 'ELECTRIC_RUNTIME_DIAGNOSTIC', message: this.failure }] }),
+    })
   }
 
   getSnapshot(): WorkspaceSnapshot {
@@ -596,7 +650,7 @@ export class ElectricWorkspaceRuntime implements WorkspaceRuntime {
       field?.type === 'uniform_electric'
         ? Math.hypot(field.fieldStrength.vector.x, field.fieldStrength.vector.y)
         : 0
-    const derived: DerivedQuantityView[] = (simulation?.derivedQuantities ?? []).map(entry => ({
+    const derived: DerivedQuantityView[] = (state?.derived ?? simulation?.derivedQuantities ?? []).map(entry => ({
       id: entry.key,
       label: DERIVED_LABELS[entry.key] ?? entry.key,
       symbol: '',
@@ -793,7 +847,10 @@ export class ElectricWorkspaceRuntime implements WorkspaceRuntime {
 
   setRunning(running: boolean): WorkspaceSnapshot {
     const end = this.computed?.endTime ?? 0
-    if (running && end > 0 && this.currentTime >= end) this.currentTime = 0
+    if (running && end > 0 && this.currentTime >= end) {
+      this.currentTime = 0
+      this.recompute()
+    }
     this.running = running && end > 0
     return this.getSnapshot()
   }
@@ -817,7 +874,7 @@ export class ElectricWorkspaceRuntime implements WorkspaceRuntime {
 
   advance(wallClockSeconds: number): WorkspaceSnapshot {
     const end = this.computed?.endTime ?? 0
-    if (this.running && Number.isFinite(wallClockSeconds) && end > 0) {
+    if (this.running && Number.isFinite(wallClockSeconds) && wallClockSeconds >= 0 && end > 0) {
       /* An electron transits the plates in ~1e-8 s, so raw wall seconds would end
          the run inside the first frame. The wall→scene mapping paces the full
          window over MICRO_WINDOW_WALL_SECONDS — the same presentation-only scaling
@@ -1222,8 +1279,8 @@ const regionInspectorOf = (
             const verticalOnly = DIRECTION_OPTIONS.filter(
               option => option.value === 'up' || option.value === 'down',
             )
-            const horizontal = DIRECTION_OPTIONS.find(option => option.value === current)
-            return horizontal === undefined
+            const horizontal = current === 'left' || current === 'right'
+            return !horizontal
               ? verticalOnly.map(option => ({ value: option.value, label: option.label }))
               : DIRECTION_OPTIONS.map(option => ({ value: option.value, label: option.label }))
           })(),

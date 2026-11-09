@@ -1,5 +1,7 @@
 import { ConversationLocationIndex } from '@deepseek-ai/dsh-client-ui-conversation/src/client/conversation/location-index.ts'
-import type { ConversationLocationData } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { ConversationLocationData, TurnLocation } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { KeyedSnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
+import { useSyncExternalStore } from 'react'
 import { PHYSICS_SCENE_TURN_KEY, type PhysicsSceneCardData } from '../src/client/scene-chat-node.ts'
 
 /** Real Harness keyed data, with one closed Turn whose identity never changes. */
@@ -20,4 +22,19 @@ export function sceneTurnData(initial?: PhysicsSceneCardData) {
   }
   if (initial !== undefined) publish(initial)
   return { turn, publish }
+}
+
+/** Test-only binding of the framework's keyed hook to the real Harness Turn source. */
+export function sceneTurnHook(turn: TurnLocation): KeyedSnapshotSelectorHook<PhysicsSceneCardData | undefined> {
+  const source = turn.data.source(PHYSICS_SCENE_TURN_KEY)
+  function usePhysicsSceneTurn(key: string): PhysicsSceneCardData | undefined
+  function usePhysicsSceneTurn<Selected>(key: string, select: (value: PhysicsSceneCardData | undefined) => Selected,
+    equal?: (left: Selected, right: Selected) => boolean): Selected
+  function usePhysicsSceneTurn<Selected>(key: string, select?: (value: PhysicsSceneCardData | undefined) => Selected,
+    _equal?: (left: Selected, right: Selected) => boolean): Selected | PhysicsSceneCardData | undefined {
+    const value = useSyncExternalStore(source.subscribe, source.getSnapshot, source.getSnapshot)
+    const current = key === String(turn.turn) ? value : undefined
+    return select === undefined ? current : select(current)
+  }
+  return usePhysicsSceneTurn
 }

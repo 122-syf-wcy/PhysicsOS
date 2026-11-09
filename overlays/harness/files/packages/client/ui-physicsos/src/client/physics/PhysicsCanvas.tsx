@@ -23,11 +23,14 @@ import {
   RENDERERS,
   type ComponentControlChannel,
   type ComponentDragChannel,
+  type ComponentSelectionChannel,
   type ComponentWiringChannel,
   type RendererProjection,
 } from './renderer-registry.tsx'
 import css from './PhysicsCanvas.module.css'
 import { layoutReadout } from './readout-layout.ts'
+import { svgPointFromClient } from './svg-screen-point.ts'
+import { CIRCUIT_PART_MIME, circuitPartIdFromTransfer } from './circuit-part-drag.ts'
 
 /** Room for axes and gutters, in px. */
 const PAD = { left: 46, bottom: 36, top: 18, right: 24 } as const
@@ -91,6 +94,9 @@ export interface PhysicsCanvasProps {
   componentControl?: ComponentControlChannel
   /** Present only while the student is assembling a circuit, by hand. */
   componentWiring?: ComponentWiringChannel
+  componentSelection?: ComponentSelectionChannel
+  /** A catalog shelf item lands in scene coordinates, independent of outer canvas zoom. */
+  onDropPart?: (partId: string, at: ScenePoint) => void
   /** Transient event bursts (collision, boundary, mark) to draw over the frame. */
   effects?: readonly CanvasEffect[]
   /**
@@ -117,6 +123,8 @@ export function PhysicsCanvas({
   componentDrag,
   componentControl,
   componentWiring,
+  componentSelection,
+  onDropPart,
   effects,
   clockTime,
 }: PhysicsCanvasProps) {
@@ -267,16 +275,13 @@ export function PhysicsCanvas({
   const nearestSample = useCallback(
     (event: ReactMouseEvent<SVGSVGElement>): number | null => {
       if (trajectory === undefined) return null
-      const box = svgRef.current?.getBoundingClientRect()
-      if (box === undefined || box.width === 0) return null
-      /* The SVG scales with preserveAspectRatio, so pointer px must be mapped
-         back through the viewBox before comparing with projected points. */
-      const viewX = ((event.clientX - box.left) / box.width) * width
-      const viewY = ((event.clientY - box.top) / box.height) * height
+      const svg = svgRef.current
+      const at = svg === null ? undefined : svgPointFromClient(svg, event)
+      if (at === undefined) return null
       let bestIndex = -1
       let bestDistance = Number.POSITIVE_INFINITY
       trajectory.points.forEach((point, index) => {
-        const distance = Math.hypot(projection.px(point) - viewX, projection.py(point) - viewY)
+        const distance = Math.hypot(projection.px(point) - at.x, projection.py(point) - at.y)
         if (distance < bestDistance) {
           bestDistance = distance
           bestIndex = index
@@ -285,7 +290,7 @@ export function PhysicsCanvas({
       /* Only claim the pointer when it is genuinely near the path. */
       return bestDistance <= 26 ? bestIndex : null
     },
-    [trajectory, projection, width, height],
+    [trajectory, projection],
   )
 
   const handleMove = useCallback(
@@ -383,12 +388,8 @@ export function PhysicsCanvas({
       }
 
   const viewPoint = (event: { clientX: number; clientY: number }) => {
-    const box = svgRef.current?.getBoundingClientRect()
-    if (box === undefined || box.width === 0 || box.height === 0) return undefined
-    return {
-      x: ((event.clientX - box.left) / box.width) * width,
-      y: ((event.clientY - box.top) / box.height) * height,
-    }
+    const svg = svgRef.current
+    return svg === null ? undefined : svgPointFromClient(svg, event)
   }
 
   const onReadoutPointerDown = (event: ReactPointerEvent<SVGGElement>) => {
@@ -454,6 +455,28 @@ export function PhysicsCanvas({
         onMouseMove={handleMove}
         onMouseLeave={() => { setHover(null) }}
         onClick={handleClick}
+        onDragOver={(event) => {
+          if (view.domain !== 'circuit' || onDropPart === undefined || !Array.from(event.dataTransfer.types).includes(CIRCUIT_PART_MIME)) return
+          event.preventDefault()
+          event.stopPropagation()
+          event.dataTransfer.dropEffect = 'copy'
+        }}
+        onDrop={(event) => {
+          if (view.domain !== 'circuit' || onDropPart === undefined) return
+          const partId = circuitPartIdFromTransfer(event.dataTransfer)
+          if (partId === undefined) return
+          event.preventDefault()
+          event.stopPropagation()
+          const point = svgPointFromClient(event.currentTarget, event)
+          if (point === undefined || point.x < PAD.left || point.x > PAD.left + plotWidth ||
+            point.y < PAD.top || point.y > PAD.top + plotHeight) return
+          const at = { x: projection.sx(point.x), y: projection.sy(point.y) }
+          if (Number.isFinite(at.x) && Number.isFinite(at.y)) onDropPart(partId, at)
+        }}
+        onKeyDown={event => {
+          if (event.key !== 'Escape' || event.defaultPrevented || event.nativeEvent.isComposing || componentWiring?.pending === undefined || componentWiring.cancel === undefined) return
+          event.preventDefault(); event.stopPropagation(); componentWiring.cancel()
+        }}
       >
         <defs>
           {/* fill="none" is load-bearing: an SVG path defaults to a BLACK fill,
@@ -586,6 +609,7 @@ export function PhysicsCanvas({
             {...componentDrag === undefined ? {} : { componentDrag }}
             {...componentControl === undefined ? {} : { componentControl }}
             {...componentWiring === undefined ? {} : { componentWiring }}
+            {...componentSelection === undefined ? {} : { componentSelection }}
           />
         </g>
 

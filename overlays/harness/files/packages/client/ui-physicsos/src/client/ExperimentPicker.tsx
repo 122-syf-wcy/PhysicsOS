@@ -29,9 +29,8 @@ import { sceneRefOf } from './surface-store.ts'
 import { useMemo, useState, type CSSProperties } from 'react'
 import clsx from 'clsx'
 import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
-import { IconSearchOutlineMedium } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconSearchOutlineMedium, Menu } from '@deepseek-ai/dsh-client-ui-primitives'
 import { knowledgeNodeOf } from '@physicsos/question-core'
-import type { PhysicsScene } from '@physicsos/physics-scene'
 
 import {
   createExperimentSceneRef,
@@ -48,7 +47,7 @@ import { recommendExperiments } from './physics/experiment-recommendations.ts'
 import type { LearningRecordState } from './learning-record-store.ts'
 import type { PhysicsosKey } from './locales.ts'
 import { Mascot } from './Mascot.tsx'
-import type { PhysicsSurfaceId, RecentExperimentsState } from './surface-store.ts'
+import type { PhysicsSceneRef, PhysicsSurfaceId, RecentExperimentsState } from './surface-store.ts'
 import { formatUpdatedAt } from './workspaceMeta.ts'
 import { IconPhysicsPlay, IconCircuitSeries } from './icons/physics-icons.tsx'
 import css from './ExperimentPicker.module.css'
@@ -119,7 +118,7 @@ export interface ExperimentPickerProps {
   readonly t: (key: PhysicsosKey) => string
   readonly openSurface: (
     id: PhysicsSurfaceId,
-    sceneRef?: { sceneId: string; scene: PhysicsScene },
+    sceneRef?: PhysicsSceneRef,
   ) => void
   /** Persisted recent scenes; the newest one powers 继续上次实验. */
   readonly useRecentExperiments: SnapshotSelectorHook<RecentExperimentsState>
@@ -139,6 +138,12 @@ export interface ExperimentPickerProps {
    * still be mounted without a builder host (tests, embeds).
    */
   readonly onFreeBuild?: () => void
+  /** An existing workbench adds an independent instance rather than switching the global lab. */
+  readonly mode?: 'open' | 'add'
+  readonly onPick?: (template: ExperimentTemplate, ref: PhysicsSceneRef) => void
+  readonly onAddScene?: (ref: PhysicsSceneRef) => void
+  readonly onAddTemplate?: (template: ExperimentTemplate, ref: PhysicsSceneRef) => void
+  readonly onNewCanvas?: () => void
 }
 
 /** One shelf of the browse grid: a subject heading and its templates. */
@@ -155,18 +160,27 @@ export function ExperimentPicker({
   useLearningRecord,
   resume,
   onFreeBuild,
+  mode = 'open',
+  onPick,
+  onAddScene,
+  onAddTemplate,
+  onNewCanvas,
 }: ExperimentPickerProps) {
   const [query, setQuery] = useState('')
   const [tab, setTab] = useState<TabId>('all')
   const [stage, setStage] = useState<StageId>('all')
   const [recent, setRecent] = useState<string[]>(() => readRecent())
+  const [addMenuOpen, setAddMenuOpen] = useState(false)
   const lastScene = useRecentExperiments(state => state.items[0])
   const attempts = useLearningRecord(state => state.attempts)
 
   const pick = (template: ExperimentTemplate): void => {
     if (template.comingSoon === true) return
     const title = t(template.label)
-    openSurface('lab', createExperimentSceneRef(template, title))
+    const ref: PhysicsSceneRef = { ...createExperimentSceneRef(template, title), canvasTemplateId: template.id,
+      canvasSource: { kind: 'template', id: template.id, title } }
+    if (onPick === undefined) openSurface('lab', ref)
+    else onPick(template, ref)
     setRecent(pushRecent(template.id))
   }
 
@@ -269,7 +283,8 @@ export function ExperimentPicker({
           kind: lastScene.kind,
           state: 'stored',
           onOpen: () => {
-            openSurface('lab', sceneRefOf(lastScene))
+            if (mode === 'add' && onAddScene !== undefined) onAddScene(sceneRefOf(lastScene))
+            else openSurface('lab', sceneRefOf(lastScene))
           },
         }
         : undefined
@@ -277,17 +292,27 @@ export function ExperimentPicker({
   const hasFocusRow = continueCard !== undefined || recommendations.length > 0
 
   return (
-    <div className={css.root} data-physicsos-surface="lab" data-physicsos-state="picker">
+    <div className={css.root} data-physicsos-surface="lab" data-physicsos-state="picker" data-physicsos-picker-mode={mode}>
       <div className={css.panel}>
         {/* ---------------------------------------------------------- header */}
         <header className={clsx(css.header, css.reveal)} style={revealAt(0)}>
           <Mascot pose="search" size={72} className={css.mascot} />
           <div className={css.headerCopy}>
-            <h2 className={css.title}>{t('lab.template.empty.title')}</h2>
-            <p className={css.body}>{t('lab.template.empty.body')}</p>
-            <button className={css.uploadEntry} type="button" onClick={() => { openSurface('contribute') }}>
+            <h2 className={css.title}>{t(mode === 'add' ? 'canvas.selectExperiment' : 'lab.template.empty.title')}</h2>
+            <p className={css.body}>{t(mode === 'add' ? 'canvas.inspectorNote' : 'lab.template.empty.body')}</p>
+            {onNewCanvas === undefined ? null : <button className={css.uploadEntry} type="button" onClick={onNewCanvas}>{t('canvas.new')}</button>}
+            {mode !== 'open' || onAddTemplate === undefined ? null : <Menu open={addMenuOpen} portal autoFocus
+              onClose={() => { setAddMenuOpen(false) }}
+              anchor={<Button variant="outline" onClick={() => { setAddMenuOpen(!addMenuOpen) }}>{t('canvas.addToCanvas')}</Button>}
+              items={EXPERIMENT_TEMPLATES.filter(template => template.comingSoon !== true).map(template => ({ id: template.id, label: t(template.label) }))}
+              onSelect={id => {
+                setAddMenuOpen(false)
+                const template = EXPERIMENT_TEMPLATES.find(item => item.id === id)
+                if (template !== undefined) onAddTemplate(template, createExperimentSceneRef(template, t(template.label)))
+              }} />}
+            {mode === 'open' ? <button className={css.uploadEntry} type="button" onClick={() => { openSurface('contribute') }}>
               {t('nav.contribute')} ↑
-            </button>
+            </button> : null}
             <a className={css.developerLink} href="/physicsos/developers/index.html" target="_blank" rel="noopener noreferrer">
               开发者文档与贡献规范 ↗
             </a>
@@ -329,7 +354,7 @@ export function ExperimentPicker({
                   <span className={css.continueTitle}>{continueCard.title}</span>
                   <span className={css.continueMeta}>{continueCard.meta}</span>
                   <span className={css.continueCta}>
-                    {t('lab.picker.continue.cta')}
+                    {t(mode === 'add' ? 'canvas.addToCanvas' : 'lab.picker.continue.cta')}
                     <IconPhysicsPlay size={13} />
                   </span>
                 </span>

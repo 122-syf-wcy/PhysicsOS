@@ -20,7 +20,10 @@ import {
   resolveInductionModel,
   type ResolvedInductionModel,
 } from '@physicsos/engine-induction'
-import { isScalarQuantity, type SimulationResult } from '@physicsos/physics-core'
+import { isScalarQuantity, type SimulationResult, type SimulationState } from '@physicsos/physics-core'
+import { publicCapturedResult } from '@physicsos/physics-workbench/data'
+import { copyJsonObject } from '@physicsos/physics-workbench/json'
+import type { CapturedResult } from '@physicsos/physics-workbench/types'
 import { canonicalValue, quantity } from '@physicsos/physics-units'
 import {
   SceneRuntime,
@@ -126,15 +129,30 @@ const runDurationOf = (scene: PhysicsScene): number => {
 interface Computed {
   readonly simulation: SimulationResult
   readonly model: ResolvedInductionModel
+  readonly runSeconds: number
 }
 
-/** The signed engine fact behind the 感应方向 sentence: a sweeping bar quotes
- *  its derived EMF (E = BLv, sign = cutting direction), a coil rig quotes the
- *  stated flux rate dΦ/dt. Both are engine published values, never recomputed. */
-const lenzReadoutOf = (simulation: SimulationResult, model: ResolvedInductionModel): number => {
-  const key = model.subModel === 'bar_motion_emf' ? 'induced_emf' : 'flux_rate'
-  const entry = simulation.derivedQuantities.find(candidate => candidate.key === key)
-  return entry === undefined || !isScalarQuantity(entry.value) ? Number.NaN : entry.value.value
+/** Direction uses the current engine fact; an absent fact is unavailable, not zero. */
+const lenzReadoutOf = (
+  derived: SimulationResult['derivedQuantities'],
+  model: ResolvedInductionModel,
+): number | undefined => {
+  const key = model.subModel === 'flux_change_emf' ? 'flux_rate' : 'induced_emf'
+  const entry = derived.find(candidate => candidate.key === key)
+  return entry === undefined || !isScalarQuantity(entry.value) || !Number.isFinite(entry.value.value)
+    ? undefined
+    : entry.value.value
+}
+
+const directionTextOf = (model: ResolvedInductionModel, signedValue: number | undefined): string => {
+  if (signedValue === undefined) return '感应方向读数不可用'
+  if (model.subModel === 'double_bar_rail') {
+    if (signedValue === 0) return '两棒无相对运动，无感应电流'
+    return signedValue > 0
+      ? '右手定则：相对运动产生沿回路正方向的感应电流'
+      : '右手定则：相对运动产生沿回路负方向的感应电流'
+  }
+  return lenzDirectionText(model.subModel === 'bar_motion_emf', signedValue)
 }
 
 /**
@@ -150,6 +168,12 @@ export class InductionWorkspaceRuntime implements WorkspaceRuntime {
   private highlighted: readonly string[] = []
   private failure: string | undefined
   private computed: Computed | undefined
+  /** Raw submitted input/output survive an engine verification failure. */
+  private retainedRun: Pick<CapturedResult, 'scene' | 'request' | 'result'> | undefined
+  private retainedEndTime: number | undefined
+  private engineInfo: CapturedResult['engineInfo'] = { id: this.engine.engineId, version: this.engine.engineVersion }
+  private rawState: CapturedResult['rawState']
+  private latestFrame: { scene: PhysicsScene; simulation: SimulationResult; time: number; state: SimulationState } | undefined
   /** The scene as the source stated it, kept so an experimental branch can be discarded. */
   private readonly origin: PhysicsScene | undefined
 
@@ -160,49 +184,75 @@ export class InductionWorkspaceRuntime implements WorkspaceRuntime {
   }
 
   private recompute(): void {
-    const scene = this.sceneRuntime.getScene()
+    const scene = this.sceneRuntime.peekScene()
+    this.retainedRun = { scene }
+    this.retainedEndTime = undefined
+    this.latestFrame = undefined
+    this.rawState = undefined
+    this.engineInfo = {
+      id: this.engine.engineId,
+      version: this.engine.engineVersion,
+      ...(scene.metadata.experimentRelease === undefined ? {} : { release: scene.metadata.experimentRelease }),
+    }
     try {
       const support = this.engine.canHandle(scene)
+      if (support.modelId !== undefined) this.engineInfo = { ...this.engineInfo, model: support.modelId }
       if (!support.supported) {
         this.failure = support.failedConditions.map(entry => entry.message).join(' ')
         this.computed = undefined
         return
       }
-      const simulation = this.engine.simulate(
+      const request = createInductionSimulationRequest(
         scene,
-        createInductionSimulationRequest(
-          scene,
-          `induction-lab-${String(scene.id)}-${scene.revision}`,
-          `induction-lab-trace-${String(scene.id)}-${scene.revision}`,
-        ),
+        `induction-lab-${String(scene.id)}-${scene.revision}`,
+        `induction-lab-trace-${String(scene.id)}-${scene.revision}`,
       )
+      this.retainedRun = { scene, request }
+      const simulation = this.engine.simulate(scene, request)
+      this.retainedRun = { scene, request, result: simulation }
+      const lastTime = simulation.states.at(-1)?.time
+      this.retainedEndTime = lastTime === undefined ? undefined : canonicalValue(lastTime)
+      this.engineInfo = { ...this.engineInfo, id: simulation.metadata.engineId, version: simulation.metadata.engineVersion }
       if (simulation.verification.status === 'failed') {
         this.failure = simulation.verification.errors.map(entry => entry.message).join(' ')
         this.computed = undefined
         return
       }
       const model = resolveInductionModel(scene)
-      this.currentTime = Math.min(this.currentTime, runDurationOf(scene))
+      this.rawState = copyJsonObject({ model })
+      const runSeconds = runDurationOf(scene)
+      this.currentTime = Math.min(this.currentTime, runSeconds)
       this.failure = undefined
-      this.computed = { simulation, model }
+      this.computed = { simulation, model, runSeconds }
+      this.frameStateOf(scene, simulation)
     } catch (error: unknown) {
       this.failure = error instanceof Error ? error.message : '感应 Runtime 无法启动。'
       this.computed = undefined
     }
   }
 
+  /** Retain the exact state used by the visual frame; capture only reads it. */
+  private frameStateOf(scene: PhysicsScene, simulation: SimulationResult): SimulationState {
+    const cached = this.latestFrame
+    if (cached?.scene === scene && cached.simulation === simulation && cached.time === this.currentTime) {
+      return cached.state
+    }
+    const state = this.engine.stateAt(scene, quantity(this.currentTime, 's', 'time'))
+    this.latestFrame = { scene, simulation, time: this.currentTime, state }
+    return state
+  }
+
   private command<T extends SceneCommandType>(type: T, payload: SceneCommandPayloadMap[T]): void {
     /* Changing a physical fact on a question scene forks first: the solution the
        student just read was verified against the original conditions. Observable
        toggles are NOT facts and never fork. */
-    if (requiresExperimentalFork(this.sceneRuntime.getScene(), type)) {
-      this.sceneRuntime = new SceneRuntime(
-        forkExperimentalScene({ scene: this.sceneRuntime.getScene() }),
-      )
-    }
-    const scene = this.sceneRuntime.getScene()
+    const current = this.sceneRuntime.getScene()
+    const prospective = requiresExperimentalFork(current, type)
+      ? new SceneRuntime(forkExperimentalScene({ scene: current }))
+      : this.sceneRuntime
+    const scene = prospective.getScene()
     this.commandSequence += 1
-    const result = this.sceneRuntime.execute(
+    const result = prospective.execute(
       createSceneCommand<T>({
         commandId: `induction-ui-command-${this.commandSequence}`,
         sceneId: String(scene.id),
@@ -216,11 +266,41 @@ export class InductionWorkspaceRuntime implements WorkspaceRuntime {
       this.failure = result.error.message
       return
     }
+    this.sceneRuntime = prospective
     this.recompute()
   }
 
   getScene(): PhysicsScene {
     return this.sceneRuntime.getScene()
+  }
+
+  captureRaw(): CapturedResult {
+    const run: Pick<CapturedResult, 'scene' | 'request' | 'result'> = this.retainedRun ?? { scene: this.sceneRuntime.peekScene() }
+    const frame = this.latestFrame
+    const state = this.computed !== undefined && frame !== undefined && frame.scene === run.scene && frame.simulation === run.result && frame.time === this.currentTime
+      ? frame.state
+      : undefined
+    const total = this.computed?.runSeconds ?? this.retainedEndTime
+    const clock = total === undefined
+      ? { time: 0, total: 0, running: false, rate: this.rate }
+      : { time: Math.min(total, Math.max(0, this.currentTime)), total, running: this.computed !== undefined && this.running, rate: this.rate }
+    return publicCapturedResult({
+      ...run,
+      ...(state === undefined ? {} : { state }),
+      ...(this.rawState === undefined ? {} : { rawState: this.rawState }),
+      clock,
+      cursor: total === undefined
+        ? { kind: 'static', identity: `${String(run.scene.id)}:${run.scene.revision}` }
+        : { kind: 'time', time: quantity(clock.time, 's', 'time') },
+      engineInfo: this.engineInfo,
+      metricSemantics: {
+        lenz_direction: {
+          semanticKey: 'induction_lenz_direction',
+          scale: { kind: 'unresolved', reason: 'Signed direction code, not a continuous scalar reading.' },
+        },
+      },
+      ...(this.failure === undefined ? {} : { diagnostics: [{ code: 'INDUCTION_RUNTIME_DIAGNOSTIC', message: this.failure }] }),
+    })
   }
 
   getSnapshot(): WorkspaceSnapshot {
@@ -261,7 +341,7 @@ export class InductionWorkspaceRuntime implements WorkspaceRuntime {
        the nearest of 61 samples: on the double-bar rig (τ = 0.25 s) a sample
        can sit 0.03 s from the clock, and the E / v readouts would then belong
        to a different instant than the "t =" printed beside them. */
-    const frameState = this.engine.stateAt(scene, quantity(this.currentTime, 's', 'time'))
+    const frameState = this.frameStateOf(scene, simulation)
     const view = inductionSceneVisual({
       scene,
       model,
@@ -575,11 +655,9 @@ export class InductionWorkspaceRuntime implements WorkspaceRuntime {
         id: 'lenz-text',
         label: '感应方向',
         symbol: '',
-        /* Direction facts come from the engine: the bar rig quotes its derived
-           EMF sign, the coil rig quotes the bench's stated flux rate. */
-        value: lenzDirectionText(
-          model.subModel === 'bar_motion_emf',
-          lenzReadoutOf(this.computed.simulation, model),
+        value: directionTextOf(
+          model,
+          lenzReadoutOf(frameDerived ?? this.computed.simulation.derivedQuantities, model),
         ),
         unit: '',
         highlights: model.benchId,
@@ -698,7 +776,7 @@ export class InductionWorkspaceRuntime implements WorkspaceRuntime {
   }
 
   advance(wallClockSeconds: number): WorkspaceSnapshot {
-    if (this.running && this.computed !== undefined && Number.isFinite(wallClockSeconds)) {
+    if (this.running && this.computed !== undefined && Number.isFinite(wallClockSeconds) && wallClockSeconds >= 0) {
       const total = runDurationOf(this.sceneRuntime.peekScene())
       const next = this.currentTime + wallClockSeconds * this.rate
       this.currentTime = next >= total ? total : next

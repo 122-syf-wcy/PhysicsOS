@@ -1,6 +1,6 @@
 import type { IsoDateTime, SceneId, SimulationId, PhysicsEventId } from '@physicsos/shared'
 import type { Quantity } from '@physicsos/physics-units'
-import { canonicalValue } from '@physicsos/physics-units'
+import { canonicalValue, validateQuantity } from '@physicsos/physics-units'
 import { PhysicsOSError } from '@physicsos/shared'
 
 import type { PhysicsDomain, TraceContext } from './common.ts'
@@ -59,9 +59,9 @@ export const simulationTimeRange = (
   options: SimulationOptions,
   defaultEndTime?: number,
 ): { startTime: number; endTime: number } => {
-  const startTime = options.startTime === undefined ? 0 : canonicalValue(options.startTime)
+  const startTime = options.startTime === undefined ? 0 : canonicalValue(validateQuantity(options.startTime, 'time'))
   const endTime =
-    options.endTime === undefined ? (defaultEndTime ?? startTime) : canonicalValue(options.endTime)
+    options.endTime === undefined ? (defaultEndTime ?? startTime) : canonicalValue(validateQuantity(options.endTime, 'time'))
   if (
     !Number.isFinite(startTime) ||
     !Number.isFinite(endTime) ||
@@ -87,6 +87,52 @@ export interface SimulationRequest {
   trace: TraceContext
 }
 
+/**
+ * Engine-owned, computation-free execution bounds for the exact request.
+ * Storage samples, solver iterations, and rendered samples are separate budgets.
+ * Bounds may exceed a host's policy; a planner never rewrites the request to fit.
+ */
+export interface SimulationPlan {
+  readonly schemaVersion: 'simulation-plan/1.0'
+  readonly engineId: string
+  readonly engineVersion: string
+  readonly simulationId: SimulationId
+  readonly sceneId: SceneId
+  readonly sceneRevision: number
+  readonly modelId?: string
+  readonly kind: 'static' | 'analytic' | 'iterative'
+  /** Inclusive accepted absolute scene-time range or its proven execution upper bound, in seconds. */
+  readonly startTime: number
+  readonly endTime: number
+  /** False only when an event-driven default has a proven bound but computing its exact end would solve physics. */
+  readonly endTimeExact?: boolean
+  /** Human-independent accounting notes, including what each numerical iteration bound counts. */
+  readonly metadata?: Readonly<Record<string, string | number | boolean>>
+  /** Upper bound on persisted SimulationState count, not a rate in hertz. */
+  readonly storageSampleCountBound: number
+  /** Upper bound on numerical integration/solver steps; analytic models use zero. */
+  readonly numericalIterationCountBound: number
+}
+
+/** Validate bounds without imposing a product policy or changing physical input. */
+export const assertSimulationPlan = (plan: SimulationPlan): void => {
+  if (plan.metadata !== undefined && (plan.metadata === null || typeof plan.metadata !== 'object' || Array.isArray(plan.metadata))) {
+    throw new PhysicsOSError('INVALID_SIMULATION_PLAN', 'Engine plan accounting metadata must be a plain record.')
+  }
+  if (plan.schemaVersion !== 'simulation-plan/1.0' || !plan.engineId || !plan.engineVersion ||
+    !plan.simulationId || !plan.sceneId || !Number.isSafeInteger(plan.sceneRevision) || plan.sceneRevision < 0 ||
+    (plan.kind !== 'static' && plan.kind !== 'analytic' && plan.kind !== 'iterative') ||
+    (plan.endTimeExact !== undefined && typeof plan.endTimeExact !== 'boolean') ||
+    (plan.metadata !== undefined && Object.values(plan.metadata).some(value =>
+      (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') ||
+      (typeof value === 'number' && !Number.isFinite(value)))) ||
+    !Number.isFinite(plan.startTime) || !Number.isFinite(plan.endTime) || plan.startTime < 0 || plan.endTime < plan.startTime ||
+    !Number.isSafeInteger(plan.storageSampleCountBound) || plan.storageSampleCountBound < 0 ||
+    !Number.isSafeInteger(plan.numericalIterationCountBound) || plan.numericalIterationCountBound < 0) {
+    throw new PhysicsOSError('INVALID_SIMULATION_PLAN', 'The engine returned invalid simulation bounds.')
+  }
+}
+
 /** docs/03 §83 */
 export interface SimulationMetadata {
   engineId: string
@@ -97,6 +143,8 @@ export interface SimulationMetadata {
   durationMs: number
   deterministic: boolean
   randomSeed?: number
+  /** Actual integration/solver accounting units, using the engine plan's declared counting convention. */
+  numericalIterationCount?: number
 }
 
 /**

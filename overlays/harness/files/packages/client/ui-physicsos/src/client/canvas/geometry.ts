@@ -1,0 +1,144 @@
+import type { CanvasLayout, CanvasNode } from '@physicsos/physics-workbench/types'
+
+export type CanvasAlignment = 'left' | 'right' | 'top' | 'bottom' | 'horizontal-center' | 'vertical-center'
+export type CanvasDistribution = 'horizontal' | 'vertical'
+export type CanvasLayer = 'front' | 'back' | 'forward' | 'backward'
+
+/** Layouts use world-space pixels; group membership never changes physical scene coordinates. */
+export function descendants(nodes: readonly CanvasNode[], selected: readonly string[]): Set<string> {
+  const included = new Set(selected)
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const node of nodes) {
+      if (node.groupId !== undefined && included.has(node.groupId) && !included.has(node.id)) {
+        included.add(node.id)
+        changed = true
+      }
+    }
+  }
+  return included
+}
+
+export function translatedLayouts(
+  nodes: readonly CanvasNode[],
+  selected: readonly string[],
+  dx: number,
+  dy: number,
+): Readonly<Record<string, CanvasLayout>> {
+  const roots = nodes.filter(node => selected.includes(node.id) && node.locked !== true)
+  const ids = descendants(nodes, roots.map(node => node.id))
+  const layouts: Record<string, CanvasLayout> = {}
+  for (const node of nodes) {
+    if (ids.has(node.id)) layouts[node.id] = { ...node.layout, x: node.layout.x + dx, y: node.layout.y + dy }
+  }
+  return layouts
+}
+
+export function boundsOf(nodes: readonly CanvasNode[]): { x: number; y: number; width: number; height: number } | undefined {
+  if (nodes.length === 0) return undefined
+  const x = Math.min(...nodes.map(node => node.layout.x))
+  const y = Math.min(...nodes.map(node => node.layout.y))
+  return {
+    x,
+    y,
+    width: Math.max(...nodes.map(node => node.layout.x + node.layout.width)) - x,
+    height: Math.max(...nodes.map(node => node.layout.y + node.layout.height)) - y,
+  }
+}
+
+const moveWithChildren = (
+  nodes: readonly CanvasNode[],
+  id: string,
+  next: CanvasLayout,
+  result: Record<string, CanvasLayout>,
+): void => {
+  const source = nodes.find(node => node.id === id)
+  if (source === undefined) return
+  Object.assign(result, translatedLayouts(nodes, [id], next.x - source.layout.x, next.y - source.layout.y))
+  result[id] = next
+}
+
+/** Alignment affects selected editable roots and carries their grouped children with them. */
+export function alignedLayouts(
+  nodes: readonly CanvasNode[],
+  selected: readonly string[],
+  alignment: CanvasAlignment,
+): Readonly<Record<string, CanvasLayout>> {
+  const ids = new Set(selected)
+  const roots = nodes.filter(node => ids.has(node.id) && node.locked !== true && (node.groupId === undefined || !ids.has(node.groupId)))
+  const bounds = boundsOf(roots)
+  if (bounds === undefined || roots.length < 2) return {}
+  const result: Record<string, CanvasLayout> = {}
+  for (const node of roots) {
+    const next = { ...node.layout }
+    if (alignment === 'left') next.x = bounds.x
+    if (alignment === 'right') next.x = bounds.x + bounds.width - next.width
+    if (alignment === 'top') next.y = bounds.y
+    if (alignment === 'bottom') next.y = bounds.y + bounds.height - next.height
+    if (alignment === 'horizontal-center') next.x = bounds.x + (bounds.width - next.width) / 2
+    if (alignment === 'vertical-center') next.y = bounds.y + (bounds.height - next.height) / 2
+    moveWithChildren(nodes, node.id, next, result)
+  }
+  return result
+}
+
+/** Distribute the selected roots over their existing outer bounds, without rescaling contents. */
+export function distributedLayouts(
+  nodes: readonly CanvasNode[],
+  selected: readonly string[],
+  direction: CanvasDistribution,
+): Readonly<Record<string, CanvasLayout>> {
+  const ids = new Set(selected)
+  const horizontal = direction === 'horizontal'
+  const roots = nodes.filter(node => ids.has(node.id) && node.locked !== true && (node.groupId === undefined || !ids.has(node.groupId)))
+    .sort((a, b) => horizontal ? a.layout.x - b.layout.x : a.layout.y - b.layout.y)
+  if (roots.length < 3) return {}
+  const bounds = boundsOf(roots)!
+  const total = roots.reduce((sum, node) => sum + (horizontal ? node.layout.width : node.layout.height), 0)
+  const gap = ((horizontal ? bounds.width : bounds.height) - total) / (roots.length - 1)
+  let at = horizontal ? bounds.x : bounds.y
+  const result: Record<string, CanvasLayout> = {}
+  for (const node of roots) {
+    const next = { ...node.layout, ...(horizontal ? { x: at } : { y: at }) }
+    moveWithChildren(nodes, node.id, next, result)
+    at += (horizontal ? node.layout.width : node.layout.height) + gap
+  }
+  return result
+}
+
+export function layeredLayouts(
+  nodes: readonly CanvasNode[],
+  selected: readonly string[],
+  layer: CanvasLayer,
+): Readonly<Record<string, CanvasLayout>> {
+  const ids = new Set(selected)
+  const sorted = [...nodes].sort((a, b) => a.layout.zIndex - b.layout.zIndex)
+  const moving = sorted.filter(node => ids.has(node.id) && node.locked !== true)
+  const stationary = sorted.filter(node => !moving.includes(node))
+  let ordered: CanvasNode[]
+  if (layer === 'front') ordered = [...stationary, ...moving]
+  else if (layer === 'back') ordered = [...moving, ...stationary]
+  else {
+    ordered = [...sorted]
+    const indices = ordered.map((node, index) => moving.includes(node) ? index : -1).filter(index => index >= 0)
+    if (layer === 'forward') {
+      for (const index of indices.reverse()) {
+        if (index < ordered.length - 1 && !moving.includes(ordered[index + 1]!)) {
+          const current = ordered[index]!
+          ordered[index] = ordered[index + 1]!
+          ordered[index + 1] = current
+        }
+      }
+    } else {
+      for (const index of indices) {
+        if (index > 0 && !moving.includes(ordered[index - 1]!)) {
+          const current = ordered[index]!
+          ordered[index] = ordered[index - 1]!
+          ordered[index - 1] = current
+        }
+      }
+    }
+  }
+  return Object.fromEntries(ordered.map((node, index) => [node.id, { ...node.layout, zIndex: index }]))
+}

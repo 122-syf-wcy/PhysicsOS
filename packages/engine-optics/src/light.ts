@@ -10,6 +10,9 @@ import type { ResolvedPinholeModel, ResolvedRefractionModel } from './light-mode
 
 export const LIGHT_RELATIVE_TOLERANCE = 1e-9
 
+/** Floating-point allowance at Snell's sine endpoint, not a physical angle tolerance. */
+const REFRACTION_ENDPOINT_ROUNDOFF = 8 * Number.EPSILON
+
 /** Magnification of a pinhole image: m = v/u. */
 export const pinholeMagnification = (objectDistance: number, screenDistance: number): number =>
   screenDistance / objectDistance
@@ -108,6 +111,9 @@ export const refractedAngleOf = (
   incidentAngle: number,
 ): number | undefined => {
   const sine = (incidentIndex * Math.sin(incidentAngle)) / refractedIndex
+  /* Reconstructing sin(asin(n₂/n₁)) can round either side of one. Both must
+     describe a grazing ray; asin amplifies even a one-ULP downward error. */
+  if (Math.abs(sine - 1) <= REFRACTION_ENDPOINT_ROUNDOFF) return Math.PI / 2
   return sine > 1 ? undefined : Math.asin(sine)
 }
 

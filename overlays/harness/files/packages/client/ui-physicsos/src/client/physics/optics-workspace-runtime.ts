@@ -21,8 +21,16 @@ import {
   type LensZone,
   type OpticalImagingResult,
 } from '@physicsos/engine-optics'
-import { isScalarQuantity, type SimulationResult } from '@physicsos/physics-core'
+import {
+  EngineUnsupportedError,
+  isScalarQuantity,
+  type SimulationRequest,
+  type SimulationResult,
+} from '@physicsos/physics-core'
+import { copyDiagnosticObject, copyJsonObject } from '@physicsos/physics-workbench/json'
+import type { CapturedResult, JsonObject } from '@physicsos/physics-workbench/types'
 import { canonicalValue } from '@physicsos/physics-units'
+import { PhysicsOSError } from '@physicsos/shared'
 import {
   SceneRuntime,
   createSceneCommand,
@@ -53,6 +61,7 @@ import type {
   InspectorSection,
   ObservableKey,
   QuantityParameter,
+  ScenePoint,
   SceneTreeNode,
   VerificationCheckView,
 } from './scene-visual-model.ts'
@@ -114,6 +123,12 @@ export class OpticsWorkspaceRuntime implements WorkspaceRuntime {
   private commandSequence = 0
   private highlighted: readonly string[] = []
   private failure: string | undefined
+  private request: SimulationRequest | undefined
+  private simulation: SimulationResult | undefined
+  private modelId: string | undefined
+  private diagnostics: readonly JsonObject[] = []
+  private rawState: JsonObject | undefined
+  private staticModel = false
   private computed: Computed | undefined
   /** The scene as the source stated it, kept so an experimental branch can be discarded. */
   private readonly origin: PhysicsScene | undefined
@@ -126,21 +141,31 @@ export class OpticsWorkspaceRuntime implements WorkspaceRuntime {
 
   private recompute(): void {
     const scene = this.sceneRuntime.getScene()
+    this.request = undefined
+    this.simulation = undefined
+    this.modelId = undefined
+    this.diagnostics = []
+    this.rawState = undefined
+    this.staticModel = false
     try {
       const support = this.engine.canHandle(scene)
+      this.modelId = support.modelId
       if (!support.supported) {
         this.failure = support.failedConditions.map(entry => entry.message).join(' ')
+        this.diagnostics = [copyJsonObject({ stage: 'support', ...support })]
         this.computed = undefined
         return
       }
-      const simulation = this.engine.simulate(
+      this.staticModel = true
+      const request = createOpticsSimulationRequest(
         scene,
-        createOpticsSimulationRequest(
-          scene,
-          `optics-lab-${String(scene.id)}-${scene.revision}`,
-          `optics-lab-trace-${String(scene.id)}-${scene.revision}`,
-        ),
+        `optics-lab-${String(scene.id)}-${scene.revision}`,
+        `optics-lab-trace-${String(scene.id)}-${scene.revision}`,
       )
+      this.request = request
+      const simulation = this.engine.simulate(scene, request)
+      this.simulation = simulation
+      this.diagnostics = [copyJsonObject({ stage: 'verification', ...simulation.verification })]
       if (simulation.verification.status === 'failed') {
         this.failure = simulation.verification.errors.map(entry => entry.message).join(' ')
         this.computed = undefined
@@ -149,13 +174,34 @@ export class OpticsWorkspaceRuntime implements WorkspaceRuntime {
       const result = resolveOpticalImaging(scene)
       this.failure = undefined
       this.computed = { simulation, result }
+      this.rawState = copyJsonObject({ model: result.model, currentState: result })
     } catch (error: unknown) {
       this.failure = error instanceof Error ? error.message : '光学 Runtime 无法启动。'
+      const cause = error instanceof EngineUnsupportedError
+        ? error.domainError
+        : error instanceof PhysicsOSError
+          ? { code: error.code, retryable: error.retryable, details: error.details }
+          : { code: 'OPTICS_RUNTIME_FAILED', retryable: false }
+      let diagnostic: JsonObject
+      try {
+        diagnostic = copyDiagnosticObject({ ...cause, stage: 'runtime', message: this.failure })
+      } catch {
+        diagnostic = copyJsonObject({
+          stage: 'runtime',
+          code: cause.code,
+          retryable: cause.retryable,
+          message: this.failure,
+          details: { missing: 'non-json-diagnostic-details' },
+        })
+      }
+      this.diagnostics = [...this.diagnostics, diagnostic]
+      this.rawState = undefined
       this.computed = undefined
     }
   }
 
   private command<T extends SceneCommandType>(type: T, payload: SceneCommandPayloadMap[T]): void {
+    const previousRuntime = this.sceneRuntime
     /* Changing a physical fact on a question scene forks first: the solution the
        student just read was verified against the original conditions. Observable
        toggles are NOT facts and never fork. */
@@ -177,7 +223,9 @@ export class OpticsWorkspaceRuntime implements WorkspaceRuntime {
       }) as SceneCommand,
     )
     if (!result.ok) {
+      this.sceneRuntime = previousRuntime
       this.failure = result.error.message
+      this.diagnostics = [...this.diagnostics, copyJsonObject({ stage: 'command', ...result.error })]
       return
     }
     this.recompute()
@@ -187,8 +235,34 @@ export class OpticsWorkspaceRuntime implements WorkspaceRuntime {
     return this.sceneRuntime.getScene()
   }
 
+  captureRaw(): CapturedResult {
+    const scene = this.sceneRuntime.peekScene()
+    return {
+      scene,
+      ...(this.request === undefined ? {} : { request: this.request }),
+      ...(this.simulation === undefined ? {} : { result: this.simulation }),
+      ...(this.rawState === undefined ? {} : { rawState: this.rawState }),
+      clock: { time: 0, total: 0, running: false, rate: this.rate },
+      cursor: {
+        kind: 'static',
+        identity: this.staticModel
+          ? 'optics-geometric-imaging'
+          : `unavailable:${this.engine.engineId}`,
+      },
+      engineInfo: {
+        id: this.engine.engineId,
+        version: this.engine.engineVersion,
+        ...(this.modelId === undefined ? {} : { model: this.modelId }),
+        ...(scene.metadata.experimentRelease === undefined
+          ? {}
+          : { release: scene.metadata.experimentRelease }),
+      },
+      diagnostics: this.diagnostics,
+    }
+  }
+
   previewParameter(id: string, value: number): WorkspaceSnapshot {
-    if (!Number.isFinite(value) || value <= 0) return this.getSnapshot()
+    if (!Number.isFinite(value) || (id === 'mirror-focal-length' ? value === 0 : value <= 0)) return this.getSnapshot()
     const preview = new OpticsWorkspaceRuntime(this.getScene())
     const next = preview.editParameter(id, value)
     if (next.status !== 'failed') this.previewRuntime = preview
@@ -197,13 +271,42 @@ export class OpticsWorkspaceRuntime implements WorkspaceRuntime {
 
   commitParameter(id: string, value: number): WorkspaceSnapshot {
     this.previewRuntime = undefined
-    if (!Number.isFinite(value) || value <= 0) return this.getSnapshot()
+    if (!Number.isFinite(value) || (id === 'mirror-focal-length' ? value === 0 : value <= 0)) return this.getSnapshot()
     return this.editParameter(id, value)
   }
 
   cancelParameterPreview(): WorkspaceSnapshot {
     this.previewRuntime = undefined
     return this.getSnapshot()
+  }
+
+  /** Native renderers report absolute scene coordinates in cm along the optical rail. */
+  private placementParameter(componentId: string, at: ScenePoint): { id: string; value: number } | undefined {
+    if (!Number.isFinite(at.x) || !Number.isFinite(at.y)) return undefined
+    const bench = opticalBenchOf(this.sceneRuntime.peekScene())
+    const model = this.computed?.result.model
+    if (bench === undefined || model === undefined) return undefined
+    const elementX = model.elementX * CM_PER_METRE
+    if (componentId === bench.object.id) return { id: 'object-distance', value: elementX - at.x }
+    if (bench.screen !== undefined && componentId === bench.screen.id) return {
+      id: 'screen-distance',
+      value: model.elementType === 'curved_mirror' ? elementX - at.x : at.x - elementX,
+    }
+    return undefined
+  }
+
+  previewComponentPlacement(componentId: string, at: ScenePoint): WorkspaceSnapshot {
+    const parameter = this.placementParameter(componentId, at)
+    return parameter === undefined ? this.getSnapshot() : this.previewParameter(parameter.id, parameter.value)
+  }
+
+  commitComponentPlacement(componentId: string, at: ScenePoint): WorkspaceSnapshot {
+    const parameter = this.placementParameter(componentId, at)
+    return parameter === undefined ? this.cancelParameterPreview() : this.commitParameter(parameter.id, parameter.value)
+  }
+
+  cancelComponentPlacement(): WorkspaceSnapshot {
+    return this.cancelParameterPreview()
   }
 
   getSnapshot(): WorkspaceSnapshot {
@@ -371,7 +474,7 @@ export class OpticsWorkspaceRuntime implements WorkspaceRuntime {
         unit: 'cm',
         value: model === undefined
           ? Number.NaN
-          : Number.parseFloat((model.objectDistance * CM_PER_METRE).toFixed(2)),
+          : model.objectDistance * CM_PER_METRE,
         min: 1,
         step: 1,
         highlights: bench.object.id,
@@ -383,7 +486,7 @@ export class OpticsWorkspaceRuntime implements WorkspaceRuntime {
         unit: 'cm',
         value: model === undefined
           ? Number.NaN
-          : Number.parseFloat((model.objectHeight * CM_PER_METRE).toFixed(2)),
+          : model.objectHeight * CM_PER_METRE,
         min: 0.5,
         step: 0.5,
         highlights: bench.object.id,
@@ -395,7 +498,7 @@ export class OpticsWorkspaceRuntime implements WorkspaceRuntime {
         label: '焦距',
         symbol: 'f',
         unit: 'cm',
-        value: Number.parseFloat((canonicalValue(element.focalLength) * CM_PER_METRE).toFixed(2)),
+        value: canonicalValue(element.focalLength) * CM_PER_METRE,
         min: 1,
         step: 1,
         highlights: element.id,
@@ -409,7 +512,7 @@ export class OpticsWorkspaceRuntime implements WorkspaceRuntime {
         label: '焦距（>0 凹面镜，<0 凸面镜）',
         symbol: 'f',
         unit: 'cm',
-        value: Number.parseFloat((canonicalValue(element.focalLength) * CM_PER_METRE).toFixed(2)),
+        value: canonicalValue(element.focalLength) * CM_PER_METRE,
         min: -100,
         max: 100,
         step: 1,
@@ -430,11 +533,9 @@ export class OpticsWorkspaceRuntime implements WorkspaceRuntime {
               : '光屏到镜距离',
         symbol: 'd',
         unit: 'cm',
-        value: Number.parseFloat(
-          ((mirrorSide
+        value: (mirrorSide
             ? model.elementX - model.screenX
-            : model.screenX - model.elementX) * CM_PER_METRE).toFixed(2),
-        ),
+            : model.screenX - model.elementX) * CM_PER_METRE,
         min: 1,
         step: 1,
         highlights: bench.screen.id,

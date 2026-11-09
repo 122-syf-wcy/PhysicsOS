@@ -1,4 +1,8 @@
-import { simulationTimeRange, eventsInSimulationRange } from '@physicsos/physics-core'
+import {
+  assertSimulationPlan,
+  eventsInSimulationRange,
+  simulationTimeRange,
+} from '@physicsos/physics-core'
 import { trajectorySampleTimes, trajectoryStorageSampleCount } from '@physicsos/physics-scene'
 import {
   check,
@@ -10,6 +14,7 @@ import {
   type ModelSupport,
   type PhysicsEngine,
   type PhysicsEventLike,
+  type SimulationPlan,
   type SimulationRequest,
   type SimulationResult,
   type SimulationState,
@@ -298,7 +303,7 @@ export class AcousticsEngine implements PhysicsEngine<PhysicsScene, PhysicsEvent
     return stateOf(resolveAcousticModel(scene), timeSeconds)
   }
 
-  simulate(scene: PhysicsScene, request: SimulationRequest): SimulationResult<PhysicsEventLike> {
+  private prepareSimulation(scene: PhysicsScene, request: SimulationRequest) {
     if (request.sceneId !== scene.id || request.sceneRevision !== scene.revision) {
       throw new PhysicsOSError(
         'SIMULATION_SCENE_MISMATCH',
@@ -314,16 +319,44 @@ export class AcousticsEngine implements PhysicsEngine<PhysicsScene, PhysicsEvent
       )
     }
 
-    const startedAt = new Date().toISOString()
     const model = resolveAcousticModel(scene)
-    const { oneWayTime, roundTripTime } = echoTimingOf(model)
+    const timing = echoTimingOf(model)
+    if (!Number.isFinite(timing.oneWayTime) || !Number.isFinite(timing.roundTripTime)) {
+      throw new PhysicsOSError('INVALID_SIMULATION_RANGE', 'Echo travel times must be finite.')
+    }
+    const plan: SimulationPlan = {
+      schemaVersion: 'simulation-plan/1.0',
+      engineId: this.engineId,
+      engineVersion: this.engineVersion,
+      simulationId: request.simulationId,
+      sceneId: scene.id,
+      sceneRevision: scene.revision,
+      modelId: ECHO_RANGING_MODEL,
+      kind: 'analytic',
+      ...simulationTimeRange(request.options, timing.roundTripTime),
+      storageSampleCountBound: trajectoryStorageSampleCount(request.options, TRAJECTORY_SEGMENTS + 1),
+      numericalIterationCountBound: 0,
+      metadata: {
+        numericalIterationAccounting:
+          'No numerical integration; closed-form sampling. Fixed echo verification probes are excluded.',
+      },
+    }
+    assertSimulationPlan(plan)
+    return { model, timing, plan }
+  }
 
-    const { startTime, endTime } = simulationTimeRange(request.options, roundTripTime)
-    const states = trajectorySampleTimes(
-      startTime,
-      endTime,
-      trajectoryStorageSampleCount(request.options, TRAJECTORY_SEGMENTS + 1),
-    ).map((time) => stateOf(model, time))
+  prepareSimulationPlan(scene: PhysicsScene, request: SimulationRequest): SimulationPlan {
+    return this.prepareSimulation(scene, request).plan
+  }
+
+  simulate(scene: PhysicsScene, request: SimulationRequest): SimulationResult<PhysicsEventLike> {
+    const { model, timing, plan } = this.prepareSimulation(scene, request)
+    const startedAt = new Date().toISOString()
+    const { oneWayTime, roundTripTime } = timing
+    const { startTime, endTime, storageSampleCountBound } = plan
+    const states = trajectorySampleTimes(startTime, endTime, storageSampleCountBound).map((time) =>
+      stateOf(model, time),
+    )
 
     const events: PhysicsEventLike[] = [
       {

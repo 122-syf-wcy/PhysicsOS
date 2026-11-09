@@ -1,6 +1,7 @@
 import {
   check,
   summarizeVerification,
+  simulationTimeRange,
   supported,
   unsupportedModel,
   type DerivedQuantity,
@@ -8,6 +9,7 @@ import {
   type PhysicsEngine,
   type PhysicsEventLike,
   type SimulationRequest,
+  type SimulationPlan,
   type SimulationResult,
   type SimulationState,
   type VerificationCheck,
@@ -238,6 +240,12 @@ export function createModernSimulationRequest(
   }
 }
 
+const modernExecutionOf = (scene: PhysicsScene, request: SimulationRequest) => {
+  const defaultEndTime = scene.timeline.endTime === undefined ? 1 : canonicalValue(scene.timeline.endTime)
+  const range = simulationTimeRange(request.options, defaultEndTime)
+  return { ...range, storageSampleCount: trajectoryStorageSampleCount(request.options, 2) }
+}
+
 export class ModernPhysicsEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLike> {
   readonly engineId = MODERN_ENGINE_ID
   readonly engineVersion = MODERN_ENGINE_VERSION
@@ -315,6 +323,28 @@ export class ModernPhysicsEngine implements PhysicsEngine<PhysicsScene, PhysicsE
     return stateOf(resolvePhotoelectricModel(scene), seconds)
   }
 
+  prepareSimulationPlan(scene: PhysicsScene, request: SimulationRequest): SimulationPlan {
+    if (request.sceneId !== scene.id || request.sceneRevision !== scene.revision) {
+      throw new PhysicsOSError('SIMULATION_SCENE_MISMATCH', 'SimulationRequest must reference the exact PhysicsScene revision being planned.')
+    }
+    const model = resolvePhotoelectricModel(scene)
+    const execution = modernExecutionOf(scene, request)
+    return {
+      schemaVersion: 'simulation-plan/1.0',
+      engineId: this.engineId,
+      engineVersion: this.engineVersion,
+      simulationId: request.simulationId,
+      sceneId: scene.id,
+      sceneRevision: scene.revision,
+      modelId: model.modelId,
+      kind: 'static',
+      startTime: execution.startTime,
+      endTime: execution.endTime,
+      storageSampleCountBound: execution.storageSampleCount,
+      numericalIterationCountBound: 0,
+    }
+  }
+
   simulate(scene: PhysicsScene, request: SimulationRequest): SimulationResult<PhysicsEventLike> {
     if (request.sceneId !== scene.id || request.sceneRevision !== scene.revision) {
       throw new PhysicsOSError(
@@ -323,31 +353,9 @@ export class ModernPhysicsEngine implements PhysicsEngine<PhysicsScene, PhysicsE
       )
     }
     const model = resolvePhotoelectricModel(scene)
-    const startTime =
-      request.options.startTime === undefined ? 0 : canonicalValue(request.options.startTime)
-    const sceneDuration =
-      scene.timeline.endTime === undefined ? 1 : canonicalValue(scene.timeline.endTime)
-    const endTime =
-      request.options.endTime === undefined
-        ? sceneDuration
-        : canonicalValue(request.options.endTime)
-    if (
-      !Number.isFinite(startTime) ||
-      !Number.isFinite(endTime) ||
-      startTime < 0 ||
-      endTime < startTime
-    ) {
-      throw new PhysicsOSError(
-        'INVALID_SIMULATION_RANGE',
-        'Modern-physics simulation range must satisfy 0 <= startTime <= endTime.',
-      )
-    }
+    const { startTime, endTime, storageSampleCount } = modernExecutionOf(scene, request)
     const startedAt = new Date().toISOString()
-    const states = trajectorySampleTimes(
-      startTime,
-      endTime,
-      trajectoryStorageSampleCount(request.options, 2),
-    ).map((time) => stateOf(model, time))
+    const states = trajectorySampleTimes(startTime, endTime, storageSampleCount).map((time) => stateOf(model, time))
     return {
       schemaVersion: 'simulation-result/1.0',
       simulationId: request.simulationId,

@@ -24,7 +24,12 @@ import {
   straightWireFieldOf,
   type ResolvedCurrentModel,
 } from '@physicsos/engine-magnetic'
-import { isScalarQuantity, type SimulationResult } from '@physicsos/physics-core'
+import {
+  isScalarQuantity,
+  type SimulationRequest,
+  type SimulationResult,
+} from '@physicsos/physics-core'
+import type { CapturedResult } from '@physicsos/physics-workbench'
 import { quantity } from '@physicsos/physics-units'
 import {
   SceneRuntime,
@@ -42,6 +47,7 @@ import {
   requiresExperimentalFork,
 } from './experimental-branch.ts'
 import { fmtFluidValue } from './fluid-visual-bridge.ts'
+import { currentCaptureEvidence } from './subbench-capture-bridge.ts'
 import { emptyVisualModel } from './scene-visual-model.ts'
 import { runtimeStatusOf } from './verified-result.ts'
 import { currentSceneVisual } from './current-visual-bridge.ts'
@@ -198,6 +204,10 @@ export class CurrentWorkspaceRuntime implements WorkspaceRuntime {
   private commandSequence = 0
   private highlighted: readonly string[] = []
   private failure: string | undefined
+  private request: SimulationRequest | undefined
+  private result: SimulationResult | undefined
+  private evidence: ReturnType<typeof currentCaptureEvidence> = {}
+  private captureDiagnostics: CapturedResult['diagnostics'] = []
   private computed: Computed | undefined
   /** The scene as the source stated it, kept so an experimental branch can be discarded. */
   private readonly origin: PhysicsScene | undefined
@@ -210,28 +220,41 @@ export class CurrentWorkspaceRuntime implements WorkspaceRuntime {
 
   private recompute(): void {
     const scene = this.sceneRuntime.getScene()
+    this.request = undefined
+    this.result = undefined
+    this.evidence = {}
+    this.captureDiagnostics = []
     try {
       const support = this.engine.canHandle(scene)
       if (!support.supported) {
         this.failure = support.failedConditions.map(entry => entry.message).join(' ')
+        this.captureDiagnostics = support.failedConditions.map(entry => ({ code: entry.condition, message: entry.message }))
         this.computed = undefined
         return
       }
-      const simulation = this.engine.simulate(
+      this.request = createCurrentSimulationRequest(
         scene,
-        createCurrentSimulationRequest(
-          scene,
-          `current-lab-${String(scene.id)}-${scene.revision}`,
-          `current-lab-trace-${String(scene.id)}-${scene.revision}`,
-        ),
+        `current-lab-${String(scene.id)}-${scene.revision}`,
+        `current-lab-trace-${String(scene.id)}-${scene.revision}`,
       )
+      const simulation = this.engine.simulate(scene, this.request)
+      this.result = simulation
+      const model = resolveCurrentModel(scene)
+      try {
+        this.evidence = currentCaptureEvidence({ scene, result: simulation, model })
+      } catch (error: unknown) {
+        this.captureDiagnostics = [{
+          code: 'CURRENT_CAPTURE_ANALYSIS_UNAVAILABLE',
+          message: error instanceof Error ? error.message : 'Raw current-field analysis is unavailable.',
+        }]
+      }
       if (simulation.verification.status === 'failed') {
         this.failure = simulation.verification.errors.map(entry => entry.message).join(' ')
         this.computed = undefined
         return
       }
       this.failure = undefined
-      this.computed = { simulation, model: resolveCurrentModel(scene) }
+      this.computed = { simulation, model }
     } catch (error: unknown) {
       this.failure = error instanceof Error ? error.message : '电流磁场 Runtime 无法启动。'
       this.computed = undefined
@@ -242,14 +265,13 @@ export class CurrentWorkspaceRuntime implements WorkspaceRuntime {
     /* Changing a physical fact on a question scene forks first: the reading the
        student just verified was derived from the original conditions. Observable
        toggles are NOT facts and never fork. */
-    if (requiresExperimentalFork(this.sceneRuntime.getScene(), type)) {
-      this.sceneRuntime = new SceneRuntime(
-        forkExperimentalScene({ scene: this.sceneRuntime.getScene() }),
-      )
-    }
-    const scene = this.sceneRuntime.getScene()
+    const currentScene = this.sceneRuntime.getScene()
+    const runtime = requiresExperimentalFork(currentScene, type)
+      ? new SceneRuntime(forkExperimentalScene({ scene: currentScene }))
+      : this.sceneRuntime
+    const scene = runtime.getScene()
     this.commandSequence += 1
-    const result = this.sceneRuntime.execute(
+    const result = runtime.execute(
       createSceneCommand<T>({
         commandId: `current-ui-command-${this.commandSequence}`,
         sceneId: String(scene.id),
@@ -263,11 +285,38 @@ export class CurrentWorkspaceRuntime implements WorkspaceRuntime {
       this.failure = result.error.message
       return
     }
+    this.sceneRuntime = runtime
     this.recompute()
   }
 
   getScene(): PhysicsScene {
     return this.sceneRuntime.getScene()
+  }
+
+  captureRaw(): CapturedResult {
+    const scene = this.sceneRuntime.getScene()
+    const state = this.result?.states[0]
+    const release = scene.metadata.experimentRelease
+    return {
+      scene,
+      ...(this.request === undefined ? {} : { request: this.request }),
+      ...(this.result === undefined ? {} : { result: this.result }),
+      ...(state === undefined ? {} : { state }),
+      ...this.evidence,
+      clock: { time: 0, total: 0, running: false, rate: 1 },
+      cursor: { kind: 'static', identity: `${this.engine.engineId}:settled-reading` },
+      engineInfo: {
+        id: this.result?.metadata.engineId ?? this.engine.engineId,
+        version: this.result?.metadata.engineVersion ?? this.engine.engineVersion,
+        ...(this.result?.metadata.solver === undefined ? {} : { model: this.result.metadata.solver }),
+        ...(release === undefined ? {} : { release }),
+      },
+      diagnostics: [
+        ...(this.evidence.diagnostics ?? []),
+        ...(this.captureDiagnostics ?? []),
+        ...(this.failure === undefined ? [] : [{ code: 'CURRENT_RUNTIME_FAILED', message: this.failure }]),
+      ],
+    }
   }
 
   getSnapshot(): WorkspaceSnapshot {
@@ -420,7 +469,7 @@ export class CurrentWorkspaceRuntime implements WorkspaceRuntime {
   setChoice(id: string, value: string): WorkspaceSnapshot {
     const model = this.computed?.model
     if (model === undefined) return this.getSnapshot()
-    if (id === 'current-direction') {
+    if (id === 'current-direction' && (value === 'in' || value === 'out')) {
       const sign = value === 'in' ? -1 : 1
       const magnitude = Math.abs(model.current)
       if (Math.sign(model.current) !== sign) {

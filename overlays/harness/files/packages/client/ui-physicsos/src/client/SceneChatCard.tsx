@@ -8,7 +8,7 @@
  * authoritative scene still lives in the host's EventStore.
  */
 
-import { memo, useCallback, useMemo, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import clsx from 'clsx'
 import {
   IconChevronLeftOutlineMedium,
@@ -21,13 +21,14 @@ import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-cli
 /* Type-only: pulls the Chat target's SlotMap entry, its `ChatNodeDataMap`
    merge (the card's kind), and the Session-scoped `useChat` standard hook. */
 import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
-import type { PhysicsScene } from '@physicsos/physics-scene'
+import { parsePhysicsScene, type PhysicsScene } from '@physicsos/physics-scene'
 import type { CodeVisualizationState, PhysicsSceneSolveSummary } from '@deepseek-ai/dsh-tool-physicsos/types'
 
 import { PLAYBACK_RATES, STEP_FRACTION } from './animation-clock.ts'
 import { buildWorkspaceRuntime } from './physics/build-workspace-runtime.ts'
 import { domainOfScene } from './physics/domain-of-scene.ts'
-import { useFrameSource, type FrameSource } from './physics/frame-source.ts'
+import { useFrameSource } from './physics/frame-source-react-compat.ts'
+import type { FrameSource } from './physics/frame-source.ts'
 import { QuestionCodeCanvas } from './experiments/QuestionCodeCanvas.tsx'
 import { useExperimentSession } from './experiments/use-experiment-session.ts'
 import { QuestionCodeControls } from './experiments/QuestionCodeControls.tsx'
@@ -56,6 +57,7 @@ type Translate = (key: PhysicsosKey, params?: Record<string, unknown>) => string
 export interface SceneChatCardInjected {
   /** Hand the card's scene to the Lab — the same verb 最近空间 rows use. */
   openSceneInLab: (ref: PhysicsSceneRef) => void
+  requestSceneInCanvas?: (ref: PhysicsSceneRef) => void
   questionCodeOwner?: QuestionCodeOwnerStore
   /** Explicit user action queues generation in the selected owning chat. */
   regenerateQuestionCode?: QuestionCodeRegenerate
@@ -90,17 +92,19 @@ export type SceneCardBodyProps =
 const ANSWER_BOUNDARY = new Set(['user', 'steering'])
 
 export const SceneCardBody = memo(function SceneCardBody({
-  data, t, openSceneInLab, recordAttempt, regenerateQuestionCode, questionCodeOwner,
+  data, t, openSceneInLab, requestSceneInCanvas, recordAttempt, regenerateQuestionCode, questionCodeOwner,
 }: SceneCardBodyProps) {
   /* The snapshot invariant guarantees `scene` is the whole PhysicsScene at
      this revision (`scene.id === sceneId`, `scene.revision === revision`). */
-  const scene = data.scene as unknown as PhysicsScene
+  const parsedScene = useMemo(() => parsePhysicsScene(data.scene), [data.scene])
+  const scene = parsedScene.ok ? parsedScene.value : undefined
   const independent = data.visualization?.status === 'ready' && data.visualization.rendererKind === 'independent'
   const experimentTitle = independent ? data.visualization.title : data.title
-  const domain = domainOfScene(scene)
-  const runtimeKey = `${domain}:${data.sceneId}:${data.revision}:${questionCodeSceneIdentity(scene)}`
+  const domain = scene === undefined ? 'unsupported' : domainOfScene(scene)
+  const runtimeKey = scene === undefined ? 'invalid-scene' : `${domain}:${data.sceneId}:${data.revision}:${questionCodeSceneIdentity(scene)}`
   const runtime = useMemo<WorkspaceRuntime | null>(
     () => {
+      if (scene === undefined) return null
       try { return buildWorkspaceRuntime(domain, scene) } catch { return null }
     },
     /* runtimeKey encodes domain + scene identity; `scene` is a fresh JSON
@@ -108,7 +112,15 @@ export const SceneCardBody = memo(function SceneCardBody({
        materialization. */
     [runtimeKey],
   )
+  useEffect(() => () => { runtime?.dispose?.() }, [runtime])
 
+  if (scene === undefined) return <div className={css.card} data-scene-card={data.sceneId} role="alert">{t('canvas.error.import')}</div>
+  const handover = (): PhysicsSceneRef => ({ sceneId: data.sceneId,
+    scene: data.visualization === undefined ? scene : withQuestionCodeVisualization(scene, data.visualization),
+    canvasSource: { kind: data.visualization === undefined ? 'question' : 'question-code', id: data.sceneId, title: experimentTitle,
+      ...(scene.metadata.sourceQuestionId === undefined ? {} : { questionId: String(scene.metadata.sourceQuestionId) }) },
+    hasVerifiedSolution: data.solve?.verification?.status === 'passed',
+    ...(data.visualization === undefined ? {} : { originScene: scene }) })
   return (
     <div className={css.card} data-scene-card={data.sceneId} data-code-experiment-shell>
       <header className={css.head}>
@@ -121,16 +133,13 @@ export const SceneCardBody = memo(function SceneCardBody({
           className={css.open}
           disabled={!independent}
           onClick={() => {
-            openSceneInLab({
-              sceneId: data.sceneId,
-              scene: data.visualization === undefined ? scene : withQuestionCodeVisualization(scene, data.visualization),
-              hasVerifiedSolution: data.solve?.verification?.status === 'passed',
-              ...(data.visualization === undefined ? {} : { originScene: scene }),
-            })
+            openSceneInLab(handover())
           }}
         >
           在实验室中探索
         </button>
+        {requestSceneInCanvas === undefined ? null : <button type="button" className={css.open}
+          onClick={() => { requestSceneInCanvas(handover()) }}>{t('canvas.addToCanvas')}</button>}
       </header>
       {runtime === null ? (
         <><QuestionCodeCanvas scene={scene} hasVerifiedSolution={data.solve?.verification?.status === 'passed'}
@@ -537,7 +546,7 @@ function SolveSection({
  * same answer block while it is still running.
  */
 export const SceneChatCard = memo(function SceneChatCard({
-  node, t, openSceneInLab, recordAttempt, regenerateQuestionCode, questionCodeOwner, useChat,
+  node, t, openSceneInLab, requestSceneInCanvas, recordAttempt, regenerateQuestionCode, questionCodeOwner, useChat,
 }: SceneChatCardProps) {
   const superseded = useChat((snapshot) => {
     /* The Turn card covers this answer once the Turn closes. This card is what
@@ -575,6 +584,7 @@ export const SceneChatCard = memo(function SceneChatCard({
   })
   if (superseded) return null
   return <SceneCardBody data={node.data} t={t} openSceneInLab={openSceneInLab}
+    {...(requestSceneInCanvas === undefined ? {} : { requestSceneInCanvas })}
     {...(questionCodeOwner === undefined ? {} : { questionCodeOwner })}
     {...(regenerateQuestionCode === undefined ? {} : { regenerateQuestionCode })}
     {...(recordAttempt === undefined ? {} : { recordAttempt })} />

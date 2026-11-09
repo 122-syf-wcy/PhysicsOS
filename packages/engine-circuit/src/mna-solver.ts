@@ -37,15 +37,35 @@ export interface CircuitSolution {
   readonly totalDissipatedPower: number
 }
 
+/** Loop limits shared by Gaussian elimination and its computation-free budget. */
+const gaussianColumnWorkOf = (size: number, column: number) => ({
+  followingRowCount: size - column - 1,
+  eliminationEntryCount: size - column + 1,
+})
+
+const linearSystemIterationCountBoundOf = (size: number): number => {
+  // Forward pivot stages and back-substitution rows each run `size` times.
+  let iterations = 2 * size
+  for (let column = 0; column < size; column += 1) {
+    const { followingRowCount, eliminationEntryCount } = gaussianColumnWorkOf(size, column)
+    // Pivot search, elimination rows, and back-substitution entries; zero factors
+    // can skip elimination entries, so counting every entry is an upper bound.
+    iterations += followingRowCount * (3 + eliminationEntryCount)
+  }
+  return iterations
+}
+
 /** Gaussian elimination with partial pivoting. Throws on a singular system. */
 const solveLinearSystem = (matrix: number[][], rhs: number[]): number[] => {
   const n = rhs.length
   const a = matrix.map((row, index) => [...row, rhs[index] ?? 0])
 
   for (let column = 0; column < n; column += 1) {
+    const { followingRowCount, eliminationEntryCount } = gaussianColumnWorkOf(n, column)
     let pivotRow = column
     let pivotValue = Math.abs(a[column]?.[column] ?? 0)
-    for (let row = column + 1; row < n; row += 1) {
+    for (let offset = 0; offset < followingRowCount; offset += 1) {
+      const row = column + 1 + offset
       const candidate = Math.abs(a[row]?.[column] ?? 0)
       if (candidate > pivotValue) {
         pivotRow = row
@@ -64,11 +84,13 @@ const solveLinearSystem = (matrix: number[][], rhs: number[]): number[] => {
       a[pivotRow] = swap as number[]
     }
     const pivot = a[column] as number[]
-    for (let row = column + 1; row < n; row += 1) {
+    for (let offset = 0; offset < followingRowCount; offset += 1) {
+      const row = column + 1 + offset
       const target = a[row] as number[]
       const factor = (target[column] ?? 0) / (pivot[column] as number)
       if (factor === 0) continue
-      for (let k = column; k <= n; k += 1) {
+      for (let entry = 0; entry < eliminationEntryCount; entry += 1) {
+        const k = column + entry
         target[k] = (target[k] ?? 0) - factor * (pivot[k] ?? 0)
       }
     }
@@ -76,9 +98,11 @@ const solveLinearSystem = (matrix: number[][], rhs: number[]): number[] => {
 
   const solution = new Array<number>(n).fill(0)
   for (let row = n - 1; row >= 0; row -= 1) {
+    const { followingRowCount } = gaussianColumnWorkOf(n, row)
     const current = a[row] as number[]
     let sum = current[n] ?? 0
-    for (let column = row + 1; column < n; column += 1) {
+    for (let offset = 0; offset < followingRowCount; offset += 1) {
+      const column = row + 1 + offset
       sum -= (current[column] ?? 0) * (solution[column] ?? 0)
     }
     solution[row] = sum / (current[row] as number)
@@ -122,22 +146,28 @@ const islandsOf = (nodeIds: readonly string[], branches: readonly CircuitBranch[
   return islands
 }
 
-export const solveCircuit = (model: ResolvedCircuitModel): CircuitSolution => {
+const linearSystemLayoutOf = (model: ResolvedCircuitModel) => {
   /* Internal source nodes may not be in nodeIds order yet; branchNodes is the
      source of truth for which nodes exist. */
   const nodeIds = [...model.nodeIds]
+  const knownNodes = new Set(nodeIds)
   for (const branch of model.branches) {
     for (const node of branchNodes(branch)) {
-      if (!nodeIds.includes(node)) nodeIds.push(node)
+      if (!knownNodes.has(node)) {
+        knownNodes.add(node)
+        nodeIds.push(node)
+      }
     }
   }
 
   const islands = islandsOf(nodeIds, model.branches)
   const grounds = new Set<string>()
   for (const island of islands) {
-    /* Deterministic reference per island; islands are electrically independent,
-       so each holds its own zero. */
-    grounds.add([...island].sort()[0] as string)
+    /* `<` compares UTF-16 strings just like the former default sort, but a
+       minimum scan is linear and leaves the unknown-node order unchanged. */
+    let ground = island[0] as string
+    for (const node of island) if (node < ground) ground = node
+    grounds.add(ground)
   }
 
   const unknownNodes = nodeIds.filter((node) => !grounds.has(node))
@@ -148,6 +178,34 @@ export const solveCircuit = (model: ResolvedCircuitModel): CircuitSolution => {
     (branch): branch is SourceBranch => branch.kind === 'source',
   )
   const size = unknownNodes.length + sourceBranches.length
+  return { nodeIds, unknownNodes, nodeIndex, sourceBranches, size }
+}
+
+/** Pure topology/layout accounting; no matrix allocation or MNA solving. */
+export const circuitNumericalIterationCountBoundOf = (model: ResolvedCircuitModel): number =>
+  linearSystemIterationCountBoundOf(linearSystemLayoutOf(model).size)
+
+/** The same actual layout supplies both Gaussian and graph/matrix processing bounds. */
+export const circuitSolverWorkBoundOf = (model: ResolvedCircuitModel) => {
+  const { nodeIds, unknownNodes, sourceBranches, size } = linearSystemLayoutOf(model)
+  const nodes = nodeIds.length
+  const branches = model.branches.length
+  const sources = sourceBranches.length
+  // Layout: copy+set, branch/endpoints, adjacency+DFS (each edge at most twice),
+  // island grounds, node filter/index, source filter. Each nested loop is included.
+  const layoutIterations = 2 * model.nodeIds.length + 7 * branches + 6 * nodes + unknownNodes.length
+  // Zeroed matrix/rhs, augmented copies and solved values; stamping/current passes
+  // visit each branch/source and each node/current-sum at most once per pass.
+  const matrixIterations = 2 * size * size + 5 * size
+  const solutionIterations = 2 * branches + 2 * sources + 2 * nodes
+  return {
+    gaussianIterationCountBound: linearSystemIterationCountBoundOf(size),
+    processingIterationCountBound: layoutIterations + matrixIterations + solutionIterations,
+  }
+}
+
+export const solveCircuit = (model: ResolvedCircuitModel): CircuitSolution => {
+  const { nodeIds, unknownNodes, nodeIndex, sourceBranches, size } = linearSystemLayoutOf(model)
   const matrix: number[][] = Array.from({ length: size }, () => new Array<number>(size).fill(0))
   const rhs = new Array<number>(size).fill(0)
 

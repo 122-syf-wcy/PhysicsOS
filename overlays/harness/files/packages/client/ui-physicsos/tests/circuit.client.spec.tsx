@@ -3,8 +3,10 @@ import { withOfficialRenderer } from './official-renderer-fixture.client.ts'
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { useState, useSyncExternalStore } from 'react'
+import { Modal } from '@deepseek-ai/dsh-client-ui-primitives'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import {
   createEmfMeasurementScene,
   createMixedCircuitScene,
@@ -20,10 +22,13 @@ import { CircuitRenderer } from '../src/client/physics/circuit-renderer.tsx'
 import type {
   ComponentControlChannel,
   ComponentDragChannel,
+  ComponentWiringChannel,
   RendererProjection,
 } from '../src/client/physics/renderer-registry.tsx'
 import type { ScenePoint } from '../src/client/physics/scene-visual-model.ts'
 import { createCircuitWorkspaceRuntime } from '../src/client/physics/circuit-workspace-runtime.ts'
+import { createWorkbenchInstanceRuntime } from '../src/client/physics/workbench-instance-runtime.ts'
+import { addComponent, draftToScene, emptyDraft } from '../src/client/physics/circuit-builder.ts'
 import { PARTS3D, part3dUrl } from '../src/client/physics/parts3d-catalog.ts'
 import {
   createExperimentSceneRef,
@@ -33,6 +38,196 @@ import { zh } from '../src/client/locales.ts'
 
 const translations: Readonly<Record<string, string>> = zh
 const t: PhysicsSurfaceProps['t'] = key => translations[key] ?? key
+
+const nativeGestureProjection: RendererProjection = {
+  px: point => point.x * 10, py: point => -point.y * 10,
+  sx: x => x / 10, sy: y => -y / 10, scale: 10, uid: 'native-gesture',
+  path: () => '', highlighted: () => false,
+}
+
+describe('native circuit pointer ownership and screen coordinates', () => {
+  it('cancels a real placement preview when the release transform becomes singular', () => {
+    const scene = createParallelCircuitScene()
+    const owner = createWorkbenchInstanceRuntime({ instanceKey: 'native-invalid-release', sceneId: String(scene.id),
+      scene, source: { kind: 'template', id: 'parallel-circuit' }, templateId: 'parallel-circuit', scheduler: null })
+    onTestFinished(() => owner.dispose())
+    const before = owner.getSnapshot()
+    const at = before.workspace.view.circuitComponents?.find(part => part.id === 'r1')?.at
+    if (at === undefined) throw new Error('The real circuit component is missing.')
+    const channel: ComponentDragChannel = {
+      preview: (id, point) => { owner.previewComponentPlacement(id, point) },
+      commit: (id, point) => { owner.commitComponentPlacement(id, point) },
+      cancel: () => { owner.cancelComponentPlacement() },
+    }
+    const { container } = render(<svg viewBox="0 0 800 500"><CircuitRenderer view={before.workspace.view}
+      projection={nativeGestureProjection} time={0} componentDrag={channel} /></svg>)
+    let singular = false
+    Object.defineProperty(container.querySelector('svg')!, 'getScreenCTM', { value: () => singular
+      ? { a: 0, b: 0, c: 0, d: 1, e: 0, f: 0, inverse: () => { throw new Error('Singular release transform.') } }
+      : { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0, inverse: () => ({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }) } })
+    const group = container.querySelector('[data-component-id="r1"]')!
+    fireEvent.pointerDown(group, { button: 0, pointerId: 1, clientX: at.x * 10, clientY: -at.y * 10 })
+    fireEvent.pointerMove(group, { pointerId: 1, clientX: at.x * 10 + 40, clientY: -at.y * 10 })
+    expect(owner.getSnapshot().previewing).toBe(true)
+    singular = true
+    fireEvent.pointerUp(group, { pointerId: 1, clientX: at.x * 10 + 40, clientY: -at.y * 10 })
+    expect(owner.getSnapshot().previewing).toBe(false)
+    expect(owner.getSnapshot().workspace.view.circuitComponents?.find(part => part.id === 'r1')?.at).toEqual(at)
+    expect(owner.getSnapshot().instanceEditRevision).toBe(before.instanceEditRevision)
+  })
+
+  it.each(['mouse two-tap', 'cross-SVG release'])('preserves native wire ownership for %s', mode => {
+    const source = addComponent(emptyDraft(), 'voltage_source', { x: 0, y: 0 })
+    const resistor = addComponent(source.draft, 'resistor', { x: 3, y: 0 })
+    const scene = draftToScene(resistor.draft)
+    const owner = createWorkbenchInstanceRuntime({ instanceKey: `native-wire-${mode}`, sceneId: String(scene.id),
+      scene, source: { kind: 'free-build' }, buildMode: 'construct', scheduler: null })
+    onTestFinished(() => owner.dispose())
+    function Bench() {
+      const summary = useSyncExternalStore(owner.summaries.subscribe, owner.summaries.getSnapshot)
+      const wiring: ComponentWiringChannel = {
+        start: terminal => { if (owner.getSnapshot().pendingWire === undefined) owner.beginWire(terminal); else owner.completeWire(terminal) },
+        complete: terminal => { owner.completeWire(terminal) }, cancel: () => { owner.cancelWire() },
+        ...(summary.pendingWire === undefined ? {} : { pending: summary.pendingWire }),
+      }
+      return <svg viewBox="0 0 800 500"><CircuitRenderer view={summary.workspace.view}
+        projection={nativeGestureProjection} time={0} componentWiring={wiring} /></svg>
+    }
+    const { container } = render(<Bench />)
+    const from = container.querySelector(`[data-terminal="${source.componentId}.positive"]`)!
+    const to = container.querySelector(`[data-terminal="${resistor.componentId}.a"]`)!
+    const foreign = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+    const foreignTerminal = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
+    foreignTerminal.setAttribute('data-terminal-component', resistor.componentId)
+    foreignTerminal.setAttribute('data-terminal-key', 'a')
+    foreign.append(foreignTerminal)
+    const previous = Object.getOwnPropertyDescriptor(document, 'elementFromPoint')
+    Object.defineProperty(document, 'elementFromPoint', { configurable: true, value: () => mode === 'cross-SVG release' ? foreignTerminal : null })
+    onTestFinished(() => { if (previous === undefined) Reflect.deleteProperty(document, 'elementFromPoint'); else Object.defineProperty(document, 'elementFromPoint', previous) })
+    fireEvent.pointerDown(from, { pointerType: 'mouse', pointerId: 1, button: 0, clientX: 0, clientY: 0 })
+    fireEvent.pointerUp(from, { pointerType: 'mouse', pointerId: 1, clientX: 30, clientY: 0 })
+    expect(owner.getSnapshot().pendingWire).toEqual({ componentId: source.componentId, terminalKey: 'positive' })
+    expect(owner.getSnapshot().instanceEditRevision).toBe(0)
+    if (mode === 'mouse two-tap') {
+      fireEvent.pointerDown(to, { pointerType: 'mouse', pointerId: 2, button: 0, clientX: 30, clientY: 0 })
+      fireEvent.pointerUp(to, { pointerType: 'mouse', pointerId: 2, clientX: 30, clientY: 0 })
+      const draft = owner.serialize().draft!
+      expect(draft.components.find(part => part.id === source.componentId)?.nets.positive).toBe(draft.components.find(part => part.id === resistor.componentId)?.nets.a)
+      expect(owner.getSnapshot().pendingWire).toBeUndefined()
+      expect(owner.getSnapshot().instanceEditRevision).toBe(1)
+    }
+  })
+
+  it.each(['touch', 'pen'])('connects the actual release terminal for a captured %s pointer', async pointerType => {
+    const source = addComponent(emptyDraft(), 'voltage_source', { x: 0, y: 0 })
+    const resistor = addComponent(source.draft, 'resistor', { x: 3, y: 0 })
+    const scene = draftToScene(resistor.draft)
+    const owner = createWorkbenchInstanceRuntime({ instanceKey: `native-wire-${pointerType}`, sceneId: String(scene.id),
+      scene, source: { kind: 'free-build' }, buildMode: 'construct', scheduler: null })
+    onTestFinished(() => owner.dispose())
+    let queued = Promise.resolve()
+    const enqueue = (action: () => void): void => { queued = queued.then(() => { action() }) }
+    function Bench() {
+      const summary = useSyncExternalStore(owner.summaries.subscribe, owner.summaries.getSnapshot)
+      const wiring: ComponentWiringChannel = {
+        start: terminal => {
+          enqueue(() => {
+            if (owner.getSnapshot().pendingWire === undefined) owner.beginWire(terminal)
+            else owner.completeWire(terminal)
+          })
+        },
+        complete: terminal => { enqueue(() => { owner.completeWire(terminal) }) },
+        ...(summary.pendingWire === undefined ? {} : { pending: summary.pendingWire }),
+      }
+      return <svg viewBox="0 0 800 500"><CircuitRenderer view={summary.workspace.view}
+        projection={nativeGestureProjection} time={0} componentWiring={wiring} /></svg>
+    }
+    const { container } = render(<Bench />)
+    const from = container.querySelector<SVGCircleElement>(`[data-terminal="${source.componentId}.positive"]`)
+    const to = container.querySelector<SVGCircleElement>(`[data-terminal="${resistor.componentId}.a"]`)
+    if (from === null || to === null) throw new Error('The real circuit terminal targets are missing.')
+    const previous = Object.getOwnPropertyDescriptor(document, 'elementFromPoint')
+    Object.defineProperty(document, 'elementFromPoint', { configurable: true, value: () => to })
+    onTestFinished(() => { if (previous === undefined) Reflect.deleteProperty(document, 'elementFromPoint'); else Object.defineProperty(document, 'elementFromPoint', previous) })
+    Object.defineProperty(from, 'setPointerCapture', { value: () => undefined })
+    fireEvent.pointerDown(from, { pointerType, pointerId: 7, button: 0, clientX: 0, clientY: 0 })
+    // Captured pointerup is delivered to the source even though the finger ends on the target.
+    fireEvent.pointerUp(from, { pointerType, pointerId: 7, clientX: 30, clientY: 0 })
+    await act(async () => { await queued })
+    const draft = owner.serialize().draft
+    const sourcePart = draft?.components.find(part => part.id === source.componentId)
+    const targetPart = draft?.components.find(part => part.id === resistor.componentId)
+    expect(sourcePart?.nets.positive).toBe(targetPart?.nets.a)
+    expect(owner.getSnapshot().pendingWire).toBeUndefined()
+    expect(owner.getSnapshot().instanceEditRevision).toBe(1)
+  })
+
+  it('cancels pending native wiring on Escape before dismissing the focused experiment', () => {
+    const source = addComponent(emptyDraft(), 'voltage_source', { x: 0, y: 0 })
+    const resistor = addComponent(source.draft, 'resistor', { x: 3, y: 0 })
+    const scene = draftToScene(resistor.draft)
+    const owner = createWorkbenchInstanceRuntime({ instanceKey: 'native-wire-escape', sceneId: String(scene.id),
+      scene, source: { kind: 'free-build' }, buildMode: 'construct', scheduler: null })
+    onTestFinished(() => owner.dispose())
+    owner.beginWire({ componentId: source.componentId, terminalKey: 'positive' })
+    function FocusedBench() {
+      const [open, setOpen] = useState(true)
+      const summary = useSyncExternalStore(owner.summaries.subscribe, owner.summaries.getSnapshot)
+      const wiring = {
+        start: (terminal: Parameters<typeof owner.completeWire>[0]) => { owner.completeWire(terminal) },
+        cancel: () => { owner.cancelWire() },
+        ...(summary.pendingWire === undefined ? {} : { pending: summary.pendingWire }),
+      }
+      return <Modal open={open} title="Focused native circuit" closeLabel="Close" onClose={() => { setOpen(false) }}>
+        <svg viewBox="0 0 800 500"><CircuitRenderer view={summary.workspace.view}
+          projection={nativeGestureProjection} time={0} componentWiring={wiring} /></svg>
+      </Modal>
+    }
+    render(<FocusedBench />)
+    const terminal = document.querySelector(`[data-terminal="${source.componentId}.positive"]`)!
+    fireEvent.keyDown(terminal, { key: 'Escape' })
+    expect(owner.getSnapshot().pendingWire).toBeUndefined()
+    expect(owner.getSnapshot().instanceEditRevision).toBe(0)
+    expect(screen.getByRole('dialog', { name: 'Focused native circuit' })).toBeTruthy()
+    fireEvent.keyDown(terminal, { key: 'Escape' })
+    expect(screen.queryByRole('dialog', { name: 'Focused native circuit' })).toBeNull()
+  })
+
+  it.each([
+    { method: 'the SVG screen CTM', matrix: true },
+    { method: 'the letterboxed viewBox fallback', matrix: false },
+  ])('maps a scaled circuit drag through $method before committing scene coordinates', ({ matrix }) => {
+    const runtime = createCircuitWorkspaceRuntime(createParallelCircuitScene())
+    const before = runtime.getSnapshot()
+    const at = before.view.circuitComponents?.find(part => part.id === 'r1')?.at
+    if (at === undefined) throw new Error('The real parallel-circuit component is missing.')
+    const channel: ComponentDragChannel = {
+      preview: (id, point) => { runtime.previewComponentPlacement?.(id, point) },
+      commit: (id, point) => { runtime.commitComponentPlacement?.(id, point) },
+      cancel: () => { runtime.cancelComponentPlacement?.() },
+    }
+    const { container } = render(<svg viewBox="0 0 800 500" preserveAspectRatio="xMidYMid meet">
+      <CircuitRenderer view={before.view} projection={nativeGestureProjection} time={0} componentDrag={channel} />
+    </svg>)
+    const svg = container.querySelector('svg')!
+    vi.spyOn(svg, 'getBoundingClientRect').mockReturnValue({
+      x: 100, y: 50, left: 100, top: 50, width: 400, height: 400, right: 500, bottom: 450, toJSON: () => ({}),
+    })
+    Object.defineProperty(svg, 'viewBox', { value: { baseVal: { x: 0, y: 0, width: 800, height: 500 } } })
+    Object.defineProperty(svg, 'getScreenCTM', { value: () => matrix ? {
+      a: 0.5, b: 0, c: 0, d: 0.5, e: 100, f: 125,
+      inverse: () => ({ a: 2, b: 0, c: 0, d: 2, e: -200, f: -250 }),
+    } : null })
+    const group = container.querySelector('[data-component-id="r1"]')!
+    const start = { clientX: 100 + at.x * 5, clientY: 125 - at.y * 5 }
+    fireEvent.pointerDown(group, { button: 0, pointerId: 1, ...start })
+    fireEvent.pointerMove(group, { pointerId: 1, clientX: start.clientX, clientY: start.clientY + 50 })
+    fireEvent.pointerUp(group, { pointerId: 1, clientX: start.clientX, clientY: start.clientY + 50 })
+    expect(runtime.getSnapshot().view.circuitComponents?.find(part => part.id === 'r1')?.at).toEqual({ x: at.x, y: at.y - 10 })
+    expect(runtime.getSnapshot().sceneRevision).toBe(before.sceneRevision + 1)
+  })
+})
+
 const neverHook = (() => {
   throw new Error('unused hook')
 }) as never

@@ -1,4 +1,8 @@
-import { simulationTimeRange, eventsInSimulationRange } from '@physicsos/physics-core'
+import {
+  assertSimulationPlan,
+  eventsInSimulationRange,
+  simulationTimeRange,
+} from '@physicsos/physics-core'
 import {
   check,
   invalidModelCondition,
@@ -10,6 +14,7 @@ import {
   type PhysicsEngine,
   type PhysicsEventLike,
   type QuantityVector,
+  type SimulationPlan,
   type SimulationRequest,
   type SimulationResult,
   type SimulationState,
@@ -520,7 +525,7 @@ export class PressureEngine implements PhysicsEngine<PhysicsScene, PhysicsEventL
     return stateOf(resolvePressureModel(scene), timeSeconds)
   }
 
-  simulate(scene: PhysicsScene, request: SimulationRequest): SimulationResult<PhysicsEventLike> {
+  private prepareSimulation(scene: PhysicsScene, request: SimulationRequest) {
     if (request.sceneId !== scene.id || request.sceneRevision !== scene.revision) {
       throw new PhysicsOSError(
         'SIMULATION_SCENE_MISMATCH',
@@ -536,10 +541,35 @@ export class PressureEngine implements PhysicsEngine<PhysicsScene, PhysicsEventL
       )
     }
 
-    const startedAt = new Date().toISOString()
     const model = resolvePressureModel(scene)
+    const plan: SimulationPlan = {
+      schemaVersion: 'simulation-plan/1.0',
+      engineId: this.engineId,
+      engineVersion: this.engineVersion,
+      simulationId: request.simulationId,
+      sceneId: scene.id,
+      sceneRevision: scene.revision,
+      modelId: modelNameOf(model.type),
+      kind: 'static',
+      ...simulationTimeRange(request.options),
+      storageSampleCountBound: 1,
+      numericalIterationCountBound: 0,
+      metadata: {
+        numericalIterationAccounting:
+          'No numerical integration; one static state. Fixed verification-only pressure quadrature is excluded.',
+      },
+    }
+    assertSimulationPlan(plan)
+    return { model, plan }
+  }
 
-    const range = simulationTimeRange(request.options)
+  prepareSimulationPlan(scene: PhysicsScene, request: SimulationRequest): SimulationPlan {
+    return this.prepareSimulation(scene, request).plan
+  }
+
+  simulate(scene: PhysicsScene, request: SimulationRequest): SimulationResult<PhysicsEventLike> {
+    const { model, plan: range } = this.prepareSimulation(scene, request)
+    const startedAt = new Date().toISOString()
 
     return {
       schemaVersion: 'simulation-result/1.0',

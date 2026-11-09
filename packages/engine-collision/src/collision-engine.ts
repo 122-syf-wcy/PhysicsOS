@@ -1,5 +1,6 @@
 import { simulationTimeRange } from '@physicsos/physics-core'
 import {
+  assertSimulationPlan,
   check,
   summarizeVerification,
   derivedScalar,
@@ -12,6 +13,7 @@ import {
   DEFAULT_TOLERANCE,
   type ModelSupport,
   type PhysicsEngine,
+  type SimulationPlan,
   type SimulationRequest,
   type SimulationResult,
   type VerificationCheck,
@@ -24,6 +26,7 @@ import { validateScene, type PhysicsScene } from '@physicsos/physics-scene'
 
 import { collisionModelOf, type CollisionModelId } from './collision-model.ts'
 import {
+  collisionExecutionBounds,
   resolveCollisionScene,
   simulateCollision,
   type CollisionPhysicsEvent,
@@ -193,6 +196,35 @@ const buildVerification = (
   return summarizeVerification(checks, sceneVerification.warnings, sceneVerification.errors)
 }
 
+function resolveCollisionSimulation(scene: PhysicsScene, request: SimulationRequest) {
+  if (request.sceneId !== scene.id || request.sceneRevision !== scene.revision) {
+    throw new PhysicsOSError(
+      'SIMULATION_SCENE_MISMATCH',
+      'SimulationRequest must reference the exact PhysicsScene revision being simulated.',
+      {
+        details: {
+          requestSceneId: request.sceneId,
+          sceneId: scene.id,
+          requestRevision: request.sceneRevision,
+          sceneRevision: scene.revision,
+        },
+      },
+    )
+  }
+  const range = simulationTimeRange(request.options, DEFAULT_DURATION_SECONDS)
+  const options = {
+    ...range,
+    ...(request.options.outputSampleRate === undefined
+      ? {}
+      : { outputSampleRate: request.options.outputSampleRate }),
+  }
+  return {
+    model: collisionModelOf(scene) ?? 'elastic_collision',
+    options,
+    bounds: collisionExecutionBounds(options, scene.bodies.length),
+  }
+}
+
 export class CollisionEngine implements PhysicsEngine<PhysicsScene, CollisionPhysicsEvent> {
   readonly engineId = COLLISION_ENGINE_ID
   readonly engineVersion = COLLISION_ENGINE_VERSION
@@ -301,35 +333,39 @@ export class CollisionEngine implements PhysicsEngine<PhysicsScene, CollisionPhy
     return stateAtResolved(resolveCollisionScene(scene), canonicalValue(time))
   }
 
+  prepareSimulationPlan(scene: PhysicsScene, request: SimulationRequest): SimulationPlan {
+    const { model, bounds } = resolveCollisionSimulation(scene, request)
+    const plan: SimulationPlan = {
+      schemaVersion: 'simulation-plan/1.0',
+      engineId: this.engineId,
+      engineVersion: this.engineVersion,
+      simulationId: request.simulationId,
+      sceneId: scene.id,
+      sceneRevision: scene.revision,
+      modelId: model,
+      kind: 'iterative',
+      startTime: bounds.startTime,
+      endTime: bounds.endTime,
+      storageSampleCountBound: bounds.storageSampleCountBound,
+      numericalIterationCountBound: bounds.numericalIterationCountBound,
+      metadata: {
+        numericalIterationAccounting:
+          'substep dispatches, body updates, contact passes, body/pair inspections and resolutions, and wall checks',
+        bodyCount: scene.bodies.length,
+        numericalIterationsPerSubstepBound: bounds.numericalIterationsPerSubstepBound,
+      },
+    }
+    assertSimulationPlan(plan)
+    return plan
+  }
+
   simulate(
     scene: PhysicsScene,
     request: SimulationRequest,
   ): SimulationResult<CollisionPhysicsEvent> {
-    if (request.sceneId !== scene.id || request.sceneRevision !== scene.revision) {
-      throw new PhysicsOSError(
-        'SIMULATION_SCENE_MISMATCH',
-        'SimulationRequest must reference the exact PhysicsScene revision being simulated.',
-        {
-          details: {
-            requestSceneId: request.sceneId,
-            sceneId: scene.id,
-            requestRevision: request.sceneRevision,
-            sceneRevision: scene.revision,
-          },
-        },
-      )
-    }
-
-    const model = collisionModelOf(scene) ?? 'elastic_collision'
+    const { model, options } = resolveCollisionSimulation(scene, request)
     const resolved = resolveCollisionScene(scene)
-    const { startTime, endTime } = simulationTimeRange(request.options, DEFAULT_DURATION_SECONDS)
-    const simulation = simulateCollision(resolved, {
-      startTime,
-      endTime,
-      ...(request.options.outputSampleRate === undefined
-        ? {}
-        : { outputSampleRate: request.options.outputSampleRate }),
-    })
+    const simulation = simulateCollision(resolved, options)
     const states = simulation.states
     const events = simulation.events
 

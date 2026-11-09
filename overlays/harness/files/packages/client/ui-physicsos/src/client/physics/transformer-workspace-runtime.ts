@@ -17,7 +17,12 @@ import {
   transformerReadingOf,
   type ResolvedTransformerModel,
 } from '@physicsos/engine-induction'
-import { isScalarQuantity, type SimulationResult } from '@physicsos/physics-core'
+import {
+  isScalarQuantity,
+  type SimulationRequest,
+  type SimulationResult,
+} from '@physicsos/physics-core'
+import type { CapturedResult } from '@physicsos/physics-workbench'
 import { quantity } from '@physicsos/physics-units'
 import {
   SceneRuntime,
@@ -34,6 +39,7 @@ import {
   requiresExperimentalFork,
 } from './experimental-branch.ts'
 import { fmtFluidValue } from './fluid-visual-bridge.ts'
+import { transformerCaptureEvidence } from './subbench-capture-bridge.ts'
 import { emptyVisualModel } from './scene-visual-model.ts'
 import { runtimeStatusOf } from './verified-result.ts'
 import {
@@ -101,6 +107,10 @@ export class TransformerWorkspaceRuntime implements WorkspaceRuntime {
   private commandSequence = 0
   private highlighted: readonly string[] = []
   private failure: string | undefined
+  private request: SimulationRequest | undefined
+  private result: SimulationResult | undefined
+  private evidence: ReturnType<typeof transformerCaptureEvidence> = {}
+  private captureDiagnostics: CapturedResult['diagnostics'] = []
   private computed: Computed | undefined
   private readonly origin: PhysicsScene | undefined
 
@@ -112,28 +122,41 @@ export class TransformerWorkspaceRuntime implements WorkspaceRuntime {
 
   private recompute(): void {
     const scene = this.sceneRuntime.getScene()
+    this.request = undefined
+    this.result = undefined
+    this.evidence = {}
+    this.captureDiagnostics = []
     try {
       const support = this.engine.canHandle(scene)
       if (!support.supported) {
         this.failure = support.failedConditions.map(entry => entry.message).join(' ')
+        this.captureDiagnostics = support.failedConditions.map(entry => ({ code: entry.condition, message: entry.message }))
         this.computed = undefined
         return
       }
-      const simulation = this.engine.simulate(
+      this.request = createTransformerSimulationRequest(
         scene,
-        createTransformerSimulationRequest(
-          scene,
-          `transformer-lab-${String(scene.id)}-${scene.revision}`,
-          `transformer-lab-trace-${String(scene.id)}-${scene.revision}`,
-        ),
+        `transformer-lab-${String(scene.id)}-${scene.revision}`,
+        `transformer-lab-trace-${String(scene.id)}-${scene.revision}`,
       )
+      const simulation = this.engine.simulate(scene, this.request)
+      this.result = simulation
+      const model = resolveTransformerModel(scene)
+      try {
+        this.evidence = transformerCaptureEvidence({ scene, result: simulation, model })
+      } catch (error: unknown) {
+        this.captureDiagnostics = [{
+          code: 'TRANSFORMER_CAPTURE_ANALYSIS_UNAVAILABLE',
+          message: error instanceof Error ? error.message : 'Raw transformer analysis is unavailable.',
+        }]
+      }
       if (simulation.verification.status === 'failed') {
         this.failure = simulation.verification.errors.map(entry => entry.message).join(' ')
         this.computed = undefined
         return
       }
       this.failure = undefined
-      this.computed = { simulation, model: resolveTransformerModel(scene) }
+      this.computed = { simulation, model }
     } catch (error: unknown) {
       this.failure = error instanceof Error ? error.message : '变压器 Runtime 无法启动。'
       this.computed = undefined
@@ -141,14 +164,13 @@ export class TransformerWorkspaceRuntime implements WorkspaceRuntime {
   }
 
   private command<T extends SceneCommandType>(type: T, payload: SceneCommandPayloadMap[T]): void {
-    if (requiresExperimentalFork(this.sceneRuntime.getScene(), type)) {
-      this.sceneRuntime = new SceneRuntime(
-        forkExperimentalScene({ scene: this.sceneRuntime.getScene() }),
-      )
-    }
-    const scene = this.sceneRuntime.getScene()
+    const currentScene = this.sceneRuntime.getScene()
+    const runtime = requiresExperimentalFork(currentScene, type)
+      ? new SceneRuntime(forkExperimentalScene({ scene: currentScene }))
+      : this.sceneRuntime
+    const scene = runtime.getScene()
     this.commandSequence += 1
-    const result = this.sceneRuntime.execute(
+    const result = runtime.execute(
       createSceneCommand<T>({
         commandId: `transformer-ui-command-${this.commandSequence}`,
         sceneId: String(scene.id),
@@ -162,11 +184,38 @@ export class TransformerWorkspaceRuntime implements WorkspaceRuntime {
       this.failure = result.error.message
       return
     }
+    this.sceneRuntime = runtime
     this.recompute()
   }
 
   getScene(): PhysicsScene {
     return this.sceneRuntime.getScene()
+  }
+
+  captureRaw(): CapturedResult {
+    const scene = this.sceneRuntime.getScene()
+    const state = this.result?.states[0]
+    const release = scene.metadata.experimentRelease
+    return {
+      scene,
+      ...(this.request === undefined ? {} : { request: this.request }),
+      ...(this.result === undefined ? {} : { result: this.result }),
+      ...(state === undefined ? {} : { state }),
+      ...this.evidence,
+      clock: { time: 0, total: 0, running: false, rate: 1 },
+      cursor: { kind: 'static', identity: `${this.engine.engineId}:settled-reading` },
+      engineInfo: {
+        id: this.result?.metadata.engineId ?? this.engine.engineId,
+        version: this.result?.metadata.engineVersion ?? this.engine.engineVersion,
+        ...(this.result?.metadata.solver === undefined ? {} : { model: this.result.metadata.solver }),
+        ...(release === undefined ? {} : { release }),
+      },
+      diagnostics: [
+        ...(this.evidence.diagnostics ?? []),
+        ...(this.captureDiagnostics ?? []),
+        ...(this.failure === undefined ? [] : [{ code: 'TRANSFORMER_RUNTIME_FAILED', message: this.failure }]),
+      ],
+    }
   }
 
   getSnapshot(): WorkspaceSnapshot {
@@ -310,8 +359,9 @@ export class TransformerWorkspaceRuntime implements WorkspaceRuntime {
     /* 升压 / 降压 in one tap: the two windings swap which one is bigger, and the
        output follows the ratio rather than the absolute counts. */
     if (id === 'transformer-kind') {
-      const wanted = value === 'step-up' ? 5 * model.primaryTurns : model.primaryTurns
-      if (Math.abs(wanted - model.secondaryTurns) > 1e-9) {
+      const ratio = value === 'step-up' ? 5 : value === 'step-down' ? 0.2 : value === 'same' ? 1 : undefined
+      const wanted = ratio === undefined ? undefined : ratio * model.primaryTurns
+      if (wanted !== undefined && Math.abs(wanted - model.secondaryTurns) > 1e-9) {
         this.command('SetSecondaryTurns', {
           benchId: model.benchId,
           turns: quantity(wanted, '', 'dimensionless'),
@@ -430,10 +480,16 @@ const parametersOf = (model: ResolvedTransformerModel): InspectorSection => {
       {
         id: 'transformer-kind',
         label: '变压器类型',
-        value: reading.stepsUp ? 'step-up' : 'step-down',
+        value: Math.abs(reading.secondaryTurns - reading.primaryTurns) < 1e-9
+          ? 'same'
+          : Math.abs(reading.secondaryTurns - reading.primaryTurns * 5) < 1e-9
+            ? 'step-up'
+            : Math.abs(reading.secondaryTurns - reading.primaryTurns * 0.2) < 1e-9 ? 'step-down' : 'custom',
         options: [
           { value: 'step-down', label: '降压（N₂ < N₁）' },
+          { value: 'same', label: '等匝数（N₂ = N₁）' },
           { value: 'step-up', label: '升压（N₂ > N₁）' },
+          { value: 'custom', label: '自定义' },
         ],
       },
     ],
@@ -492,7 +548,7 @@ const derivedSectionOf = (
       id: 'instrument-reading',
       label: '仪器读数',
       symbol: '',
-      value: `${fmtFluidValue(reading.primaryVoltage, 4)} V → ${fmtFluidValue(reading.secondaryVoltage, 4)} V（${reading.stepsUp ? '升压' : '降压'}）`,
+      value: `${fmtFluidValue(reading.primaryVoltage, 4)} V → ${fmtFluidValue(reading.secondaryVoltage, 4)} V（${Math.abs(reading.secondaryTurns - reading.primaryTurns) < 1e-9 ? '等匝数' : reading.stepsUp ? '升压' : '降压'}）`,
       unit: '',
     },
   ]

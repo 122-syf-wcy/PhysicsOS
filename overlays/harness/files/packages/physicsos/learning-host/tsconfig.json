@@ -2,11 +2,15 @@
   "extends": "../../../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": "src",
-    "outDir": "lib/types",
-    "noCheck": true
+    "outDir": "lib/types"
   },
   "include": ["src"],
   "references": [
+    { "path": "../../../tsconfig.physicsos.json" },
+    { "path": "../../../vendor/schemastery" },
+    { "path": "../../../vendor/loader" },
+    { "path": "../../../vendor/include" },
+    { "path": "../../util/home-paths" },
     {
       "path": "../../../vendor/cordis"
     },

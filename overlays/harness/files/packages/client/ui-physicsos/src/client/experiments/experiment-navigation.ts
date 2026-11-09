@@ -44,6 +44,10 @@ export function startExperimentNavigation({
   const read = async (): Promise<void> => {
     const ticket = ++generation
     const hash = browser.location.hash
+    if (hash === '#/canvases' || hash.startsWith('#/canvases/')) {
+      wasManaged = false
+      return
+    }
     if (hash === CONTRIBUTION) {
       wasManaged = true
       applying = true
@@ -116,6 +120,10 @@ export function startExperimentNavigation({
     if (!alive || applying) return
     const state = surface.store.getSnapshot()
     const ticket = ++generation
+    if (state.surface === 'canvas') {
+      wasManaged = false
+      return
+    }
     if (state.surface === 'contribute') {
       write(CONTRIBUTION)
       return

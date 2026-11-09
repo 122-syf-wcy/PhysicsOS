@@ -18,6 +18,7 @@ import {
   invalidModelCondition,
   quantityVector,
   summarizeVerification,
+  simulationTimeRange,
   supported,
   toCanonicalVector,
   unsupportedModel,
@@ -27,6 +28,7 @@ import {
   type PhysicsEngine,
   type PhysicsEventLike,
   type SimulationRequest,
+  type SimulationPlan,
   type SimulationResult,
   type SimulationState,
   type VerificationCheck,
@@ -34,6 +36,8 @@ import {
 } from '@physicsos/physics-core'
 import {
   memoizeOnFrozenScene,
+  decimateTrajectoryPoints,
+  MAX_TRAJECTORY_STORAGE_SAMPLES,
   validateScene,
   trajectorySampleTimes,
   trajectoryStorageSampleCount,
@@ -115,6 +119,24 @@ const vectorsWithinTolerance = (actual: Vector3, expected: Vector3): boolean => 
   const error = magnitude(subtract(actual, expected))
   const reference = Math.max(magnitude(actual), magnitude(expected))
   return error <= DEFAULT_TOLERANCE.absolute || error <= DEFAULT_TOLERANCE.relative * reference
+}
+
+const magneticExecutionOf = (model: MagneticModel, request: SimulationRequest) => {
+  const range = simulationTimeRange(request.options, model.period)
+  const { startTime, endTime } = range
+  const verificationTimes = [0, model.period / 4, model.period / 2, 3 * model.period / 4, model.period]
+  const trajectoryTimes = trajectorySampleTimes(
+    startTime, endTime, trajectoryStorageSampleCount(request.options, DEFAULT_TRAJECTORY_SEGMENTS + 1),
+  )
+  const sampleTimes = [...new Set([startTime, endTime, ...trajectoryTimes, ...verificationTimes])]
+    .filter(time => time >= startTime && time <= endTime)
+    .sort((left, right) => left - right)
+  const protectedTimes = new Set([startTime, endTime, ...verificationTimes])
+  const protectedIndices = sampleTimes.flatMap((time, index) => protectedTimes.has(time) ? [index] : [])
+  const storedTimes = sampleTimes.length > MAX_TRAJECTORY_STORAGE_SAMPLES
+    ? decimateTrajectoryPoints(sampleTimes, MAX_TRAJECTORY_STORAGE_SAMPLES, protectedIndices)
+    : sampleTimes
+  return { ...range, storedTimes }
 }
 
 /** Analytical solver for the deliberately frozen magnetic circular-motion model. */
@@ -283,6 +305,28 @@ export class MagneticEngine implements PhysicsEngine<PhysicsScene, PhysicsEventL
     return this.stateAt(scene, quantity(seconds, 's', 'time'))
   }
 
+  prepareSimulationPlan(scene: PhysicsScene, request: SimulationRequest): SimulationPlan {
+    if (request.sceneId !== scene.id || request.sceneRevision !== scene.revision) {
+      throw new PhysicsOSError('SIMULATION_SCENE_MISMATCH', 'SimulationRequest must reference the exact PhysicsScene revision being planned.')
+    }
+    const model = this.resolveModel(scene)
+    const execution = magneticExecutionOf(model, request)
+    return {
+      schemaVersion: 'simulation-plan/1.0',
+      engineId: this.engineId,
+      engineVersion: this.engineVersion,
+      simulationId: request.simulationId,
+      sceneId: scene.id,
+      sceneRevision: scene.revision,
+      modelId: MAGNETIC_MODEL_ID,
+      kind: 'analytic',
+      startTime: execution.startTime,
+      endTime: execution.endTime,
+      storageSampleCountBound: execution.storedTimes.length,
+      numericalIterationCountBound: 0,
+    }
+  }
+
   simulate(scene: PhysicsScene, request: SimulationRequest): SimulationResult<PhysicsEventLike> {
     if (request.sceneId !== scene.id || request.sceneRevision !== scene.revision) {
       throw new PhysicsOSError(
@@ -300,34 +344,8 @@ export class MagneticEngine implements PhysicsEngine<PhysicsScene, PhysicsEventL
     }
 
     const model = this.resolveModel(scene)
-    const startTime =
-      request.options.startTime === undefined ? 0 : canonicalValue(request.options.startTime)
-    const endTime =
-      request.options.endTime === undefined ? model.period : canonicalValue(request.options.endTime)
-    if (endTime < startTime) {
-      throw new PhysicsOSError(
-        'INVALID_SIMULATION_RANGE',
-        'Simulation endTime must be greater than or equal to startTime.',
-        { details: { startTime, endTime } },
-      )
-    }
-
-    const verificationTimes = [
-      0,
-      model.period / 4,
-      model.period / 2,
-      (3 * model.period) / 4,
-      model.period,
-    ]
-    const trajectoryTimes = trajectorySampleTimes(
-      startTime,
-      endTime,
-      trajectoryStorageSampleCount(request.options, DEFAULT_TRAJECTORY_SEGMENTS + 1),
-    )
-    const sampleTimes = [...new Set([startTime, endTime, ...trajectoryTimes, ...verificationTimes])]
-      .filter((time) => time >= startTime && time <= endTime)
-      .sort((left, right) => left - right)
-    const states = sampleTimes.map((time) => this.stateAtModel(model, time))
+    const { storedTimes } = magneticExecutionOf(model, request)
+    const states = storedTimes.map((time) => this.stateAtModel(model, time))
     const startedAt = new Date().toISOString()
 
     return {
@@ -478,23 +496,40 @@ export class MagneticEngine implements PhysicsEngine<PhysicsScene, PhysicsEventL
     const speedConserved =
       states.length > 0 && speeds.every((speed) => withinTolerance(speed, initialSpeed))
 
-    /* period_closes — at t = period the position and velocity return to the
-       initial vectors (golden test 14). Only applicable when a state at the
-       full period exists in the sampled range; if the window ends before T
-       the check is reported as passed (vacuously true) rather than failing. */
+    // Closure compares supplied states one full period apart, never a nonzero start to absolute T.
     const initialState = states[0]
-    const periodState = states.find((state) => withinTolerance(state.time.value, model.period))
-    let periodCloses = true
-    let positionClosed = true
-    let velocityClosed = true
+    const initialTime = initialState === undefined ? undefined : canonicalValue(initialState.time)
+    const closureTime = initialTime === undefined ? undefined : initialTime + model.period
+    const lastTime = states.at(-1) === undefined ? undefined : canonicalValue(states.at(-1)!.time)
+    const closureInRange = closureTime !== undefined && initialTime !== undefined && closureTime > initialTime &&
+      lastTime !== undefined && closureTime <= lastTime
+    const timeTolerance = model.period * Math.min(DEFAULT_TOLERANCE.relative, DEFAULT_TOLERANCE.angular) / (2 * Math.PI)
+    let periodState: SimulationState | undefined
+    let closestClosureDistance = Number.POSITIVE_INFINITY
+    if (closureInRange && closureTime !== undefined && initialTime !== undefined) {
+      for (const state of states) {
+        const time = canonicalValue(state.time)
+        const elapsed = time - initialTime
+        const distance = Math.abs(time - closureTime)
+        if (
+          state !== initialState && elapsed > 0 &&
+          Math.abs(elapsed - model.period) <= Math.min(timeTolerance, model.period * 0.25) &&
+          distance <= timeTolerance && distance < closestClosureDistance
+        ) {
+          periodState = state
+          closestClosureDistance = distance
+        }
+      }
+    }
+    const absolutePhaseMagnitude = Math.abs((model.charge * model.fieldMagnitude * (closureTime ?? 0)) / model.mass)
+    const phaseResolution = 4 * Number.EPSILON * absolutePhaseMagnitude
+    const closurePhaseResolvable = phaseResolution <= Math.min(DEFAULT_TOLERANCE.relative, DEFAULT_TOLERANCE.angular)
+    const closureEvaluated = initialState !== undefined && periodState !== undefined && closurePhaseResolvable
+    let positionClosed = false
+    let velocityClosed = false
     if (initialState !== undefined && periodState !== undefined) {
-      const initialPosition = requireVector(initialState, 'position')
-      const finalPosition = requireVector(periodState, 'position')
-      const initialVelocity = requireVector(initialState, 'velocity')
-      const finalVelocity = requireVector(periodState, 'velocity')
-      positionClosed = vectorsWithinTolerance(finalPosition, initialPosition)
-      velocityClosed = vectorsWithinTolerance(finalVelocity, initialVelocity)
-      periodCloses = positionClosed && velocityClosed
+      positionClosed = vectorsWithinTolerance(requireVector(periodState, 'position'), requireVector(initialState, 'position'))
+      velocityClosed = vectorsWithinTolerance(requireVector(periodState, 'velocity'), requireVector(initialState, 'velocity'))
     }
 
     /* force_perpendicular_velocity — the Lorentz force is perpendicular to the
@@ -521,17 +556,20 @@ export class MagneticEngine implements PhysicsEngine<PhysicsScene, PhysicsEventL
           tolerance: DEFAULT_TOLERANCE,
         },
       }),
-      check('period_closes', 'conservation', periodCloses, {
-        message: 'At t = T the position and velocity must return to their initial vectors.',
+      ...(closureEvaluated ? [check('period_closes', 'conservation', positionClosed && velocityClosed, {
+        message: 'Supplied position and velocity one full period after the requested start must return to their starting vectors.',
         targetId: particleId,
         details: {
           period: model.period,
+          startTime: initialTime,
+          closureTime,
           positionClosed,
           velocityClosed,
           sampledAtPeriod: periodState !== undefined,
+          evaluated: closureEvaluated,
           tolerance: DEFAULT_TOLERANCE,
         },
-      }),
+      })] : []),
       check('force_perpendicular_velocity', 'conservation', forcePerpendicular, {
         message: 'The Lorentz force must satisfy F · v ≈ 0 at every sampled state.',
         targetId: particleId,
@@ -544,7 +582,13 @@ export class MagneticEngine implements PhysicsEngine<PhysicsScene, PhysicsEventL
       }),
     ]
 
-    return summarizeVerification(checks, [], [])
+    return summarizeVerification(checks, closureEvaluated ? [] : [{
+      code: 'PERIOD_CLOSURE_NOT_SAMPLED',
+      severity: 'warning',
+      message: 'Period closure was not evaluated: no sampled one-period pair has sufficient time and phase resolution.',
+      targetId: particleId,
+      details: { evaluated: false, period: model.period, startTime: initialTime, closureTime, phaseResolution, closurePhaseResolvable },
+    }], [])
   }
 
   private derivedQuantities(model: MagneticModel): DerivedQuantity[] {

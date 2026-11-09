@@ -26,6 +26,8 @@ import {
   IconQuestionOutlineMedium,
   IconRefreshOutlineMedium,
   IconSparkleMedium,
+  isBehindModal,
+  modalSelector,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 
 import { PLAYBACK_RATES, STEP_FRACTION } from './animation-clock.ts'
@@ -43,7 +45,8 @@ import { WorkspaceScenePanel } from './WorkspaceScenePanel.tsx'
 import { IconChatBubble, IconScene, IconVariable, IconVerified } from './icons/physics-icons.tsx'
 import { Mascot } from './Mascot.tsx'
 import { useEventEffects } from './physics/event-effects.ts'
-import { useFrameSource, type FrameSource } from './physics/frame-source.ts'
+import { useFrameSource } from './physics/frame-source-react-compat.ts'
+import type { FrameSource } from './physics/frame-source.ts'
 import { PhysicsCanvas } from './physics/PhysicsCanvas.tsx'
 import type { ComponentControlChannel, ComponentDragChannel } from './physics/renderer-registry.tsx'
 import type { ObservableKey } from './physics/scene-visual-model.ts'
@@ -179,6 +182,7 @@ export function PhysicsWorkspace({
   experimentMeta,
 }: PhysicsWorkspaceProps) {
   const { session, snapshot, commit, frameSource } = useExperimentSession(runtime, onSceneChange)
+  const coverRef = useRef<HTMLDivElement | null>(null)
   const [selected, setSelected] = useState('scene')
   /* Time-varying experiments show their graph beside the apparatus from the
      first frame. Static scenes keep the optional analysis panel folded. */
@@ -242,27 +246,24 @@ export function PhysicsWorkspace({
     [runtime, commit],
   )
 
-  /* Playback keyboard: Space toggles, ←/→ step a tenth of the window, Home
-     rewinds. Document-level so it works without focusing the canvas first, but
-     it yields to editable and activatable targets — those keys belong to the
-     control under focus. */
+  /* A focused workspace owns playback keys, including inside its own modal.
+     The single-workspace document/body fallback preserves standalone use. */
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || document.querySelector('[role="dialog"][aria-modal="true"]') !== null) return
+      if (event.defaultPrevented || event.isComposing || event.ctrlKey || event.altKey || event.metaKey) return
+      const cover = coverRef.current
+      if (cover === null || isBehindModal(cover)) return
       const target = event.target
-      if (target instanceof HTMLElement) {
-        const tag = target.tagName
-        /* Editable controls own every key. Buttons and links own only their
-           activation keys — an ArrowRight focused on 运行 should still step. */
-        if (
-          tag === 'INPUT' ||
-          tag === 'TEXTAREA' ||
-          tag === 'SELECT' ||
-          target.isContentEditable
-        ) {
-          return
-        }
-        if ((tag === 'BUTTON' || tag === 'A') && (event.key === ' ' || event.key === 'Enter')) return
+      const foreground = [...document.querySelectorAll(modalSelector)].at(-1)
+      if (foreground !== undefined && (!foreground.contains(cover) || !(target instanceof Node) || !cover.contains(target))) return
+      if (target instanceof Node && !cover.contains(target)) {
+        if (target !== document && target !== document.body && target !== document.documentElement) return
+        if (document.querySelectorAll('[data-physicsos-surface="lab"], [data-private-question-code-workspace]').length !== 1) return
+      }
+      if (target instanceof Element) {
+        if (target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="menu"]') !== null) return
+        // Activation stays with its control; the playback button may still own directional stepping.
+        if (target.closest('button, a, [role="button"]') !== null && (event.key === ' ' || event.key === 'Enter')) return
       }
       const failedRun = snapshot.status === 'failed'
       if (event.key === ' ') {
@@ -420,6 +421,16 @@ export function PhysicsWorkspace({
    */
   const componentWiring = useMemo<ComponentWiringChannel | undefined>(() => {
     if (buildMode !== true || runtime.applyDraftEdit === undefined) return undefined
+    const complete = (ref: TerminalRef): void => {
+      const next = runtime.completeWire?.(ref)
+      setPendingTerminal(undefined)
+      setDraft(runtime.circuitDraft?.())
+      if (next !== undefined) {
+        commit(next)
+        const produced = runtime.circuitDraft?.()
+        setHistory(current => current === undefined || produced === undefined ? current : commitHistory(current, produced))
+      }
+    }
     return {
       start: (ref) => {
         if (pendingTerminal === undefined) {
@@ -435,20 +446,11 @@ export function PhysicsWorkspace({
           setPendingTerminal(undefined)
           return
         }
-        const next = runtime.completeWire?.(ref)
-        setPendingTerminal(undefined)
-        setDraft(runtime.circuitDraft?.())
-        if (next !== undefined) {
-          commit(next)
-          const produced = runtime.circuitDraft?.()
-          setHistory(current =>
-            current === undefined || produced === undefined
-              ? current
-              : commitHistory(current, produced),
-          )
-        }
+        complete(ref)
       },
       pending: pendingTerminal,
+      cancel: () => { runtime.cancelWire?.(); setPendingTerminal(undefined) },
+      complete,
     }
   }, [buildMode, runtime, pendingTerminal, commit])
 
@@ -499,7 +501,6 @@ export function PhysicsWorkspace({
      scroll of that body — a card click's scrollIntoView is enough — drags the
      whole lab up and clips the toolbar. While a lab is mounted the body has
      nothing visible to scroll to, so lock it and pin it to the top. */
-  const coverRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
     const cover = coverRef.current
     if (cover === null) return

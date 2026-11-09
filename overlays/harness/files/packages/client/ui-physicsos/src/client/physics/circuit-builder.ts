@@ -409,7 +409,7 @@ export const disconnectTerminal = (draft: CircuitDraft, ref: TerminalRef): Circu
  */
 export const draftToScene = (
   draft: CircuitDraft,
-  options: { readonly sceneId?: string; readonly revision?: number } = {},
+  options: { readonly sceneId?: string; readonly revision?: number; readonly baseScene?: PhysicsScene } = {},
 ): PhysicsScene => {
   const components = draft.components.map((component): CircuitComponentSpec => {
     const terminals = Object.fromEntries(
@@ -478,13 +478,71 @@ export const draftToScene = (
     }
   })
 
-  return createCircuitScene({
-    sceneId: options.sceneId ?? FREE_BUILD_SCENE_ID,
+  const base = options.baseScene
+  const baseCircuit = base === undefined ? undefined : circuitOf(base)
+  const projected = createCircuitScene({
+    sceneId: options.sceneId ?? (base === undefined ? FREE_BUILD_SCENE_ID : String(base.id)),
     ...(options.revision === undefined ? {} : { revision: options.revision }),
+    ...(baseCircuit === undefined ? {} : { circuitId: baseCircuit.id }),
     components,
     title: draft.title,
     description: draft.description,
   })
+  if (base === undefined) return projected
+  const committed = structuredClone(base)
+  const oldComponents = new Map(baseCircuit?.components.map(component => [String(component.id), component]) ?? [])
+  const circuits = projected.circuits.map(circuit => ({
+    ...circuit,
+    metadata: { ...baseCircuit?.metadata, ...circuit.metadata },
+    components: circuit.components.map(component => {
+      const previous = oldComponents.get(String(component.id))
+      return previous === undefined ? component : { ...previous, ...component }
+    }),
+  }))
+  const visibility = new Map(base.observableDefinitions.map(definition => [definition.id, definition.visible]))
+  const componentIds = new Set(circuits.flatMap(circuit => circuit.components.map(component => String(component.id))))
+  const removedReferences = new Set(baseCircuit?.components.filter(component => !componentIds.has(String(component.id))).map(component => String(component.id)) ?? [])
+  const survivingConnections = new Set(circuits.flatMap(circuit => circuit.connections.map(connection => connection.id)))
+  const survivingNodes = new Set(circuits.flatMap(circuit => circuit.nodes.map(node => node.id)))
+  for (const connection of baseCircuit?.connections ?? []) {
+    if (!survivingConnections.has(connection.id)) removedReferences.add(connection.id)
+  }
+  for (const node of baseCircuit?.nodes ?? []) {
+    if (!survivingNodes.has(node.id)) removedReferences.add(node.id)
+  }
+  const retainedDefinitions = committed.observableDefinitions.filter(definition =>
+    definition.targetId === undefined || definition.targetId === baseCircuit?.id || componentIds.has(String(definition.targetId)),
+  )
+  const retainedTypes = new Set(retainedDefinitions.map(definition => definition.type))
+  const hadSweep = baseCircuit?.components.some(component => component.type === 'variable_resistor') ?? false
+  const hasSweep = circuits.some(circuit => circuit.components.some(component => component.type === 'variable_resistor'))
+  const timeline = hadSweep === hasSweep ? committed.timeline
+    : { ...committed.timeline, ...projected.timeline, playbackRate: committed.timeline.playbackRate }
+  return {
+    ...committed,
+    id: projected.id,
+    revision: projected.revision,
+    circuits,
+    timeline,
+    measurementDefinitions: committed.measurementDefinitions.filter(definition =>
+      (definition.targetId === undefined || !removedReferences.has(definition.targetId)) &&
+      (definition.componentId === undefined || !removedReferences.has(String(definition.componentId))),
+    ),
+    annotations: committed.annotations.filter(annotation => annotation.targetId === undefined || !removedReferences.has(annotation.targetId)),
+    observableDefinitions: [
+      ...retainedDefinitions,
+      ...projected.observableDefinitions.filter(definition => !retainedTypes.has(definition.type)).map(definition => ({
+        ...definition,
+        visible: visibility.get(definition.id) ?? definition.visible,
+      })),
+    ],
+    metadata: {
+      ...committed.metadata,
+      title: draft.title,
+      description: draft.description,
+      updatedAt: projected.metadata.updatedAt,
+    },
+  }
 }
 
 /* -------------------------------------------------------------- history -- */
@@ -644,6 +702,33 @@ export const draftFromScene = (scene: PhysicsScene): CircuitDraft => {
     title: scene.metadata.title ?? '自由搭建电路',
     description: scene.metadata.description ?? '自己选器材、自己接线。',
     nextNet: cursor,
+  }
+}
+
+/** Keep authored net identities/allocation while synchronizing inspector and bench commands. */
+export const synchronizeDraftWithScene = (draft: CircuitDraft, scene: PhysicsScene): CircuitDraft => {
+  const fresh = draftFromScene(scene)
+  const oldById = new Map(draft.components.map(component => [component.id, component]))
+  const oldTerminals = new Set(draft.components.flatMap(component => Object.keys(component.nets).map(key => `${component.id}\u0000${key}`)))
+  const freshTerminals = fresh.components.flatMap(component => Object.keys(component.nets).map(key => `${component.id}\u0000${key}`))
+  if (oldTerminals.size !== freshTerminals.length || freshTerminals.some(key => !oldTerminals.has(key))) return fresh
+  const oldToFresh = new Map<number, number>()
+  const freshToOld = new Map<number, number>()
+  for (const component of fresh.components) {
+    const previous = oldById.get(component.id)
+    if (previous === undefined || previous.type !== component.type) return fresh
+    for (const [key, freshNet] of Object.entries(component.nets)) {
+      const oldNet = previous.nets[key]
+      if (oldNet === undefined || (oldToFresh.has(oldNet) && oldToFresh.get(oldNet) !== freshNet) ||
+        (freshToOld.has(freshNet) && freshToOld.get(freshNet) !== oldNet)) return fresh
+      oldToFresh.set(oldNet, freshNet)
+      freshToOld.set(freshNet, oldNet)
+    }
+  }
+  return {
+    ...fresh,
+    components: fresh.components.map(component => ({ ...component, nets: oldById.get(component.id)?.nets ?? component.nets })),
+    nextNet: draft.nextNet,
   }
 }
 

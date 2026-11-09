@@ -7,6 +7,7 @@ import {
   resolveLeverRotationalModel,
   type LeverAngularState,
   type LeverRotationalModel,
+  type LeverIterationCounter,
 } from './rotational-dynamics.ts'
 import { momentsOf, type LeverMoments } from './statics.ts'
 
@@ -61,9 +62,13 @@ export const leverAngularStateAt = (
  * vertical and, because the run stops at equilibrium, reports that settled pose
  * for every later time.
  */
-export const leverStateAt = (model: ResolvedLeverModel, time: number): LeverState => {
+export const leverStateAt = (
+  model: ResolvedLeverModel,
+  time: number,
+  options: { readonly iterationCounter?: LeverIterationCounter } = {},
+): LeverState => {
   const rotational = resolveLeverRotationalModel(model)
-  const angular = integrateLeverAngular(rotational, time)
+  const angular = integrateLeverAngular(rotational, time, options)
   return {
     moments: momentsOf(model),
     tilt: angular.angle,

@@ -550,9 +550,15 @@ importers:
       '@physicsos/physics-scene':
         specifier: file:../physics-scene
         version: link:../physics-scene
+      '@physicsos/physics-units':
+        specifier: file:../physics-units
+        version: link:../physics-units
       '@physicsos/physics-verifier':
         specifier: file:../physics-verifier
         version: link:../physics-verifier
+      '@physicsos/shared':
+        specifier: file:../shared
+        version: link:../shared
 
   packages/physics-scene:
     dependencies:
@@ -586,6 +592,24 @@ importers:
       '@physicsos/physics-electric-core':
         specifier: file:../physics-electric-core
         version: link:../physics-electric-core
+      '@physicsos/physics-math':
+        specifier: file:../physics-math
+        version: link:../physics-math
+      '@physicsos/physics-scene':
+        specifier: file:../physics-scene
+        version: link:../physics-scene
+      '@physicsos/physics-units':
+        specifier: file:../physics-units
+        version: link:../physics-units
+      '@physicsos/shared':
+        specifier: file:../shared
+        version: link:../shared
+
+  packages/physics-workbench:
+    dependencies:
+      '@physicsos/physics-core':
+        specifier: file:../physics-core
+        version: link:../physics-core
       '@physicsos/physics-math':
         specifier: file:../physics-math
         version: link:../physics-math

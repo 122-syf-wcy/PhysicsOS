@@ -1,6 +1,7 @@
 import { createSnapshotStore, type SnapshotStore } from './runtime-compat.ts'
 import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { PhysicsScene } from '@physicsos/physics-scene'
+import type { InstanceSource, TemplateReleaseIdentity } from '@physicsos/physics-workbench/types'
 
 import type { LearningApi } from './learning-api.ts'
 import { domainOfScene } from './physics/domain-of-scene.ts'
@@ -9,6 +10,7 @@ import { domainOfScene } from './physics/domain-of-scene.ts'
 export type PhysicsSurfaceId =
   | 'home'
   | 'lab'
+  | 'canvas'
   | 'record'
   | 'paper'
   | 'library'
@@ -26,6 +28,7 @@ export type PhysicsSurfaceId =
  */
 export const PHYSICS_PANEL_IDS = {
   lab: 'physicsos-lab' as MainPanelId,
+  canvas: 'physicsos-canvas' as MainPanelId,
   paper: 'physicsos-paper' as MainPanelId,
   notice: 'physicsos-notice' as MainPanelId,
   library: 'physicsos-library' as MainPanelId,
@@ -36,6 +39,7 @@ export const PHYSICS_PANEL_IDS = {
 
 const SURFACE_BY_PANEL: Readonly<Record<string, PhysicsSurfaceId>> = {
   [PHYSICS_PANEL_IDS.lab]: 'lab',
+  [PHYSICS_PANEL_IDS.canvas]: 'canvas',
   [PHYSICS_PANEL_IDS.paper]: 'paper',
   [PHYSICS_PANEL_IDS.notice]: 'notice',
   [PHYSICS_PANEL_IDS.library]: 'library',
@@ -65,6 +69,9 @@ export interface PhysicsSceneRef {
   /** Verification belongs to the original question, outside the scene/hash contract. */
   hasVerifiedSolution?: boolean
   buildMode?: true
+  canvasTemplateId?: string
+  canvasSource?: InstanceSource
+  canvasTemplateRelease?: TemplateReleaseIdentity
 }
 
 /** Keep persisted authoring/provenance state when opening a recent scene. */
@@ -74,11 +81,15 @@ export const sceneRefOf = (entry: PhysicsSceneRef): PhysicsSceneRef => ({
   ...(entry.originScene === undefined ? {} : { originScene: entry.originScene }),
   ...(entry.hasVerifiedSolution === undefined ? {} : { hasVerifiedSolution: entry.hasVerifiedSolution }),
   ...(entry.buildMode === true ? { buildMode: true } : {}),
+  ...(entry.canvasTemplateId === undefined ? {} : { canvasTemplateId: entry.canvasTemplateId }),
+  ...(entry.canvasSource === undefined ? {} : { canvasSource: entry.canvasSource }),
+  ...(entry.canvasTemplateRelease === undefined ? {} : { canvasTemplateRelease: entry.canvasTemplateRelease }),
 })
 
 /** Snapshot the sidebar and workspace overlay subscribe to. */
 export interface PhysicsSurfaceState {
   surface: PhysicsSurfaceId
+  canvasId?: string
   routeNotice?: string
   /** Changes only on an explicit handover, never a write-back. */
   sceneGeneration?: number
@@ -116,6 +127,9 @@ export interface RecentExperimentEntry {
   readonly originScene?: PhysicsScene
   readonly hasVerifiedSolution?: boolean
   readonly buildMode?: true
+  readonly canvasTemplateId?: string
+  readonly canvasSource?: InstanceSource
+  readonly canvasTemplateRelease?: TemplateReleaseIdentity
 }
 
 /** Snapshot the sidebar recent-space list subscribes to. */
@@ -158,6 +172,8 @@ export interface PhysicsSurfaceController {
   /** Real scenes the student opened, newest first, for the sidebar 最近空间. */
   recent: SnapshotStore<RecentExperimentsState>
   open: (surface: PhysicsSurfaceId, sceneRef?: PhysicsSceneRef) => void
+  /** Select a workbench without replacing the independently resumable lab scene. */
+  openCanvas: (canvasId?: string) => void
   /**
    * Show a scene without adding it to 最近空间.
    *
@@ -339,6 +355,9 @@ export function createPhysicsSurfaceController(
       ...(sceneRef.originScene === undefined ? {} : { originScene: sceneRef.originScene }),
       ...(sceneRef.hasVerifiedSolution === undefined ? {} : { hasVerifiedSolution: sceneRef.hasVerifiedSolution }),
       ...(sceneRef.buildMode === true ? { buildMode: true } : {}),
+      ...(sceneRef.canvasTemplateId === undefined ? {} : { canvasTemplateId: sceneRef.canvasTemplateId }),
+      ...(sceneRef.canvasSource === undefined ? {} : { canvasSource: sceneRef.canvasSource }),
+      ...(sceneRef.canvasTemplateRelease === undefined ? {} : { canvasTemplateRelease: sceneRef.canvasTemplateRelease }),
     }
     deleted.delete(entry.sceneId)
     removedDuringSync.delete(entry.sceneId)
@@ -383,6 +402,14 @@ export function createPhysicsSurfaceController(
       navigation?.selectSurface(surface)
       if (sceneRef !== undefined) record(sceneRef)
     },
+    openCanvas: (canvasId) => {
+      const next = { ...store.getSnapshot(), surface: 'canvas' as const }
+      delete next.canvasId
+      delete next.routeNotice
+      delete next.experimentPicker
+      store.set(canvasId === undefined ? next : { ...next, canvasId })
+      navigation?.selectSurface('canvas')
+    },
     openTransient: show,
     remember: record,
     updateScene: (scene) => {
@@ -395,6 +422,9 @@ export function createPhysicsSurfaceController(
         ...(originScene === undefined ? {} : { originScene }),
         ...(previous.hasVerifiedSolution === undefined ? {} : { hasVerifiedSolution: scene.id === previous.scene.id && previous.hasVerifiedSolution }),
         ...(current.buildMode === true ? { buildMode: true } : {}),
+        ...(previous.canvasTemplateId === undefined ? {} : { canvasTemplateId: previous.canvasTemplateId }),
+        ...(previous.canvasSource === undefined ? {} : { canvasSource: previous.canvasSource }),
+        ...(previous.canvasTemplateRelease === undefined ? {} : { canvasTemplateRelease: previous.canvasTemplateRelease }),
       }
       store.set({ ...current, sceneRef })
       record(sceneRef)

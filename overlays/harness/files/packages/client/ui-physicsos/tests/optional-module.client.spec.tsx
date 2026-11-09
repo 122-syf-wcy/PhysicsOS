@@ -6,7 +6,7 @@ import { OptionalComponent } from '../src/client/OptionalComponent.tsx'
 import { SceneTurnCard, type SceneTurnCardProps } from '../src/client/SceneTurnCard.tsx'
 import * as optionalModules from '../src/client/optional-modules.ts'
 import { solvedCardData } from './solved-card-fixture.client.ts'
-import { sceneTurnData } from './scene-turn-data-fixture.client.ts'
+import { sceneTurnData, sceneTurnHook } from './scene-turn-data-fixture.client.ts'
 
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
 
@@ -31,14 +31,16 @@ it('keeps empty turn tails lightweight and loads the card body only for a publis
     SceneCardBody: () => <p>Loaded turn scene</p>,
   } as unknown as Awaited<ReturnType<typeof optionalModules.loadWorkspaceModule>>)
   const hygiene = vi.fn()
+  const emptyTurn = sceneTurnData().turn
   const props = {
-    turn: sceneTurnData().turn, t: (key: string) => key,
+    turn: emptyTurn, t: (key: string) => key, usePhysicsSceneTurn: sceneTurnHook(emptyTurn),
     openSceneInLab: vi.fn(), endTurnHygiene: hygiene,
   } as unknown as SceneTurnCardProps
   const view = render(<SceneTurnCard {...props} />)
   expect(load).not.toHaveBeenCalled()
   expect(hygiene).toHaveBeenCalledTimes(1)
-  view.rerender(<SceneTurnCard {...props} turn={sceneTurnData(solvedCardData('electric-01-perpendicular-deflection')).turn} />)
+  const publishedTurn = sceneTurnData(solvedCardData('electric-01-perpendicular-deflection')).turn
+  view.rerender(<SceneTurnCard {...props} turn={publishedTurn} usePhysicsSceneTurn={sceneTurnHook(publishedTurn)} />)
   expect(await screen.findByText('Loaded turn scene')).toBeTruthy()
   expect(load).toHaveBeenCalledTimes(1)
 })

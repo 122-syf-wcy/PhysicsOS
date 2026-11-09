@@ -18,13 +18,21 @@
 import {
   FluidEngine,
   createFluidSimulationRequest,
-  equilibriumOf,
   immersionStateAt,
   resolveBuoyancy,
   type ResolvedFluidModel,
 } from '@physicsos/engine-fluid'
-import { isScalarQuantity, type SimulationResult } from '@physicsos/physics-core'
+import {
+  EngineUnsupportedError,
+  isScalarQuantity,
+  simulationTimeRange,
+  type SimulationRequest,
+  type SimulationResult,
+} from '@physicsos/physics-core'
+import { copyDiagnosticObject, copyJsonObject } from '@physicsos/physics-workbench/json'
+import type { CapturedResult, JsonObject } from '@physicsos/physics-workbench/types'
 import { canonicalValue, quantity } from '@physicsos/physics-units'
+import { PhysicsOSError } from '@physicsos/shared'
 import {
   SceneRuntime,
   createSceneCommand,
@@ -135,7 +143,16 @@ export class FluidWorkspaceRuntime implements WorkspaceRuntime {
   private commandSequence = 0
   private highlighted: readonly string[] = []
   private failure: string | undefined
+  private request: SimulationRequest | undefined
+  private simulation: SimulationResult | undefined
+  private modelId: string | undefined
+  private diagnostics: readonly JsonObject[] = []
+  private rawState: JsonObject | undefined
   private computed: Computed | undefined
+  private currentState: ReturnType<typeof immersionStateAt> | undefined
+  private stateTime = 0
+  private windowStart = 0
+  private totalTime = 0
   /** The scene as the source stated it, kept so an experimental branch can be discarded. */
   private readonly origin: PhysicsScene | undefined
 
@@ -147,39 +164,105 @@ export class FluidWorkspaceRuntime implements WorkspaceRuntime {
 
   private recompute(): void {
     const scene = this.sceneRuntime.getScene()
+    this.request = undefined
+    this.simulation = undefined
+    this.modelId = undefined
+    this.diagnostics = []
+    this.rawState = undefined
+    this.currentState = undefined
+    this.windowStart = 0
+    this.totalTime = 0
     try {
       const support = this.engine.canHandle(scene)
+      this.modelId = support.modelId
       if (!support.supported) {
         this.failure = support.failedConditions.map(entry => entry.message).join(' ')
+        this.diagnostics = [copyJsonObject({ stage: 'support', ...support })]
         this.computed = undefined
+        this.running = false
         return
       }
-      const simulation = this.engine.simulate(
+      const request = createFluidSimulationRequest(
         scene,
-        createFluidSimulationRequest(
-          scene,
-          `fluid-lab-${String(scene.id)}-${scene.revision}`,
-          `fluid-lab-trace-${String(scene.id)}-${scene.revision}`,
-        ),
+        `fluid-lab-${String(scene.id)}-${scene.revision}`,
+        `fluid-lab-trace-${String(scene.id)}-${scene.revision}`,
       )
+      this.request = request
+      this.retainWindow(request)
+      const simulation = this.engine.simulate(scene, request)
+      this.simulation = simulation
+      this.retainWindow(request, simulation)
+      this.diagnostics = [copyJsonObject({ stage: 'verification', ...simulation.verification })]
       if (simulation.verification.status === 'failed') {
         this.failure = simulation.verification.errors.map(entry => entry.message).join(' ')
         this.computed = undefined
+        this.running = false
         return
       }
       const model = resolveBuoyancy(scene)
-      /* A parameter edit re-times the descent; clamp the clock into the new
-         window so a floater does not park past the moment it settles. */
-      this.currentTime = Math.min(this.currentTime, equilibriumOf(model).settleTime)
       this.failure = undefined
       this.computed = { simulation, model }
+      this.stateOf(model)
     } catch (error: unknown) {
       this.failure = error instanceof Error ? error.message : '浮力 Runtime 无法启动。'
+      const cause = error instanceof EngineUnsupportedError
+        ? error.domainError
+        : error instanceof PhysicsOSError
+          ? { code: error.code, retryable: error.retryable, details: error.details }
+          : { code: 'FLUID_RUNTIME_FAILED', retryable: false }
+      let diagnostic: JsonObject
+      try {
+        diagnostic = copyDiagnosticObject({ ...cause, stage: 'runtime', message: this.failure })
+      } catch {
+        diagnostic = copyJsonObject({
+          stage: 'runtime',
+          code: cause.code,
+          retryable: cause.retryable,
+          message: this.failure,
+          details: { missing: 'non-json-diagnostic-details' },
+        })
+      }
+      this.diagnostics = [...this.diagnostics, diagnostic]
+      this.rawState = undefined
+      this.currentState = undefined
       this.computed = undefined
+      this.running = false
+      if (this.request !== undefined) this.retainWindow(this.request, this.simulation)
     }
   }
 
+  private retainWindow(request: SimulationRequest, result?: SimulationResult): void {
+    if (result === undefined && request.options.startTime === undefined && request.options.endTime === undefined) return
+    const states = result?.states ?? []
+    const first = states[0]?.time
+    const last = states[states.length - 1]?.time
+    try {
+      const { startTime, endTime } = simulationTimeRange({
+        ...request.options,
+        ...(request.options.startTime !== undefined || first === undefined ? {} : { startTime: first }),
+        ...(request.options.endTime !== undefined || last === undefined ? {} : { endTime: last }),
+      })
+      this.windowStart = startTime
+      this.totalTime = endTime
+      this.currentTime = Math.min(endTime, Math.max(startTime, this.currentTime))
+    } catch {
+      this.windowStart = 0
+      this.totalTime = 0
+      /* An invalid request has no bounded playback window; the engine reports its failure. */
+    }
+  }
+
+  private stateOf(model: ResolvedFluidModel): ReturnType<typeof immersionStateAt> {
+    if (this.currentState === undefined || this.stateTime !== this.currentTime) {
+      this.currentState = immersionStateAt(model, this.currentTime)
+      this.rawState = copyJsonObject({ model, currentState: this.currentState })
+      this.stateTime = this.currentTime
+    }
+    return this.currentState
+  }
+
   private command<T extends SceneCommandType>(type: T, payload: SceneCommandPayloadMap[T]): void {
+    const previousRuntime = this.sceneRuntime
     /* Changing a physical fact on a question scene forks first: the solution the
        student just read was verified against the original conditions. Observable
        toggles are NOT facts and never fork. */
@@ -201,7 +284,9 @@ export class FluidWorkspaceRuntime implements WorkspaceRuntime {
       }) as SceneCommand,
     )
     if (!result.ok) {
+      this.sceneRuntime = previousRuntime
       this.failure = result.error.message
+      this.diagnostics = [...this.diagnostics, copyJsonObject({ stage: 'command', ...result.error })]
       return
     }
     this.recompute()
@@ -209,6 +294,38 @@ export class FluidWorkspaceRuntime implements WorkspaceRuntime {
 
   getScene(): PhysicsScene {
     return this.sceneRuntime.getScene()
+  }
+
+  captureRaw(): CapturedResult {
+    const scene = this.sceneRuntime.peekScene()
+    const solved = this.computed !== undefined
+    const time = this.request === undefined
+      ? 0
+      : Math.min(this.totalTime, Math.max(this.windowStart, this.currentTime))
+    return {
+      scene,
+      ...(this.request === undefined ? {} : { request: this.request }),
+      ...(this.simulation === undefined ? {} : { result: this.simulation }),
+      ...(this.rawState === undefined ? {} : { rawState: this.rawState }),
+      clock: {
+        time,
+        total: this.totalTime,
+        running: solved && this.running,
+        rate: this.rate,
+      },
+      cursor: this.request !== undefined
+        ? { kind: 'time', time: quantity(time, 's', 'time') }
+        : { kind: 'static', identity: `unavailable:${this.engine.engineId}` },
+      engineInfo: {
+        id: this.engine.engineId,
+        version: this.engine.engineVersion,
+        ...(this.modelId === undefined ? {} : { model: this.modelId }),
+        ...(scene.metadata.experimentRelease === undefined
+          ? {}
+          : { release: scene.metadata.experimentRelease }),
+      },
+      diagnostics: this.diagnostics,
+    }
   }
 
   getSnapshot(): WorkspaceSnapshot {
@@ -234,7 +351,14 @@ export class FluidWorkspaceRuntime implements WorkspaceRuntime {
         derivation: [],
         verification: [],
         events: [],
-        clock: { time: 0, total: 0, running: false, rate: this.rate },
+        clock: {
+          time: this.request === undefined
+            ? 0
+            : Math.min(this.totalTime, Math.max(this.windowStart, this.currentTime)),
+          total: this.totalTime,
+          running: false,
+          rate: this.rate,
+        },
         trajectoryTimes: [],
         error: {
           code: 'FLUID_RUNTIME_FAILED',
@@ -245,8 +369,8 @@ export class FluidWorkspaceRuntime implements WorkspaceRuntime {
     }
 
     const { simulation, model } = this.computed
-    const { settleTime } = equilibriumOf(model)
-    const immersion = immersionStateAt(model, this.currentTime)
+    const settleTime = this.totalTime
+    const immersion = this.stateOf(model)
     const view = fluidSceneVisual({ scene, model, immersion, time: this.currentTime })
 
     const status = runtimeStatusOf(simulation.verification)
@@ -331,7 +455,7 @@ export class FluidWorkspaceRuntime implements WorkspaceRuntime {
         label: '弹簧测力计',
         secondary: model === undefined
           ? ''
-          : `${immersionStateAt(model, this.currentTime).scaleReading.toFixed(2)} N`,
+          : `${this.stateOf(model).scaleReading.toFixed(2)} N`,
         icon: 'ground' as const,
         kind: 'object' as const,
       },
@@ -425,7 +549,7 @@ export class FluidWorkspaceRuntime implements WorkspaceRuntime {
         }))
       /* The frame's own readings: where the block is right now, and whether it
          is heading for the bottom or for equilibrium. */
-      const immersion = immersionStateAt(model, this.currentTime)
+      const immersion = this.stateOf(model)
       derived.push({
         id: 'immersion-phase',
         label: '浸入状态',
@@ -498,8 +622,7 @@ export class FluidWorkspaceRuntime implements WorkspaceRuntime {
   setRunning(running: boolean): WorkspaceSnapshot {
     /* Restarting the finished experiment lifts the block back out of the water. */
     if (running && this.computed !== undefined) {
-      const { settleTime } = equilibriumOf(this.computed.model)
-      if (this.currentTime >= settleTime) this.currentTime = 0
+      if (this.currentTime >= this.totalTime) this.currentTime = this.windowStart
     }
     this.running = running
     return this.getSnapshot()
@@ -511,8 +634,10 @@ export class FluidWorkspaceRuntime implements WorkspaceRuntime {
   }
 
   seek(time: number): WorkspaceSnapshot {
-    const total = this.computed === undefined ? 0 : equilibriumOf(this.computed.model).settleTime
-    this.currentTime = Number.isFinite(time) ? Math.min(total, Math.max(0, time)) : 0
+    const total = this.totalTime
+    this.currentTime = Number.isFinite(time)
+      ? Math.min(total, Math.max(this.windowStart, time))
+      : this.windowStart
     this.running = false
     return this.getSnapshot()
   }
@@ -557,10 +682,9 @@ export class FluidWorkspaceRuntime implements WorkspaceRuntime {
        The run stops where the block settles rather than looping: the steady
        reading IS the measurement. */
     if (this.running && this.computed !== undefined && Number.isFinite(wallClockSeconds)) {
-      const { settleTime } = equilibriumOf(this.computed.model)
       const next = this.currentTime + wallClockSeconds * this.rate
-      this.currentTime = next >= settleTime ? settleTime : next
-      if (this.currentTime >= settleTime) this.running = false
+      this.currentTime = Math.min(this.totalTime, Math.max(this.windowStart, next))
+      if (this.currentTime >= this.totalTime) this.running = false
     }
     return this.getSnapshot()
   }

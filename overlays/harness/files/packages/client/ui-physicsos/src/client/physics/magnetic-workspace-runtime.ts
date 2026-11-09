@@ -21,6 +21,7 @@ import {
 } from '../prototype/magnetic-scene.ts'
 import type { LabCanvasViewModel, LabFieldDirection, LabObservableId, LabTreeNode } from '../lab-view-model.ts'
 import type { PhysicsScene } from '@physicsos/physics-scene'
+import type { CapturedResult } from '@physicsos/physics-workbench/types'
 import { magneticPhysicalDelta } from '../animation-clock.ts'
 import type { WorkspaceRuntime, WorkspaceSnapshot } from './workspace-runtime.ts'
 import { emptyVisualModel } from './scene-visual-model.ts'
@@ -317,7 +318,12 @@ export class MagneticWorkspaceRuntime implements WorkspaceRuntime {
     return this.toWorkspace(this.bridge.getSnapshot())
   }
 
+  captureRaw(): CapturedResult {
+    return this.bridge.captureRaw()
+  }
+
   editParameter(id: string, value: number): WorkspaceSnapshot {
+    if (id !== 'q' && id !== 'm' && id !== 'v0' && id !== 'B') return this.getSnapshot()
     const outcome =
       id === 'q'
         ? this.bridge.setParticleCharge(value)

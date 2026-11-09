@@ -20,7 +20,8 @@ import type { CircuitComponentVisual, ScenePoint } from './scene-visual-model.ts
 import type { RendererProjection, RendererProps } from './renderer-registry.tsx'
 import { clsxJoin } from './primitives.tsx'
 import { PARTS3D, part3dUrl, type Part3dEntry } from './parts3d-catalog.ts'
-import { terminalKeysOf } from './circuit-builder.ts'
+import { terminalKeysOf, type TerminalRef } from './circuit-builder.ts'
+import { svgPointFromClient } from './svg-screen-point.ts'
 import { spriteIdFor } from './circuit-builder-labels.ts'
 import css from './renderers.module.css'
 
@@ -569,6 +570,7 @@ export function CircuitRenderer({
   componentDrag,
   componentControl,
   componentWiring,
+  componentSelection,
 }: RendererProps) {
   /* A sprite that fails to load (missing file, network) drops its component
      back to the vector symbol — the same fallback rule experiment artwork uses. */
@@ -577,20 +579,37 @@ export function CircuitRenderer({
     setFailedSprites(previous => new Set(previous).add(id))
   }
 
-  /* A wire being dragged from a terminal: the release may land on another
-     terminal (capture handles that) or anywhere else (the window listener
-     ends the gesture there), so the flag routes the one that fires first. */
-  const wiringRef = useRef<{ active: boolean }>({ active: false })
+  const wiringRef = useRef<{ pointerId: number; from: TerminalRef; svg: SVGSVGElement; completedOnPress: boolean } | undefined>()
+  const wireSurfaceRef = useRef<SVGGElement>(null)
+  const [wirePointer, setWirePointer] = useState<ScenePoint | undefined>()
   useEffect(() => {
     if (componentWiring === undefined) return undefined
-    const end = () => {
-      wiringRef.current.active = false
+    const move = (event: PointerEvent) => {
+      const gesture = wiringRef.current
+      if (gesture !== undefined && (gesture.pointerId !== event.pointerId || gesture.completedOnPress)) return
+      if (gesture === undefined && componentWiring.pending === undefined) return
+      const svg = gesture?.svg ?? wireSurfaceRef.current?.ownerSVGElement
+      if (svg === undefined || svg === null) return
+      if (gesture === undefined && event.target instanceof Node && !svg.contains(event.target)) return
+      const point = svgPointFromClient(svg, event)
+      if (point !== undefined) setWirePointer(point)
     }
+    const end = (event: PointerEvent) => {
+      if (wiringRef.current?.pointerId === event.pointerId) wiringRef.current = undefined
+    }
+    const cancel = (event: PointerEvent) => {
+      if (wiringRef.current?.pointerId !== event.pointerId) return
+      wiringRef.current = undefined
+      setWirePointer(undefined)
+      componentWiring.cancel?.()
+    }
+    window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', end)
-    window.addEventListener('pointercancel', end)
+    window.addEventListener('pointercancel', cancel)
     return () => {
+      window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', end)
-      window.removeEventListener('pointercancel', end)
+      window.removeEventListener('pointercancel', cancel)
     }
   }, [componentWiring])
 
@@ -632,13 +651,8 @@ export function CircuitRenderer({
   const sceneAt = (event: ReactPointerEvent<SVGGElement>): ScenePoint | undefined => {
     const svg = event.currentTarget.ownerSVGElement
     if (svg === null) return undefined
-    const rect = svg.getBoundingClientRect()
-    if (rect.width === 0 || rect.height === 0) return undefined
-    const viewBox = svg.viewBox.baseVal
-    if (viewBox.width === 0 || viewBox.height === 0) return undefined
-    const viewX = viewBox.x + ((event.clientX - rect.left) / rect.width) * viewBox.width
-    const viewY = viewBox.y + ((event.clientY - rect.top) / rect.height) * viewBox.height
-    return { x: projection.sx(viewX), y: projection.sy(viewY) }
+    const at = svgPointFromClient(svg, event)
+    return at === undefined ? undefined : { x: projection.sx(at.x), y: projection.sy(at.y) }
   }
 
   /* Scene point → the component's local frame (+x = terminal b, the direction
@@ -795,6 +809,12 @@ export function CircuitRenderer({
     if (drag === null || event.pointerId !== drag.pointerId) return
     dragRef.current = null
     setDraggingId(undefined)
+    const at = sceneAt(event)
+    if (at === undefined) {
+      if (drag.mode === 'slider') componentControl?.cancelSlider()
+      else componentDrag?.cancel()
+      return
+    }
     if (drag.mode === 'slider') {
       /* A knob press released without travel is a click, not a position
          change — committing it would spend a revision on no physics. */
@@ -805,9 +825,15 @@ export function CircuitRenderer({
       if (drag.toggleTo !== undefined) componentControl?.setSwitch(drag.componentId, drag.toggleTo)
       return
     }
-    const at = sceneAt(event)
-    if (at === undefined) return
     componentDrag?.commit(drag.componentId, { x: at.x - drag.offsetX, y: at.y - drag.offsetY })
+  }
+  const cancelComponentDrag = (event: ReactPointerEvent<SVGGElement>) => {
+    const drag = dragRef.current
+    if (drag === null || event.pointerId !== drag.pointerId) return
+    dragRef.current = null
+    setDraggingId(undefined)
+    if (drag.mode === 'slider') componentControl?.cancelSlider()
+    else componentDrag?.cancel()
   }
   const components = view.circuitComponents ?? []
   const wires = view.circuitWires ?? []
@@ -821,6 +847,10 @@ export function CircuitRenderer({
   const showCurrent = view.visible.current === true
   const showVoltage = view.visible.voltage === true
   const showPower = view.visible.power === true
+  const pendingLead = componentWiring?.pending ?? wiringRef.current?.from
+  const pendingPart = pendingLead === undefined ? undefined : components.find(part => part.id === pendingLead.componentId)
+  const pendingStart = pendingLead === undefined || pendingPart === undefined
+    ? undefined : wireTerminalPoint(pendingPart, pendingLead.terminalKey, projection)
 
   /* Bodies the annotations have to steer around. A part cannot know what its
      neighbours occupy while it is being laid out, so every drawn sprite is
@@ -912,6 +942,14 @@ export function CircuitRenderer({
         />
       ))}
 
+      {/* A loose lead is pointer feedback only; topology changes only when its second terminal commits. */}
+      <g ref={wireSurfaceRef} pointerEvents="none" aria-hidden="true">
+        {componentWiring !== undefined && pendingStart !== undefined && wirePointer !== undefined ? <path
+          data-circuit-wire-preview="true"
+          d={`M${pendingStart.x.toFixed(2)} ${pendingStart.y.toFixed(2)} L${wirePointer.x.toFixed(2)} ${wirePointer.y.toFixed(2)}`}
+          fill="none" stroke="var(--physics-body-live)" strokeWidth={2} strokeDasharray="5 4" vectorEffect="non-scaling-stroke" /> : null}
+      </g>
+
       {components.map((component) => {
         const cx = projection.px(component.at)
         const cy = projection.py(component.at)
@@ -919,7 +957,8 @@ export function CircuitRenderer({
            with y down, so the same angle applies with its sign flipped. */
         const svgRotation = -component.rotation
         const vertical = isVertical(component.rotation)
-        const highlighted = projection.highlighted(component.id)
+        const selected = componentSelection?.selected === component.id
+        const highlighted = projection.highlighted(component.id) || selected
 
         /* A catalogued sprite takes over the symbol body; anything missing from
            the catalog or failed to load keeps the vector drawing. */
@@ -1035,19 +1074,30 @@ export function CircuitRenderer({
               draggingId === component.id ? css.circuitDragging : undefined,
             )}
             data-component-id={component.id}
+            data-component-selected={componentSelection === undefined ? undefined : selected ? 'true' : 'false'}
+            tabIndex={componentSelection === undefined ? undefined : 0}
+            role={componentSelection === undefined ? undefined : 'button'}
+            aria-label={componentSelection === undefined ? undefined : component.label}
+            aria-pressed={componentSelection === undefined ? undefined : selected}
             onPointerDown={(event) => {
+              if (event.button === 0) componentSelection?.select(component.id)
               onComponentPointerDown(component, event, rail)
+            }}
+            onClick={(event) => {
+              if (componentSelection === undefined || event.defaultPrevented) return
+              event.stopPropagation()
+              componentSelection.select(component.id)
+            }}
+            onKeyDown={(event) => {
+              if (componentSelection === undefined || event.defaultPrevented || event.nativeEvent.isComposing || (event.key !== 'Enter' && event.key !== ' ')) return
+              event.preventDefault()
+              event.stopPropagation()
+              componentSelection.select(component.id)
             }}
             onPointerMove={onComponentPointerMove}
             onPointerUp={endComponentDrag}
-            onPointerCancel={(event) => {
-              const drag = dragRef.current
-              if (drag === null || event.pointerId !== drag.pointerId) return
-              dragRef.current = null
-              setDraggingId(undefined)
-              if (drag.mode === 'slider') componentControl?.cancelSlider()
-              else componentDrag?.cancel()
-            }}
+            onPointerCancel={cancelComponentDrag}
+            onLostPointerCapture={cancelComponentDrag}
           >
             {/* Light, laid down before the part: the bloom is thrown widest and
                 softest, the disc carries the body of the light, the core is the
@@ -1217,6 +1267,8 @@ export function CircuitRenderer({
                         pending ? css.circuitTerminalPending : undefined,
                       )}
                       data-terminal={`${component.id}.${terminalKey}`}
+                      data-terminal-component={component.id}
+                      data-terminal-key={terminalKey}
                       cx={point.x}
                       cy={point.y}
                       r={TERMINAL_GRAB * scale}
@@ -1225,18 +1277,39 @@ export function CircuitRenderer({
                       aria-label={`${component.label} ${terminalKey}`}
                       onPointerDown={(event) => {
                         event.stopPropagation()
-                        /* Touch and pen need the capture to see the release;
-                           a mouse reports its position on the window anyway. */
-                        if (event.pointerType !== 'mouse') event.currentTarget.setPointerCapture(event.pointerId)
-                        wiringRef.current.active = true
+                        if (event.button !== 0 || wiringRef.current !== undefined) return
+                        const svg = event.currentTarget.ownerSVGElement
+                        if (svg === null) return
+                        if (event.pointerType !== 'mouse' && typeof event.currentTarget.setPointerCapture === 'function') event.currentTarget.setPointerCapture(event.pointerId)
+                        wiringRef.current = { pointerId: event.pointerId, from: { componentId: component.id, terminalKey }, svg,
+                          completedOnPress: componentWiring.pending !== undefined }
+                        setWirePointer(componentWiring.pending === undefined ? svgPointFromClient(svg, event) : undefined)
                         componentWiring.start({ componentId: component.id, terminalKey })
                       }}
                       onPointerUp={(event) => {
-                        if (!wiringRef.current.active) return
+                        const gesture = wiringRef.current
+                        if (gesture === undefined || gesture.pointerId !== event.pointerId) return
                         event.stopPropagation()
-                        componentWiring.start({ componentId: component.id, terminalKey })
+                        wiringRef.current = undefined
+                        if (gesture.completedOnPress) return
+                        // Pointer capture delivers this event to the source. Hit-test the real release target in the same SVG owner.
+                        const hit = gesture.svg.ownerDocument.elementFromPoint?.(event.clientX, event.clientY) ?? event.currentTarget
+                        const terminal = hit.closest('[data-terminal-component][data-terminal-key]')
+                        if (!(terminal instanceof SVGElement) || terminal.ownerSVGElement !== gesture.svg) return
+                        const targetId = terminal.getAttribute('data-terminal-component')
+                        const target = view.circuitComponents?.find(part => part.id === targetId)
+                        const targetKey = target === undefined ? undefined : terminalKeysOf(target.kind).find(key => key === terminal.getAttribute('data-terminal-key'))
+                        if (target === undefined || targetKey === undefined || target.id === gesture.from.componentId && targetKey === gesture.from.terminalKey) return
+                        setWirePointer(undefined)
+                        const complete = componentWiring.complete ?? componentWiring.start
+                        complete({ componentId: target.id, terminalKey: targetKey })
                       }}
                       onKeyDown={(event) => {
+                        if (event.defaultPrevented || event.nativeEvent.isComposing) return
+                        if (event.key === 'Escape' && componentWiring.pending !== undefined && componentWiring.cancel !== undefined) {
+                          event.preventDefault(); event.stopPropagation(); wiringRef.current = undefined
+                          setWirePointer(undefined); componentWiring.cancel(); return
+                        }
                         if (event.key !== 'Enter' && event.key !== ' ') return
                         event.preventDefault()
                         componentWiring.start({ componentId: component.id, terminalKey })

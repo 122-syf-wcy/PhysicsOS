@@ -82,6 +82,12 @@ export interface ComponentDragChannel {
   readonly cancel: () => void
 }
 
+/** The selected apparatus is view state shared with its parameter inspector. */
+export interface ComponentSelectionChannel {
+  readonly selected?: string | undefined
+  readonly select: (id: string) => void
+}
+
 /**
  * Build-mode wiring channel (circuit domain). Present only while the student is
  * assembling a circuit; the renderer then draws a focusable target on every
@@ -93,6 +99,10 @@ export interface ComponentWiringChannel {
   readonly start: (ref: TerminalRef) => void
   /** Terminal a wire is currently open from, for the pending highlight. */
   readonly pending?: TerminalRef | undefined
+  /** Abandon the pending terminal without creating a physical edit. */
+  readonly cancel?: (() => void) | undefined
+  /** Finish a drag after its queued start without relying on a rendered pending summary. */
+  readonly complete?: ((ref: TerminalRef) => void) | undefined
 }
 
 /**
@@ -123,6 +133,7 @@ export interface RendererProps {
   componentControl?: ComponentControlChannel
   /** Present only while the student is assembling a circuit, by hand. */
   componentWiring?: ComponentWiringChannel
+  componentSelection?: ComponentSelectionChannel
 }
 
 /* ---------------------------------------------------------------- magnetic -- */

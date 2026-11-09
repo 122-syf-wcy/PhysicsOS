@@ -25,6 +25,11 @@ import { AuthGate } from './AuthGate.tsx'
 import { HomeBelow, HomeHero } from './HomeHero.tsx'
 import { HomeBrandMark } from './HomeBrand.tsx'
 import { startExperimentNavigation } from './experiments/experiment-navigation.ts'
+import { createCanvasApi } from './canvas/api.ts'
+import { createCanvasController } from './canvas/controller.ts'
+import { createCanvasPersistence } from './canvas/persistence.ts'
+import { registerCanvasViews } from './canvas/register.ts'
+import { startCanvasNavigation } from './canvas/navigation.ts'
 import { loadWorkspaceModule } from './optional-modules.ts'
 import { startSyncRetry } from './sync-retry.ts'
 import { requestDirectRegeneration } from './question-code-regenerate.ts'
@@ -40,8 +45,10 @@ import { PhysicsProfileSeat } from './PhysicsProfileSeat.tsx'
 import { createPhysicsProfileController } from './profile-store.ts'
 import { RecentSpaces } from './RecentSpaces.tsx'
 import { OptionalSceneChatCard as SceneChatCard } from './optional-surfaces.tsx'
-import { SceneTurnCard } from './SceneTurnCard.tsx'
-import { physicsSceneCardDefinition, physicsSceneTurnDefinition } from './scene-chat-node.ts'
+import { SceneTurnCard, type SceneTurnInjected } from './SceneTurnCard.tsx'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { CanvasObservable } from './canvas/types.ts'
+import { PHYSICS_SCENE_TURN_KEY, physicsSceneCardDefinition, physicsSceneTurnDefinition, type PhysicsSceneCardData } from './scene-chat-node.ts'
 import { SidebarBrandMark, SidebarBrandName } from './SidebarBrand.tsx'
 import { SidebarFooter } from './SidebarFooter.tsx'
 import { SidebarNav } from './SidebarNav.tsx'
@@ -177,6 +184,20 @@ export function apply(ctx: ClientContext): void {
   /* localStorage-backed so 最近空间 survives a reload with restorable scenes;
      under an account it lands in that user's namespace. */
   const surface = createPhysicsSurfaceController(auth.userStorage, learningApi, surfacePanels)
+  const canvas = createCanvasController({
+    api: createCanvasApi(),
+    persistence: createCanvasPersistence(),
+    getAccount: () => {
+      const state = auth.store.getSnapshot()
+      return state.status === 'authed' ? state.user : undefined
+    },
+    createRuntime: async options => (await loadWorkspaceModule()).createWorkbenchInstanceRuntime(options),
+    window,
+    document,
+  })
+  const learningRecord = createLearningRecordController(auth.userStorage, learningApi)
+  const canvasEntry = registerCanvasViews(ctx, canvas, surface, auth, learningRecord)
+  ctx.effect(() => startCanvasNavigation(surface, window), 'ui-physicsos: canvas navigation')
   ctx.effect(() => {
     let disposed = false
     let starting = false
@@ -230,8 +251,6 @@ export function apply(ctx: ClientContext): void {
      and golden-question cards), read by the 学习记录 surface. Persisted so the
      record survives a reload. Created before the scene card registers because
      the card's recordAttempt closure writes to it. */
-  const learningRecord = createLearningRecordController(auth.userStorage, learningApi)
-
   /* 登录后对账一次:本地作答与最近场景先落盘,再把账号维度的那一份并回来。
      尽力而为 —— 离线或会话过期时本地记录照常可用,下一次登录再补一次。 */
   ctx.effect(() => {
@@ -297,6 +316,7 @@ export function apply(ctx: ClientContext): void {
     questionCodeOwner,
     regenerateQuestionCode: (sceneId: string) => regenerateQuestionCode(sceneId),
     openSceneInLab: (ref: PhysicsSceneRef) => { surface.open('lab', ref) },
+    requestSceneInCanvas: canvasEntry.requestSceneInCanvas,
     endTurnHygiene,
     recordAttempt: (attempt: Parameters<typeof learningRecord.record>[0]) => {
       learningRecord.record(attempt)
@@ -314,11 +334,61 @@ export function apply(ctx: ClientContext): void {
      not a message, so its node has no place in the conversation surface and
      never draws; the Turn's own data is where the card can sit beside the
      answer it belongs to. */
+  const turnSources = new Map<SessionId, {
+    readonly cells: Map<string, ReturnType<typeof createSnapshotStore<PhysicsSceneCardData | undefined>>>
+    readonly bindings: Map<string, { readonly source: CanvasObservable<PhysicsSceneCardData | undefined>; readonly stop: () => void }>
+    parent: CanvasObservable<import('@deepseek-ai/dsh-client-ui-chat/client').ChatSnapshot | undefined> | undefined
+    stopParent: (() => void) | undefined
+    refresh: (() => void) | undefined
+  }>()
+  const physicsSceneTurnSource = (sessionId: SessionId, key: string): CanvasObservable<PhysicsSceneCardData | undefined> => {
+    let family = turnSources.get(sessionId)
+    if (family === undefined) { family = { cells: new Map(), bindings: new Map(), parent: undefined, stopParent: undefined, refresh: undefined }; turnSources.set(sessionId, family) }
+    let cell = family.cells.get(key)
+    if (cell === undefined) { cell = createSnapshotStore<PhysicsSceneCardData | undefined>(undefined); family.cells.set(key, cell) }
+    let parent: typeof family.parent
+    try { parent = ctx.uiConversation.binding(sessionId).target('chat') } catch { parent = undefined }
+    if (parent !== family.parent) {
+      family.stopParent?.()
+      family.parent = parent
+      const current = family
+      const refresh = (): void => {
+        const chat = current.parent?.getSnapshot()
+        for (const [turnKey, target] of current.cells) {
+          const number = Number(turnKey)
+          const turn = Number.isSafeInteger(number) ? chat?.timeline.turns.get(number) : undefined
+          const source = turn?.data.source(PHYSICS_SCENE_TURN_KEY)
+          const previous = current.bindings.get(turnKey)
+          if (source === previous?.source) continue
+          previous?.stop()
+          current.bindings.delete(turnKey)
+          if (source === undefined) target.set(undefined)
+          else {
+            const publish = (): void => { target.set(source.getSnapshot()) }
+            current.bindings.set(turnKey, { source, stop: source.subscribe(publish) })
+            publish()
+          }
+        }
+      }
+      family.refresh = refresh
+      family.stopParent = parent?.subscribe(refresh)
+    }
+    family.refresh?.()
+    return cell
+  }
+  ctx.effect(() => () => {
+    for (const family of turnSources.values()) {
+      family.stopParent?.()
+      for (const binding of family.bindings.values()) binding.stop()
+      for (const cell of family.cells.values()) cell.set(undefined)
+    }
+    turnSources.clear()
+  }, 'ui-physicsos: turn scene sources')
   ctx.slots.inject('conversation.chat.turnTail', () => ctx.slots.register({
-    name: 'conversation.chat.turnTail',
-    id: 'physicsos-scene-turn',
-    locale: NS,
-    inject: sceneCardFace,
+    name: 'conversation.chat.turnTail', id: 'physicsos-scene-turn', locale: NS,
+    inject: (sessionId): ReturnType<typeof sceneCardFace> & SceneTurnInjected => ({
+      ...sceneCardFace(), keyedHooks: { physicsSceneTurn: key => physicsSceneTurnSource(sessionId, key) },
+    }),
   }, SceneTurnCard))
 
   /* The account workspace manager. It occupies the shell's own workspace seat:
@@ -422,6 +492,7 @@ export function apply(ctx: ClientContext): void {
         sceneRef?: Parameters<typeof surface.open>[1],
       ) => { surface.open(id, sceneRef) },
       removeRecent: (sceneId: string) => { surface.removeRecent(sceneId) },
+      requestSceneInCanvas: canvasEntry.requestSceneInCanvas,
       /* 历史对话 rows reopen the Harness session itself — the same verb the
          workspace browser uses; conversation state lives server-side. */
       openSession: (sessionId: SessionId) => { ctx.uiWorkspace.openSession(sessionId) },
@@ -470,11 +541,14 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     inject: () => ({
       hooks: { recentExperiments: surface.recent },
+      openCanvasView: canvasEntry.openCanvasView,
+      newCanvas: canvasEntry.newCanvas,
+      requestSceneInCanvas: canvasEntry.requestSceneInCanvas,
       /* "新建物理实验" is a creation intent, so it lands on the picker rather
          than on the magnetic demo — the same chooser the sidebar uses. A recent
          entry hands its stored scene over and restores it directly. */
       openSurface: (
-        id: 'home' | 'lab' | 'record',
+        id: 'home' | 'lab' | 'record' | 'canvas',
         sceneRef?: Parameters<typeof surface.open>[1],
       ) => {
         if (id === 'lab' && sceneRef === undefined) surface.openExperimentPicker()
@@ -718,6 +792,9 @@ export function apply(ctx: ClientContext): void {
           if (sceneRef === undefined) surface.open(id)
           else surface.open('lab', sceneRef)
         },
+        newCanvas: canvasEntry.newCanvas,
+        requestSceneInCanvas: canvasEntry.requestSceneInCanvas,
+        requestCanvasSource: canvasEntry.requestCanvasSource,
         /* Toolbar 切换实验: chooser over the running scene, resumable. */
         updateScene: surface.updateScene,
         openExperimentPicker: () => { surface.openExperimentPicker() },
@@ -734,6 +811,7 @@ export function apply(ctx: ClientContext): void {
         practiceQuestion,
       })
       for (const panelId of Object.values(PHYSICS_PANEL_IDS)) {
+        if (panelId === PHYSICS_PANEL_IDS.canvas) continue
         yield scope.slots.register({
           name: 'main',
           key: panelId,

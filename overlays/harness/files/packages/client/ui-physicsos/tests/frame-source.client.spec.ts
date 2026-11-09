@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
-import { createFrameSource, useFrameSource } from '../src/client/physics/frame-source.ts'
+import { createFrameSource } from '../src/client/physics/frame-source.ts'
+import { useFrameSource } from '../src/client/physics/frame-source-react-compat.ts'
 
 describe('frame source (#123 renderer channel)', () => {
   it('serves the initial frame and publishes updates', () => {

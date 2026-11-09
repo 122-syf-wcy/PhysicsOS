@@ -16,6 +16,8 @@ import {
   type ObservationRuntimeState,
 } from '@physicsos/physics-observation'
 import { verifyMagneticScene } from '@physicsos/physics-verifier'
+import { canonicalValue } from '@physicsos/physics-units'
+import type { CapturedResult } from '@physicsos/physics-workbench/types'
 
 import {
   MAGNETIC_OBSERVABLE_LABELS,
@@ -41,6 +43,7 @@ import { runtimeStatusOf } from './physics/verified-result.ts'
 import { latticeSpacingOf } from './physics/bridge-helpers.ts'
 
 type MagneticSimulation = ReturnType<MagneticEngine['simulate']>
+type MagneticRequest = ReturnType<typeof createMagneticSimulationRequest>
 type MagneticState = ReturnType<MagneticEngine['stateAtSeconds']>
 type MagneticVerification = ReturnType<typeof verifyMagneticScene>
 
@@ -742,6 +745,10 @@ export class MagneticRuntimeBridge {
   private commandSequence = 0
   private traceSequence = 0
   private snapshot!: MagneticRuntimeSnapshot
+  private simulationRequest: MagneticRequest | undefined
+  private simulationResult: MagneticSimulation | undefined
+  private currentState: MagneticState | undefined
+  private captureTime = 0
 
   constructor(input: MagneticSceneInput | PhysicsScene = {}) {
     this.sceneRuntime = new SceneRuntime(isPhysicsScene(input) ? input : createMagneticScene(input))
@@ -754,6 +761,44 @@ export class MagneticRuntimeBridge {
    */
   getSnapshot(): MagneticRuntimeSnapshot {
     return this.snapshot
+  }
+
+  /** Raw evidence already held for the displayed revision and frame. */
+  captureRaw(): CapturedResult {
+    const { scene, clock, error } = this.snapshot
+    const request = this.simulationRequest
+    const result = this.simulationResult
+    const state = this.currentState
+    const start = request?.options.startTime ?? result?.states[0]?.time
+    const end = request?.options.endTime ?? result?.states.at(-1)?.time
+    const startTime = result === undefined || start === undefined ? 0 : canonicalValue(start)
+    const endTime = result === undefined || end === undefined ? clock.total : canonicalValue(end)
+    const isStatic = result === undefined ? clock.total === 0 : endTime === startTime
+    const captureClock = isStatic
+      ? { time: 0, total: 0, running: false, rate: clock.rate }
+      : this.snapshot.status === 'failed'
+        ? { time: Math.min(endTime, Math.max(startTime, this.captureTime)), total: endTime, running: false, rate: clock.rate }
+        : clock
+    return {
+      scene,
+      ...(request === undefined ? {} : { request }),
+      ...(result === undefined ? {} : { result }),
+      ...(state === undefined ? {} : { state }),
+      clock: captureClock,
+      cursor: isStatic
+        ? { kind: 'static', identity: this.engine.engineId }
+        : { kind: 'time', time: { value: captureClock.time, unit: 's', dimension: 'time' } },
+      engineInfo: {
+        id: result?.metadata.engineId ?? this.engine.engineId,
+        version: result?.metadata.engineVersion ?? this.engine.engineVersion,
+        ...(scene.metadata.experimentRelease === undefined ? {} : { release: scene.metadata.experimentRelease }),
+      },
+      diagnostics: [
+        ...(error === undefined ? [] : [{ code: error.code, message: error.message, retryable: error.retryable }]),
+        ...(result?.verification.errors.map(issue => ({ code: issue.code, message: issue.message, severity: issue.severity })) ?? []),
+        ...(result?.verification.warnings.map(issue => ({ code: issue.code, message: issue.message, severity: issue.severity })) ?? []),
+      ],
+    }
   }
 
   /**
@@ -1002,18 +1047,23 @@ export class MagneticRuntimeBridge {
    */
   recompute(): MagneticRuntimeSnapshot {
     const scene = this.sceneRuntime.getScene()
+    this.simulationRequest = undefined
+    this.simulationResult = undefined
+    this.currentState = undefined
+    this.captureTime = this.currentTime
     try {
-      const simulation = this.engine.simulate(
+      const request = createMagneticSimulationRequest(
         scene,
-        createMagneticSimulationRequest(
-          scene,
-          `simulation-${scene.revision}`,
-          `physicsos-runtime-${scene.revision}-${this.traceSequence}`,
-        ),
+        `simulation-${scene.revision}`,
+        `physicsos-runtime-${scene.revision}-${this.traceSequence}`,
       )
-      const verification = verifyMagneticScene(scene, simulation)
+      this.simulationRequest = request
+      const simulation = this.engine.simulate(scene, request)
+      this.simulationResult = simulation
+      const verification = verifyMagneticScene(scene, simulation, { request })
       const status: MagneticRuntimeStatus = runtimeStatusOf(verification)
       const verifiedSimulation = { ...simulation, verification }
+      this.simulationResult = verifiedSimulation
       const trusted = status !== 'failed'
       const period = trusted ? (scalarFact(simulation, 'cyclotron_period')?.value ?? 0) : 0
       if (period > 0 && this.currentTime > period) this.currentTime %= period
@@ -1021,7 +1071,9 @@ export class MagneticRuntimeBridge {
         this.currentTime = 0
         this.running = false
       }
+      if (trusted) this.captureTime = this.currentTime
       const state = trusted ? this.engine.stateAtSeconds(scene, this.currentTime) : undefined
+      this.currentState = state
       const observations =
         !trusted || state === undefined
           ? { sceneRevision: scene.revision, observations: [] as readonly MagneticObservation[] }
@@ -1068,6 +1120,7 @@ export class MagneticRuntimeBridge {
       this.snapshot = snapshot
       return snapshot
     } catch (error: unknown) {
+      this.currentState = undefined
       this.currentTime = 0
       this.running = false
       const params = parametersOf(scene)
@@ -1111,6 +1164,7 @@ export class MagneticRuntimeBridge {
     const simulation = this.snapshot.simulation
     const trusted = this.snapshot.status !== 'failed' && simulation !== null
     if (!trusted) {
+      this.currentState = undefined
       this.currentTime = 0
       this.running = false
       this.snapshot = {
@@ -1128,7 +1182,9 @@ export class MagneticRuntimeBridge {
     try {
       const period = scalarFact(simulation, 'cyclotron_period')?.value ?? 0
       if (period > 0 && this.currentTime > period) this.currentTime %= period
+      this.captureTime = this.currentTime
       const state = this.engine.stateAtSeconds(scene, this.currentTime)
+      this.currentState = state
       const observations = observeMagneticScene({ scene, simulation, state })
       const view = viewOf(scene, simulation, observations, state, this.guidesVisible)
       this.snapshot = {

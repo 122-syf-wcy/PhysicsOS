@@ -24,6 +24,7 @@ import type {
   VerificationCheckView,
 } from './scene-visual-model.ts'
 import type { PhysicsScene } from '@physicsos/physics-scene'
+import type { CapturedResult } from '@physicsos/physics-workbench'
 import type { CircuitDraft, TerminalRef } from './circuit-builder.ts'
 
 /** Everything the shell needs to render one frame. Plain data only. */
@@ -60,11 +61,26 @@ export interface WorkspaceSnapshot {
   error?: RuntimeErrorView
 }
 
-/** Imperative surface the shell drives; every method returns the next frame. */
+/** Snapshot safe to put into a host source or a document: no behavior crosses it. */
+export type WorkspaceFrame = Omit<WorkspaceSnapshot, 'sampleReadout'>
+
+/** Imperative surface driven by an instance owner, not passed to its presentation. */
 export interface WorkspaceRuntime {
   /** Current committed facts; previews and animation never alter this scene. */
   getScene?(): PhysicsScene
   getSnapshot(): WorkspaceSnapshot
+  /** Cheap playback semantics; it must not serialize or copy a complete simulation result. */
+  getPlaybackKind?(): 'static' | 'time'
+  /** Physical time when the visible chart clock is a periodic projection. */
+  getPhysicalClock?(): PlaybackClock
+  /** Restore physical time without treating the saved age as a chart seek or replay. */
+  restorePhysicalClock?(clock: PlaybackClock): WorkspaceSnapshot
+  /** Held engine evidence; capturing must never solve or format a value. */
+  captureRaw?(): CapturedResult
+  /** Optional retained immutable publication copy; its envelope is still validated by the owner. */
+  capturePublished?(): CapturedResult
+  /** Releases any owned engine work; adapters without async work need no method. */
+  dispose?(): void
   /** Transient parameter preview; the committed scene is unchanged until release. */
   previewParameter?(id: string, value: number): WorkspaceSnapshot
   commitParameter?(id: string, value: number): WorkspaceSnapshot

@@ -18,10 +18,14 @@ import {
   energyLedgerOf,
   energyMotionAt,
   resolveEnergyModel,
+  type EnergyLedger,
   type ResolvedEnergyModel,
 } from '@physicsos/engine-mechanics'
-import { isScalarQuantity, type SimulationResult } from '@physicsos/physics-core'
-import { quantity } from '@physicsos/physics-units'
+import { isScalarQuantity, type SimulationResult, type SimulationState } from '@physicsos/physics-core'
+import { conditionsFromScene, publicCapturedResult } from '@physicsos/physics-workbench/data'
+import { copyJsonObject } from '@physicsos/physics-workbench/json'
+import type { AnalysisDataset, CapturedResult } from '@physicsos/physics-workbench/types'
+import { canonicalValue, quantity } from '@physicsos/physics-units'
 import {
   SceneRuntime,
   createSceneCommand,
@@ -97,6 +101,7 @@ const ROUGH_COEFFICIENT = 0.2
 interface Computed {
   readonly simulation: SimulationResult
   readonly model: ResolvedEnergyModel
+  readonly analysis: readonly AnalysisDataset[]
 }
 
 /**
@@ -109,6 +114,13 @@ export class EnergyWorkspaceRuntime implements WorkspaceRuntime {
   private highlighted: readonly string[] = []
   private failure: string | undefined
   private computed: Computed | undefined
+  /** Stated inputs remain editable even when the resulting ledger fails verification. */
+  private inputModel: ResolvedEnergyModel | undefined
+  /** Raw submitted input/output survive an engine verification failure. */
+  private retainedRun: Pick<CapturedResult, 'scene' | 'request' | 'result'> | undefined
+  private engineInfo: CapturedResult['engineInfo'] = { id: this.engine.engineId, version: this.engine.engineVersion }
+  private rawState: CapturedResult['rawState']
+  private currentState: SimulationState | undefined
   private time = 0
   private running = false
   private rate = 1
@@ -122,29 +134,45 @@ export class EnergyWorkspaceRuntime implements WorkspaceRuntime {
   }
 
   private recompute(): void {
-    const scene = this.sceneRuntime.getScene()
+    const scene = this.sceneRuntime.peekScene()
+    this.retainedRun = { scene }
+    this.inputModel = undefined
+    this.rawState = undefined
+    this.currentState = undefined
+    this.engineInfo = {
+      id: this.engine.engineId,
+      version: this.engine.engineVersion,
+      ...(scene.metadata.experimentRelease === undefined ? {} : { release: scene.metadata.experimentRelease }),
+    }
     try {
       const support = this.engine.canHandle(scene)
+      if (support.modelId !== undefined) this.engineInfo = { ...this.engineInfo, model: support.modelId }
       if (!support.supported) {
         this.failure = support.failedConditions.map(entry => entry.message).join(' ')
         this.computed = undefined
         return
       }
-      const simulation = this.engine.simulate(
+      const model = resolveEnergyModel(scene)
+      this.inputModel = model
+      const request = createEnergySimulationRequest(
         scene,
-        createEnergySimulationRequest(
-          scene,
-          `energy-lab-${String(scene.id)}-${scene.revision}`,
-          `energy-lab-trace-${String(scene.id)}-${scene.revision}`,
-        ),
+        `energy-lab-${String(scene.id)}-${scene.revision}`,
+        `energy-lab-trace-${String(scene.id)}-${scene.revision}`,
       )
+      this.retainedRun = { scene, request }
+      const simulation = this.engine.simulate(scene, request)
+      this.retainedRun = { scene, request, result: simulation }
+      this.engineInfo = { ...this.engineInfo, id: simulation.metadata.engineId, version: simulation.metadata.engineVersion }
       if (simulation.verification.status === 'failed') {
         this.failure = simulation.verification.errors.map(entry => entry.message).join(' ')
         this.computed = undefined
         return
       }
+      const ledger = energyLedgerOf(model)
+      this.rawState = copyJsonObject({ model, ledger })
       this.failure = undefined
-      this.computed = { simulation, model: resolveEnergyModel(scene) }
+      this.computed = { simulation, model, analysis: [energyLedgerDatasetOf(scene, simulation, model, ledger)] }
+      this.currentState = this.engine.stateAt(scene, quantity(this.time, 's', 'time'))
     } catch (error: unknown) {
       this.failure = error instanceof Error ? error.message : '机械能 Runtime 无法启动。'
       this.computed = undefined
@@ -152,14 +180,13 @@ export class EnergyWorkspaceRuntime implements WorkspaceRuntime {
   }
 
   private command<T extends SceneCommandType>(type: T, payload: SceneCommandPayloadMap[T]): void {
-    if (requiresExperimentalFork(this.sceneRuntime.getScene(), type)) {
-      this.sceneRuntime = new SceneRuntime(
-        forkExperimentalScene({ scene: this.sceneRuntime.getScene() }),
-      )
-    }
-    const scene = this.sceneRuntime.getScene()
+    const current = this.sceneRuntime.getScene()
+    const prospective = requiresExperimentalFork(current, type)
+      ? new SceneRuntime(forkExperimentalScene({ scene: current }))
+      : this.sceneRuntime
+    const scene = prospective.getScene()
     this.commandSequence += 1
-    const result = this.sceneRuntime.execute(
+    const result = prospective.execute(
       createSceneCommand<T>({
         commandId: `energy-ui-command-${this.commandSequence}`,
         sceneId: String(scene.id),
@@ -173,6 +200,7 @@ export class EnergyWorkspaceRuntime implements WorkspaceRuntime {
       this.failure = result.error.message
       return
     }
+    this.sceneRuntime = prospective
     if (type !== 'SetObservableEnabled') {
       this.time = 0
       this.running = false
@@ -182,6 +210,33 @@ export class EnergyWorkspaceRuntime implements WorkspaceRuntime {
 
   getScene(): PhysicsScene {
     return this.sceneRuntime.getScene()
+  }
+
+  captureRaw(): CapturedResult {
+    const run: Pick<CapturedResult, 'scene' | 'request' | 'result'> = this.retainedRun ?? { scene: this.sceneRuntime.peekScene() }
+    const state = this.currentState
+    const end = run.result?.states.at(-1)?.time
+    const clock = { time: this.time, total: end === undefined ? 0 : canonicalValue(end),
+      running: this.computed !== undefined && this.running, rate: this.rate }
+    return publicCapturedResult({
+      ...run,
+      ...(state === undefined ? {} : { state }),
+      ...(this.rawState === undefined ? {} : { rawState: this.rawState }),
+      ...(this.computed === undefined ? {} : { analysis: this.computed.analysis }),
+      clock,
+      cursor: run.request === undefined ? { kind: 'static', identity: `unavailable:${this.engine.engineId}` }
+        : { kind: 'time', time: quantity(clock.time, 's', 'time') },
+      engineInfo: this.engineInfo,
+      metricSemantics: {
+        potential_energy: {
+          semanticKey: 'gravitational_potential_energy',
+          scale: { kind: 'linear' },
+          reference: { identity: 'gravitational-potential-at-ramp-bottom', value: quantity(0, 'J', 'energy') },
+        },
+        friction_work: { semanticKey: 'friction_dissipated_energy', scale: { kind: 'linear' } },
+      },
+      ...(this.failure === undefined ? {} : { diagnostics: [{ code: 'ENERGY_RUNTIME_DIAGNOSTIC', message: this.failure }] }),
+    })
   }
 
   getSnapshot(): WorkspaceSnapshot {
@@ -199,7 +254,7 @@ export class EnergyWorkspaceRuntime implements WorkspaceRuntime {
         view: emptyVisualModel('mechanics'),
         ariaLabel: title,
         tree: this.treeOf(scene),
-        inspector: this.inspectorOf(undefined),
+        inspector: this.inputModel === undefined ? [] : [parametersOf(this.inputModel)],
         charts: [],
         table: { columns: [], rows: [] },
         derivation: [],
@@ -216,6 +271,7 @@ export class EnergyWorkspaceRuntime implements WorkspaceRuntime {
     }
 
     const { simulation, model } = this.computed
+    this.currentState = this.engine.stateAt(scene, quantity(this.time, 's', 'time'))
     const view = energySceneVisual({ scene, model, time: this.time })
     const status = runtimeStatusOf(simulation.verification)
 
@@ -317,7 +373,7 @@ export class EnergyWorkspaceRuntime implements WorkspaceRuntime {
   }
 
   editParameter(id: string, value: number): WorkspaceSnapshot {
-    const model = this.computed?.model
+    const model = this.inputModel
     if (model !== undefined) {
       for (const [parameterId, dispatch] of PARAMETER_COMMANDS) {
         if (parameterId !== id) continue
@@ -330,7 +386,7 @@ export class EnergyWorkspaceRuntime implements WorkspaceRuntime {
   }
 
   setChoice(id: string, value: string): WorkspaceSnapshot {
-    const model = this.computed?.model
+    const model = this.inputModel
     if (model === undefined) return this.getSnapshot()
     /* The two surfaces are one tap apart because the whole experiment is the
        difference between them. */
@@ -404,10 +460,71 @@ export class EnergyWorkspaceRuntime implements WorkspaceRuntime {
   }
 }
 
+/** Native ledger facts have one static identity; they are not a cart trajectory. */
+const energyLedgerDatasetOf = (
+  scene: PhysicsScene,
+  simulation: SimulationResult,
+  model: ResolvedEnergyModel,
+  ledger: EnergyLedger,
+): AnalysisDataset => {
+  const readings = [
+    ['mass', ledger.mass, 'cart_mass', 'mass', 'kg'],
+    ['gravity', ledger.gravity, 'gravity_acceleration_magnitude', 'acceleration', 'm/s^2'],
+    ['releaseHeight', ledger.releaseHeight, 'release_height', 'length', 'm'],
+    ['inclineAngle', ledger.inclineAngle, 'incline_angle', 'angle', 'rad'],
+    ['frictionCoefficient', ledger.frictionCoefficient, 'friction_coefficient', 'dimensionless', ''],
+    ['rampLength', ledger.rampLength, 'ramp_length', 'length', 'm'],
+    ['potentialAtRelease', ledger.potentialAtRelease, 'gravitational_potential_energy', 'energy', 'J'],
+    ['frictionWork', ledger.frictionWork, 'friction_dissipated_energy', 'energy', 'J'],
+    ['kineticAtBottom', ledger.kineticAtBottom, 'kinetic_energy', 'energy', 'J'],
+    ['speedAtBottom', ledger.speedAtBottom, 'speed_at_bottom', 'velocity', 'm/s'],
+    ['idealSpeed', ledger.idealSpeed, 'frictionless_speed_at_bottom', 'velocity', 'm/s'],
+    ['energyAccounted', ledger.energyAccounted, 'energy_accounted', 'energy', 'J'],
+  ] as const
+  return {
+    schemaVersion: 1,
+    kind: 'dataset',
+    id: `${String(simulation.simulationId)}:energy-ledger`,
+    axes: [{
+      id: 'static',
+      kind: 'static',
+      identity: 'mechanical-energy-ledger',
+      dimension: 'dimensionless',
+      unit: '',
+      origin: { kind: 'absolute', value: quantity(0, '', 'dimensionless'), reference: 'mechanical-energy-ledger' },
+    }],
+    metrics: readings.map(([id, , semanticKey, dimension, unit]): AnalysisDataset['metrics'][number] => ({
+      id,
+      semanticKey,
+      targetId: model.benchId,
+      component: 'scalar',
+      dimension,
+      unit,
+      scale: { kind: 'linear' },
+      ...(id === 'potentialAtRelease'
+        ? { reference: { identity: 'gravitational-potential-at-ramp-bottom', value: quantity(0, 'J', 'energy') } }
+        : {}),
+    })),
+    rows: [{
+      rowId: 'ledger',
+      axes: { static: 0 },
+      values: Object.fromEntries(readings.map(([id, value]) => [id, value])),
+      evidence: { scope: 'resolved-engine-energy-ledger' },
+    }],
+    conditions: conditionsFromScene(scene),
+    origin: {
+      sceneId: String(scene.id),
+      sceneRevision: scene.revision,
+      simulationId: String(simulation.simulationId),
+      collection: 'analysis',
+      analysisId: 'energy-ledger',
+    },
+  }
+}
+
 /* -------------------------------------------------------------- inspector -- */
 
 const parametersOf = (model: ResolvedEnergyModel): InspectorSection => {
-  const ledger = energyLedgerOf(model)
   return {
     id: 'energy-parameters',
     title: '斜面与小车',
@@ -417,7 +534,7 @@ const parametersOf = (model: ResolvedEnergyModel): InspectorSection => {
         label: '小车质量',
         symbol: 'm',
         unit: 'kg',
-        value: ledger.mass,
+        value: model.mass,
         min: 0.1,
         max: 20,
         step: 0.1,
@@ -427,7 +544,7 @@ const parametersOf = (model: ResolvedEnergyModel): InspectorSection => {
         label: '释放高度',
         symbol: 'h',
         unit: 'cm',
-        value: ledger.releaseHeight * 100,
+        value: model.releaseHeight * 100,
         min: 5,
         max: 300,
         step: 5,
@@ -437,7 +554,7 @@ const parametersOf = (model: ResolvedEnergyModel): InspectorSection => {
         label: '斜面倾角',
         symbol: 'θ',
         unit: '°',
-        value: (ledger.inclineAngle * 180) / Math.PI,
+        value: (model.inclineAngle * 180) / Math.PI,
         min: 5,
         max: 85,
         step: 5,
@@ -447,7 +564,7 @@ const parametersOf = (model: ResolvedEnergyModel): InspectorSection => {
         label: '摩擦系数',
         symbol: 'μ',
         unit: '',
-        value: ledger.frictionCoefficient,
+        value: model.frictionCoefficient,
         min: 0,
         max: 0.8,
         step: 0.05,
@@ -574,5 +691,5 @@ const tableOf = (model: ResolvedEnergyModel): DataTableView => {
  * @returns the workspace runtime.
  * @param scene - the physics scene.
  */
-export const createEnergyWorkspaceRuntime = (scene: PhysicsScene): WorkspaceRuntime =>
+export const createEnergyWorkspaceRuntime = (scene: PhysicsScene): EnergyWorkspaceRuntime =>
   new EnergyWorkspaceRuntime(scene)

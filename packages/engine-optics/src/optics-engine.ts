@@ -1,4 +1,4 @@
-import { simulationTimeRange } from '@physicsos/physics-core'
+import { assertSimulationPlan, simulationTimeRange } from '@physicsos/physics-core'
 import {
   check,
   invalidModelCondition,
@@ -9,6 +9,7 @@ import {
   type ModelSupport,
   type PhysicsEngine,
   type PhysicsEventLike,
+  type SimulationPlan,
   type SimulationRequest,
   type SimulationResult,
   type SimulationState,
@@ -20,7 +21,7 @@ import { opticalBenchesOf, validateScene, type PhysicsScene } from '@physicsos/p
 import { asSimulationId, asTraceId, PhysicsOSError } from '@physicsos/shared'
 
 import { imagingResultOf, type OpticalImagingResult } from './imaging.ts'
-import { resolveOpticalModel } from './optics-model.ts'
+import { resolveOpticalModel, type ResolvedOpticalModel } from './optics-model.ts'
 import { constructedImageTopOf } from './principal-rays.ts'
 
 export const OPTICS_ENGINE_ID = 'engine-optics'
@@ -140,8 +141,7 @@ const derivedOf = (result: OpticalImagingResult): DerivedQuantity[] => {
   return derived
 }
 
-const stateOf = (scene: PhysicsScene, timeSeconds: number): SimulationState => {
-  const result = resolveOpticalImaging(scene)
+const stateOf = (result: OpticalImagingResult, timeSeconds: number): SimulationState => {
   const { model, outcome } = result
   const objects: SimulationState['objects'] = [
     {
@@ -319,6 +319,13 @@ export function createOpticsSimulationRequest(
 
 /* ----------------------------------------------------------- the engine -- */
 
+const modelNameOf = (type: ResolvedOpticalModel['elementType']): string =>
+  type === 'thin_lens'
+    ? THIN_LENS_MODEL
+    : type === 'curved_mirror'
+      ? CURVED_MIRROR_MODEL
+      : PLANE_MIRROR_MODEL
+
 export class OpticsEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLike> {
   readonly engineId = OPTICS_ENGINE_ID
   readonly engineVersion = OPTICS_ENGINE_VERSION
@@ -369,14 +376,7 @@ export class OpticsEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLik
 
     try {
       const result = resolveOpticalImaging(scene)
-      return supported(
-        result.model.elementType === 'thin_lens'
-          ? THIN_LENS_MODEL
-          : result.model.elementType === 'curved_mirror'
-            ? CURVED_MIRROR_MODEL
-            : PLANE_MIRROR_MODEL,
-        this.domain,
-      )
+      return supported(modelNameOf(result.model.elementType), this.domain)
     } catch (error: unknown) {
       return invalidModelCondition(OPTICS_ENGINE_ID, [
         failure(
@@ -417,10 +417,10 @@ export class OpticsEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLik
         'Simulation time must be finite and non-negative.',
       )
     }
-    return stateOf(scene, seconds)
+    return stateOf(resolveOpticalImaging(scene), seconds)
   }
 
-  simulate(scene: PhysicsScene, request: SimulationRequest): SimulationResult<PhysicsEventLike> {
+  private prepareSimulation(scene: PhysicsScene, request: SimulationRequest) {
     if (request.sceneId !== scene.id || request.sceneRevision !== scene.revision) {
       throw new PhysicsOSError(
         'SIMULATION_SCENE_MISMATCH',
@@ -436,10 +436,38 @@ export class OpticsEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLik
       )
     }
 
+    const model = resolveOpticalModel(scene)
+    const plan: SimulationPlan = {
+      schemaVersion: 'simulation-plan/1.0',
+      engineId: this.engineId,
+      engineVersion: this.engineVersion,
+      simulationId: request.simulationId,
+      sceneId: scene.id,
+      sceneRevision: scene.revision,
+      modelId: modelNameOf(model.elementType),
+      kind: 'static',
+      ...simulationTimeRange(request.options),
+      storageSampleCountBound: 1,
+      numericalIterationCountBound: 0,
+      metadata: {
+        numericalIterationAccounting:
+          'No numerical integration; one static state. Algebraic imaging and fixed ray-construction verification are excluded.',
+      },
+    }
+    assertSimulationPlan(plan)
+    return { model, plan }
+  }
+
+  prepareSimulationPlan(scene: PhysicsScene, request: SimulationRequest): SimulationPlan {
+    return this.prepareSimulation(scene, request).plan
+  }
+
+  simulate(scene: PhysicsScene, request: SimulationRequest): SimulationResult<PhysicsEventLike> {
+    const { model, plan } = this.prepareSimulation(scene, request)
     const startedAt = new Date().toISOString()
-    /* Imaging is static: the single state at t = 0 is the whole run. */
-    const result = resolveOpticalImaging(scene)
-    const states = [stateOf(scene, simulationTimeRange(request.options).startTime)]
+    /* Imaging is static: one state at the effective start is the whole run. */
+    const result = imagingResultOf(model)
+    const states = [stateOf(result, plan.startTime)]
     const verification = buildVerification(scene, result)
 
     return {

@@ -15,9 +15,11 @@ import {
 import { canonicalValue, quantity, type Quantity } from '@physicsos/physics-units'
 import { asPhysicsEventId, asSimulationId, asTraceId, PhysicsOSError } from '@physicsos/shared'
 import {
+  assertSimulationPlan,
   check,
   invalidModelCondition,
   quantityVector,
+  simulationTimeRange,
   summarizeVerification,
   supported,
   toCanonicalVector,
@@ -26,6 +28,7 @@ import {
   type ModelSupport,
   type PhysicsEngine,
   type PhysicsEventLike,
+  type SimulationPlan,
   type SimulationRequest,
   type SimulationResult,
   type SimulationState,
@@ -772,6 +775,34 @@ export function createElectricRegionSimulationRequest(
 
 /* ----------------------------------------------------------- the engine -- */
 
+/** The same canonical window and storage count feed planning and execution. */
+const prepareElectricRegionSimulation = (scene: PhysicsScene, request: SimulationRequest) => {
+  if (request.sceneId !== scene.id || request.sceneRevision !== scene.revision) {
+    throw new PhysicsOSError(
+      'SIMULATION_SCENE_MISMATCH',
+      'SimulationRequest must reference the exact PhysicsScene revision being simulated.',
+      {
+        details: {
+          requestSceneId: request.sceneId,
+          sceneId: scene.id,
+          requestRevision: request.sceneRevision,
+          sceneRevision: scene.revision,
+        },
+      },
+    )
+  }
+  const model = resolveParallelPlateModel(scene)
+  const sceneDuration =
+    scene.timeline.endTime === undefined
+      ? DEFAULT_DURATION_SECONDS
+      : canonicalValue(scene.timeline.endTime)
+  return {
+    model,
+    ...simulationTimeRange(request.options, sceneDuration),
+    sampleCount: trajectoryStorageSampleCount(request.options, DEFAULT_TRAJECTORY_SEGMENTS + 1),
+  }
+}
+
 export class ElectricRegionEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLike> {
   readonly engineId = ELECTRIC_REGION_ENGINE_ID
   readonly engineVersion = ELECTRIC_REGION_ENGINE_VERSION
@@ -946,52 +977,31 @@ export class ElectricRegionEngine implements PhysicsEngine<PhysicsScene, Physics
     return this.stateAt(scene, quantity(seconds, 's', 'time'))
   }
 
-  simulate(scene: PhysicsScene, request: SimulationRequest): SimulationResult<PhysicsEventLike> {
-    // Validate request matches scene.
-    if (request.sceneId !== scene.id || request.sceneRevision !== scene.revision) {
-      throw new PhysicsOSError(
-        'SIMULATION_SCENE_MISMATCH',
-        'SimulationRequest must reference the exact PhysicsScene revision being simulated.',
-        {
-          details: {
-            requestSceneId: request.sceneId,
-            sceneId: scene.id,
-            requestRevision: request.sceneRevision,
-            sceneRevision: scene.revision,
-          },
-        },
-      )
-    }
-
-    const model = resolveParallelPlateModel(scene)
-    const startTime =
-      request.options.startTime === undefined ? 0 : canonicalValue(request.options.startTime)
-    const sceneDuration =
-      scene.timeline.endTime === undefined
-        ? DEFAULT_DURATION_SECONDS
-        : canonicalValue(scene.timeline.endTime)
-    const endTime =
-      request.options.endTime === undefined
-        ? sceneDuration
-        : canonicalValue(request.options.endTime)
-    if (
-      !Number.isFinite(startTime) ||
-      !Number.isFinite(endTime) ||
-      startTime < 0 ||
-      endTime < startTime
-    ) {
-      throw new PhysicsOSError(
-        'INVALID_SIMULATION_RANGE',
-        'Simulation range must satisfy 0 <= startTime <= endTime.',
-      )
-    }
-
-    // Sample trajectory.
-    const times = trajectorySampleTimes(
+  prepareSimulationPlan(scene: PhysicsScene, request: SimulationRequest): SimulationPlan {
+    const { model, startTime, endTime, sampleCount } = prepareElectricRegionSimulation(scene, request)
+    const plan: SimulationPlan = {
+      schemaVersion: 'simulation-plan/1.0',
+      engineId: this.engineId,
+      engineVersion: this.engineVersion,
+      simulationId: request.simulationId,
+      sceneId: scene.id,
+      sceneRevision: scene.revision,
+      modelId: model.modelId,
+      kind: 'analytic',
       startTime,
       endTime,
-      trajectoryStorageSampleCount(request.options, DEFAULT_TRAJECTORY_SEGMENTS + 1),
-    )
+      storageSampleCountBound: sampleCount,
+      numericalIterationCountBound: 0,
+    }
+    assertSimulationPlan(plan)
+    return plan
+  }
+
+  simulate(scene: PhysicsScene, request: SimulationRequest): SimulationResult<PhysicsEventLike> {
+    const { model, startTime, endTime, sampleCount } = prepareElectricRegionSimulation(scene, request)
+
+    // Sample trajectory.
+    const times = trajectorySampleTimes(startTime, endTime, sampleCount)
     const states = times.map((t) => stateAtForModel(model, t))
 
     // Detect events.

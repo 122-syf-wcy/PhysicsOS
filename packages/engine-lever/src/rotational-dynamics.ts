@@ -94,10 +94,59 @@ export interface LeverRotationalModel {
   readonly equilibriumAngle: number
 }
 
+export interface LeverIterationCounter {
+  numericalIterationCount: number
+}
+
 export interface LeverRotationalOptions {
   readonly dampingRatio?: number
   readonly integrationStep?: number
+  /** Optional engine-owned accounting; it does not affect the solved state. */
+  readonly iterationCounter?: LeverIterationCounter
 }
+
+const leverIntegrationStep = (options: LeverRotationalOptions): number => {
+  const dt = options.integrationStep ?? LEVER_INTEGRATION_STEP
+  if (!Number.isFinite(dt) || dt <= 0) {
+    throw new PhysicsOSError(
+      'INVALID_LEVER_TIME_STEP',
+      'The lever integration step must be positive finite seconds.',
+    )
+  }
+  return dt
+}
+
+/** The exact loop cap used by a from-rest angular integration, without solving it. */
+export const leverIntegrationStepCount = (
+  model: LeverRotationalModel,
+  timeSeconds: number,
+  options: LeverRotationalOptions = {},
+): number => {
+  if (!Number.isFinite(timeSeconds) || timeSeconds < 0) {
+    throw new PhysicsOSError(
+      'INVALID_SIMULATION_TIME',
+      'Simulation time must be finite and non-negative.',
+    )
+  }
+  if (model.balanced) return 0
+  const count = Math.ceil(timeSeconds / leverIntegrationStep(options))
+  if (!Number.isSafeInteger(count)) {
+    throw new PhysicsOSError(
+      'INVALID_SIMULATION_ITERATION_BOUND',
+      'The lever integration requires a representable integer step budget.',
+    )
+  }
+  return count
+}
+
+/** The settling search has the same fixed step and a real finite horizon. */
+export const leverSettleStepCountBound = (
+  model: LeverRotationalModel,
+  options: LeverRotationalOptions = {},
+): number => leverIntegrationStepCount(model, LEVER_MAX_RUN_SECONDS, options)
+
+export const leverRunDurationBound = (model: LeverRotationalModel): number =>
+  model.balanced ? 0 : LEVER_MAX_RUN_SECONDS
 
 /** Solved angular state at one instant. All values are canonical SI numbers. */
 export interface LeverAngularState {
@@ -232,13 +281,14 @@ export const integrateLeverAngular = (
       bounded: false,
     }
   }
-  const dt = options.integrationStep ?? LEVER_INTEGRATION_STEP
+  const dt = leverIntegrationStep(options)
   let angle = 0
   let angularVelocity = 0
   let bounded = false
   let settled = false
-  const steps = Math.ceil(timeSeconds / dt)
+  const steps = leverIntegrationStepCount(model, timeSeconds, options)
   for (let index = 0; index < steps; index += 1) {
+    if (options.iterationCounter !== undefined) options.iterationCounter.numericalIterationCount += 1
     const h = Math.min(dt, timeSeconds - index * dt)
     const next = angularStep(model, angle, angularVelocity, h)
     angle = next.angle
@@ -273,11 +323,12 @@ export const leverSettleSeconds = (
   options: LeverRotationalOptions = {},
 ): number => {
   if (model.balanced) return 0
-  const dt = options.integrationStep ?? LEVER_INTEGRATION_STEP
+  const dt = leverIntegrationStep(options)
   let angle = 0
   let angularVelocity = 0
-  const maxSteps = Math.ceil(LEVER_MAX_RUN_SECONDS / dt)
+  const maxSteps = leverSettleStepCountBound(model, options)
   for (let index = 0; index < maxSteps; index += 1) {
+    if (options.iterationCounter !== undefined) options.iterationCounter.numericalIterationCount += 1
     const next = angularStep(model, angle, angularVelocity, dt)
     angle = next.angle
     angularVelocity = next.angularVelocity

@@ -12,8 +12,8 @@
       ],
       "entry": "packages/physicsos/tool-physicsos/src/index.ts",
       "publisher": "PhysicsOS",
-      "sha256": "f8432c3a4787335601375efb8bddf8704bd0ca726504dc8122f57017ab7eefa6",
-      "signature": "ed25519:azuQ+jNJ1wgUT9e6J6fIkFsPefYCLwJfKQI9fRNURb8p/PsnC/yuIR8FL5noX46RoI1J/PFhr/zJoFw73HZcDA==",
+      "sha256": "04b999a96971d8a2adb539b7506fbbad4038605adbac82f25b617c90a22237f8",
+      "signature": "ed25519:812O+cHBngGuRY2/cPjfx0WOZ4o2k+DuuHZFWZP0j1Swy4QNUl1w5G/6OmaTnBhq5K19icoo1AZmsUvG5uLLBw==",
       "description": "PhysicsOS experiments, simulation, observation, and question-solving tools."
     },
     {
@@ -28,8 +28,8 @@
       ],
       "entry": "packages/physicsos/auth-host/src/index.ts",
       "publisher": "PhysicsOS",
-      "sha256": "39bab35086ce02dbbcf2960de0e42cfedd663e8f38197c34c781c537e37bad3a",
-      "signature": "ed25519:Os/8qSJBSftNtTfT4IwdnaM4USEKeyJDLnIqHp5LHVcqhVOwUU40+NGrjZtHJ/ZCi3+pGqxC8aqWDsR4g5IeBQ==",
+      "sha256": "7d3ae120a59dc66ebe146c4673f1f58efb51d52b214b8ae1a062dd3591d2c178",
+      "signature": "ed25519:eRe9/zwHIFW9zt/SDN/uclpVKm44jUggOkkMqwsLIPdtqfWgTc1Yo3dA5NB6rKvoHLqtS7uzIkXabIUG/9F+Cw==",
       "description": "School tenants, accounts, sessions, password reset, and audit ledger."
     },
     {
@@ -47,8 +47,8 @@
       ],
       "entry": "packages/physicsos/paper-host/src/index.ts",
       "publisher": "PhysicsOS",
-      "sha256": "dd12f1b4dc27e1bd071b85bbe7f186cb57225fe63fba24cfff634cba8ff7d7f3",
-      "signature": "ed25519:t/iQgEA77fqFwchMXlgmyoZ4K4AfxWNGKQoGghantLKbx2Gaj/D7TD/4+0GHlrlKikneWdzUVaFgL00oSrRrBw==",
+      "sha256": "e4d68db18e3c304617e4236b07372dee0098549e3533fc181a9df339448fc58b",
+      "signature": "ed25519:KiAvFqBYu9h0TnHarXg8z92Iyt1qfxMYhYU87VTSk+NWMAuzUcxzCBZEjv6O6z96j1laA3mLTWX6Oowo629WCg==",
       "description": "Question-paper intake, drafting, verification, approval, and export."
     },
     {
@@ -63,8 +63,8 @@
       ],
       "entry": "packages/physicsos/notice-host/src/index.ts",
       "publisher": "PhysicsOS",
-      "sha256": "ebccdded8ed78ce0d4a05a34b3d6a888e17c8aa101c244a7d0b93bbb1808c40f",
-      "signature": "ed25519:0xGi9ZYl6AI8ml6cqogT9XhFTJCk68uIPxopPBzlRSAF7DttgnzVbyNvpVyGsofA9PQZrw3syBdEhQqETBPeAw==",
+      "sha256": "61e7b8b583d1b9eb29daa9a65f2346e0ad0ea3541e5a9fc4b33797167712a64c",
+      "signature": "ed25519:LZKyGCBiP1Z4HsPlLiG1SOeVaJ58/c6TIq/yaSkWIQb9tbQziYl6j9YVZQF+abz8HDlb1QfYjocwloLfP0wtDA==",
       "description": "Student feedback intake and administrator announcements."
     },
     {
@@ -105,8 +105,8 @@
       ],
       "entry": "packages/physicsos/learning-host/src/index.ts",
       "publisher": "PhysicsOS",
-      "sha256": "58fdf6e8ba3398a469f240469549ca5c50b0438fc94a5aafc5eb478e9939a94d",
-      "signature": "ed25519:yyo33deCk09PYm8os/qLyyrCFv/GFjQbJWXhjg3+Nvkf2vYF40o2cn9FmiNtfEnP+U0QIS4l9OZems/EnlPjCg==",
+      "sha256": "55c0124a3395aa82f7c0597fedaa62a30dd2f04fe3131ba992cf7e52da630a0c",
+      "signature": "ed25519:mTgHoFjbuQOD+6LNlZZh44rzatQ2NyQx4vzc07XLqdS8TXgBWY9nQDyZ6zF6D41S46pCls98MJu/ccYzrPsYBQ==",
       "description": "Account-scoped attempts and saved-scene synchronization."
     },
     {
@@ -152,8 +152,8 @@
       ],
       "entry": "packages/physicsos/model-pool-host/src/index.ts",
       "publisher": "PhysicsOS",
-      "sha256": "59a67783089c60a704e9a666d1d39bf072e23936c42da1e2c6d73fda04db0b27",
-      "signature": "ed25519:ZKJGtrSmdPB12jUaFjo9a1UkIMGg1XY7KehYNyJc8OOcVa286gcJTxzLg4Z/S4Yog2kFp4EoBFrjZxbG+SaSCw==",
+      "sha256": "00ceb35fa13d462691108b85e41760681c4509b88d5225e42f41a0452d352292",
+      "signature": "ed25519:bul2MuC1crDBUS3jXadMroLwv1CTDt9CR12ZQ3e/SEQUKn3tKCkJlBgfNDV/+FaskJhP4VSas88c+yA7n/RzCQ==",
       "description": "Encrypted model-channel rotation, failover, and local OpenAI proxy."
     },
     {

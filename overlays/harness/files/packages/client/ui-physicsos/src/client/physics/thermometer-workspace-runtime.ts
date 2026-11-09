@@ -17,7 +17,12 @@ import {
   thermometerReadingOf,
   type ResolvedThermometerModel,
 } from '@physicsos/engine-thermal'
-import { isScalarQuantity, type SimulationResult } from '@physicsos/physics-core'
+import {
+  isScalarQuantity,
+  type SimulationRequest,
+  type SimulationResult,
+} from '@physicsos/physics-core'
+import type { CapturedResult } from '@physicsos/physics-workbench'
 import { CELSIUS_ZERO_IN_KELVIN } from '@physicsos/physics-scene'
 import { quantity } from '@physicsos/physics-units'
 import {
@@ -35,6 +40,10 @@ import {
   requiresExperimentalFork,
 } from './experimental-branch.ts'
 import { fmtFluidValue } from './fluid-visual-bridge.ts'
+import {
+  THERMOMETER_METRIC_SEMANTICS,
+  thermometerCaptureEvidence,
+} from './subbench-capture-bridge.ts'
 import { emptyVisualModel } from './scene-visual-model.ts'
 import { runtimeStatusOf } from './verified-result.ts'
 import {
@@ -111,6 +120,10 @@ export class ThermometerWorkspaceRuntime implements WorkspaceRuntime {
   private commandSequence = 0
   private highlighted: readonly string[] = []
   private failure: string | undefined
+  private request: SimulationRequest | undefined
+  private result: SimulationResult | undefined
+  private evidence: ReturnType<typeof thermometerCaptureEvidence> = { metricSemantics: THERMOMETER_METRIC_SEMANTICS }
+  private captureDiagnostics: CapturedResult['diagnostics'] = []
   private computed: Computed | undefined
   private readonly origin: PhysicsScene | undefined
 
@@ -122,28 +135,41 @@ export class ThermometerWorkspaceRuntime implements WorkspaceRuntime {
 
   private recompute(): void {
     const scene = this.sceneRuntime.getScene()
+    this.request = undefined
+    this.result = undefined
+    this.evidence = { metricSemantics: THERMOMETER_METRIC_SEMANTICS }
+    this.captureDiagnostics = []
     try {
       const support = this.engine.canHandle(scene)
       if (!support.supported) {
         this.failure = support.failedConditions.map(entry => entry.message).join(' ')
+        this.captureDiagnostics = support.failedConditions.map(entry => ({ code: entry.condition, message: entry.message }))
         this.computed = undefined
         return
       }
-      const simulation = this.engine.simulate(
+      this.request = createThermometerSimulationRequest(
         scene,
-        createThermometerSimulationRequest(
-          scene,
-          `thermometer-lab-${String(scene.id)}-${scene.revision}`,
-          `thermometer-lab-trace-${String(scene.id)}-${scene.revision}`,
-        ),
+        `thermometer-lab-${String(scene.id)}-${scene.revision}`,
+        `thermometer-lab-trace-${String(scene.id)}-${scene.revision}`,
       )
+      const simulation = this.engine.simulate(scene, this.request)
+      this.result = simulation
+      const model = resolveThermometerModel(scene)
+      try {
+        this.evidence = thermometerCaptureEvidence({ scene, result: simulation, model })
+      } catch (error: unknown) {
+        this.captureDiagnostics = [{
+          code: 'THERMOMETER_CAPTURE_ANALYSIS_UNAVAILABLE',
+          message: error instanceof Error ? error.message : 'Raw thermometer analysis is unavailable.',
+        }]
+      }
       if (simulation.verification.status === 'failed') {
         this.failure = simulation.verification.errors.map(entry => entry.message).join(' ')
         this.computed = undefined
         return
       }
       this.failure = undefined
-      this.computed = { simulation, model: resolveThermometerModel(scene) }
+      this.computed = { simulation, model }
     } catch (error: unknown) {
       this.failure = error instanceof Error ? error.message : '温度计 Runtime 无法启动。'
       this.computed = undefined
@@ -151,14 +177,13 @@ export class ThermometerWorkspaceRuntime implements WorkspaceRuntime {
   }
 
   private command<T extends SceneCommandType>(type: T, payload: SceneCommandPayloadMap[T]): void {
-    if (requiresExperimentalFork(this.sceneRuntime.getScene(), type)) {
-      this.sceneRuntime = new SceneRuntime(
-        forkExperimentalScene({ scene: this.sceneRuntime.getScene() }),
-      )
-    }
-    const scene = this.sceneRuntime.getScene()
+    const currentScene = this.sceneRuntime.getScene()
+    const runtime = requiresExperimentalFork(currentScene, type)
+      ? new SceneRuntime(forkExperimentalScene({ scene: currentScene }))
+      : this.sceneRuntime
+    const scene = runtime.getScene()
     this.commandSequence += 1
-    const result = this.sceneRuntime.execute(
+    const result = runtime.execute(
       createSceneCommand<T>({
         commandId: `thermometer-ui-command-${this.commandSequence}`,
         sceneId: String(scene.id),
@@ -172,11 +197,38 @@ export class ThermometerWorkspaceRuntime implements WorkspaceRuntime {
       this.failure = result.error.message
       return
     }
+    this.sceneRuntime = runtime
     this.recompute()
   }
 
   getScene(): PhysicsScene {
     return this.sceneRuntime.getScene()
+  }
+
+  captureRaw(): CapturedResult {
+    const scene = this.sceneRuntime.getScene()
+    const state = this.result?.states[0]
+    const release = scene.metadata.experimentRelease
+    return {
+      scene,
+      ...(this.request === undefined ? {} : { request: this.request }),
+      ...(this.result === undefined ? {} : { result: this.result }),
+      ...(state === undefined ? {} : { state }),
+      ...this.evidence,
+      clock: { time: 0, total: 0, running: false, rate: 1 },
+      cursor: { kind: 'static', identity: `${this.engine.engineId}:settled-reading` },
+      engineInfo: {
+        id: this.result?.metadata.engineId ?? this.engine.engineId,
+        version: this.result?.metadata.engineVersion ?? this.engine.engineVersion,
+        ...(this.result?.metadata.solver === undefined ? {} : { model: this.result.metadata.solver }),
+        ...(release === undefined ? {} : { release }),
+      },
+      diagnostics: [
+        ...(this.evidence.diagnostics ?? []),
+        ...(this.captureDiagnostics ?? []),
+        ...(this.failure === undefined ? [] : [{ code: 'THERMOMETER_RUNTIME_FAILED', message: this.failure }]),
+      ],
+    }
   }
 
   getSnapshot(): WorkspaceSnapshot {
@@ -331,11 +383,14 @@ export class ThermometerWorkspaceRuntime implements WorkspaceRuntime {
     /* 把温度计分别插进冰水与沸水 —— the two fixed points, as an action rather
        than a sentence. */
     if (id === 'dip-into') {
-      const celsius = value === 'ice' ? 0 : value === 'steam' ? 100 : 25
-      this.command('SetThermometerTemperature', {
-        benchId: model.benchId,
-        temperature: quantity(celsius + CELSIUS_ZERO_IN_KELVIN, 'K', 'temperature'),
-      })
+      const celsius = value === 'ice' ? 0 : value === 'steam' ? 100 : value === 'room' ? 25 : undefined
+      const temperature = celsius === undefined ? undefined : celsius + CELSIUS_ZERO_IN_KELVIN
+      if (temperature !== undefined && Math.abs(temperature - model.temperature) > 1e-9) {
+        this.command('SetThermometerTemperature', {
+          benchId: model.benchId,
+          temperature: quantity(temperature, 'K', 'temperature'),
+        })
+      }
     }
     return this.getSnapshot()
   }
@@ -467,11 +522,14 @@ const parametersOf = (model: ResolvedThermometerModel): InspectorSection => {
       {
         id: 'dip-into',
         label: '把温度计插进',
-        value: celsius === 0 ? 'ice' : celsius === 100 ? 'steam' : 'room',
+        value: Math.abs(celsius) < 1e-9 ? 'ice'
+          : Math.abs(celsius - 100) < 1e-9 ? 'steam'
+            : Math.abs(celsius - 25) < 1e-9 ? 'room' : 'custom',
         options: [
           { value: 'ice', label: '冰水混合物（0 °C，下固定点）' },
           { value: 'steam', label: '沸水（100 °C，上固定点）' },
           { value: 'room', label: '室温（25 °C）' },
+          { value: 'custom', label: '自定义' },
         ],
       },
     ],

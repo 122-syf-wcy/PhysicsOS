@@ -1,4 +1,4 @@
-import { simulationTimeRange } from '@physicsos/physics-core'
+import { assertSimulationPlan, simulationTimeRange } from '@physicsos/physics-core'
 import { add, dot, isFiniteVector, magnitude, scale, type Vector3 } from '@physicsos/physics-math'
 import { canonicalValue, quantity, type Quantity } from '@physicsos/physics-units'
 import { asSimulationId, asTraceId, PhysicsOSError } from '@physicsos/shared'
@@ -13,6 +13,7 @@ import {
   type ModelSupport,
   type PhysicsEngine,
   type PhysicsEventLike,
+  type SimulationPlan,
   type SimulationRequest,
   type SimulationResult,
   type SimulationState,
@@ -30,6 +31,7 @@ import { verifyElectricSimulation } from '@physicsos/physics-verifier'
 
 import { electricForce } from './electrostatics.ts'
 import {
+  POINT_CHARGE_MODEL,
   canHandlePointCharge,
   isPointChargeScene,
   pointChargeDerived,
@@ -309,6 +311,84 @@ export const evaluateUniformElectricState = (
   return stateForModel(model, seconds)
 }
 
+type ElectricSimulationPreparation =
+  | {
+      readonly kind: 'static'
+      readonly modelId: typeof POINT_CHARGE_MODEL
+      readonly startTime: number
+      readonly endTime: number
+      readonly sampleCount: 1
+    }
+  | {
+      readonly kind: 'analytic'
+      readonly modelId: typeof UNIFORM_ELECTRIC_PARTICLE_MODEL
+      readonly model: UniformElectricParticleModel
+      readonly startTime: number
+      readonly endTime: number
+      readonly sampleCount: number
+    }
+
+/** Resolve execution inputs without evaluating a state or allocating trajectory samples. */
+const prepareElectricSimulation = (
+  scene: PhysicsScene,
+  request: SimulationRequest,
+): ElectricSimulationPreparation => {
+  if (request.sceneId !== scene.id || request.sceneRevision !== scene.revision) {
+    throw new PhysicsOSError(
+      'SIMULATION_SCENE_MISMATCH',
+      'SimulationRequest must reference the exact PhysicsScene revision being simulated.',
+      {
+        details: {
+          requestSceneId: request.sceneId,
+          sceneId: scene.id,
+          requestRevision: request.sceneRevision,
+          sceneRevision: scene.revision,
+        },
+      },
+    )
+  }
+
+  if (isPointChargeScene(scene)) {
+    const support = new ElectricEngine().canHandle(scene)
+    if (!support.supported) throw new EngineUnsupportedError(ELECTRIC_ENGINE_ID, support)
+    return {
+      kind: 'static',
+      modelId: POINT_CHARGE_MODEL,
+      ...simulationTimeRange(request.options),
+      sampleCount: 1,
+    }
+  }
+
+  const model = resolveUniformElectricModel(scene)
+  const startTime =
+    request.options.startTime === undefined ? 0 : canonicalValue(request.options.startTime)
+  const sceneDuration =
+    scene.timeline.endTime === undefined
+      ? defaultSpanSeconds(model)
+      : canonicalValue(scene.timeline.endTime)
+  const endTime =
+    request.options.endTime === undefined ? sceneDuration : canonicalValue(request.options.endTime)
+  if (
+    !Number.isFinite(startTime) ||
+    !Number.isFinite(endTime) ||
+    startTime < 0 ||
+    endTime < startTime
+  ) {
+    throw new PhysicsOSError(
+      'INVALID_SIMULATION_RANGE',
+      'Electric simulation range must satisfy 0 <= startTime <= endTime.',
+    )
+  }
+  return {
+    kind: 'analytic',
+    modelId: model.modelId,
+    model,
+    startTime,
+    endTime,
+    sampleCount: trajectoryStorageSampleCount(request.options, DEFAULT_TRAJECTORY_SEGMENTS + 1),
+  }
+}
+
 export class ElectricEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLike> {
   readonly engineId = ELECTRIC_ENGINE_ID
   readonly engineVersion = ELECTRIC_ENGINE_VERSION
@@ -449,52 +529,33 @@ export class ElectricEngine implements PhysicsEngine<PhysicsScene, PhysicsEventL
     return this.stateAt(scene, quantity(seconds, 's', 'time'))
   }
 
+  prepareSimulationPlan(scene: PhysicsScene, request: SimulationRequest): SimulationPlan {
+    const preparation = prepareElectricSimulation(scene, request)
+    const plan: SimulationPlan = {
+      schemaVersion: 'simulation-plan/1.0',
+      engineId: this.engineId,
+      engineVersion: this.engineVersion,
+      simulationId: request.simulationId,
+      sceneId: scene.id,
+      sceneRevision: scene.revision,
+      modelId: preparation.modelId,
+      kind: preparation.kind,
+      startTime: preparation.startTime,
+      endTime: preparation.endTime,
+      storageSampleCountBound: preparation.sampleCount,
+      numericalIterationCountBound: 0,
+    }
+    assertSimulationPlan(plan)
+    return plan
+  }
+
   simulate(scene: PhysicsScene, request: SimulationRequest): SimulationResult<PhysicsEventLike> {
-    if (request.sceneId !== scene.id || request.sceneRevision !== scene.revision) {
-      throw new PhysicsOSError(
-        'SIMULATION_SCENE_MISMATCH',
-        'SimulationRequest must reference the exact PhysicsScene revision being simulated.',
-        {
-          details: {
-            requestSceneId: request.sceneId,
-            sceneId: scene.id,
-            requestRevision: request.sceneRevision,
-            sceneRevision: scene.revision,
-          },
-        },
-      )
+    const preparation = prepareElectricSimulation(scene, request)
+    if (preparation.kind === 'static') {
+      return this.simulatePointCharge(scene, request, preparation.startTime)
     }
-
-    if (isPointChargeScene(scene)) return this.simulatePointCharge(scene, request)
-
-    const model = resolveUniformElectricModel(scene)
-    const startTime =
-      request.options.startTime === undefined ? 0 : canonicalValue(request.options.startTime)
-    const sceneDuration =
-      scene.timeline.endTime === undefined
-        ? defaultSpanSeconds(model)
-        : canonicalValue(scene.timeline.endTime)
-    const endTime =
-      request.options.endTime === undefined
-        ? sceneDuration
-        : canonicalValue(request.options.endTime)
-    if (
-      !Number.isFinite(startTime) ||
-      !Number.isFinite(endTime) ||
-      startTime < 0 ||
-      endTime < startTime
-    ) {
-      throw new PhysicsOSError(
-        'INVALID_SIMULATION_RANGE',
-        'Electric simulation range must satisfy 0 <= startTime <= endTime.',
-      )
-    }
-
-    const times = trajectorySampleTimes(
-      startTime,
-      endTime,
-      trajectoryStorageSampleCount(request.options, DEFAULT_TRAJECTORY_SEGMENTS + 1),
-    )
+    const { model, startTime, endTime, sampleCount } = preparation
+    const times = trajectorySampleTimes(startTime, endTime, sampleCount)
     const states = times.map((time) => stateForModel(model, time))
     const startedAt = new Date().toISOString()
     const pending: SimulationResult<PhysicsEventLike> = {
@@ -531,9 +592,8 @@ export class ElectricEngine implements PhysicsEngine<PhysicsScene, PhysicsEventL
   private simulatePointCharge(
     scene: PhysicsScene,
     request: SimulationRequest,
+    startTime: number,
   ): SimulationResult<PhysicsEventLike> {
-    const support = this.canHandle(scene)
-    if (!support.supported) throw new EngineUnsupportedError(ELECTRIC_ENGINE_ID, support)
     const model = resolvePointChargeModel(scene)
     const startedAt = new Date().toISOString()
     const pending: SimulationResult<PhysicsEventLike> = {
@@ -541,7 +601,7 @@ export class ElectricEngine implements PhysicsEngine<PhysicsScene, PhysicsEventL
       simulationId: request.simulationId,
       sceneId: scene.id,
       sceneRevision: scene.revision,
-      states: [pointChargeState(model, simulationTimeRange(request.options).startTime)],
+      states: [pointChargeState(model, startTime)],
       events: [],
       measurements: [],
       derivedQuantities: pointChargeDerived(model),

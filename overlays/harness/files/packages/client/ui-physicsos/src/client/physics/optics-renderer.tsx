@@ -15,9 +15,12 @@
  * never buried under a ray.
  */
 
+import { useEffect, useRef, useState } from 'react'
+import type { PointerEvent } from 'react'
 import type { ScenePoint } from './scene-visual-model.ts'
-import type { RendererProjection, RendererProps } from './renderer-registry.tsx'
+import type { ComponentDragChannel, RendererProjection, RendererProps } from './renderer-registry.tsx'
 import { clsxJoin } from './primitives.tsx'
+import { svgPointFromClient } from './svg-screen-point.ts'
 import css from './renderers.module.css'
 
 /** Arrowhead polygon at the tip of a screen-space segment. */
@@ -74,7 +77,79 @@ const VerticalArrow = ({
   )
 }
 
-export function OpticsRenderer({ view, projection }: RendererProps) {
+export function OpticsRenderer({ view, projection, componentDrag }: RendererProps) {
+  const dragRef = useRef<{
+    id: string
+    pointerId: number
+    svg: SVGSVGElement
+    channel: ComponentDragChannel
+    sx: RendererProjection['sx']
+    scale: number
+    startX: number
+    railY: number
+    offsetX: number
+    moved: boolean
+  } | null>(null)
+  const [draggingId, setDraggingId] = useState<string | undefined>()
+  useEffect(() => () => {
+    const drag = dragRef.current
+    dragRef.current = null
+    if (drag?.moved) drag.channel.cancel()
+  }, [])
+  useEffect(() => {
+    if (componentDrag !== undefined) return
+    const drag = dragRef.current
+    dragRef.current = null
+    setDraggingId(undefined)
+    if (drag?.moved) drag.channel.cancel()
+  }, [componentDrag])
+
+  const beginDrag = (event: PointerEvent<SVGGElement>, id: string, at: ScenePoint): void => {
+    if (componentDrag === undefined || event.button !== 0 || dragRef.current !== null) return
+    const svg = event.currentTarget.ownerSVGElement
+    const point = svg === null ? undefined : svgPointFromClient(svg, event)
+    if (svg === null || point === undefined) return
+    const x = projection.sx(point.x)
+    if (!Number.isFinite(x)) return
+    dragRef.current = { id, pointerId: event.pointerId, svg, channel: componentDrag,
+      // Keep the press-time projection while preview frames change the fitted bench extent.
+      sx: projection.sx, scale: projection.scale, startX: at.x, railY: at.y, offsetX: x - at.x, moved: false }
+    event.preventDefault()
+    event.stopPropagation()
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+  }
+  const moveDrag = (event: PointerEvent<SVGGElement>): void => {
+    const drag = dragRef.current
+    if (drag === null || event.pointerId !== drag.pointerId) return
+    event.stopPropagation()
+    const point = svgPointFromClient(drag.svg, event)
+    if (point === undefined) return
+    const x = drag.sx(point.x) - drag.offsetX
+    if (!Number.isFinite(x) || (!drag.moved && Math.abs(x - drag.startX) * drag.scale < 3)) return
+    drag.moved = true
+    setDraggingId(drag.id)
+    drag.channel.preview(drag.id, { x, y: drag.railY })
+  }
+  const endDrag = (event: PointerEvent<SVGGElement>): void => {
+    const drag = dragRef.current
+    if (drag === null || event.pointerId !== drag.pointerId) return
+    dragRef.current = null
+    setDraggingId(undefined)
+    event.stopPropagation()
+    if (!drag.moved) return
+    const point = svgPointFromClient(drag.svg, event)
+    const x = point === undefined ? undefined : drag.sx(point.x) - drag.offsetX
+    if (x === undefined || !Number.isFinite(x)) drag.channel.cancel()
+    else drag.channel.commit(drag.id, { x, y: drag.railY })
+  }
+  const cancelDrag = (event: PointerEvent<SVGGElement>): void => {
+    const drag = dragRef.current
+    if (drag === null || event.pointerId !== drag.pointerId) return
+    dragRef.current = null
+    setDraggingId(undefined)
+    event.stopPropagation()
+    if (drag.moved) drag.channel.cancel()
+  }
   const axisY = projection.py({ x: 0, y: 0 })
   const left = projection.px({ x: view.origin.x, y: 0 })
   const right = projection.px({ x: view.origin.x + view.extent.width, y: 0 })
@@ -235,7 +310,12 @@ export function OpticsRenderer({ view, projection }: RendererProps) {
         const bottomY = projection.py({ x: 0, y: screen.at.y - screen.halfHeight })
         const highlighted = projection.highlighted(screen.id)
         return (
-          <g key={screen.id} className={highlighted ? css.highlightGroup : undefined}>
+          <g key={screen.id} className={highlighted ? css.highlightGroup : undefined}
+            style={componentDrag === undefined ? undefined : { cursor: draggingId === screen.id ? 'grabbing' : 'grab', touchAction: 'none' }}
+            onPointerDown={event => { beginDrag(event, screen.id, screen.at) }} onPointerMove={moveDrag}
+            onPointerUp={endDrag} onPointerCancel={cancelDrag} onLostPointerCapture={cancelDrag}>
+            {componentDrag === undefined ? null : <rect x={x - 12} y={Math.min(topY, bottomY) - 12}
+              width={24} height={Math.abs(bottomY - topY) + 24} fill="transparent" />}
             {screen.lit ? (
               <line className={css.screenGlow} x1={x} y1={topY} x2={x} y2={bottomY} />
             ) : null}
@@ -263,7 +343,12 @@ export function OpticsRenderer({ view, projection }: RendererProps) {
         const topY = projection.py({ x: 0, y: object.at.y + object.height })
         const highlighted = projection.highlighted(object.id)
         return (
-          <g key={object.id} className={highlighted ? css.highlightGroup : undefined}>
+          <g key={object.id} className={highlighted ? css.highlightGroup : undefined}
+            style={componentDrag === undefined ? undefined : { cursor: draggingId === object.id ? 'grabbing' : 'grab', touchAction: 'none' }}
+            onPointerDown={event => { beginDrag(event, object.id, object.at) }} onPointerMove={moveDrag}
+            onPointerUp={endDrag} onPointerCancel={cancelDrag} onLostPointerCapture={cancelDrag}>
+            {componentDrag === undefined ? null : <rect x={x - 12} y={Math.min(footY, topY) - 12}
+              width={24} height={Math.abs(footY - topY) + 24} fill="transparent" />}
             <VerticalArrow
               x={x}
               footY={footY}

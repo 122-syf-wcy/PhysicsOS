@@ -161,6 +161,13 @@ const FACT_COMMANDS: ReadonlySet<SceneCommandType> = new Set<SceneCommandType>([
   'SetWavePathDifference',
   'SetWaveStringLength',
   'SetWaveHarmonic',
+  'SetPhotoelectricWorkFunction',
+  'SetPhotonWavelength',
+  'SetLightIntensity',
+  'SetCathodeArea',
+  'SetQuantumEfficiency',
+  'SetOrbitRadius',
+  'SetOrbitalGravitationalParameter',
 ])
 
 /**

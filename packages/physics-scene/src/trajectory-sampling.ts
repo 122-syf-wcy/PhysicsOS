@@ -64,7 +64,8 @@ export const trajectorySampleTimes = (
   const count = clampToRange(sampleCount, MIN_TRAJECTORY_SAMPLES, MAX_TRAJECTORY_STORAGE_SAMPLES)
   return Array.from(
     { length: count },
-    (_, index) => startTime + ((endTime - startTime) * index) / (count - 1),
+    (_, index) => index === 0 ? startTime : index === count - 1 ? endTime
+      : startTime + (endTime - startTime) * (index / (count - 1)),
   )
 }
 

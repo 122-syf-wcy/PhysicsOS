@@ -10,6 +10,7 @@ import {
   type ModelSupport,
   type PhysicsEngine,
   type PhysicsEventLike,
+  type SimulationPlan,
   type SimulationRequest,
   type SimulationResult,
   type SimulationState,
@@ -26,12 +27,18 @@ import {
 import { asSimulationId, asTraceId, PhysicsOSError } from '@physicsos/shared'
 
 import {
+  prepareCircuitModel,
   resolveCircuitModel,
   sliderPositionAt,
   effectiveSliderResistance,
+  type ConductanceBranch,
   type ResolvedCircuitModel,
 } from './circuit-model.ts'
-import { solveCircuit, type CircuitSolution } from './mna-solver.ts'
+import {
+  circuitSolverWorkBoundOf,
+  solveCircuit,
+  type CircuitSolution,
+} from './mna-solver.ts'
 
 export const CIRCUIT_ENGINE_ID = 'engine-circuit'
 export const CIRCUIT_ENGINE_VERSION = '1.0.0'
@@ -159,8 +166,12 @@ export const resolveCircuitOperatingPoint = (
 
 /* ------------------------------------------------------------- state/dqs -- */
 
-const stateOf = (scene: PhysicsScene, time: number): SimulationState => {
-  const point = resolveCircuitOperatingPoint(scene, time)
+const stateOf = (
+  scene: PhysicsScene,
+  time: number,
+  model = resolveCircuitModel(scene, time),
+): SimulationState => {
+  const point = operatingPointOf(model, solveCircuit(model))
   const objects = point.components.map((component) => ({
     id: component.componentId,
     values: {
@@ -239,12 +250,16 @@ const derivedOf = (point: CircuitOperatingPoint): DerivedQuantity[] => {
       assumptions: [...ASSUMPTIONS],
     })
   }
+  const branchesByComponentId = new Map<string, ConductanceBranch>()
+  for (const branch of point.model.branches) {
+    if (branch.kind === 'conductance' && !branchesByComponentId.has(branch.componentId)) {
+      branchesByComponentId.set(branch.componentId, branch)
+    }
+  }
   for (const resistor of point.model.variableResistors) {
     const componentId = String(resistor.id)
-    const branch = point.model.branches.find(
-      (candidate) => candidate.kind === 'conductance' && candidate.componentId === componentId,
-    )
-    if (branch === undefined || branch.kind !== 'conductance') continue
+    const branch = branchesByComponentId.get(componentId)
+    if (branch === undefined) continue
     derived.push({
       key: `slider_resistance:${componentId}`,
       targetId: componentId,
@@ -264,6 +279,11 @@ const buildVerification = (
 ): VerificationResult => {
   const sceneVerification = validateScene(scene)
   const checks: VerificationCheck[] = [...sceneVerification.checks]
+  const componentsById = new Map<string, CircuitComponent>()
+  for (const component of point.model.components) {
+    const componentId = String(component.id)
+    if (!componentsById.has(componentId)) componentsById.set(componentId, component)
+  }
 
   checks.push(
     check(
@@ -292,9 +312,7 @@ const buildVerification = (
 
   for (const component of point.components) {
     if (component.type !== 'voltage_source') continue
-    const source = point.model.components.find(
-      (candidate) => String(candidate.id) === component.componentId,
-    )
+    const source = componentsById.get(component.componentId)
     if (source === undefined || source.type !== 'voltage_source') continue
     const internal =
       source.internalResistance === undefined ? 0 : canonicalValue(source.internalResistance)
@@ -317,9 +335,7 @@ const buildVerification = (
   const metersNonIntrusive = point.components.every((component) => {
     if (component.type === 'voltmeter') return Math.abs(component.current) < KCL_TOLERANCE_AMPS
     if (component.type === 'ammeter') {
-      const meter = point.model.components.find(
-        (candidate) => String(candidate.id) === component.componentId,
-      )
+      const meter = componentsById.get(component.componentId)
       const internal =
         meter?.type === 'ammeter' && meter.internalResistance !== undefined
           ? canonicalValue(meter.internalResistance)
@@ -358,6 +374,107 @@ export function createCircuitSimulationRequest(
       sceneId: scene.id,
       sceneRevision: scene.revision,
     },
+  }
+}
+
+/** Resolve the execution window and topology without evaluating an operating point. */
+const prepareCircuitSimulation = (scene: PhysicsScene, request: SimulationRequest) => {
+  if (request.sceneId !== scene.id || request.sceneRevision !== scene.revision) {
+    throw new PhysicsOSError(
+      'SIMULATION_SCENE_MISMATCH',
+      'SimulationRequest must reference the exact PhysicsScene revision being simulated.',
+      {
+        details: {
+          requestSceneId: request.sceneId,
+          sceneId: scene.id,
+          requestRevision: request.sceneRevision,
+          sceneRevision: scene.revision,
+        },
+      },
+    )
+  }
+
+  const startTime =
+    request.options.startTime === undefined ? 0 : canonicalValue(request.options.startTime)
+  const sceneDuration =
+    scene.timeline.endTime === undefined ? 0 : canonicalValue(scene.timeline.endTime)
+  const endTime =
+    request.options.endTime === undefined
+      ? sceneDuration
+      : canonicalValue(request.options.endTime)
+  if (
+    !Number.isFinite(startTime) ||
+    !Number.isFinite(endTime) ||
+    startTime < 0 ||
+    endTime < startTime
+  ) {
+    throw new PhysicsOSError(
+      'INVALID_SIMULATION_RANGE',
+      'Simulation range must satisfy 0 <= startTime <= endTime.',
+    )
+  }
+
+  const storageSampleCount =
+    endTime > startTime
+      ? trajectoryStorageSampleCount(request.options, SWEEP_SAMPLES + 1)
+      : 1
+  // Slider motion changes branch resistances, never the MNA layout.
+  const { model, iterationCount: modelProcessingIterationCount } = prepareCircuitModel(scene, startTime)
+  return { startTime, endTime, storageSampleCount, model, modelProcessingIterationCount }
+}
+
+const circuitExecutionWorkBoundOf = (
+  scene: PhysicsScene,
+  model: ResolvedCircuitModel,
+  modelProcessingIterationCount: number,
+  storageSampleCount: number,
+) => {
+  const solver = circuitSolverWorkBoundOf(model)
+  const solveCount = storageSampleCount + 1
+  const components = model.components.length
+  const branches = model.branches.length
+  const variables = model.variableResistors.length
+  // Every state and the final summary construct six fixed facts plus at most
+  // one external-resistance fact and one fact per variable resistor. Each fact
+  // copies the four fixed assumptions. The branch index is one pass, not N finds.
+  const derivedIterations = branches + variables + (7 + variables) * ASSUMPTIONS.length
+  // Operating points visit each enabled component once; each state maps them
+  // once more. Final measurements filter and then map at most that many entries.
+  const outputIterations = solveCount * components + storageSampleCount * components +
+    solveCount * derivedIterations + 2 * components + storageSampleCount
+
+  const circuit = scene.circuits[0]!
+  const authoredComponents = circuit.components.length
+  const declaredNodes = circuit.nodes.length
+  const connections = circuit.connections.length
+  const observables = scene.observableDefinitions.length
+  const objectIds = authoredComponents + 1
+  const triangular = (count: number) => count * (count + 1) / 2
+  // validateScene currently deduplicates these ID arrays with indexOf. In a
+  // supported scene all IDs are unique, so the triangular comparison bound is
+  // exact; every targeted-observable membership scan is at most objectIds.
+  const sceneChecks = 9 + connections + 2 * authoredComponents + observables
+  const validationIterations =
+    triangular(objectIds) + triangular(declaredNodes) + triangular(connections) +
+    triangular(observables) + observables * objectIds +
+    authoredComponents + 2 * objectIds + 2 * declaredNodes + 3 * connections +
+    3 * authoredComponents + 3 * observables +
+    // Nine Q-sized passes cover filtering, copies, check-family processing and
+    // issue construction even when a direct engine call has failed scene checks.
+    9 * sceneChecks + 8
+  // Own verification indexes/visits components in three passes, copies scene
+  // checks, adds at most one source check per component plus three fixed checks,
+  // and summarizes again. Nine passes cover checks and already-reported issues.
+  const verificationIterations = validationIterations + 3 * components + sceneChecks +
+    9 * (sceneChecks + components + 3) + 8
+  const gaussianIterationCountBound = solveCount * solver.gaussianIterationCountBound
+  const processingIterationCountBound =
+    solveCount * (modelProcessingIterationCount + solver.processingIterationCountBound) +
+    outputIterations + verificationIterations
+  return {
+    gaussianIterationCountBound,
+    processingIterationCountBound,
+    numericalIterationCountBound: gaussianIterationCountBound + processingIterationCountBound,
   }
 }
 
@@ -499,52 +616,40 @@ export class CircuitEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLi
     return this.stateAt(scene, quantity(seconds, 's', 'time'))
   }
 
+  prepareSimulationPlan(scene: PhysicsScene, request: SimulationRequest): SimulationPlan {
+    const { startTime, endTime, storageSampleCount, model, modelProcessingIterationCount } =
+      prepareCircuitSimulation(scene, request)
+    const work = circuitExecutionWorkBoundOf(scene, model, modelProcessingIterationCount, storageSampleCount)
+    return {
+      schemaVersion: 'simulation-plan/1.0',
+      engineId: this.engineId,
+      engineVersion: this.engineVersion,
+      simulationId: request.simulationId,
+      sceneId: scene.id,
+      sceneRevision: scene.revision,
+      modelId: DC_CIRCUIT_MODEL,
+      kind: 'iterative',
+      startTime,
+      endTime,
+      storageSampleCountBound: storageSampleCount,
+      numericalIterationCountBound: work.numericalIterationCountBound,
+      metadata: {
+        gaussianIterationCountBound: work.gaussianIterationCountBound,
+        processingIterationCountBound: work.processingIterationCountBound,
+        numericalIterationAccounting:
+          'Gaussian solver loops plus model/component/branch/node, state, summary and verification processing across stored states and the final solve; includes current validator ID-comparison bounds.',
+      },
+    }
+  }
+
   simulate(scene: PhysicsScene, request: SimulationRequest): SimulationResult<PhysicsEventLike> {
-    if (request.sceneId !== scene.id || request.sceneRevision !== scene.revision) {
-      throw new PhysicsOSError(
-        'SIMULATION_SCENE_MISMATCH',
-        'SimulationRequest must reference the exact PhysicsScene revision being simulated.',
-        {
-          details: {
-            requestSceneId: request.sceneId,
-            sceneId: scene.id,
-            requestRevision: request.sceneRevision,
-            sceneRevision: scene.revision,
-          },
-        },
-      )
-    }
-
-    const startTime =
-      request.options.startTime === undefined ? 0 : canonicalValue(request.options.startTime)
-    const sceneDuration =
-      scene.timeline.endTime === undefined ? 0 : canonicalValue(scene.timeline.endTime)
-    const endTime =
-      request.options.endTime === undefined
-        ? sceneDuration
-        : canonicalValue(request.options.endTime)
-    if (
-      !Number.isFinite(startTime) ||
-      !Number.isFinite(endTime) ||
-      startTime < 0 ||
-      endTime < startTime
-    ) {
-      throw new PhysicsOSError(
-        'INVALID_SIMULATION_RANGE',
-        'Simulation range must satisfy 0 <= startTime <= endTime.',
-      )
-    }
-
+    const { startTime, endTime, storageSampleCount, model } = prepareCircuitSimulation(scene, request)
     const startedAt = new Date().toISOString()
     const times =
       endTime > startTime
-        ? trajectorySampleTimes(
-            startTime,
-            endTime,
-            trajectoryStorageSampleCount(request.options, SWEEP_SAMPLES + 1),
-          )
+        ? trajectorySampleTimes(startTime, endTime, storageSampleCount)
         : [startTime]
-    const states = times.map((t) => stateOf(scene, t))
+    const states = times.map((t, index) => stateOf(scene, t, index === 0 ? model : undefined))
 
     const finalPoint = resolveCircuitOperatingPoint(scene, endTime)
     const verification = buildVerification(scene, finalPoint)

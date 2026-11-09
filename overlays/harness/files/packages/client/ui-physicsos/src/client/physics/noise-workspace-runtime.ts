@@ -17,7 +17,12 @@ import {
   resolveNoiseModel,
   type ResolvedNoiseModel,
 } from '@physicsos/engine-acoustics'
-import { isScalarQuantity, type SimulationResult } from '@physicsos/physics-core'
+import {
+  isScalarQuantity,
+  type SimulationRequest,
+  type SimulationResult,
+} from '@physicsos/physics-core'
+import type { CapturedResult } from '@physicsos/physics-workbench'
 import { quantity } from '@physicsos/physics-units'
 import {
   SceneRuntime,
@@ -34,6 +39,7 @@ import {
   requiresExperimentalFork,
 } from './experimental-branch.ts'
 import { fmtFluidValue } from './fluid-visual-bridge.ts'
+import { NOISE_METRIC_SEMANTICS, noiseCaptureEvidence } from './subbench-capture-bridge.ts'
 import { emptyVisualModel } from './scene-visual-model.ts'
 import { runtimeStatusOf } from './verified-result.ts'
 import { noiseObservableKeyOf, noiseRigText, noiseSceneVisual } from './noise-visual-bridge.ts'
@@ -106,6 +112,10 @@ export class NoiseWorkspaceRuntime implements WorkspaceRuntime {
   private commandSequence = 0
   private highlighted: readonly string[] = []
   private failure: string | undefined
+  private request: SimulationRequest | undefined
+  private result: SimulationResult | undefined
+  private evidence: ReturnType<typeof noiseCaptureEvidence> = { metricSemantics: NOISE_METRIC_SEMANTICS }
+  private captureDiagnostics: CapturedResult['diagnostics'] = []
   private computed: Computed | undefined
   private readonly origin: PhysicsScene | undefined
 
@@ -117,28 +127,41 @@ export class NoiseWorkspaceRuntime implements WorkspaceRuntime {
 
   private recompute(): void {
     const scene = this.sceneRuntime.getScene()
+    this.request = undefined
+    this.result = undefined
+    this.evidence = { metricSemantics: NOISE_METRIC_SEMANTICS }
+    this.captureDiagnostics = []
     try {
       const support = this.engine.canHandle(scene)
       if (!support.supported) {
         this.failure = support.failedConditions.map(entry => entry.message).join(' ')
+        this.captureDiagnostics = support.failedConditions.map(entry => ({ code: entry.condition, message: entry.message }))
         this.computed = undefined
         return
       }
-      const simulation = this.engine.simulate(
+      this.request = createNoiseSimulationRequest(
         scene,
-        createNoiseSimulationRequest(
-          scene,
-          `noise-lab-${String(scene.id)}-${scene.revision}`,
-          `noise-lab-trace-${String(scene.id)}-${scene.revision}`,
-        ),
+        `noise-lab-${String(scene.id)}-${scene.revision}`,
+        `noise-lab-trace-${String(scene.id)}-${scene.revision}`,
       )
+      const simulation = this.engine.simulate(scene, this.request)
+      this.result = simulation
+      const model = resolveNoiseModel(scene)
+      try {
+        this.evidence = noiseCaptureEvidence({ scene, result: simulation, model })
+      } catch (error: unknown) {
+        this.captureDiagnostics = [{
+          code: 'NOISE_CAPTURE_ANALYSIS_UNAVAILABLE',
+          message: error instanceof Error ? error.message : 'Raw noise analysis is unavailable.',
+        }]
+      }
       if (simulation.verification.status === 'failed') {
         this.failure = simulation.verification.errors.map(entry => entry.message).join(' ')
         this.computed = undefined
         return
       }
       this.failure = undefined
-      this.computed = { simulation, model: resolveNoiseModel(scene) }
+      this.computed = { simulation, model }
     } catch (error: unknown) {
       this.failure = error instanceof Error ? error.message : '噪声 Runtime 无法启动。'
       this.computed = undefined
@@ -146,14 +169,13 @@ export class NoiseWorkspaceRuntime implements WorkspaceRuntime {
   }
 
   private command<T extends SceneCommandType>(type: T, payload: SceneCommandPayloadMap[T]): void {
-    if (requiresExperimentalFork(this.sceneRuntime.getScene(), type)) {
-      this.sceneRuntime = new SceneRuntime(
-        forkExperimentalScene({ scene: this.sceneRuntime.getScene() }),
-      )
-    }
-    const scene = this.sceneRuntime.getScene()
+    const currentScene = this.sceneRuntime.getScene()
+    const runtime = requiresExperimentalFork(currentScene, type)
+      ? new SceneRuntime(forkExperimentalScene({ scene: currentScene }))
+      : this.sceneRuntime
+    const scene = runtime.getScene()
     this.commandSequence += 1
-    const result = this.sceneRuntime.execute(
+    const result = runtime.execute(
       createSceneCommand<T>({
         commandId: `noise-ui-command-${this.commandSequence}`,
         sceneId: String(scene.id),
@@ -167,11 +189,38 @@ export class NoiseWorkspaceRuntime implements WorkspaceRuntime {
       this.failure = result.error.message
       return
     }
+    this.sceneRuntime = runtime
     this.recompute()
   }
 
   getScene(): PhysicsScene {
     return this.sceneRuntime.getScene()
+  }
+
+  captureRaw(): CapturedResult {
+    const scene = this.sceneRuntime.getScene()
+    const state = this.result?.states[0]
+    const release = scene.metadata.experimentRelease
+    return {
+      scene,
+      ...(this.request === undefined ? {} : { request: this.request }),
+      ...(this.result === undefined ? {} : { result: this.result }),
+      ...(state === undefined ? {} : { state }),
+      ...this.evidence,
+      clock: { time: 0, total: 0, running: false, rate: 1 },
+      cursor: { kind: 'static', identity: `${this.engine.engineId}:settled-reading` },
+      engineInfo: {
+        id: this.result?.metadata.engineId ?? this.engine.engineId,
+        version: this.result?.metadata.engineVersion ?? this.engine.engineVersion,
+        ...(this.result?.metadata.solver === undefined ? {} : { model: this.result.metadata.solver }),
+        ...(release === undefined ? {} : { release }),
+      },
+      diagnostics: [
+        ...(this.evidence.diagnostics ?? []),
+        ...(this.captureDiagnostics ?? []),
+        ...(this.failure === undefined ? [] : [{ code: 'NOISE_RUNTIME_FAILED', message: this.failure }]),
+      ],
+    }
   }
 
   getSnapshot(): WorkspaceSnapshot {

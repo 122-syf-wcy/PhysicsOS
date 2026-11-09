@@ -1,60 +1,99 @@
-/**
- * Frame source — the renderer's independent update channel.
- *
- * `#123 Canvas 性能` forbids React updating the whole component tree on every
- * animation frame: the renderer must have its own update loop and React must
- * only subscribe to low-frequency summaries / Selection / Panel Data / Status.
- *
- * A `FrameSource` is a tiny external store holding the latest physics frame.
- * The playback loop writes into it without touching React state; only the
- * canvas (the renderer) subscribes via `useFrameSource`, so per-frame updates
- * re-render the canvas alone instead of the whole workspace tree.
- */
-
-import { useSyncExternalStore } from 'react'
-
-/** External store holding the latest frame value. */
-export interface FrameSource<T> {
-  /** Current frame; stable between publishes. */
-  get(this: void): T
-  /** Publish a new frame; notifies every subscriber. */
-  set(this: void, next: T): void
-  /** Subscribe to future frames; returns an unsubscribe function. */
+/** A renderer update channel independent of the workspace's low-frequency source. */
+export interface BareFrameSource<T> {
+  getSnapshot?(this: void): T
+  get?(this: void): T
+  set?(this: void, next: T): void
   subscribe(this: void, listener: () => void): () => void
 }
 
-/**
- * Create an external frame store seeded with the first frame.
- * @returns the frame source.
- * @param initial - the initial value.
- */
-export const createFrameSource = <T>(initial: T): FrameSource<T> => {
-  let current = initial
-  const listeners = new Set<() => void>()
-  return {
-    get: () => current,
-    set: (next: T) => {
-      if (next === current) return
-      current = next
-      for (const listener of listeners) listener()
-    },
-    subscribe: (listener: () => void) => {
-      listeners.add(listener)
-      return () => {
-        listeners.delete(listener)
-      }
-    },
+export interface FrameSource<T> {
+  /** Both names have the same stable function identity. */
+  getSnapshot(this: void): T
+  get(this: void): T
+  set(this: void, next: T): void
+  subscribe(this: void, listener: () => void): () => void
+  /** Retains the last frame, but closes publication and notification. */
+  dispose(this: void, finalSnapshot?: T): void
+}
+
+export interface FrameSourceOptions {
+  onListenerError?(error: unknown): void
+}
+
+const reportListenerError = (options: FrameSourceOptions, error: unknown): void => {
+  try {
+    options.onListenerError?.(error)
+  } catch {
+    // A failed observer must not prevent another renderer receiving its frame.
   }
 }
 
+/** The source's functions and its snapshot remain stable between publications. */
+export const createFrameSource = <T>(initial: T, options: FrameSourceOptions = {}): FrameSource<T> => {
+  let current = initial
+  let disposed = false
+  const listeners = new Set<() => void>()
+  const getSnapshot = (): T => current
+  const subscribe = (listener: () => void): (() => void) => {
+    if (disposed) return () => undefined
+    listeners.add(listener)
+    return () => { listeners.delete(listener) }
+  }
+  const set = (next: T): void => {
+    if (disposed || Object.is(next, current)) return
+    current = next
+    for (const listener of [...listeners]) {
+      if (disposed) break
+      if (!listeners.has(listener)) continue
+      try { listener() } catch (error: unknown) { reportListenerError(options, error) }
+    }
+  }
+  const dispose = (finalSnapshot?: T): void => {
+    if (disposed) return
+    disposed = true
+    listeners.clear()
+    if (finalSnapshot !== undefined) current = finalSnapshot
+  }
+  return { getSnapshot, get: getSnapshot, set, subscribe, dispose }
+}
+
 /**
- * Subscribe a component to the latest frame.
- *
- * Re-renders only when the frame value changes (React's built-in external-store
- * subscription), so a canvas fed by a frame source never re-renders on parent
- * state churn that does not touch its frame.
- * @returns the t.
- * @param source - the source.
+ * Adapt a getSnapshot/get source without exporting a framework or React binding.
+ * The adapter owns its subscription, not the supplied source's lifetime. A bad
+ * read leaves the last complete frame in place and is reported to the caller.
  */
-export const useFrameSource = <T>(source: FrameSource<T>): T =>
-  useSyncExternalStore(source.subscribe, source.get, source.get)
+export const adaptFrameSource = <T>(
+  source: BareFrameSource<T>,
+  options: FrameSourceOptions = {},
+): FrameSource<T> => {
+  const read = source.getSnapshot ?? source.get
+  if (read === undefined) throw new TypeError('A frame source needs getSnapshot or get.')
+  const local = createFrameSource(read(), options)
+  let disposed = false
+  let unsubscribe: (() => void) | undefined
+  const refresh = (): void => {
+    if (disposed) return
+    try { local.set(read()) } catch (error: unknown) { reportListenerError(options, error) }
+  }
+  try {
+    unsubscribe = source.subscribe(refresh)
+    refresh()
+  } catch (error: unknown) { reportListenerError(options, error) }
+  return {
+    getSnapshot: local.getSnapshot,
+    get: local.get,
+    subscribe: local.subscribe,
+    set: (next: T): void => {
+      if (disposed) return
+      if (source.set === undefined) { local.set(next); return }
+      try { source.set(next); refresh() } catch (error: unknown) { reportListenerError(options, error) }
+    },
+    dispose: (finalSnapshot?: T): void => {
+      if (disposed) return
+      disposed = true
+      local.dispose(finalSnapshot)
+      try { unsubscribe?.() } catch (error: unknown) { reportListenerError(options, error) }
+      unsubscribe = undefined
+    },
+  }
+}

@@ -485,3 +485,8 @@ export {
   type CollisionBodySpec,
   type CollisionSceneInput,
 } from './collision/collision-scene-factory.ts'
+export {
+  parsePhysicsScene,
+  type SceneParseIssue,
+  type SceneParseResult,
+} from './scene-parser.ts'

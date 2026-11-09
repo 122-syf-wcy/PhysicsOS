@@ -15,7 +15,7 @@ import { createQuestionCodeOwnerStore } from '../src/client/experiments/question
 import { isUniversalSnapshot, type UniversalExperimentSnapshot } from '../src/client/experiments/universal-contract.ts'
 import { zh } from '../src/client/locales.ts'
 import { solvedCardData } from './solved-card-fixture.client.ts'
-import { sceneTurnData } from './scene-turn-data-fixture.client.ts'
+import { sceneTurnData, sceneTurnHook } from './scene-turn-data-fixture.client.ts'
 
 beforeEach(() => { vi.stubGlobal('crypto', webcrypto) })
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers() })
@@ -141,7 +141,7 @@ it.each(['failed', 'ready'] as const)('renders a late %s generation from the sam
   const store = sceneTurnData({ ...f.data, visualization: { status: 'generating', jobId: 'direct-job',
     ownerSessionId: f.ref.ownerSessionId, sceneId: scene.id, sceneRevision: scene.revision, deadlineAt: Date.now() + 600_000 } })
   const turn = store.turn
-  const view = render(<SceneTurnCard turn={turn} seq={1} openFile={vi.fn()} t={t}
+  const view = render(<SceneTurnCard turn={turn} seq={1} openFile={vi.fn()} t={t} usePhysicsSceneTurn={sceneTurnHook(turn)}
     questionCodeOwner={f.questionCodeOwner} openSceneInLab={f.openSceneInLab} />)
   await waitFor(() => { expect(view.container.querySelector('[data-question-code-status="generating"]')).not.toBeNull() })
   // Only the Harness key changes and notifies; no props rerender or new Turn.

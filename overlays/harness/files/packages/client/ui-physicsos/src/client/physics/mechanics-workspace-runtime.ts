@@ -10,6 +10,7 @@
 import { MechanicsRuntimeBridge, type MechanicsRuntimeSnapshot } from './mechanics-runtime-bridge.ts'
 import { branchBadgeOf } from './experimental-branch.ts'
 import type { PhysicsScene, MechanicsSceneInput } from '@physicsos/physics-scene'
+import type { CapturedResult } from '@physicsos/physics-workbench/types'
 import type { WorkspaceRuntime, WorkspaceSnapshot } from './workspace-runtime.ts'
 import type { ObservableKey } from './scene-visual-model.ts'
 import { formatSignificant } from './number-format.ts'
@@ -160,6 +161,14 @@ export class MechanicsWorkspaceRuntime implements WorkspaceRuntime {
 
   getSnapshot(): WorkspaceSnapshot {
     return this.toWorkspace(this.bridge.getSnapshot())
+  }
+
+  getPlaybackKind(): 'static' | 'time' {
+    return this.bridge.getSnapshot().modelId === 'spring_statics' ? 'static' : 'time'
+  }
+
+  captureRaw(): CapturedResult {
+    return this.bridge.captureRaw()
   }
 
   editParameter(id: string, value: number): WorkspaceSnapshot {

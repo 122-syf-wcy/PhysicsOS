@@ -184,14 +184,6 @@ export const COMMAND_SPECS: Readonly<Record<SceneCommandType, CommandSpec>> = {
       vector: vector('force', '如 {x:10, y:0, unit:"N"}'),
     },
   },
-  SetOrbitRadius: {
-    domain: 'mechanics（圆轨道）',
-    summary: '以米为单位改圆轨道半径（> 0），保持中心天体 GM 并同步初位置和轨道速度',
-    fields: {
-      observableId: { kind: 'observable_id', description: '圆轨道几何可观察量 id' },
-      radius: number('轨道半径，SI 单位 m，必须大于 0'),
-    },
-  },
   SetGroundLevel: {
     domain: 'mechanics（抛体）',
     summary: '改地面高度',
@@ -754,6 +746,62 @@ export const COMMAND_SPECS: Readonly<Record<SceneCommandType, CommandSpec>> = {
     summary: '改谐波次数 n（正整数）',
     fields: { benchId: id('波动台 id'), harmonic: number('正整数') },
   },
+  SetOrbitRadius: {
+    domain: 'mechanics（圆轨道）',
+    summary: '改圆轨道半径 r（> 0），速度、周期和引力由 r 与 GM 重算',
+    fields: {
+      observableId: { kind: 'observable_id', description: '参数 kind="orbit" 的轨道几何可观察量 id' },
+      radius: quantity('length', '正的轨道半径，如 {value:6800000, unit:"m"}；也接受旧的 SI 米数值'),
+    },
+  },
+  SetOrbitalGravitationalParameter: {
+    domain: 'mechanics（圆轨道）',
+    summary: '改中心天体引力参数 GM（> 0），圆轨道速度与周期随之重算',
+    fields: {
+      observableId: { kind: 'observable_id', description: '参数 kind="orbit" 的轨道几何可观察量 id' },
+      gravitationalParameter: number('有限正数，SI 单位 m³/s²，如 3.986004418e14；不是中心天体质量'),
+    },
+  },
+  SetPhotoelectricWorkFunction: {
+    domain: 'modern_physics（光电效应）',
+    summary: '改阴极材料的逸出功 W（> 0），重算阈值、光电子动能与遏止电压',
+    fields: {
+      benchId: id('光电效应实验台 id'),
+      workFunction: quantity('energy', '正逸出功，如 {value:2, unit:"eV"}'),
+    },
+  },
+  SetPhotonWavelength: {
+    domain: 'modern_physics（光电效应）',
+    summary: '改入射光波长 λ（> 0），频率和光子能量按实际波长重算',
+    fields: {
+      benchId: id('光电效应实验台 id'),
+      wavelength: quantity('length', '正波长，如 {value:400, unit:"nm"}'),
+    },
+  },
+  SetLightIntensity: {
+    domain: 'modern_physics（光电效应）',
+    summary: '改入射光强（> 0）；低于阈值时不会因此产生光电子',
+    fields: {
+      benchId: id('光电效应实验台 id'),
+      intensity: quantity('intensity', '正入射功率密度，如 {value:10, unit:"W/m^2"}'),
+    },
+  },
+  SetCathodeArea: {
+    domain: 'modern_physics（光电效应）',
+    summary: '改受光阴极面积（> 0），重算入射光子数率与饱和电流',
+    fields: {
+      benchId: id('光电效应实验台 id'),
+      area: quantity('area', '正受光面积，如 {value:1, unit:"cm^2"}'),
+    },
+  },
+  SetQuantumEfficiency: {
+    domain: 'modern_physics（光电效应）',
+    summary: '改阴极量子效率 η（0 到 1，含端点）',
+    fields: {
+      benchId: id('光电效应实验台 id'),
+      efficiency: number('无量纲有限比例，0 ≤ η ≤ 1；不是百分数整数'),
+    },
+  },
 }
 
 export const COMMAND_TYPES: readonly SceneCommandType[] = Object.keys(
@@ -861,6 +909,12 @@ export const normalizeCommandPayload = (
         payload[name] = value
         break
       case 'quantity': {
+        // Existing orbit callers supply SI metres directly; new callers can
+        // keep an explicitly dimensioned length without changing that contract.
+        if (type === 'SetOrbitRadius' && name === 'radius' && typeof value === 'number') {
+          payload[name] = finiteNumber(value, name)
+          break
+        }
         if (!isRecord(value)) {
           throw new CommandPayloadError('INVALID_PAYLOAD', `字段 ${name} 必须是 {value, unit}。`)
         }

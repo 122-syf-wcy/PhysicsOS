@@ -1,6 +1,7 @@
 import { simulationTimeRange, eventsInSimulationRange } from '@physicsos/physics-core'
-import { trajectorySampleTimes, trajectoryStorageSampleCount } from '@physicsos/physics-scene'
+import { trajectoryStorageSampleCount } from '@physicsos/physics-scene'
 import {
+  assertSimulationPlan,
   check,
   invalidModelCondition,
   summarizeVerification,
@@ -10,6 +11,7 @@ import {
   type ModelSupport,
   type PhysicsEngine,
   type PhysicsEventLike,
+  type SimulationPlan,
   type SimulationRequest,
   type SimulationResult,
   type SimulationState,
@@ -21,16 +23,21 @@ import { leverBenchesOf, validateScene, type PhysicsScene } from '@physicsos/phy
 import { asPhysicsEventId, asSimulationId, asTraceId, PhysicsOSError } from '@physicsos/shared'
 
 import { resolveLeverModel, type ResolvedLeverModel } from './lever-model.ts'
-import { leverRunDuration, leverStateAt } from './lever-state.ts'
+import { leverStateAt } from './lever-state.ts'
 import {
   LEVER_INTEGRATION_STEP,
   LEVER_MAX_ANGLE,
   LEVER_MAX_ANGULAR_SPEED,
   LEVER_MAX_RUN_SECONDS,
   LEVER_SETTLED_TORQUE_FRACTION,
+  leverIntegrationStepCount,
   leverPotentialEnergyAt,
+  leverRunDurationBound,
   leverSettleSeconds,
+  leverSettleStepCountBound,
   resolveLeverRotationalModel,
+  type LeverIterationCounter,
+  type LeverRotationalModel,
 } from './rotational-dynamics.ts'
 import { momentsOf } from './statics.ts'
 
@@ -140,8 +147,16 @@ const derivedOf = (model: ResolvedLeverModel): DerivedQuantity[] => {
  * reads — θ, ω, τ_net — alongside the statics moments; the values come straight
  * from the engine's integrator, never from a view-side ramp.
  */
-const stateOf = (model: ResolvedLeverModel, timeSeconds: number): SimulationState => {
-  const state = leverStateAt(model, timeSeconds)
+const stateOf = (
+  model: ResolvedLeverModel,
+  timeSeconds: number,
+  iterationCounter?: LeverIterationCounter,
+): SimulationState => {
+  const state = leverStateAt(
+    model,
+    timeSeconds,
+    iterationCounter === undefined ? {} : { iterationCounter },
+  )
   return {
     time: seconds(timeSeconds),
     objects: [
@@ -186,13 +201,14 @@ const stateOf = (model: ResolvedLeverModel, timeSeconds: number): SimulationStat
 const dynamicsChecks = (
   model: ResolvedLeverModel,
   moments: ReturnType<typeof momentsOf>,
+  settleTime: number,
+  iterationCounter: LeverIterationCounter,
 ): VerificationCheck[] => {
   const rotational = resolveLeverRotationalModel(model)
-  const settleTime = leverSettleSeconds(rotational)
   const horizon = Math.max(settleTime, LEVER_INTEGRATION_STEP)
   const sampleStep = horizon / DYNAMIC_SAMPLE_COUNT
   const states = Array.from({ length: DYNAMIC_SAMPLE_COUNT + 1 }, (_, index) =>
-    leverStateAt(model, (index / DYNAMIC_SAMPLE_COUNT) * horizon),
+    leverStateAt(model, (index / DYNAMIC_SAMPLE_COUNT) * horizon, { iterationCounter }),
   )
   const torqueScale = Math.max(Math.abs(rotational.netMoment), 1e-12)
   const lawTolerance = LEVER_LAW_RELATIVE_TOLERANCE * torqueScale
@@ -240,7 +256,7 @@ const dynamicsChecks = (
 
   /* Equilibrium: a balanced beam is level throughout; an unbalanced one comes
      to rest at the moment-free vertical (when it settles inside the horizon). */
-  const rest = leverStateAt(model, settleTime)
+  const rest = leverStateAt(model, settleTime, { iterationCounter })
   const settledWithinHorizon = settleTime < LEVER_MAX_RUN_SECONDS
   const equilibriumOk = moments.balanced
     ? states.every((state) => Math.abs(state.tilt) <= LEVER_RELATIVE_TOLERANCE)
@@ -285,7 +301,12 @@ const dynamicsChecks = (
   ]
 }
 
-const buildVerification = (scene: PhysicsScene, model: ResolvedLeverModel): VerificationResult => {
+const buildVerification = (
+  scene: PhysicsScene,
+  model: ResolvedLeverModel,
+  settleTime: number,
+  iterationCounter: LeverIterationCounter,
+): VerificationResult => {
   const sceneVerification = validateScene(scene)
   const checks: VerificationCheck[] = [...sceneVerification.checks]
   const moments = momentsOf(model)
@@ -349,8 +370,7 @@ const buildVerification = (scene: PhysicsScene, model: ResolvedLeverModel): Veri
   /* The static balance condition is a check on the apparatus, not on a pose:
      balanced ⇔ the beam stays level, otherwise it rotates toward the side of the
      larger moment. The beam's motion itself is checked by the dynamics checks. */
-  const rotational = resolveLeverRotationalModel(model)
-  const settled = leverStateAt(model, leverSettleSeconds(rotational))
+  const settled = leverStateAt(model, settleTime, { iterationCounter })
   const tiltAgrees = moments.balanced
     ? Math.abs(settled.tilt) <= LEVER_RELATIVE_TOLERANCE
     : Math.sign(settled.tilt) === Math.sign(moments.netMoment) && settled.tilt !== 0
@@ -370,7 +390,7 @@ const buildVerification = (scene: PhysicsScene, model: ResolvedLeverModel): Veri
     }),
   )
 
-  checks.push(...dynamicsChecks(model, moments))
+  checks.push(...dynamicsChecks(model, moments, settleTime, iterationCounter))
 
   return summarizeVerification(checks, sceneVerification.warnings, sceneVerification.errors)
 }
@@ -393,6 +413,74 @@ export function createLeverSimulationRequest(
       sceneRevision: scene.revision,
     },
   }
+}
+
+function resolveLeverSimulation(scene: PhysicsScene, request: SimulationRequest) {
+  if (request.sceneId !== scene.id || request.sceneRevision !== scene.revision) {
+    throw new PhysicsOSError(
+      'SIMULATION_SCENE_MISMATCH',
+      'SimulationRequest must reference the exact PhysicsScene revision being simulated.',
+      {
+        details: {
+          requestSceneId: request.sceneId,
+          sceneId: scene.id,
+          requestRevision: request.sceneRevision,
+          sceneRevision: scene.revision,
+        },
+      },
+    )
+  }
+  const model = resolveLeverModel(scene)
+  const rotational = resolveLeverRotationalModel(model)
+  const rangeBound = simulationTimeRange(request.options, leverRunDurationBound(rotational))
+  const storageSampleCountBound = trajectoryStorageSampleCount(
+    request.options,
+    TRAJECTORY_SEGMENTS + 1,
+  )
+  return { model, rotational, rangeBound, storageSampleCountBound }
+}
+
+const leverSimulationRange = (request: SimulationRequest, defaultEndTime: number) =>
+  simulationTimeRange(request.options, defaultEndTime)
+
+const leverStorageSampleTime = (
+  range: { startTime: number; endTime: number },
+  count: number,
+  index: number,
+): number => {
+  if (index === 0) return range.startTime
+  if (index === count - 1) return range.endTime
+  return range.startTime + (range.endTime - range.startTime) * (index / (count - 1))
+}
+
+const leverNumericalIterationCountBound = (
+  rotational: LeverRotationalModel,
+  range: { startTime: number; endTime: number },
+  storageSampleCount: number,
+): number => {
+  // simulate reuses this one capped search for its duration, events and verification.
+  let count = leverSettleStepCountBound(rotational)
+  for (let index = 0; index < storageSampleCount; index += 1) {
+    const time = leverStorageSampleTime(range, storageSampleCount, index)
+    count += leverIntegrationStepCount(rotational, time)
+  }
+  const horizon = Math.max(leverRunDurationBound(rotational), LEVER_INTEGRATION_STEP)
+  for (let index = 0; index <= DYNAMIC_SAMPLE_COUNT; index += 1) {
+    count += leverIntegrationStepCount(rotational, (index / DYNAMIC_SAMPLE_COUNT) * horizon)
+  }
+  // Moment-balance and equilibrium checks each integrate once at the settle time.
+  count += 2 * leverIntegrationStepCount(rotational, leverRunDurationBound(rotational))
+  if (!Number.isSafeInteger(count)) {
+    throw new PhysicsOSError(
+      'INVALID_SIMULATION_ITERATION_BOUND',
+      'Lever storage, settling and verification exceed the representable integer step budget.',
+    )
+  }
+  return count
+}
+
+type LeverSimulationResult = SimulationResult<PhysicsEventLike> & {
+  metadata: SimulationResult<PhysicsEventLike>['metadata'] & { numericalIterationCount: number }
 }
 
 export class LeverEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLike> {
@@ -495,35 +583,60 @@ export class LeverEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLike
     return stateOf(resolveLeverModel(scene), timeSeconds)
   }
 
-  simulate(scene: PhysicsScene, request: SimulationRequest): SimulationResult<PhysicsEventLike> {
-    if (request.sceneId !== scene.id || request.sceneRevision !== scene.revision) {
+  prepareSimulationPlan(scene: PhysicsScene, request: SimulationRequest): SimulationPlan {
+    const { rotational, rangeBound: range, storageSampleCountBound } = resolveLeverSimulation(
+      scene,
+      request,
+    )
+    if (request.options.endTime === undefined && range.startTime > 0 && !rotational.balanced) {
       throw new PhysicsOSError(
-        'SIMULATION_SCENE_MISMATCH',
-        'SimulationRequest must reference the exact PhysicsScene revision being simulated.',
-        {
-          details: {
-            requestSceneId: request.sceneId,
-            sceneId: scene.id,
-            requestRevision: request.sceneRevision,
-            sceneRevision: scene.revision,
-          },
-        },
+        'SIMULATION_PLAN_END_TIME_REQUIRED',
+        'A lever window starting after zero requires an explicit endTime; its event-driven default end cannot be validated without solving.',
       )
     }
+    const plan: SimulationPlan = {
+      schemaVersion: 'simulation-plan/1.0',
+      engineId: this.engineId,
+      engineVersion: this.engineVersion,
+      simulationId: request.simulationId,
+      sceneId: scene.id,
+      sceneRevision: scene.revision,
+      modelId: MOMENT_BALANCE_MODEL,
+      kind: rotational.balanced ? 'static' : 'iterative',
+      startTime: range.startTime,
+      endTime: range.endTime,
+      endTimeExact: request.options.endTime !== undefined || rotational.balanced,
+      storageSampleCountBound,
+      numericalIterationCountBound: leverNumericalIterationCountBound(
+        rotational,
+        range,
+        storageSampleCountBound,
+      ),
+      metadata: {
+        numericalIterationAccounting:
+          'angular integration steps: one capped settle search, stored states and dynamics verification',
+        defaultHorizon: 'unbalanced default settles no later than the capped search horizon',
+        settleSearchHorizonSeconds: LEVER_MAX_RUN_SECONDS,
+      },
+    }
+    assertSimulationPlan(plan)
+    return plan
+  }
 
+  simulate(scene: PhysicsScene, request: SimulationRequest): LeverSimulationResult {
+    const { model, rotational, storageSampleCountBound } = resolveLeverSimulation(scene, request)
     const startedAt = new Date().toISOString()
-    const model = resolveLeverModel(scene)
     const moments = momentsOf(model)
-    const rotational = resolveLeverRotationalModel(model)
-    const settleTime = leverSettleSeconds(rotational)
-    const totalTime = leverRunDuration(model)
-
-    const { startTime, endTime } = simulationTimeRange(request.options, totalTime)
-    const states = trajectorySampleTimes(
-      startTime,
-      endTime,
-      trajectoryStorageSampleCount(request.options, TRAJECTORY_SEGMENTS + 1),
-    ).map((time) => stateOf(model, time))
+    const iterationCounter: LeverIterationCounter = { numericalIterationCount: 0 }
+    const settleTime = leverSettleSeconds(rotational, { iterationCounter })
+    const { startTime, endTime } = leverSimulationRange(request, settleTime)
+    const states = Array.from({ length: storageSampleCountBound }, (_, index) =>
+      stateOf(
+        model,
+        leverStorageSampleTime({ startTime, endTime }, storageSampleCountBound, index),
+        iterationCounter,
+      ),
+    )
 
     const events: PhysicsEventLike[] = moments.balanced
       ? [
@@ -561,7 +674,7 @@ export class LeverEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLike
       events: eventsInSimulationRange(events, startTime, endTime),
       measurements: [],
       derivedQuantities: derivedOf(model),
-      verification: buildVerification(scene, model),
+      verification: buildVerification(scene, model, settleTime, iterationCounter),
       metadata: {
         engineId: this.engineId,
         engineVersion: this.engineVersion,
@@ -570,6 +683,7 @@ export class LeverEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLike
         finishedAt: new Date().toISOString(),
         durationMs: 0,
         deterministic: true,
+        numericalIterationCount: iterationCounter.numericalIterationCount,
       },
       trace: request.trace,
     }

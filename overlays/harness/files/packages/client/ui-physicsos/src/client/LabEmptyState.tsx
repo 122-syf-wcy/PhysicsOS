@@ -9,11 +9,10 @@
  */
 
 import css from './experiments/ExperimentPage.module.css'
-import type { PhysicsScene } from '@physicsos/physics-scene'
 
 import { ExperimentPicker, type ExperimentPickerProps } from './ExperimentPicker.tsx'
 import type { PhysicsosKey } from './locales.ts'
-import type { PhysicsSurfaceId } from './surface-store.ts'
+import type { PhysicsSceneRef, PhysicsSurfaceId } from './surface-store.ts'
 
 type Translate = (key: PhysicsosKey) => string
 
@@ -23,7 +22,7 @@ export interface LabEmptyStateProps {
   readonly t: Translate
   readonly openSurface: (
     id: PhysicsSurfaceId,
-    sceneRef?: { sceneId: string; scene: PhysicsScene },
+    sceneRef?: PhysicsSceneRef,
   ) => void
   /** Persisted recent scenes, for the picker's 继续上次实验 card. */
   readonly useRecentExperiments: ExperimentPickerProps['useRecentExperiments']
@@ -33,6 +32,9 @@ export interface LabEmptyStateProps {
   readonly resume?: ExperimentPickerProps['resume']
   /** Open the Lab assembling a circuit from scratch. */
   readonly onFreeBuild?: () => void
+  readonly onNewCanvas?: ExperimentPickerProps['onNewCanvas']
+  readonly onAddScene?: ExperimentPickerProps['onAddScene']
+  readonly onAddTemplate?: ExperimentPickerProps['onAddTemplate']
 }
 
 /**
@@ -47,6 +49,9 @@ export function LabEmptyState({
   useLearningRecord,
   resume,
   onFreeBuild,
+  onNewCanvas,
+  onAddScene,
+  onAddTemplate,
 }: LabEmptyStateProps) {
   return (<>
     {routeNotice ? <div role="status" className={css.routeNotice}>{routeNotice}</div> : null}
@@ -57,6 +62,9 @@ export function LabEmptyState({
       useLearningRecord={useLearningRecord}
       {...(resume === undefined ? {} : { resume })}
       {...(onFreeBuild === undefined ? {} : { onFreeBuild })}
+      {...(onNewCanvas === undefined ? {} : { onNewCanvas })}
+      {...(onAddScene === undefined ? {} : { onAddScene })}
+      {...(onAddTemplate === undefined ? {} : { onAddTemplate })}
     />
   </>)
 }

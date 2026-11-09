@@ -17,14 +17,22 @@
 import {
   ThermalEngine,
   createThermalSimulationRequest,
-  heatingTimingOf,
   resolveHeatingCurve,
   sampleStateAt,
   thermalStateAt,
   type ResolvedThermalModel,
 } from '@physicsos/engine-thermal'
-import { isScalarQuantity, type SimulationResult } from '@physicsos/physics-core'
+import {
+  EngineUnsupportedError,
+  isScalarQuantity,
+  simulationTimeRange,
+  type SimulationRequest,
+  type SimulationResult,
+} from '@physicsos/physics-core'
+import { copyDiagnosticObject, copyJsonObject } from '@physicsos/physics-workbench/json'
+import type { CapturedResult, JsonObject, MetricSemantics } from '@physicsos/physics-workbench/types'
 import { canonicalValue, quantity } from '@physicsos/physics-units'
+import { PhysicsOSError } from '@physicsos/shared'
 import {
   SceneRuntime,
   createSceneCommand,
@@ -125,6 +133,17 @@ const EVENT_VIEW: Record<string, { label: string; kind: TimelineEvent['kind'] }>
  */
 const DEFAULT_RATE = 20
 
+const THERMAL_METRIC_SEMANTICS: Readonly<Record<string, MetricSemantics>> = {
+  temperature: { semanticKey: 'temperature', scale: { kind: 'temperature-absolute' } },
+  melting_point: { semanticKey: 'melting_point', scale: { kind: 'temperature-absolute' } },
+  boiling_point: { semanticKey: 'boiling_point', scale: { kind: 'temperature-absolute' } },
+  temperature_rise: { semanticKey: 'temperature_rise', scale: { kind: 'temperature-difference' } },
+  comparison_temperature_rise: {
+    semanticKey: 'comparison_temperature_rise',
+    scale: { kind: 'temperature-difference' },
+  },
+}
+
 interface Computed {
   readonly simulation: SimulationResult
   readonly model: ResolvedThermalModel
@@ -142,7 +161,17 @@ export class ThermalWorkspaceRuntime implements WorkspaceRuntime {
   private commandSequence = 0
   private highlighted: readonly string[] = []
   private failure: string | undefined
+  private request: SimulationRequest | undefined
+  private simulation: SimulationResult | undefined
+  private modelId: string | undefined
+  private diagnostics: readonly JsonObject[] = []
+  private rawState: JsonObject | undefined
   private computed: Computed | undefined
+  private currentState: ReturnType<typeof thermalStateAt> | undefined
+  private comparisonState: ReturnType<typeof sampleStateAt> | undefined
+  private stateTime = 0
+  private windowStart = 0
+  private totalTime = 0
   /** The scene as the source stated it, kept so an experimental branch can be discarded. */
   private readonly origin: PhysicsScene | undefined
 
@@ -154,39 +183,114 @@ export class ThermalWorkspaceRuntime implements WorkspaceRuntime {
 
   private recompute(): void {
     const scene = this.sceneRuntime.getScene()
+    this.request = undefined
+    this.simulation = undefined
+    this.modelId = undefined
+    this.diagnostics = []
+    this.rawState = undefined
+    this.currentState = undefined
+    this.comparisonState = undefined
+    this.windowStart = 0
+    this.totalTime = 0
     try {
       const support = this.engine.canHandle(scene)
+      this.modelId = support.modelId
       if (!support.supported) {
         this.failure = support.failedConditions.map(entry => entry.message).join(' ')
+        this.diagnostics = [copyJsonObject({ stage: 'support', ...support })]
         this.computed = undefined
+        this.running = false
         return
       }
-      const simulation = this.engine.simulate(
+      const request = createThermalSimulationRequest(
         scene,
-        createThermalSimulationRequest(
-          scene,
-          `thermal-lab-${String(scene.id)}-${scene.revision}`,
-          `thermal-lab-trace-${String(scene.id)}-${scene.revision}`,
-        ),
+        `thermal-lab-${String(scene.id)}-${scene.revision}`,
+        `thermal-lab-trace-${String(scene.id)}-${scene.revision}`,
       )
+      this.request = request
+      this.retainWindow(request)
+      const simulation = this.engine.simulate(scene, request)
+      this.simulation = simulation
+      this.retainWindow(request, simulation)
+      this.diagnostics = [copyJsonObject({ stage: 'verification', ...simulation.verification })]
       if (simulation.verification.status === 'failed') {
         this.failure = simulation.verification.errors.map(entry => entry.message).join(' ')
         this.computed = undefined
+        this.running = false
         return
       }
       const model = resolveHeatingCurve(scene)
-      /* A parameter edit re-times the whole run; clamp the clock into the new
-         window so a doubled power does not park the frame past the end. */
-      this.currentTime = Math.min(this.currentTime, heatingTimingOf(model).totalTime)
       this.failure = undefined
       this.computed = { simulation, model }
+      this.stateOf(model)
     } catch (error: unknown) {
       this.failure = error instanceof Error ? error.message : '热学 Runtime 无法启动。'
+      const cause = error instanceof EngineUnsupportedError
+        ? error.domainError
+        : error instanceof PhysicsOSError
+          ? { code: error.code, retryable: error.retryable, details: error.details }
+          : { code: 'THERMAL_RUNTIME_FAILED', retryable: false }
+      let diagnostic: JsonObject
+      try {
+        diagnostic = copyDiagnosticObject({ ...cause, stage: 'runtime', message: this.failure })
+      } catch {
+        diagnostic = copyJsonObject({
+          stage: 'runtime',
+          code: cause.code,
+          retryable: cause.retryable,
+          message: this.failure,
+          details: { missing: 'non-json-diagnostic-details' },
+        })
+      }
+      this.diagnostics = [...this.diagnostics, diagnostic]
+      this.rawState = undefined
+      this.currentState = undefined
+      this.comparisonState = undefined
       this.computed = undefined
+      this.running = false
+      if (this.request !== undefined) this.retainWindow(this.request, this.simulation)
     }
   }
 
+  private retainWindow(request: SimulationRequest, result?: SimulationResult): void {
+    if (result === undefined && request.options.startTime === undefined && request.options.endTime === undefined) return
+    const states = result?.states ?? []
+    const first = states[0]?.time
+    const last = states[states.length - 1]?.time
+    try {
+      const { startTime, endTime } = simulationTimeRange({
+        ...request.options,
+        ...(request.options.startTime !== undefined || first === undefined ? {} : { startTime: first }),
+        ...(request.options.endTime !== undefined || last === undefined ? {} : { endTime: last }),
+      })
+      this.windowStart = startTime
+      this.totalTime = endTime
+      this.currentTime = Math.min(endTime, Math.max(startTime, this.currentTime))
+    } catch {
+      this.windowStart = 0
+      this.totalTime = 0
+      /* An invalid request has no bounded playback window; the engine reports its failure. */
+    }
+  }
+
+  private stateOf(model: ResolvedThermalModel): ReturnType<typeof thermalStateAt> {
+    if (this.currentState === undefined || this.stateTime !== this.currentTime) {
+      this.currentState = thermalStateAt(model, this.currentTime)
+      this.comparisonState = model.comparisonSample === undefined
+        ? undefined
+        : sampleStateAt(model.comparisonSample, model.heaterPower, this.currentTime, model.runDuration)
+      this.rawState = copyJsonObject({
+        model,
+        currentState: this.currentState,
+        comparisonState: this.comparisonState,
+      })
+      this.stateTime = this.currentTime
+    }
+    return this.currentState
+  }
+
   private command<T extends SceneCommandType>(type: T, payload: SceneCommandPayloadMap[T]): void {
+    const previousRuntime = this.sceneRuntime
     /* Changing a physical fact on a question scene forks first: the solution the
        student just read was verified against the original conditions. Observable
        toggles are NOT facts and never fork. */
@@ -208,7 +312,9 @@ export class ThermalWorkspaceRuntime implements WorkspaceRuntime {
       }) as SceneCommand,
     )
     if (!result.ok) {
+      this.sceneRuntime = previousRuntime
       this.failure = result.error.message
+      this.diagnostics = [...this.diagnostics, copyJsonObject({ stage: 'command', ...result.error })]
       return
     }
     this.recompute()
@@ -216,6 +322,39 @@ export class ThermalWorkspaceRuntime implements WorkspaceRuntime {
 
   getScene(): PhysicsScene {
     return this.sceneRuntime.getScene()
+  }
+
+  captureRaw(): CapturedResult {
+    const scene = this.sceneRuntime.peekScene()
+    const solved = this.computed !== undefined
+    const time = this.request === undefined
+      ? 0
+      : Math.min(this.totalTime, Math.max(this.windowStart, this.currentTime))
+    return {
+      scene,
+      ...(this.request === undefined ? {} : { request: this.request }),
+      ...(this.simulation === undefined ? {} : { result: this.simulation }),
+      ...(this.rawState === undefined ? {} : { rawState: this.rawState }),
+      clock: {
+        time,
+        total: this.totalTime,
+        running: solved && this.running,
+        rate: this.rate,
+      },
+      cursor: this.request !== undefined
+        ? { kind: 'time', time: quantity(time, 's', 'time') }
+        : { kind: 'static', identity: `unavailable:${this.engine.engineId}` },
+      engineInfo: {
+        id: this.engine.engineId,
+        version: this.engine.engineVersion,
+        ...(this.modelId === undefined ? {} : { model: this.modelId }),
+        ...(scene.metadata.experimentRelease === undefined
+          ? {}
+          : { release: scene.metadata.experimentRelease }),
+      },
+      diagnostics: this.diagnostics,
+      metricSemantics: THERMAL_METRIC_SEMANTICS,
+    }
   }
 
   getSnapshot(): WorkspaceSnapshot {
@@ -241,7 +380,14 @@ export class ThermalWorkspaceRuntime implements WorkspaceRuntime {
         derivation: [],
         verification: [],
         events: [],
-        clock: { time: 0, total: 0, running: false, rate: this.rate },
+        clock: {
+          time: this.request === undefined
+            ? 0
+            : Math.min(this.totalTime, Math.max(this.windowStart, this.currentTime)),
+          total: this.totalTime,
+          running: false,
+          rate: this.rate,
+        },
         trajectoryTimes: [],
         error: {
           code: 'THERMAL_RUNTIME_FAILED',
@@ -252,12 +398,10 @@ export class ThermalWorkspaceRuntime implements WorkspaceRuntime {
     }
 
     const { simulation, model } = this.computed
-    const { totalTime } = heatingTimingOf(model)
-    const state = thermalStateAt(model, this.currentTime)
+    const totalTime = this.totalTime
+    const state = this.stateOf(model)
     const comparison = model.comparisonSample
-    const comparisonState = comparison === undefined
-      ? undefined
-      : sampleStateAt(comparison, model.heaterPower, this.currentTime, model.runDuration)
+    const comparisonState = this.comparisonState
     const primaryPeak = thermalStateAt(model, totalTime).temperature
     const comparisonPeak = comparison === undefined
       ? primaryPeak
@@ -369,7 +513,7 @@ export class ThermalWorkspaceRuntime implements WorkspaceRuntime {
         label: bench.sample.name === undefined ? '温度计' : `${bench.sample.name}温度计`,
         secondary: model === undefined
           ? ''
-          : `${celsiusOf(thermalStateAt(model, this.currentTime).temperature).toFixed(1)} ℃`,
+          : `${celsiusOf(this.stateOf(model).temperature).toFixed(1)} ℃`,
         icon: 'observable' as const,
         kind: 'object' as const,
       },
@@ -454,7 +598,7 @@ export class ThermalWorkspaceRuntime implements WorkspaceRuntime {
         }))
       /* The frame's own readings: what the thermometer says right now and which
          stretch of the curve it is on. */
-      const state = thermalStateAt(model, this.currentTime)
+      const state = this.stateOf(model)
       derived.push({
         id: 'current-temperature',
         label: bench.comparisonSample === undefined
@@ -536,8 +680,7 @@ export class ThermalWorkspaceRuntime implements WorkspaceRuntime {
   setRunning(running: boolean): WorkspaceSnapshot {
     /* Restarting the finished experiment cools the sample back to its start. */
     if (running && this.computed !== undefined) {
-      const { totalTime } = heatingTimingOf(this.computed.model)
-      if (this.currentTime >= totalTime) this.currentTime = 0
+      if (this.currentTime >= this.totalTime) this.currentTime = this.windowStart
     }
     this.running = running
     return this.getSnapshot()
@@ -549,8 +692,10 @@ export class ThermalWorkspaceRuntime implements WorkspaceRuntime {
   }
 
   seek(time: number): WorkspaceSnapshot {
-    const total = this.computed === undefined ? 0 : heatingTimingOf(this.computed.model).totalTime
-    this.currentTime = Number.isFinite(time) ? Math.min(total, Math.max(0, time)) : 0
+    const total = this.totalTime
+    this.currentTime = Number.isFinite(time)
+      ? Math.min(total, Math.max(this.windowStart, time))
+      : this.windowStart
     this.running = false
     return this.getSnapshot()
   }
@@ -563,10 +708,9 @@ export class ThermalWorkspaceRuntime implements WorkspaceRuntime {
     /* The run stops at the end rather than looping: the finished curve IS the
        result the student reads. */
     if (this.running && this.computed !== undefined && Number.isFinite(wallClockSeconds)) {
-      const { totalTime } = heatingTimingOf(this.computed.model)
       const next = this.currentTime + wallClockSeconds * this.rate
-      this.currentTime = next >= totalTime ? totalTime : next
-      if (this.currentTime >= totalTime) this.running = false
+      this.currentTime = Math.min(this.totalTime, Math.max(this.windowStart, next))
+      if (this.currentTime >= this.totalTime) this.running = false
     }
     return this.getSnapshot()
   }

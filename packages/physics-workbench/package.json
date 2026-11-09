@@ -1,0 +1,33 @@
+{
+  "name": "@physicsos/physics-workbench",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Browser-safe experiment canvas documents, immutable captures, graph transport, raw comparisons and CSV",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types.ts",
+    "./protocol": "./src/protocol.ts",
+    "./codec": "./src/codec.ts",
+    "./json": "./src/json.ts",
+    "./data": "./src/data.ts",
+    "./graph": "./src/graph.ts",
+    "./comparison": "./src/comparison.ts",
+    "./csv": "./src/csv.ts",
+    "./merge": "./src/merge.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@physicsos/physics-core": "file:../physics-core",
+    "@physicsos/physics-math": "file:../physics-math",
+    "@physicsos/physics-scene": "file:../physics-scene",
+    "@physicsos/physics-units": "file:../physics-units",
+    "@physicsos/shared": "file:../shared"
+  }
+}

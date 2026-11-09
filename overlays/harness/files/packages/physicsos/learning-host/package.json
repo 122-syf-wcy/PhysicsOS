@@ -39,6 +39,12 @@
     "@deepseek-ai/dsh-storage": "workspace:^",
     "@deepseek-ai/dsh-storage-domain": "workspace:^",
     "@physicsos/physics-scene": "link:../../../../../packages/physics-scene",
+    "@physicsos/physics-workbench": "link:../../../../../packages/physics-workbench",
+    "@physicsos/physics-runtime": "link:../../../../../packages/physics-runtime",
+    "@physicsos/physics-core": "link:../../../../../packages/physics-core",
+    "@physicsos/physics-units": "link:../../../../../packages/physics-units",
+    "@deepseek-ai/schemastery": "workspace:^",
+    "@deepseek-ai/dsh-home-paths": "workspace:^",
     "zod": "^4.4.3"
   },
   "peerDependencies": {
@@ -48,6 +54,11 @@
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
     "@deepseek-ai/dsh-invariants": "workspace:^",
-    "@deepseek-ai/dsh-storage-json": "workspace:^"
+    "@deepseek-ai/dsh-storage-json": "workspace:^",
+    "@deepseek-ai/dsh-storage-postgres": "workspace:^",
+    "pg": "^8.23.0",
+    "@types/pg": "^8.23.1",
+    "@deepseek-ai/cordis-plugin-loader": "workspace:^",
+    "@deepseek-ai/cordis-plugin-include": "workspace:^"
   }
 }

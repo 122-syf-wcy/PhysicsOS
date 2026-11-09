@@ -19,8 +19,11 @@ import {
   type SceneCommandType,
 } from '@physicsos/physics-scene'
 import { observeMechanicsScene } from '@physicsos/physics-observation'
+import { canonicalValue } from '@physicsos/physics-units'
 import { toCanonicalVector } from '@physicsos/physics-core'
 import { verifyMechanicsSimulation } from '@physicsos/physics-verifier'
+import type { CapturedResult, JsonObject } from '@physicsos/physics-workbench/types'
+import { copyJsonObject } from '@physicsos/physics-workbench/json'
 
 import { emptyVisualModel, type SceneVisualModel } from './scene-visual-model.ts'
 import { runtimeStatusOf } from './verified-result.ts'
@@ -41,12 +44,16 @@ import type {
 } from './scene-visual-model.ts'
 
 type MechanicsSimulation = ReturnType<MechanicsEngine['simulate']>
+type MechanicsRequest = ReturnType<typeof createMechanicsSimulationRequest>
+type MechanicsState = ReturnType<MechanicsEngine['stateAt']>
 
 /** Scene-derived facts that only change when the scene itself changes. */
 interface MechanicsSimulationCache {
   readonly sceneRevision: number
+  readonly request: MechanicsRequest
   readonly simulation: MechanicsSimulation
   readonly verification: ReturnType<typeof verifyMechanicsSimulation>
+  readonly captureVerification: JsonObject
   readonly status: RuntimeStatus
 }
 
@@ -184,6 +191,10 @@ export class MechanicsRuntimeBridge {
   private launchDirection = { x: 1, y: 0, z: 0 }
   /** Simulation of the current scene revision, reused across clock frames. */
   private simulationCache: MechanicsSimulationCache | undefined
+  private simulationRequest: MechanicsRequest | undefined
+  private simulationResult: MechanicsSimulation | undefined
+  private currentState: MechanicsState | undefined
+  private captureTime = 0
   /** Fixed teaching scale: the initial orbit takes 20 screen seconds at 1×. */
   private orbitTimeScale = 1
   private readonly forceDirections = new Map<string, number>()
@@ -206,6 +217,49 @@ export class MechanicsRuntimeBridge {
    */
   getSnapshot(): MechanicsRuntimeSnapshot {
     return this.snapshot
+  }
+
+  /** Raw evidence already held for the displayed revision and frame. */
+  captureRaw(): CapturedResult {
+    const { scene, modelId, clock, error } = this.snapshot
+    const request = this.simulationRequest
+    const result = this.simulationResult
+    const state = this.currentState
+    const start = request?.options.startTime ?? result?.states[0]?.time
+    const end = request?.options.endTime ?? result?.states.at(-1)?.time
+    const startTime = result === undefined || start === undefined ? 0 : canonicalValue(start)
+    const endTime = result === undefined || end === undefined ? clock.total : canonicalValue(end)
+    const isStatic = modelId === 'spring_statics' || (result === undefined ? clock.total === 0 : endTime === startTime)
+    const captureClock = isStatic
+      ? { time: 0, total: 0, running: false, rate: clock.rate }
+      : this.snapshot.status === 'failed'
+        ? { time: Math.min(endTime, Math.max(startTime, this.captureTime)), total: endTime, running: false, rate: clock.rate }
+        : clock
+    const verification = result !== undefined && this.simulationCache?.simulation === result
+      ? this.simulationCache.captureVerification
+      : undefined
+    return {
+      scene,
+      ...(request === undefined ? {} : { request }),
+      ...(result === undefined ? {} : { result }),
+      ...(state === undefined ? {} : { state }),
+      clock: captureClock,
+      cursor: isStatic
+        ? { kind: 'static', identity: modelId }
+        : { kind: 'time', time: { value: captureClock.time, unit: 's', dimension: 'time' } },
+      engineInfo: {
+        id: result?.metadata.engineId ?? this.engine.engineId,
+        version: result?.metadata.engineVersion ?? this.engine.engineVersion,
+        model: modelId,
+        ...(scene.metadata.experimentRelease === undefined ? {} : { release: scene.metadata.experimentRelease }),
+      },
+      diagnostics: [
+        ...(error === undefined ? [] : [{ code: error.code, message: error.message, retryable: error.retryable }]),
+        ...(result?.verification.errors.map(issue => ({ code: issue.code, message: issue.message, severity: issue.severity })) ?? []),
+        ...(result?.verification.warnings.map(issue => ({ code: issue.code, message: issue.message, severity: issue.severity })) ?? []),
+        ...(verification === undefined ? [] : [verification]),
+      ],
+    }
   }
 
   /**
@@ -271,7 +325,7 @@ export class MechanicsRuntimeBridge {
           const radius = Number(orbit.parameters?.['gravitationalParameter']) / (value * value)
           return this.command('SetOrbitRadius', { observableId: orbit.id, radius }).snapshot
         }
-        return this.setInitialSpeed(value, 'x').snapshot
+        return this.setInitialSpeedMagnitude(value).snapshot
       case 'friction':
         return this.setFriction(value).snapshot
       case 'staticFriction':
@@ -282,6 +336,14 @@ export class MechanicsRuntimeBridge {
         return this.setPendulumLength(value).snapshot
       case 'amplitude':
         return this.setAmplitude(value).snapshot
+      case 'orbitRadius': {
+        const orbit = this.sceneRuntime.getScene().observableDefinitions.find(definition => definition.parameters?.['kind'] === 'orbit')
+        return orbit === undefined ? this.snapshot : this.command('SetOrbitRadius', { observableId: orbit.id, radius: { value, unit: 'm', dimension: 'length' } }).snapshot
+      }
+      case 'gravitationalParameter': {
+        const orbit = this.sceneRuntime.getScene().observableDefinitions.find(definition => definition.parameters?.['kind'] === 'orbit')
+        return orbit === undefined ? this.snapshot : this.command('SetOrbitalGravitationalParameter', { observableId: orbit.id, gravitationalParameter: value }).snapshot
+      }
       default:
         return this.snapshot
     }
@@ -407,6 +469,22 @@ export class MechanicsRuntimeBridge {
     return this.command('SetBodyVelocity', {
       bodyId: body?.id ?? 'body-1',
       velocity: { vector, unit: 'm/s', dimension: 'velocity' },
+    })
+  }
+
+  /** The inspector's speed is a magnitude; axis setters remain available to callers. */
+  setInitialSpeedMagnitude(value: number): MechanicsRuntimeCommandOutcome {
+    const scene = this.sceneRuntime.getScene()
+    const body = scene.bodies[0]
+    const current = body?.velocity.vector ?? { x: 0, y: 0, z: 0 }
+    const magnitude = Math.hypot(current.x, current.y, current.z)
+    const verticalAcceleration = body?.acceleration?.vector.y ?? 0
+    const direction = this.modelId() === 'projectile_motion' ? this.launchDirection
+      : magnitude > 0 ? { x: current.x / magnitude, y: current.y / magnitude, z: current.z / magnitude }
+        : Math.abs(verticalAcceleration) > 0 ? { x: 0, y: 1, z: 0 } : { x: 1, y: 0, z: 0 }
+    return this.command('SetBodyVelocity', {
+      bodyId: body?.id ?? 'body-1',
+      velocity: { vector: { x: direction.x * value, y: direction.y * value, z: direction.z * value }, unit: 'm/s', dimension: 'velocity' },
     })
   }
 
@@ -761,7 +839,11 @@ export class MechanicsRuntimeBridge {
          revision rather than once per frame. */
       const cached = this.simulationCache
       const fresh = cached === undefined || cached.sceneRevision !== scene.revision
+      this.captureTime = this.currentTime
+      this.currentState = undefined
       if (fresh) {
+        this.simulationRequest = undefined
+        this.simulationResult = undefined
         const support = this.engine.canHandle(scene)
         if (!support.supported) {
           this.snapshot = this.failedSnapshot(scene, modelId, {
@@ -772,17 +854,20 @@ export class MechanicsRuntimeBridge {
           return this.snapshot
         }
       }
-      const simulation = fresh
-        ? this.engine.simulate(
+      const request = fresh
+        ? createMechanicsSimulationRequest(
           scene,
-          createMechanicsSimulationRequest(
-            scene,
-            `mech-sim-${scene.revision}`,
-            `physicsos-mech-${scene.revision}-${this.traceSequence}`,
-          ),
+          `mech-sim-${scene.revision}`,
+          `physicsos-mech-${scene.revision}-${this.traceSequence}`,
         )
-        : cached.simulation
+        : cached.request
+      this.simulationRequest = request
+      const simulation = fresh ? this.engine.simulate(scene, request) : cached.simulation
+      this.simulationResult = simulation
       const verification = fresh ? verifyMechanicsSimulation(scene, simulation) : cached.verification
+      const captureVerification = fresh
+        ? copyJsonObject({ kind: 'external-verification', sceneId: scene.id, sceneRevision: scene.revision, report: verification })
+        : cached.captureVerification
       /* Both the engine's own verification and the mechanics verifier must
          reach the verified floor from their checks; either one failing fails the
          frame, and anything weaker than a real passed check warns rather than
@@ -795,7 +880,7 @@ export class MechanicsRuntimeBridge {
           : engineStatus === 'verified' && verifierStatus === 'verified'
             ? 'verified'
             : 'warning'
-      this.simulationCache = { sceneRevision: scene.revision, simulation, verification, status }
+      this.simulationCache = { sceneRevision: scene.revision, request, simulation, verification, captureVerification, status }
 
       if (status === 'failed') {
         this.snapshot = this.failedSnapshot(scene, modelId, {
@@ -809,8 +894,10 @@ export class MechanicsRuntimeBridge {
       const model = resolveMechanicsModel(scene)
       const total = this.durationOf(model, simulation)
       if (this.currentTime > total) this.currentTime = total
+      this.captureTime = this.currentTime
 
       const state = this.engine.stateAt(scene, { value: this.currentTime, unit: 's', dimension: 'time' })
+      this.currentState = state
       const observations = observeMechanicsScene({ scene, simulation, state })
       const visibility = this.visibilityOf(scene)
 
@@ -856,6 +943,7 @@ export class MechanicsRuntimeBridge {
       }
       return this.snapshot
     } catch (error: unknown) {
+      this.currentState = undefined
       this.currentTime = 0
       this.running = false
       this.snapshot = this.failedSnapshot(scene, modelId, runtimeErrorOf(error, modelId))

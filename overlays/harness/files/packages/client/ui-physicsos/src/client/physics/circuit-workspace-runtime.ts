@@ -18,16 +18,18 @@
 import {
   CircuitEngine,
   createCircuitSimulationRequest,
-  resolveCircuitModel,
   resolveCircuitOperatingPoint,
   type CircuitOperatingPoint,
+  type ResolvedCircuitModel,
 } from '@physicsos/engine-circuit'
 import {
   isScalarQuantity,
+  type SimulationRequest,
   type SimulationResult,
   type SimulationState,
 } from '@physicsos/physics-core'
-import { canonicalValue } from '@physicsos/physics-units'
+import { canonicalValue, quantity } from '@physicsos/physics-units'
+import type { CapturedResult } from '@physicsos/physics-workbench/types'
 import {
   SceneRuntime,
   circuitLayoutPlace,
@@ -51,6 +53,7 @@ import {
   connectTerminals,
   draftFromScene,
   draftToScene,
+  synchronizeDraftWithScene,
   type CircuitDraft,
   type TerminalRef,
 } from './circuit-builder.ts'
@@ -58,6 +61,7 @@ import {
   branchBadgeOf,
   forkExperimentalScene,
   requiresExperimentalFork,
+  requiresExperimentalForkForFact,
 } from './experimental-branch.ts'
 import { emptyVisualModel } from './scene-visual-model.ts'
 import { runtimeStatusOf } from './verified-result.ts'
@@ -174,7 +178,8 @@ export class CircuitWorkspaceRuntime implements WorkspaceRuntime {
   private highlighted: readonly string[] = []
   private failure: string | undefined
   private computed: Computed | undefined
-  private simulationCache: { key: string; simulation: SimulationResult } | undefined
+  private simulationCache: { key: string; request: SimulationRequest; simulation: SimulationResult } | undefined
+  private captureEvidence: Pick<CapturedResult, 'scene' | 'request' | 'result' | 'state'> | undefined
   /**
    * In-flight schematic drag: the component's painted position while the
    * pointer is down. Preview only — the layout lands on the scene when the
@@ -218,7 +223,7 @@ export class CircuitWorkspaceRuntime implements WorkspaceRuntime {
 
   constructor(scene: PhysicsScene) {
     this.sceneRuntime = new SceneRuntime(scene)
-    this.origin = scene.metadata.sourceQuestionId === undefined ? undefined : scene
+    this.origin = scene.metadata.sourceQuestionId === undefined ? undefined : structuredClone(scene)
     this.recompute()
   }
 
@@ -234,8 +239,9 @@ export class CircuitWorkspaceRuntime implements WorkspaceRuntime {
     this.failureCondition = undefined
     try {
       const key = `${String(scene.id)}:${scene.revision}`
-      const cached = this.simulationCache?.key === key ? this.simulationCache.simulation : undefined
+      const cached = this.simulationCache?.key === key ? this.simulationCache : undefined
       if (cached === undefined) {
+        this.captureEvidence = { scene }
         const support = this.engine.canHandle(scene)
         if (!support.supported) {
           this.failureCondition = support.failedConditions[0]?.condition
@@ -244,15 +250,15 @@ export class CircuitWorkspaceRuntime implements WorkspaceRuntime {
           return
         }
       }
-      const simulation = cached ?? this.engine.simulate(
+      const request = cached?.request ?? createCircuitSimulationRequest(
         scene,
-        createCircuitSimulationRequest(
-          scene,
-          `circuit-lab-${String(scene.id)}-${scene.revision}`,
-          `circuit-lab-trace-${String(scene.id)}-${scene.revision}`,
-        ),
+        `circuit-lab-${String(scene.id)}-${scene.revision}`,
+        `circuit-lab-trace-${String(scene.id)}-${scene.revision}`,
       )
-      this.simulationCache = { key, simulation }
+      this.captureEvidence = { scene, request }
+      const simulation = cached?.simulation ?? this.engine.simulate(scene, request)
+      this.simulationCache = { key, request, simulation }
+      this.captureEvidence = { scene, request, result: simulation }
       if (simulation.verification.status === 'failed') {
         this.failure = simulation.verification.errors.map(entry => entry.message).join(' ')
         this.computed = undefined
@@ -264,6 +270,7 @@ export class CircuitWorkspaceRuntime implements WorkspaceRuntime {
       const point = resolveCircuitOperatingPoint(scene, this.currentTime)
       this.failure = undefined
       this.computed = { simulation, point, state, endTime }
+      this.captureEvidence = { scene, request, result: simulation, state }
     } catch (error: unknown) {
       this.failure = error instanceof Error ? error.message : '电路 Runtime 无法启动。'
       this.computed = undefined
@@ -275,19 +282,13 @@ export class CircuitWorkspaceRuntime implements WorkspaceRuntime {
     payload: SceneCommandPayloadMap[T],
     { rewind = true }: { readonly rewind?: boolean } = {},
   ): void {
-    /* Changing a physical fact on a question scene forks first: the solution the
-       student just read was verified against the original conditions. Playback,
-       seeking and observable toggles are NOT facts and never fork. */
-    if (requiresExperimentalFork(this.sceneRuntime.getScene(), type)) {
-      this.sceneRuntime = new SceneRuntime(
-        forkExperimentalScene({ scene: this.sceneRuntime.getScene() }),
-      )
-      this.currentTime = 0
-      this.running = false
-    }
-    const scene = this.sceneRuntime.getScene()
+    const before = this.sceneRuntime.getScene()
+    const prospective = requiresExperimentalFork(before, type)
+      ? new SceneRuntime(forkExperimentalScene({ scene: before }))
+      : this.sceneRuntime
+    const scene = prospective.getScene()
     this.commandSequence += 1
-    const result = this.sceneRuntime.execute(
+    const result = prospective.execute(
       createSceneCommand<T>({
         commandId: `circuit-ui-command-${this.commandSequence}`,
         sceneId: String(scene.id),
@@ -301,9 +302,10 @@ export class CircuitWorkspaceRuntime implements WorkspaceRuntime {
       this.failure = result.error.message
       return
     }
+    if (prospective !== this.sceneRuntime) this.sceneRuntime = prospective
     // The builder's next structural edit must start from committed facts,
     // including inspector values and switch/slider changes made on the bench.
-    if (this.draft !== null) this.draft = draftFromScene(this.sceneRuntime.getScene())
+    if (this.draft !== null) this.draft = synchronizeDraftWithScene(this.draft, this.sceneRuntime.getScene())
     /* A parameter change makes the previous sweep position physically stale;
        a placement move does not — nothing it rewrites feeds the solver. */
     if (rewind) {
@@ -328,6 +330,29 @@ export class CircuitWorkspaceRuntime implements WorkspaceRuntime {
     return this.sceneRuntime.getScene()
   }
 
+  captureRaw(): CapturedResult {
+    const scene = this.sceneRuntime.peekScene()
+    const evidence = this.captureEvidence
+    const aligned = evidence?.scene.id === scene.id && evidence.scene.revision === scene.revision
+    const held = aligned ? evidence : { scene }
+    const result = held?.result
+    const lastState = result?.states.at(-1)
+    const firstState = result?.states[0]
+    const endTime = this.computed?.endTime ?? (lastState === undefined ? 0 : canonicalValue(lastState.time))
+    const startTime = firstState === undefined ? 0 : canonicalValue(firstState.time)
+    const time = Math.max(startTime, Math.min(endTime, this.currentTime))
+    return {
+      ...held,
+      scene,
+      clock: { time: endTime > 0 ? time : 0, total: endTime, running: this.running && endTime > 0 && this.computed !== undefined, rate: this.rate },
+      cursor: endTime > startTime
+        ? { kind: 'time', time: quantity(time, 's', 'time') }
+        : { kind: 'static', identity: 'dc_steady_state_mna' },
+      engineInfo: { id: result?.metadata.engineId ?? this.engine.engineId, version: result?.metadata.engineVersion ?? this.engine.engineVersion, model: 'dc_steady_state_mna' },
+      ...(this.failure === undefined ? {} : { diagnostics: [{ code: 'CIRCUIT_RUNTIME_FAILED', message: this.failure, ...(this.failureCondition === undefined ? {} : { condition: this.failureCondition }) }] }),
+    }
+  }
+
   getSnapshot(): WorkspaceSnapshot {
     const scene = this.sceneRuntime.peekScene()
     const title = scene.metadata.title ?? '直流动态电路'
@@ -339,14 +364,20 @@ export class CircuitWorkspaceRuntime implements WorkspaceRuntime {
          still has wiring worth drawing, and a canvas that vanishes mid-build
          takes the student's work with it. Readings come out empty, so nothing
          on screen claims a value the engine did not produce. */
-      const unpowered =
-        circuit === undefined
-          ? undefined
-          : circuitSceneVisualAt({
-            scene: this.viewSceneOf(scene),
-            point: unpoweredOperatingPoint(scene, this.currentTime),
-            time: this.currentTime,
-          })
+      const topology = circuit === undefined ? undefined : circuitSceneVisualAt({
+        scene: this.viewSceneOf(scene),
+        point: unpoweredOperatingPoint(scene, this.currentTime),
+        time: this.currentTime,
+      })
+      const unpowered = topology === undefined ? undefined : {
+        ...topology,
+        circuitComponents: (topology.circuitComponents ?? []).map(component => {
+          const { reading: _reading, currentText: _currentText, voltageText: _voltageText, powerText: _powerText, glow: _glow, ...apparatus } = component
+          return apparatus
+        }),
+        chargeFlows: [],
+        overlay: { ...topology.overlay, readout: [] },
+      }
       return {
         domain: 'circuit',
         title,
@@ -362,7 +393,7 @@ export class CircuitWorkspaceRuntime implements WorkspaceRuntime {
         derivation: [],
         verification: [],
         events: [],
-        clock: { time: this.currentTime, total: 0, running: false, rate: this.rate },
+        clock: this.captureRaw().clock,
         trajectoryTimes: [],
         error: {
           code: 'CIRCUIT_RUNTIME_FAILED',
@@ -666,7 +697,7 @@ export class CircuitWorkspaceRuntime implements WorkspaceRuntime {
 
   setRunning(running: boolean): WorkspaceSnapshot {
     const end = this.computed?.endTime ?? 0
-    if (running && end > 0 && this.currentTime >= end) this.currentTime = 0
+    if (running && end > 0 && this.currentTime >= end) { this.currentTime = 0; this.recompute() }
     this.running = running && end > 0
     return this.getSnapshot()
   }
@@ -801,6 +832,7 @@ export class CircuitWorkspaceRuntime implements WorkspaceRuntime {
 
   leaveBuilder(): WorkspaceSnapshot {
     this.draft = null
+    this.pendingWire = undefined
     return this.getSnapshot()
   }
 
@@ -816,18 +848,23 @@ export class CircuitWorkspaceRuntime implements WorkspaceRuntime {
    */
   applyDraftEdit(edit: (draft: CircuitDraft) => CircuitDraft): WorkspaceSnapshot {
     const current = this.draft ?? draftFromScene(this.sceneRuntime.getScene())
-    const next = edit(current)
+    const next = structuredClone(edit(structuredClone(current)))
+    if (JSON.stringify(next) === JSON.stringify(current)) return this.getSnapshot()
+    const scene = this.sceneRuntime.getScene()
+    const base = requiresExperimentalForkForFact(scene) ? forkExperimentalScene({ scene }) : scene
+    const candidate = draftToScene(next, {
+      sceneId: String(base.id), revision: scene.revision + 1, baseScene: base,
+    })
+    this.sceneRuntime = new SceneRuntime(candidate)
     this.draft = next
-    if (next !== current) {
-      const scene = this.sceneRuntime.getScene()
-      this.sceneRuntime = new SceneRuntime(
-        draftToScene(next, { sceneId: String(scene.id), revision: scene.revision + 1 }),
-      )
-      this.highlighted = []
-      this.currentTime = 0
-      this.running = false
-      this.recompute()
-    }
+    this.pendingWire = undefined
+    this.placementPreview = undefined
+    this.sliderPreview = undefined
+    this.pinnedFrame = undefined
+    this.highlighted = []
+    this.currentTime = 0
+    this.running = false
+    this.recompute()
     return this.getSnapshot()
   }
 
@@ -875,7 +912,13 @@ export class CircuitWorkspaceRuntime implements WorkspaceRuntime {
 
   restoreOrigin(): WorkspaceSnapshot {
     if (this.origin === undefined) return this.getSnapshot()
-    this.sceneRuntime = new SceneRuntime(this.origin)
+    const scene = this.sceneRuntime.getScene()
+    this.sceneRuntime = new SceneRuntime({ ...structuredClone(this.origin), id: scene.id, revision: scene.revision + 1 })
+    if (this.draft !== null) this.draft = synchronizeDraftWithScene(this.draft, this.sceneRuntime.getScene())
+    this.pendingWire = undefined
+    this.placementPreview = undefined
+    this.sliderPreview = undefined
+    this.pinnedFrame = undefined
     this.highlighted = []
     this.currentTime = 0
     this.running = false
@@ -1010,8 +1053,20 @@ const sampleReadoutOf = (
  * schematic with no current, voltage or glow, and the engine's own diagnosis
  * rides alongside instead of replacing the drawing.
  */
-const unpoweredOperatingPoint = (scene: PhysicsScene, time: number): CircuitOperatingPoint => {
-  const model = resolveCircuitModel(scene, time)
+const unpoweredOperatingPoint = (scene: PhysicsScene, _time: number): CircuitOperatingPoint => {
+  const circuit = circuitOf(scene)
+  // This is a presentation-only topology: unsupported electrical components
+  // must not be sent through the model resolver a second time on a failure frame.
+  const model: ResolvedCircuitModel = {
+    circuitId: circuit?.id ?? 'unavailable-circuit',
+    components: circuit?.components ?? [],
+    nodeOfTerminal: new Map(),
+    nodeIds: circuit?.nodes.map(node => node.id) ?? [],
+    branches: [],
+    primarySourceId: undefined,
+    variableResistors: [],
+    sweepDuration: 0,
+  }
   return {
     model,
     solution: {

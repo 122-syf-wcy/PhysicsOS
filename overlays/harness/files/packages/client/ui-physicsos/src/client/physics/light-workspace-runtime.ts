@@ -18,7 +18,12 @@ import {
   resolveLightModel,
   type ResolvedLightModel,
 } from '@physicsos/engine-optics'
-import { isScalarQuantity, type SimulationResult } from '@physicsos/physics-core'
+import {
+  isScalarQuantity,
+  type SimulationRequest,
+  type SimulationResult,
+} from '@physicsos/physics-core'
+import type { CapturedResult } from '@physicsos/physics-workbench'
 import { quantity } from '@physicsos/physics-units'
 import {
   SceneRuntime,
@@ -36,6 +41,7 @@ import {
   requiresExperimentalFork,
 } from './experimental-branch.ts'
 import { fmtFluidValue } from './fluid-visual-bridge.ts'
+import { lightCaptureEvidence } from './subbench-capture-bridge.ts'
 import { emptyVisualModel } from './scene-visual-model.ts'
 import { runtimeStatusOf } from './verified-result.ts'
 import type {
@@ -99,6 +105,10 @@ export class LightWorkspaceRuntime implements WorkspaceRuntime {
   private commandSequence = 0
   private highlighted: readonly string[] = []
   private failure: string | undefined
+  private request: SimulationRequest | undefined
+  private result: SimulationResult | undefined
+  private evidence: ReturnType<typeof lightCaptureEvidence> = {}
+  private captureDiagnostics: CapturedResult['diagnostics'] = []
   private computed: Computed | undefined
   private readonly origin: PhysicsScene | undefined
 
@@ -110,28 +120,41 @@ export class LightWorkspaceRuntime implements WorkspaceRuntime {
 
   private recompute(): void {
     const scene = this.sceneRuntime.getScene()
+    this.request = undefined
+    this.result = undefined
+    this.evidence = {}
+    this.captureDiagnostics = []
     try {
       const support = this.engine.canHandle(scene)
       if (!support.supported) {
         this.failure = support.failedConditions.map(entry => entry.message).join(' ')
+        this.captureDiagnostics = support.failedConditions.map(entry => ({ code: entry.condition, message: entry.message }))
         this.computed = undefined
         return
       }
-      const simulation = this.engine.simulate(
+      this.request = createLightSimulationRequest(
         scene,
-        createLightSimulationRequest(
-          scene,
-          `light-lab-${String(scene.id)}-${scene.revision}`,
-          `light-lab-trace-${String(scene.id)}-${scene.revision}`,
-        ),
+        `light-lab-${String(scene.id)}-${scene.revision}`,
+        `light-lab-trace-${String(scene.id)}-${scene.revision}`,
       )
+      const simulation = this.engine.simulate(scene, this.request)
+      this.result = simulation
+      const model = resolveLightModel(scene)
+      try {
+        this.evidence = lightCaptureEvidence({ scene, result: simulation, model })
+      } catch (error: unknown) {
+        this.captureDiagnostics = [{
+          code: 'LIGHT_CAPTURE_ANALYSIS_UNAVAILABLE',
+          message: error instanceof Error ? error.message : 'Raw light analysis is unavailable.',
+        }]
+      }
       if (simulation.verification.status === 'failed') {
         this.failure = simulation.verification.errors.map(entry => entry.message).join(' ')
         this.computed = undefined
         return
       }
       this.failure = undefined
-      this.computed = { simulation, model: resolveLightModel(scene) }
+      this.computed = { simulation, model }
     } catch (error: unknown) {
       this.failure = error instanceof Error ? error.message : '光的直线传播 Runtime 无法启动。'
       this.computed = undefined
@@ -139,14 +162,13 @@ export class LightWorkspaceRuntime implements WorkspaceRuntime {
   }
 
   private command<T extends SceneCommandType>(type: T, payload: SceneCommandPayloadMap[T]): void {
-    if (requiresExperimentalFork(this.sceneRuntime.getScene(), type)) {
-      this.sceneRuntime = new SceneRuntime(
-        forkExperimentalScene({ scene: this.sceneRuntime.getScene() }),
-      )
-    }
-    const scene = this.sceneRuntime.getScene()
+    const currentScene = this.sceneRuntime.getScene()
+    const runtime = requiresExperimentalFork(currentScene, type)
+      ? new SceneRuntime(forkExperimentalScene({ scene: currentScene }))
+      : this.sceneRuntime
+    const scene = runtime.getScene()
     this.commandSequence += 1
-    const result = this.sceneRuntime.execute(
+    const result = runtime.execute(
       createSceneCommand<T>({
         commandId: `light-ui-command-${this.commandSequence}`,
         sceneId: String(scene.id),
@@ -160,11 +182,38 @@ export class LightWorkspaceRuntime implements WorkspaceRuntime {
       this.failure = result.error.message
       return
     }
+    this.sceneRuntime = runtime
     this.recompute()
   }
 
   getScene(): PhysicsScene {
     return this.sceneRuntime.getScene()
+  }
+
+  captureRaw(): CapturedResult {
+    const scene = this.sceneRuntime.getScene()
+    const state = this.result?.states[0]
+    const release = scene.metadata.experimentRelease
+    return {
+      scene,
+      ...(this.request === undefined ? {} : { request: this.request }),
+      ...(this.result === undefined ? {} : { result: this.result }),
+      ...(state === undefined ? {} : { state }),
+      ...this.evidence,
+      clock: { time: 0, total: 0, running: false, rate: 1 },
+      cursor: { kind: 'static', identity: `${this.engine.engineId}:settled-reading` },
+      engineInfo: {
+        id: this.result?.metadata.engineId ?? this.engine.engineId,
+        version: this.result?.metadata.engineVersion ?? this.engine.engineVersion,
+        ...(this.result?.metadata.solver === undefined ? {} : { model: this.result.metadata.solver }),
+        ...(release === undefined ? {} : { release }),
+      },
+      diagnostics: [
+        ...(this.evidence.diagnostics ?? []),
+        ...(this.captureDiagnostics ?? []),
+        ...(this.failure === undefined ? [] : [{ code: 'LIGHT_RUNTIME_FAILED', message: this.failure }]),
+      ],
+    }
   }
 
   getSnapshot(): WorkspaceSnapshot {
@@ -308,12 +357,26 @@ export class LightWorkspaceRuntime implements WorkspaceRuntime {
     /* The three textbook layouts, one tap apart: the image smaller than the
        object, the same size, and larger — which is the whole of h′ = h·v/u. */
     if (id === 'pinhole-layout' && model.type === 'pinhole') {
-      const layout = PINHOLE_LAYOUTS[value]
-      if (layout !== undefined && Math.abs(layout - model.screenDistance) > 1e-9) {
+      const ratio = PINHOLE_LAYOUTS[value]
+      const distance = ratio === undefined ? undefined : ratio * model.objectDistance
+      if (distance !== undefined && Math.abs(distance - model.screenDistance) > 1e-9) {
         this.command('SetScreenDistance', {
           benchId: model.benchId,
-          distance: quantity(layout * 100, 'cm', 'length'),
+          distance: quantity(distance, 'm', 'length'),
         })
+      }
+    }
+    if (id === 'refraction-angle' && model.type === 'total_reflection') {
+      const critical = refractionReadingOf(model).criticalAngle
+      const angle = value === 'under'
+        ? critical === undefined ? Math.PI / 6 : critical / 2
+        : critical === undefined
+          ? undefined
+          : value === 'critical'
+            ? critical
+            : value === 'past' ? (critical + Math.PI / 2) / 2 : undefined
+      if (angle !== undefined && Math.abs(angle - model.incidentAngle) > 1e-9) {
+        this.command('SetIncidentAngle', { benchId: model.benchId, angle: quantity(angle, 'rad', 'angle') })
       }
     }
     return this.getSnapshot()
@@ -369,11 +432,11 @@ export class LightWorkspaceRuntime implements WorkspaceRuntime {
   }
 }
 
-/** Screen distances (m) for the three layouts the switch offers. */
+/** Screen-to-object distance ratios for the three layouts the switch offers. */
 const PINHOLE_LAYOUTS: Readonly<Record<string, number>> = {
-  smaller: 0.15,
-  same: 0.3,
-  larger: 0.45,
+  smaller: 0.5,
+  same: 1,
+  larger: 1.5,
 }
 
 /* -------------------------------------------------------------- inspector -- */
@@ -421,17 +484,23 @@ const parametersOf = (model: ResolvedLightModel): InspectorSection => {
           id: 'refraction-angle',
           label: '入射角',
           value:
-            reading.criticalAngle !== undefined &&
-            Math.abs(reading.incidentAngle - reading.criticalAngle) < 1e-9
-              ? 'critical'
-              : reading.totalInternalReflection
-                ? 'past'
-                : 'under',
-          options: [
-            { value: 'under', label: '小于临界角：有折射光线' },
-            { value: 'critical', label: '正好临界角：折射角 90°' },
-            { value: 'past', label: '超过临界角：全反射' },
-          ],
+            reading.criticalAngle === undefined
+              ? Math.abs(reading.incidentAngle - Math.PI / 6) < 1e-9 ? 'under' : 'custom'
+              : Math.abs(reading.incidentAngle - reading.criticalAngle) < 1e-9
+                ? 'critical'
+                : Math.abs(reading.incidentAngle - reading.criticalAngle / 2) < 1e-9
+                  ? 'under'
+                  : Math.abs(reading.incidentAngle - (reading.criticalAngle + Math.PI / 2) / 2) < 1e-9
+                    ? 'past'
+                    : 'custom',
+          options: reading.criticalAngle === undefined
+            ? [{ value: 'under', label: '有折射光线（无临界角）' }, { value: 'custom', label: '自定义' }]
+            : [
+              { value: 'under', label: '小于临界角：有折射光线' },
+              { value: 'critical', label: '正好临界角：折射角 90°' },
+              { value: 'past', label: '超过临界角：全反射' },
+              { value: 'custom', label: '自定义' },
+            ],
         },
       ],
     }
@@ -479,13 +548,16 @@ const parametersOf = (model: ResolvedLightModel): InspectorSection => {
         value:
           Math.abs(reading.screenDistance - reading.objectDistance) < 1e-9
             ? 'same'
-            : reading.screenDistance < reading.objectDistance
+            : Math.abs(reading.screenDistance - reading.objectDistance * 0.5) < 1e-9
               ? 'smaller'
-              : 'larger',
+              : Math.abs(reading.screenDistance - reading.objectDistance * 1.5) < 1e-9
+                ? 'larger'
+                : 'custom',
         options: [
           { value: 'smaller', label: 'v < u：缩小的像' },
           { value: 'same', label: 'v = u：等大的像' },
           { value: 'larger', label: 'v > u：放大的像' },
+          { value: 'custom', label: '自定义' },
         ],
       },
     ],

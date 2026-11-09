@@ -17,7 +17,6 @@ let root: string | undefined
 let context: Context | undefined
 
 afterEach(async () => {
-  await new Promise(resolve => setTimeout(resolve, 50))
   await context?.fiber.dispose()
   context = undefined
   if (root !== undefined) await rm(root, { recursive: true, force: true })
@@ -47,6 +46,8 @@ async function loadYaml(): Promise<Context> {
       '    backend: json',
       '- id: learning-host',
       "  name: '@deepseek-ai/dsh-learning-host'",
+      '  config:',
+      `    canvasDshHome: ${JSON.stringify(root)}`,
       '- id: auth-host',
       "  name: '@deepseek-ai/dsh-auth-host'",
       '  config:',

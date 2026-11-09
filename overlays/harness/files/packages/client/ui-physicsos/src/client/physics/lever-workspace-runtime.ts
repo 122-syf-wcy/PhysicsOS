@@ -16,14 +16,22 @@
 import {
   LeverEngine,
   createLeverSimulationRequest,
-  leverRunDuration,
   leverStateAt,
   momentsOf,
   resolveMomentBalance,
   type ResolvedLeverModel,
 } from '@physicsos/engine-lever'
-import { isScalarQuantity, type SimulationResult } from '@physicsos/physics-core'
+import {
+  EngineUnsupportedError,
+  isScalarQuantity,
+  simulationTimeRange,
+  type SimulationRequest,
+  type SimulationResult,
+} from '@physicsos/physics-core'
+import { copyDiagnosticObject, copyJsonObject } from '@physicsos/physics-workbench/json'
+import type { CapturedResult, JsonObject } from '@physicsos/physics-workbench/types'
 import { canonicalValue, quantity } from '@physicsos/physics-units'
+import { PhysicsOSError } from '@physicsos/shared'
 import {
   SceneRuntime,
   createSceneCommand,
@@ -127,7 +135,17 @@ export class LeverWorkspaceRuntime implements WorkspaceRuntime {
   private commandSequence = 0
   private highlighted: readonly string[] = []
   private failure: string | undefined
+  private request: SimulationRequest | undefined
+  private simulation: SimulationResult | undefined
+  private modelId: string | undefined
+  private diagnostics: readonly JsonObject[] = []
+  private rawState: JsonObject | undefined
   private computed: Computed | undefined
+  private currentState: ReturnType<typeof leverStateAt> | undefined
+  private stateTime = 0
+  private windowStart = 0
+  private totalTime = 0
+  private timeAxis: boolean | undefined
   private readonly origin: PhysicsScene | undefined
 
   constructor(scene: PhysicsScene) {
@@ -138,37 +156,109 @@ export class LeverWorkspaceRuntime implements WorkspaceRuntime {
 
   private recompute(): void {
     const scene = this.sceneRuntime.getScene()
+    this.request = undefined
+    this.simulation = undefined
+    this.modelId = undefined
+    this.diagnostics = []
+    this.rawState = undefined
+    this.currentState = undefined
+    this.windowStart = 0
+    this.totalTime = 0
+    this.timeAxis = undefined
     try {
       const support = this.engine.canHandle(scene)
+      this.modelId = support.modelId
       if (!support.supported) {
         this.failure = support.failedConditions.map(entry => entry.message).join(' ')
+        this.diagnostics = [copyJsonObject({ stage: 'support', ...support })]
         this.computed = undefined
-        return
-      }
-      const simulation = this.engine.simulate(
-        scene,
-        createLeverSimulationRequest(
-          scene,
-          `lever-lab-${String(scene.id)}-${scene.revision}`,
-          `lever-lab-trace-${String(scene.id)}-${scene.revision}`,
-        ),
-      )
-      if (simulation.verification.status === 'failed') {
-        this.failure = simulation.verification.errors.map(entry => entry.message).join(' ')
-        this.computed = undefined
+        this.running = false
         return
       }
       const model = resolveMomentBalance(scene)
-      this.currentTime = Math.min(this.currentTime, leverRunDuration(model))
+      this.timeAxis = !momentsOf(model).balanced
+      const request = createLeverSimulationRequest(
+        scene,
+        `lever-lab-${String(scene.id)}-${scene.revision}`,
+        `lever-lab-trace-${String(scene.id)}-${scene.revision}`,
+      )
+      this.request = request
+      this.retainWindow(request)
+      const simulation = this.engine.simulate(scene, request)
+      this.simulation = simulation
+      this.retainWindow(request, simulation)
+      this.diagnostics = [copyJsonObject({ stage: 'verification', ...simulation.verification })]
+      if (simulation.verification.status === 'failed') {
+        this.failure = simulation.verification.errors.map(entry => entry.message).join(' ')
+        this.computed = undefined
+        this.running = false
+        return
+      }
+      if (this.totalTime === 0) this.running = false
       this.failure = undefined
       this.computed = { simulation, model }
+      this.stateOf(model)
     } catch (error: unknown) {
       this.failure = error instanceof Error ? error.message : '杠杆 Runtime 无法启动。'
+      const cause = error instanceof EngineUnsupportedError
+        ? error.domainError
+        : error instanceof PhysicsOSError
+          ? { code: error.code, retryable: error.retryable, details: error.details }
+          : { code: 'LEVER_RUNTIME_FAILED', retryable: false }
+      let diagnostic: JsonObject
+      try {
+        diagnostic = copyDiagnosticObject({ ...cause, stage: 'runtime', message: this.failure })
+      } catch {
+        diagnostic = copyJsonObject({
+          stage: 'runtime',
+          code: cause.code,
+          retryable: cause.retryable,
+          message: this.failure,
+          details: { missing: 'non-json-diagnostic-details' },
+        })
+      }
+      this.diagnostics = [...this.diagnostics, diagnostic]
+      this.rawState = undefined
+      this.currentState = undefined
       this.computed = undefined
+      this.running = false
+      if (this.request !== undefined) this.retainWindow(this.request, this.simulation)
     }
   }
 
+  private retainWindow(request: SimulationRequest, result?: SimulationResult): void {
+    if (this.timeAxis !== true) return
+    if (result === undefined && request.options.startTime === undefined && request.options.endTime === undefined) return
+    const states = result?.states ?? []
+    const first = states[0]?.time
+    const last = states[states.length - 1]?.time
+    try {
+      const { startTime, endTime } = simulationTimeRange({
+        ...request.options,
+        ...(request.options.startTime !== undefined || first === undefined ? {} : { startTime: first }),
+        ...(request.options.endTime !== undefined || last === undefined ? {} : { endTime: last }),
+      })
+      this.windowStart = startTime
+      this.totalTime = endTime
+      this.currentTime = Math.min(endTime, Math.max(startTime, this.currentTime))
+    } catch {
+      this.windowStart = 0
+      this.totalTime = 0
+      /* An invalid request has no bounded playback window; the engine reports its failure. */
+    }
+  }
+
+  private stateOf(model: ResolvedLeverModel): ReturnType<typeof leverStateAt> {
+    if (this.currentState === undefined || this.stateTime !== this.currentTime) {
+      this.currentState = leverStateAt(model, this.currentTime)
+      this.rawState = copyJsonObject({ model, currentState: this.currentState })
+      this.stateTime = this.currentTime
+    }
+    return this.currentState
+  }
+
   private command<T extends SceneCommandType>(type: T, payload: SceneCommandPayloadMap[T]): void {
+    const previousRuntime = this.sceneRuntime
     if (requiresExperimentalFork(this.sceneRuntime.getScene(), type)) {
       this.sceneRuntime = new SceneRuntime(
         forkExperimentalScene({ scene: this.sceneRuntime.getScene() }),
@@ -187,7 +277,9 @@ export class LeverWorkspaceRuntime implements WorkspaceRuntime {
       }) as SceneCommand,
     )
     if (!result.ok) {
+      this.sceneRuntime = previousRuntime
       this.failure = result.error.message
+      this.diagnostics = [...this.diagnostics, copyJsonObject({ stage: 'command', ...result.error })]
       return
     }
     this.recompute()
@@ -195,6 +287,43 @@ export class LeverWorkspaceRuntime implements WorkspaceRuntime {
 
   getScene(): PhysicsScene {
     return this.sceneRuntime.getScene()
+  }
+
+  captureRaw(): CapturedResult {
+    const scene = this.sceneRuntime.peekScene()
+    const moving = this.computed !== undefined && this.totalTime > 0
+    const time = this.timeAxis !== true
+      ? 0
+      : Math.min(this.totalTime, Math.max(this.windowStart, this.currentTime))
+    return {
+      scene,
+      ...(this.request === undefined ? {} : { request: this.request }),
+      ...(this.simulation === undefined ? {} : { result: this.simulation }),
+      ...(this.rawState === undefined ? {} : { rawState: this.rawState }),
+      clock: {
+        time,
+        total: this.totalTime,
+        running: moving && this.running,
+        rate: this.rate,
+      },
+      cursor: this.timeAxis === true
+        ? { kind: 'time', time: quantity(time, 's', 'time') }
+        : {
+          kind: 'static',
+          identity: this.timeAxis === false
+            ? 'lever-equilibrium'
+            : `unavailable:${this.engine.engineId}`,
+        },
+      engineInfo: {
+        id: this.engine.engineId,
+        version: this.engine.engineVersion,
+        ...(this.modelId === undefined ? {} : { model: this.modelId }),
+        ...(scene.metadata.experimentRelease === undefined
+          ? {}
+          : { release: scene.metadata.experimentRelease }),
+      },
+      diagnostics: this.diagnostics,
+    }
   }
 
   getSnapshot(): WorkspaceSnapshot {
@@ -220,7 +349,14 @@ export class LeverWorkspaceRuntime implements WorkspaceRuntime {
         derivation: [],
         verification: [],
         events: [],
-        clock: { time: 0, total: 0, running: false, rate: this.rate },
+        clock: {
+          time: this.timeAxis !== true
+            ? 0
+            : Math.min(this.totalTime, Math.max(this.windowStart, this.currentTime)),
+          total: this.totalTime,
+          running: false,
+          rate: this.rate,
+        },
         trajectoryTimes: [],
         error: {
           code: 'LEVER_RUNTIME_FAILED',
@@ -231,8 +367,8 @@ export class LeverWorkspaceRuntime implements WorkspaceRuntime {
     }
 
     const { simulation, model } = this.computed
-    const totalTime = leverRunDuration(model)
-    const state = leverStateAt(model, this.currentTime)
+    const totalTime = this.totalTime
+    const state = this.stateOf(model)
     const view = leverSceneVisual({ scene, model, state, time: this.currentTime })
 
     const status = runtimeStatusOf(simulation.verification)
@@ -396,7 +532,7 @@ export class LeverWorkspaceRuntime implements WorkspaceRuntime {
     ]
 
     if (this.computed !== undefined && model !== undefined) {
-      const state = leverStateAt(model, this.currentTime)
+      const state = this.stateOf(model)
       const derived: DerivedQuantityView[] = this.computed.simulation.derivedQuantities
         .filter(entry => isScalarQuantity(entry.value))
         .map(entry => ({
@@ -471,11 +607,10 @@ export class LeverWorkspaceRuntime implements WorkspaceRuntime {
   }
 
   setRunning(running: boolean): WorkspaceSnapshot {
-    if (running && this.computed !== undefined) {
-      const totalTime = leverRunDuration(this.computed.model)
-      if (this.currentTime >= totalTime) this.currentTime = 0
+    if (running && this.computed !== undefined && this.totalTime > 0) {
+      if (this.currentTime >= this.totalTime) this.currentTime = this.windowStart
     }
-    this.running = running
+    this.running = running && this.computed !== undefined && this.totalTime > 0
     return this.getSnapshot()
   }
 
@@ -485,8 +620,10 @@ export class LeverWorkspaceRuntime implements WorkspaceRuntime {
   }
 
   seek(time: number): WorkspaceSnapshot {
-    const total = this.computed === undefined ? 0 : leverRunDuration(this.computed.model)
-    this.currentTime = Number.isFinite(time) ? Math.min(total, Math.max(0, time)) : 0
+    const total = this.totalTime
+    this.currentTime = Number.isFinite(time)
+      ? Math.min(total, Math.max(this.windowStart, time))
+      : this.windowStart
     this.running = false
     return this.getSnapshot()
   }
@@ -497,10 +634,9 @@ export class LeverWorkspaceRuntime implements WorkspaceRuntime {
 
   advance(wallClockSeconds: number): WorkspaceSnapshot {
     if (this.running && this.computed !== undefined && Number.isFinite(wallClockSeconds)) {
-      const totalTime = leverRunDuration(this.computed.model)
       const next = this.currentTime + wallClockSeconds * this.rate
-      this.currentTime = next >= totalTime ? totalTime : next
-      if (this.currentTime >= totalTime) this.running = false
+      this.currentTime = Math.min(this.totalTime, Math.max(this.windowStart, next))
+      if (this.currentTime >= this.totalTime) this.running = false
     }
     return this.getSnapshot()
   }

@@ -19,13 +19,18 @@ import {
   WaveEngine,
   createWaveSimulationRequest,
   resolveWaveModel,
+  waveProfileId,
   type ResolvedWaveModel,
 } from '@physicsos/engine-wave'
 import {
   isScalarQuantity,
+  toCanonicalVector,
   type SimulationResult,
   type SimulationState,
 } from '@physicsos/physics-core'
+import { conditionsFromScene, publicCapturedResult } from '@physicsos/physics-workbench/data'
+import { copyJsonObject } from '@physicsos/physics-workbench/json'
+import type { AnalysisDataset, CapturedResult, DatasetRow, DataValue } from '@physicsos/physics-workbench/types'
 import { canonicalValue, quantity } from '@physicsos/physics-units'
 import {
   SceneRuntime,
@@ -178,6 +183,29 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
   private highlighted: readonly string[] = []
   private failure: string | undefined
   private computed: Computed | undefined
+  /** Raw submitted input/output survive an engine verification failure. */
+  private retainedRun: Pick<CapturedResult, 'scene' | 'request' | 'result'> | undefined
+  private retainedEndTime: number | undefined
+  private engineInfo: CapturedResult['engineInfo'] = { id: this.engine.engineId, version: this.engine.engineVersion }
+  private rawState: CapturedResult['rawState']
+  private retainedAnalysis: readonly AnalysisDataset[] = []
+  /** The validated run and full analysis are fixed facts; cursor profiles remain live. */
+  private publishedRun: {
+    sourceResult: SimulationResult
+    sourceRequest: CapturedResult['request']
+    sourceAnalysis: readonly AnalysisDataset[]
+    result: SimulationResult
+    request: CapturedResult['request']
+    analysis: readonly AnalysisDataset[]
+  } | undefined
+  private retainedConditions: AnalysisDataset['conditions'] = []
+  private latestFrame: {
+    scene: PhysicsScene
+    simulation: SimulationResult
+    time: number
+    state: SimulationState
+    profile?: AnalysisDataset
+  } | undefined
   /** The scene as the source stated it, kept so an experimental branch can be discarded. */
   private readonly origin: PhysicsScene | undefined
 
@@ -188,9 +216,21 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
   }
 
   private recompute(): void {
-    const scene = this.sceneRuntime.getScene()
+    const scene = this.sceneRuntime.peekScene()
+    this.retainedRun = { scene }
+    this.retainedEndTime = undefined
+    this.latestFrame = undefined
+    this.rawState = undefined
+    this.retainedAnalysis = []
+    this.retainedConditions = []
+    this.engineInfo = {
+      id: this.engine.engineId,
+      version: this.engine.engineVersion,
+      ...(scene.metadata.experimentRelease === undefined ? {} : { release: scene.metadata.experimentRelease }),
+    }
     try {
       const support = this.engine.canHandle(scene)
+      if (support.modelId !== undefined) this.engineInfo = { ...this.engineInfo, model: support.modelId }
       if (!support.supported) {
         this.failure = support.failedConditions.map(entry => entry.message).join(' ')
         this.computed = undefined
@@ -208,20 +248,32 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
       const request = createWaveSimulationRequest(
         scene, `wave-lab-${String(scene.id)}-${scene.revision}`, `wave-lab-trace-${String(scene.id)}-${scene.revision}`,
       )
-      const simulation = this.engine.simulate(scene, {
-        ...request, options: { ...request.options, endTime: quantity(runSeconds, 's', 'time') },
-      })
-      if (simulation.verification.status === 'failed') {
-        this.failure = simulation.verification.errors.map(entry => entry.message).join(' ')
+      const effectiveRequest = { ...request, options: { ...request.options, endTime: quantity(runSeconds, 's', 'time') } }
+      this.retainedRun = { scene, request: effectiveRequest }
+      const simulation = this.engine.simulate(scene, effectiveRequest)
+      this.retainedRun = { scene, request: effectiveRequest, result: simulation }
+      const lastTime = simulation.states.at(-1)?.time
+      this.retainedEndTime = lastTime === undefined ? undefined : canonicalValue(lastTime)
+      this.engineInfo = { ...this.engineInfo, id: simulation.metadata.engineId, version: simulation.metadata.engineVersion }
+      const rejected = simulation.verification.status === 'failed'
+      this.failure = rejected ? simulation.verification.errors.map(entry => entry.message).join(' ') : undefined
+      this.rawState = copyJsonObject({ model })
+      this.retainedConditions = conditionsFromScene(scene)
+      this.retainedAnalysis = this.spatialAnalysis(simulation, { scene, model, conditions: this.retainedConditions })
+      if (rejected) {
         this.computed = undefined
         return
       }
+      const actualRunSeconds = this.retainedEndTime
+      if (actualRunSeconds === undefined) throw new Error('波动仿真未产出时间范围。')
+      if (model.subModel !== 'wave_interference') this.currentTime = Math.min(this.currentTime, actualRunSeconds)
       this.failure = undefined
-      this.computed = {
-        simulation,
-        model,
-        initialState: this.engine.stateAt(scene, quantity(0, 's', 'time')),
-        runSeconds,
+      const initialState = this.engine.stateAt(scene, quantity(0, 's', 'time'))
+      this.computed = { simulation, model, initialState, runSeconds: actualRunSeconds }
+      if (this.currentTime === 0) {
+        this.retainFrame(scene, simulation, initialState)
+      } else {
+        this.frameStateOf(scene, simulation)
       }
       if (model.subModel !== 'wave_interference') this.currentTime = Math.min(this.currentTime, this.runSeconds)
     } catch (error: unknown) {
@@ -230,18 +282,34 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
     }
   }
 
+  /** Retain the exact state used by the visual frame; capture only reads it. */
+  private frameStateOf(scene: PhysicsScene, simulation: SimulationResult): SimulationState {
+    const cached = this.latestFrame
+    if (cached?.scene === scene && cached.simulation === simulation && cached.time === this.currentTime) {
+      return cached.state
+    }
+    const state = this.engine.stateAt(scene, quantity(this.currentTime, 's', 'time'))
+    this.retainFrame(scene, simulation, state)
+    return state
+  }
+
+  private retainFrame(scene: PhysicsScene, simulation: SimulationResult, state: SimulationState): void {
+    const model = this.computed?.model
+    const profile = model === undefined ? undefined : waveProfileDatasetOf(scene, simulation, model, [state], 'captured-state', this.retainedConditions)
+    this.latestFrame = { scene, simulation, time: this.currentTime, state, ...(profile === undefined ? {} : { profile }) }
+  }
+
   private command<T extends SceneCommandType>(type: T, payload: SceneCommandPayloadMap[T]): void {
     /* Changing a physical fact on a question scene forks first: the solution the
        student just read was verified against the original conditions. Observable
        toggles are NOT facts and never fork. */
-    if (requiresExperimentalFork(this.sceneRuntime.getScene(), type)) {
-      this.sceneRuntime = new SceneRuntime(
-        forkExperimentalScene({ scene: this.sceneRuntime.getScene() }),
-      )
-    }
-    const scene = this.sceneRuntime.getScene()
+    const current = this.sceneRuntime.getScene()
+    const prospective = requiresExperimentalFork(current, type)
+      ? new SceneRuntime(forkExperimentalScene({ scene: current }))
+      : this.sceneRuntime
+    const scene = prospective.getScene()
     this.commandSequence += 1
-    const result = this.sceneRuntime.execute(
+    const result = prospective.execute(
       createSceneCommand<T>({
         commandId: `wave-ui-command-${this.commandSequence}`,
         sceneId: String(scene.id),
@@ -255,6 +323,7 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
       this.failure = result.error.message
       return
     }
+    this.sceneRuntime = prospective
     // A changed interference setup starts a new propagation experiment. Merely
     // hiding a layer preserves the accumulated age of its travelling fronts.
     if (type !== 'SetObservableEnabled' && waveBenchOf(this.sceneRuntime.getScene())?.type === 'interference') {
@@ -266,7 +335,9 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
 
   /** One physical clock; the chart cursor is only its periodic projection. */
   private get displayTime(): number {
-    return this.computed?.model.subModel === 'wave_interference' && this.currentTime > this.runSeconds
+    return this.computed !== undefined &&
+      ['travelling_wave', 'wave_interference', 'standing_wave', 'longitudinal_wave'].includes(this.computed.model.subModel) &&
+      this.currentTime > this.runSeconds
       ? this.currentTime % this.runSeconds : this.currentTime
   }
 
@@ -287,6 +358,102 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
   getScene(): PhysicsScene {
     return this.sceneRuntime.getScene()
   }
+
+  getPlaybackKind(): 'static' | 'time' {
+    return this.engineInfo.model === 'reflection_refraction' ? 'static' : 'time'
+  }
+
+  getPhysicalClock(): WorkspaceSnapshot['clock'] {
+    const total = this.computed === undefined ? this.retainedEndTime ?? 0 : this.runSeconds
+    if (this.getPlaybackKind() === 'static' || total <= 0) return { time: 0, total: 0, running: false, rate: this.rate }
+    const time = this.computed === undefined ? Math.min(total, Math.max(0, this.currentTime)) : Math.max(0, this.currentTime)
+    return { time, total: Math.max(total, time), running: this.computed !== undefined && this.running, rate: this.rate }
+  }
+
+  restorePhysicalClock(clock: WorkspaceSnapshot['clock']): WorkspaceSnapshot {
+    if (!Number.isFinite(clock.time) || clock.time < 0 || !Number.isFinite(clock.rate) || clock.rate <= 0) return this.getSnapshot()
+    this.rate = clock.rate
+    this.currentTime = this.getPlaybackKind() === 'static' ? 0 : clock.time
+    this.running = clock.running && this.computed !== undefined && this.getPlaybackKind() !== 'static'
+    return this.getSnapshot()
+  }
+
+  private captureEvidence(): CapturedResult {
+    const run: Pick<CapturedResult, 'scene' | 'request' | 'result'> = this.retainedRun ?? { scene: this.sceneRuntime.peekScene() }
+    const computed = this.computed
+    const frame = this.latestFrame
+    const state = computed !== undefined && frame !== undefined && frame.scene === run.scene && frame.simulation === run.result && frame.time === this.currentTime
+      ? frame.state
+      : undefined
+    const clock = this.getPhysicalClock()
+    const staticRun = clock.total <= 0
+    const analysis = this.retainedAnalysis
+    const capturedProfile = state === undefined ? undefined : frame?.profile
+    return {
+      ...run,
+      ...(state === undefined ? {} : { state }),
+      ...(this.rawState === undefined ? {} : { rawState: this.rawState }),
+      analysis: capturedProfile === undefined ? analysis : [...analysis, capturedProfile],
+      clock,
+      cursor: staticRun
+        ? { kind: 'static', identity: `${String(run.scene.id)}:${run.scene.revision}` }
+        : { kind: 'time', time: quantity(clock.time, 's', 'time') },
+      engineInfo: this.engineInfo,
+      metricSemantics: {
+        pressure_state: {
+          semanticKey: 'wave_pressure_state',
+          scale: { kind: 'unresolved', reason: 'Categorical code: -1 compression, 0 neutral, +1 rarefaction.' },
+        },
+        interference_type: {
+          semanticKey: 'wave_interference_type',
+          scale: { kind: 'unresolved', reason: 'Categorical code: +1 constructive, -1 destructive, 0 partial.' },
+        },
+        total_internal_reflection: {
+          semanticKey: 'total_internal_reflection',
+          scale: { kind: 'unresolved', reason: 'Boolean code: 1 total internal reflection, 0 transmission.' },
+        },
+      },
+      ...(this.failure === undefined ? {} : { diagnostics: [{ code: 'WAVE_RUNTIME_DIAGNOSTIC', message: this.failure }] }),
+    }
+  }
+
+  captureRaw(): CapturedResult {
+    return publicCapturedResult(this.captureEvidence())
+  }
+
+  capturePublished(): CapturedResult {
+    const raw = this.captureEvidence()
+    const sourceAnalysis = this.retainedAnalysis
+    const cached = raw.result !== undefined && this.publishedRun?.sourceResult === raw.result &&
+      this.publishedRun.sourceRequest === raw.request && this.publishedRun.sourceAnalysis === sourceAnalysis
+      ? this.publishedRun : undefined
+    // Preserve every fixed run row while publishing the current frame's own
+    // profile after it. Seeking never substitutes an old cursor profile.
+    const analysis = cached === undefined ? raw.analysis
+      : [...cached.analysis, ...(raw.analysis?.slice(sourceAnalysis.length) ?? [])]
+    const capture = publicCapturedResult({
+      ...raw,
+      ...(cached === undefined ? {} : {
+        result: cached.result,
+        ...(cached.request === undefined ? {} : { request: cached.request }),
+      }),
+      ...(analysis === undefined ? {} : { analysis }),
+    })
+    if (raw.result !== undefined && capture.result !== undefined) this.publishedRun = {
+      sourceResult: raw.result, sourceRequest: raw.request, sourceAnalysis,
+      result: capture.result, request: capture.request,
+      analysis: capture.analysis?.slice(0, sourceAnalysis.length) ?? [],
+    }
+    return capture
+  }
+
+  /** All stored engine profiles, retaining every time and spatial sample. */
+  private readonly spatialAnalysis = memoizeOnIdentityWith(
+    (simulation: SimulationResult, context: { scene: PhysicsScene; model: ResolvedWaveModel; conditions: AnalysisDataset['conditions'] }): readonly AnalysisDataset[] => {
+      const dataset = waveProfileDatasetOf(context.scene, simulation, context.model, simulation.states, 'analysis', context.conditions)
+      return dataset === undefined ? [] : [dataset]
+    },
+  )
 
   getSnapshot(): WorkspaceSnapshot {
     /* Shared frozen snapshot: this runs every animation frame, so no clone. */
@@ -322,7 +489,7 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
     }
 
     const { simulation, model, initialState } = this.computed
-    const state = this.engine.stateAt(scene, quantity(this.currentTime, 's', 'time'))
+    const state = this.frameStateOf(scene, simulation)
     const view = waveSceneVisual({
       scene,
       model,
@@ -532,8 +699,8 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
     model: ResolvedWaveModel | undefined,
   ): readonly InspectorSection[] {
     const sections: InspectorSection[] = []
-    const rounded = (value: number | undefined, digits: number): number =>
-      value === undefined ? Number.NaN : Number.parseFloat(value.toFixed(digits))
+    // Editable values retain their physical precision; only read-only labels are formatted.
+    const rounded = (value: number | undefined, _digits: number): number => value ?? Number.NaN
 
     const parameters: QuantityParameter[] = [
       {
@@ -787,6 +954,139 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
     this.running = false
     this.recompute()
     return this.getSnapshot()
+  }
+}
+
+/** Project only stored engine profiles; x is a physical coordinate, never a sample index. */
+const waveProfileDatasetOf = (
+  scene: PhysicsScene,
+  simulation: SimulationResult,
+  model: ResolvedWaveModel,
+  states: readonly SimulationState[],
+  collection: 'analysis' | 'captured-state',
+  conditions: AnalysisDataset['conditions'],
+): AnalysisDataset | undefined => {
+  const longitudinal = model.subModel === 'longitudinal_wave'
+  if (!longitudinal && model.subModel !== 'travelling_wave' && model.subModel !== 'standing_wave') return undefined
+  const firstProfileId = waveProfileId(model.benchId, 0)
+  const prefix = firstProfileId.slice(0, firstProfileId.lastIndexOf('.') + 1)
+  const finiteValue = (value: number): DataValue => Number.isFinite(value)
+    ? value
+    : { missing: 'The engine sample contains a non-finite value.' }
+  const rows: DatasetRow[] = states.flatMap((state, stateIndex) => state.objects
+    .filter(object => object.id.startsWith(prefix))
+    .map((object): DatasetRow => {
+      const position = object.position === undefined ? undefined : toCanonicalVector(object.position).vectorSI
+      const rawDisplacement = object.values?.['displacement']
+      const displacement = longitudinal
+        ? rawDisplacement !== undefined && isScalarQuantity(rawDisplacement)
+          ? canonicalValue(rawDisplacement)
+          : undefined
+        : position?.y
+      const x = position === undefined
+        ? undefined
+        : longitudinal
+          ? displacement === undefined ? undefined : position.x - displacement
+          : position.x
+      const values: Record<string, DataValue> = {
+        displacement: displacement === undefined
+          ? { missing: 'The engine sample did not publish displacement.' }
+          : finiteValue(displacement),
+      }
+      if (longitudinal) {
+        values.position_x = position === undefined
+          ? { missing: 'The engine sample did not publish position.' }
+          : finiteValue(position.x)
+        for (const key of ['strain', 'pressure_state'] as const) {
+          const entry = object.values?.[key]
+          values[key] = entry === undefined || !isScalarQuantity(entry)
+            ? { missing: `The engine sample did not publish ${key}.` }
+            : finiteValue(canonicalValue(entry))
+        }
+      }
+      return {
+        rowId: `${stateIndex}:${object.id}`,
+        axes: {
+          time: finiteValue(canonicalValue(state.time)),
+          x: x === undefined ? { missing: 'The engine sample has no equilibrium position.' } : finiteValue(x),
+        },
+        values,
+        evidence: { objectId: object.id, stateIndex },
+      }
+    }))
+  if (rows.length === 0) return undefined
+  return {
+    schemaVersion: 1,
+    kind: 'dataset',
+    id: `${String(simulation.simulationId)}:wave-profile:${collection}`,
+    axes: [
+      {
+        id: 'time',
+        kind: 'time',
+        identity: 'simulation_time',
+        dimension: 'time',
+        unit: 's',
+        origin: { kind: 'absolute', value: quantity(0, 's', 'time'), reference: 'simulation-time-zero' },
+      },
+      {
+        id: 'x',
+        kind: 'space',
+        identity: 'wave_equilibrium_position_x',
+        dimension: 'length',
+        unit: 'm',
+        origin: { kind: 'relative', value: quantity(0, 'm', 'length'), reference: `${model.benchId}:equilibrium-origin` },
+      },
+    ],
+    metrics: [
+      {
+        id: 'displacement',
+        semanticKey: longitudinal ? 'wave_longitudinal_displacement' : 'wave_transverse_displacement',
+        targetId: model.benchId,
+        component: longitudinal ? 'scalar' : 'y',
+        dimension: 'length',
+        unit: 'm',
+        scale: { kind: 'linear' },
+      },
+      ...(longitudinal ? [
+        {
+          id: 'position_x',
+          semanticKey: 'position',
+          targetId: model.benchId,
+          component: 'x' as const,
+          dimension: 'length' as const,
+          unit: 'm',
+          scale: { kind: 'linear' as const },
+        },
+        {
+          id: 'strain',
+          semanticKey: 'wave_longitudinal_strain',
+          targetId: model.benchId,
+          component: 'scalar' as const,
+          dimension: 'dimensionless' as const,
+          unit: '',
+          scale: { kind: 'linear' as const },
+        },
+        {
+          id: 'pressure_state',
+          semanticKey: 'wave_pressure_state',
+          targetId: model.benchId,
+          component: 'scalar' as const,
+          dimension: 'dimensionless' as const,
+          unit: '',
+          scale: { kind: 'unresolved' as const, reason: 'Categorical code: -1 compression, 0 neutral, +1 rarefaction.' },
+        },
+      ] : []),
+    ],
+    rows,
+    conditions,
+    origin: {
+      sceneId: String(scene.id),
+      sceneRevision: scene.revision,
+      simulationId: String(simulation.simulationId),
+      collection,
+      analysisId: `wave-profile:${collection}`,
+    },
+    metadata: { subModel: model.subModel, source: 'engine-profile-objects' },
   }
 }
 

@@ -12,7 +12,10 @@ import { formatUpdatedAt, workspaceKnowledge } from './workspaceMeta.ts'
 import css from './HomeActions.module.css'
 
 export type HomeActionsInjected = {
-  openSurface: (surface: 'home' | 'lab' | 'record', sceneRef?: PhysicsSceneRef) => void
+  openSurface: (surface: 'home' | 'lab' | 'record' | 'canvas', sceneRef?: PhysicsSceneRef) => void
+  openCanvasView: (canvasId?: string) => void
+  newCanvas: (title: string) => Promise<string>
+  requestSceneInCanvas: (sceneRef: PhysicsSceneRef) => void
   hooks: {
     recentExperiments: SnapshotStore<RecentExperimentsState>
   }
@@ -23,7 +26,7 @@ export type HomeActionsProps =
   & PropsLocale<'physicsos'>
 
 /** Quick actions and the recent real-scene list under the hero composer. */
-export function HomeActions({ useRecentExperiments, openSurface, t }: HomeActionsProps) {
+export function HomeActions({ useRecentExperiments, openSurface, openCanvasView, newCanvas, requestSceneInCanvas, t }: HomeActionsProps) {
   const items = useRecentExperiments(s => s.items)
   return (
     <div className={css.root}>
@@ -44,8 +47,8 @@ export function HomeActions({ useRecentExperiments, openSurface, t }: HomeAction
         <button
           type="button"
           className={css.portal}
-          aria-label={t('action.newLab')}
-          onClick={() => { openSurface('lab') }}
+          aria-label={t('canvas.new')}
+          onClick={() => { void newCanvas(t('canvas.untitled')).catch(() => undefined) }}
         >
           <img
             className={css.portalImage}
@@ -56,11 +59,11 @@ export function HomeActions({ useRecentExperiments, openSurface, t }: HomeAction
           <span className={css.portalBody}>
             <span className={css.portalTitle}>
               <span className={css.portalIcon}><IconPhysicsLab size={18} /></span>
-              {t('action.newLab')}
+              {t('canvas.new')}
             </span>
-            <span className={css.portalDescription}>{t('home.lab.description')}</span>
+            <span className={css.portalDescription}>{t('canvas.subtitle')}</span>
             <span className={css.portalMeta}>
-              {t('home.lab.meta')}
+              {t('canvas.emptyBoardHint')}
               <IconChevronRightOutlineMedium size={14} />
             </span>
           </span>
@@ -96,17 +99,15 @@ export function HomeActions({ useRecentExperiments, openSurface, t }: HomeAction
         <button
           type="button"
           className={css.action}
-          disabled
-          title={t('feature.unavailable')}
+          onClick={() => { openCanvasView() }}
         >
           <IconFolderOpenOutlineMedium size={16} />
-          <span>{t('action.openScene')}</span>
+          <span>{t('canvas.open')}</span>
         </button>
         <button
           type="button"
           className={css.action}
-          disabled
-          title={t('feature.unavailable')}
+          onClick={() => { openSurface('lab') }}
         >
           <IconBrowseOutlineMedium size={16} />
           <span>{t('action.templates')}</span>
@@ -156,6 +157,8 @@ export function HomeActions({ useRecentExperiments, openSurface, t }: HomeAction
                     </span>
                     <span className={css.recentTime}>{formatUpdatedAt(entry.updatedAt)}</span>
                   </button>
+                  <button type="button" className={css.action} aria-label={`${t('canvas.addToCanvas')} · ${entry.title}`}
+                    onClick={() => { requestSceneInCanvas(sceneRefOf(entry)) }}>{t('canvas.addToCanvas')}</button>
                 </li>
               )
             })}

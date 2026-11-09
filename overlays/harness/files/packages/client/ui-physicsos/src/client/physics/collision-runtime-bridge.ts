@@ -25,6 +25,7 @@ import {
 } from '@physicsos/physics-scene'
 import { derivedScalar, derivedVector, toCanonicalVector } from '@physicsos/physics-core'
 import { canonicalValue } from '@physicsos/physics-units'
+import type { CapturedResult } from '@physicsos/physics-workbench/types'
 
 import { collisionSceneVisualAt, collisionSampleIndices } from './collision-visual-bridge.ts'
 import { emptyVisualModel, type SceneVisualModel } from './scene-visual-model.ts'
@@ -46,10 +47,13 @@ import type {
 } from './scene-visual-model.ts'
 
 type CollisionSimulation = ReturnType<CollisionEngine['simulate']>
+type CollisionRequest = ReturnType<typeof createCollisionSimulationRequest>
+type CollisionState = ReturnType<CollisionEngine['stateAt']>
 
 /** Simulation of the current scene revision, reused across playback frames. */
 interface CollisionSimulationCache {
   readonly sceneRevision: number
+  readonly request: CollisionRequest
   readonly simulation: CollisionSimulation
   readonly status: RuntimeStatus
 }
@@ -136,6 +140,10 @@ export class CollisionRuntimeBridge {
   private highlighted: readonly string[] = []
   private snapshot!: CollisionRuntimeSnapshot
   private simulationCache: CollisionSimulationCache | undefined
+  private simulationRequest: CollisionRequest | undefined
+  private simulationResult: CollisionSimulation | undefined
+  private currentState: CollisionState | undefined
+  private captureTime = 0
 
   constructor(input: CollisionSceneInput | PhysicsScene) {
     this.sceneRuntime = new SceneRuntime(
@@ -150,6 +158,45 @@ export class CollisionRuntimeBridge {
    */
   getSnapshot(): CollisionRuntimeSnapshot {
     return this.snapshot
+  }
+
+  /** Raw evidence already held for the displayed revision and frame. */
+  captureRaw(): CapturedResult {
+    const { scene, modelId, clock, error } = this.snapshot
+    const request = this.simulationRequest
+    const result = this.simulationResult
+    const state = this.currentState
+    const start = request?.options.startTime ?? result?.states[0]?.time
+    const end = request?.options.endTime ?? result?.states.at(-1)?.time
+    const startTime = result === undefined || start === undefined ? 0 : canonicalValue(start)
+    const endTime = result === undefined || end === undefined ? clock.total : canonicalValue(end)
+    const isStatic = result === undefined ? clock.total === 0 : endTime === startTime
+    const captureClock = isStatic
+      ? { time: 0, total: 0, running: false, rate: clock.rate }
+      : this.snapshot.status === 'failed'
+        ? { time: Math.min(endTime, Math.max(startTime, this.captureTime)), total: endTime, running: false, rate: clock.rate }
+        : clock
+    return {
+      scene,
+      ...(request === undefined ? {} : { request }),
+      ...(result === undefined ? {} : { result }),
+      ...(state === undefined ? {} : { state }),
+      clock: captureClock,
+      cursor: isStatic
+        ? { kind: 'static', identity: modelId }
+        : { kind: 'time', time: { value: captureClock.time, unit: 's', dimension: 'time' } },
+      engineInfo: {
+        id: result?.metadata.engineId ?? this.engine.engineId,
+        version: result?.metadata.engineVersion ?? this.engine.engineVersion,
+        model: modelId,
+        ...(scene.metadata.experimentRelease === undefined ? {} : { release: scene.metadata.experimentRelease }),
+      },
+      diagnostics: [
+        ...(error === undefined ? [] : [{ code: error.code, message: error.message, retryable: error.retryable }]),
+        ...(result?.verification.errors.map(issue => ({ code: issue.code, message: issue.message, severity: issue.severity })) ?? []),
+        ...(result?.verification.warnings.map(issue => ({ code: issue.code, message: issue.message, severity: issue.severity })) ?? []),
+      ],
+    }
   }
 
   /**
@@ -362,7 +409,11 @@ export class CollisionRuntimeBridge {
          scene validation in `canHandle` runs once per revision, not per frame. */
       const cached = this.simulationCache
       const fresh = cached === undefined || cached.sceneRevision !== scene.revision
+      this.captureTime = this.currentTime
+      this.currentState = undefined
       if (fresh) {
+        this.simulationRequest = undefined
+        this.simulationResult = undefined
         const support = this.engine.canHandle(scene)
         if (!support.supported) {
           this.snapshot = this.failedSnapshot(scene, modelId, {
@@ -373,18 +424,18 @@ export class CollisionRuntimeBridge {
           return this.snapshot
         }
       }
-      const simulation = fresh
-        ? this.engine.simulate(
+      const request = fresh
+        ? createCollisionSimulationRequest(
           scene,
-          createCollisionSimulationRequest(
-            scene,
-            `collision-sim-${scene.revision}`,
-            `physicsos-collision-${scene.revision}-${this.traceSequence}`,
-          ),
+          `collision-sim-${scene.revision}`,
+          `physicsos-collision-${scene.revision}-${this.traceSequence}`,
         )
-        : cached.simulation
+        : cached.request
+      this.simulationRequest = request
+      const simulation = fresh ? this.engine.simulate(scene, request) : cached.simulation
+      this.simulationResult = simulation
       const status: RuntimeStatus = runtimeStatusOf(simulation.verification)
-      this.simulationCache = { sceneRevision: scene.revision, simulation, status }
+      this.simulationCache = { sceneRevision: scene.revision, request, simulation, status }
 
       if (status === 'failed') {
         this.snapshot = this.failedSnapshot(scene, modelId, {
@@ -397,8 +448,10 @@ export class CollisionRuntimeBridge {
 
       const total = this.durationOf(simulation)
       if (this.currentTime > total) this.currentTime = total
+      this.captureTime = this.currentTime
 
       const state = this.nearestState(simulation, this.currentTime)
+      this.currentState = state
 
       const built = this.buildSnapshot({
         scene,
@@ -417,6 +470,7 @@ export class CollisionRuntimeBridge {
       }
       return this.snapshot
     } catch (error: unknown) {
+      this.currentState = undefined
       this.currentTime = 0
       this.running = false
       this.snapshot = this.failedSnapshot(scene, modelId, runtimeErrorOf(error))
