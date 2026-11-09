@@ -26,7 +26,7 @@ describe('mechanics review regressions', () => {
     expect(state.objects[0]!.velocity!.vector.y).toBeCloseTo(0, 10)
   })
 
-  it.each([0, 0.5, 1])('keeps the actual SVG cart above its support at fraction %s', fraction => {
+  it.each([0, 0.5, 1])('keeps the actual SVG cart above its support at fraction %s', (fraction) => {
     const runtime = createEnergyWorkspaceRuntime(createRampFrictionScene())
     const frame = runtime.seek(runtime.getSnapshot().clock.total * fraction)
     const original = JSON.stringify(frame.view)

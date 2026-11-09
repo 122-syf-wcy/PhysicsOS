@@ -34,7 +34,9 @@ describe('wave lesson playback', () => {
     expect(replay.view.waveProfile!.points.every(point => point.y === 0)).toBe(true)
     const steady = runtime.setChoice('standing-mode', 'steady')
     const end = runtime.seek(steady.clock.total)
-    end.view.waveProfile!.points.forEach((point, i) => expect(point.y).toBeCloseTo(steady.view.waveProfile!.points[i]!.y, 10))
+    end.view.waveProfile!.points.forEach((point, i) => {
+      expect(point.y).toBeCloseTo(steady.view.waveProfile!.points[i]!.y, 10)
+    })
   })
 
   it('preserves the endpoint of a nonperiodic Doppler journey', () => {
@@ -44,7 +46,7 @@ describe('wave lesson playback', () => {
     expect(end.clock.running).toBe(false)
     expect(end.clock.time).toBe(end.clock.total)
   })
-  it.each([createTravellingWaveScene, createWaveInterferenceScene, createStandingWaveScene])('loops only after play and preserves pause, seek and slow rate', createScene => {
+  it.each([createTravellingWaveScene, createWaveInterferenceScene, createStandingWaveScene])('loops only after play and preserves pause, seek and slow rate', (createScene) => {
     const runtime = createWaveWorkspaceRuntime(createScene())
     expect(runtime.advance(10).clock.time).toBe(0)
     runtime.setRate(0.01)

@@ -615,9 +615,12 @@ export class CollisionRuntimeBridge {
     const individual = bodies.map((body, index): ChartSeries => ({
       id: `p${index + 1}-t`, title: `球 ${index + 1} 水平动量 p${index + 1}ₓ(t)`,
       xLabel: 't / s', yLabel: 'pₓ / (kg·m/s)', role: index === 0 ? 'velocity' : 'force',
-      points: simulation.states.flatMap(state => {
+      points: simulation.states.flatMap((state) => {
         const velocity = state.objects.find(object => object.id === body.id)?.velocity
-        return velocity === undefined ? [] : [{ t: state.time.value, value: canonicalValue(body.mass) * toCanonicalVector(velocity).vectorSI.x }]
+        return velocity === undefined ? [] : [{
+          t: state.time.value,
+          value: canonicalValue(body.mass) * toCanonicalVector(velocity).vectorSI.x,
+        }]
       }),
     }))
     return [...individual, momentumSeries, energySeries]

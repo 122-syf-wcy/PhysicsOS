@@ -234,7 +234,7 @@ export class EnergyWorkspaceRuntime implements WorkspaceRuntime {
         { id: 'Ek-t', title: '动能 Ek(t)', key: 'current_kinetic_energy', role: 'velocity' as const },
         { id: 'Q-t', title: '转化的内能 Q(t)', key: 'current_thermal_energy', role: 'force' as const },
       ].map(({ id, title: chartTitle, key, role }) => ({ id, title: chartTitle, xLabel: 't / s', yLabel: 'E / J', role,
-        points: simulation.states.map(state => {
+        points: simulation.states.map((state) => {
           const value = state.derived.find(entry => entry.key === key)?.value
           return { t: state.time.value, value: value !== undefined && isScalarQuantity(value) ? value.value : 0 }
         }),

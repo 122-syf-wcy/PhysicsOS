@@ -32,7 +32,7 @@ it('exports a chart-capable workspace with its current engine snapshot for brows
     ['physics/MathText.module.css', mathCss],
   ] as const) {
     styles += (await readFile(resolve('packages/client/ui-physicsos/src/client', name), 'utf8'))
-      .replace(/\.([a-zA-Z][\w-]*)/g, (all, key: string) => (classes as Record<string, string>)[key] ? `.${(classes as Record<string, string>)[key]}` : all)
+      .replace(/\.([a-zA-Z][\w-]*)/g, (all, key: string) => classes[key] ? `.${classes[key]}` : all)
       .replace(/:global\(([^()]*)\)/g, '$1') + '\n'
   }
   const fixture = process.env.PHYSICSOS_FEEDBACK_FIXTURE ?? '/tmp/physicsos-feedback-common'

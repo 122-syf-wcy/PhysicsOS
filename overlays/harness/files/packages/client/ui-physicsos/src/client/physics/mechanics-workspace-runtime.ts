@@ -90,7 +90,8 @@ export class MechanicsWorkspaceRuntime implements WorkspaceRuntime {
     if (!this.comparison || snapshot.modelId !== 'projectile_motion' || snapshot.status === 'failed') return view
     if (this.comparisonCache?.scene !== snapshot.scene) {
       const engine = new MechanicsEngine()
-      const body = snapshot.scene.bodies[0]!
+      const body = snapshot.scene.bodies[0]
+      if (body === undefined) return view
       const speed = Math.hypot(body.velocity.vector.x, body.velocity.vector.y)
       const paths: TrajectoryVisual[] = []
       const labels: LabelVisual[] = []
@@ -101,7 +102,7 @@ export class MechanicsWorkspaceRuntime implements WorkspaceRuntime {
         } : entry) }
         const result = engine.simulate(scene, createMechanicsSimulationRequest(scene, `comparison-${angle}`, `comparison-${angle}-${scene.revision}`))
         if (result.verification.status === 'failed') continue
-        const points = result.states.flatMap(state => {
+        const points = result.states.flatMap((state) => {
           const position = state.objects.find(entry => entry.id === body.id)?.position?.vector
           return position === undefined ? [] : [{ x: position.x, y: position.y }]
         })

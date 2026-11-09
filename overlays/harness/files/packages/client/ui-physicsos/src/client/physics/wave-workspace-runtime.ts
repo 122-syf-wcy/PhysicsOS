@@ -376,7 +376,12 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
         points: Array.from({ length: 193 }, (_, index) => {
           const t = duration * index / 192
           const samples = this.engine.stateAt(scene, quantity(t, 's', 'time')).objects.filter(object => object.id.includes('.formation-sum.'))
-          const nearest = samples.reduce((best, next) => Math.abs((next.position?.vector.x ?? 0) - firstAntinode) < Math.abs((best.position?.vector.x ?? 0) - firstAntinode) ? next : best)
+          const nearest = samples.reduce(
+            (best, next) =>
+              Math.abs((next.position?.vector.x ?? 0) - firstAntinode) < Math.abs((best.position?.vector.x ?? 0) - firstAntinode)
+                ? next
+                : best,
+          )
           return { t, value: (nearest.position?.vector.y ?? 0) * 100 }
         }),
       }]

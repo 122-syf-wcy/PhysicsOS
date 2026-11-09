@@ -450,7 +450,7 @@ export const waveSceneVisual = (input: WaveVisualInput): SceneVisualModel => {
       grid: { minor: 20, major: 100 }, axes: { x: 'x / cm', y: 'y / cm' }, tickStep: 100,
       trajectories: [
         ...[...groups].map(([id, points]) => ({ id: `wave-${id}`, kind: 'history' as const, points })),
-        ...(visibleMinimum ? [{ id: 'wave-first-minimum', kind: 'predicted' as const, points: [{ x: 0, y: 0 }, { x: screenDistanceCm, y: exactHalfWidthCm! }] }] : []),
+        ...(visibleMinimum ? [{ id: 'wave-first-minimum', kind: 'predicted' as const, points: [{ x: 0, y: 0 }, { x: screenDistanceCm, y: exactHalfWidthCm }] }] : []),
         { id: 'wave-diffraction-intensity', kind: 'history', points: screenPoints },
       ],
       labels: [
@@ -459,8 +459,8 @@ export const waveSceneVisual = (input: WaveVisualInput): SceneVisualModel => {
         { id: 'wave-intensity-label', at: { x: screenDistanceCm + intensityScale / 2, y: halfHeight }, text: '屏上强度 I/I₀', anchor: 'middle' },
       ],
       dimensions: [
-        ...(visibleMinimum ? [{ id: 'wave-central-width', from: { x: screenDistanceCm, y: -exactHalfWidthCm! }, to: { x: screenDistanceCm, y: exactHalfWidthCm! },
-          label: `中央宽度 ${fmtWaveValue(exactHalfWidthCm! / 50)} m`, side: 'right' as const }] : []),
+        ...(visibleMinimum ? [{ id: 'wave-central-width', from: { x: screenDistanceCm, y: -exactHalfWidthCm }, to: { x: screenDistanceCm, y: exactHalfWidthCm },
+          label: `中央宽度 ${fmtWaveValue(exactHalfWidthCm / 50)} m`, side: 'right' as const }] : []),
         { id: 'wave-intensity-scale', from: { x: screenDistanceCm, y: -halfHeight }, to: { x: screenDistanceCm + intensityScale, y: -halfHeight }, label: 'I/I₀ = 1', side: 'right' },
       ],
       overlay: {

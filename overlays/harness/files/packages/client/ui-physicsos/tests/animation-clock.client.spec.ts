@@ -18,14 +18,14 @@ describe('animation clock', () => {
   it('keeps advancing across render updates and resumes without consuming the paused interval', () => {
     const frames = new Map<number, FrameRequestCallback>()
     let nextId = 0
-    vi.spyOn(window, 'requestAnimationFrame').mockImplementation(callback => {
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
       frames.set(++nextId, callback)
       return nextId
     })
-    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(id => { frames.delete(id) })
+    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation((id) => { frames.delete(id) })
     let elapsed = 0
     const { rerender, unmount } = renderHook(({ running }) => {
-      useAnimationClock(running, delta => { elapsed += delta })
+      useAnimationClock(running, (delta) => { elapsed += delta })
     }, { initialProps: { running: false } })
     expect(frames.size).toBe(0)
     rerender({ running: true })
