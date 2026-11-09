@@ -645,7 +645,13 @@ export const createWorkbenchInstanceRuntime = (options: CreateWorkbenchInstanceO
       if (parsed === undefined) throw new TypeError('Invalid circuit authoring facts.')
       next = copy(parsed)
     } catch (error: unknown) { report(error); return actionError('INVALID_DRAFT', 'The circuit draft edit was rejected.') }
-    if (JSON.stringify(current) === JSON.stringify(next)) return summary
+    if (JSON.stringify(current) === JSON.stringify(next)) {
+      if (diagnostics.some(item => item.code === 'INVALID_DRAFT' || item.code === 'WORKBENCH_EDIT_REJECTED')) {
+        diagnostics = []
+        return publishSummary()
+      }
+      return summary
+    }
     return transaction('circuit:draft', () => {
       buildMode = 'construct'
       runtime.enterBuilder?.()
@@ -670,21 +676,23 @@ export const createWorkbenchInstanceRuntime = (options: CreateWorkbenchInstanceO
     const beforeDraft = draft
     const beforeEditRevision = instanceEditRevision
     const beforeClock = physicalClockOf()
+    const beforeHighlighted = highlighted
     try {
+      const restoredDraft = buildMode === 'construct'
+        ? copy((redo ? entry.afterDraft : entry.beforeDraft) ?? draftFromScene(restored)) : undefined
+      highlighted = restoredDraft === undefined ? []
+        : highlighted.filter(id => restoredDraft.components.some(component => component.id === id))
       release = restored.metadata.experimentRelease
       notebook = copy(readNotebook(restored))
       installRuntime(restored, { time: 0, total: 0, running: false, rate: frames.getSnapshot().clock.rate })
       committedScene = restored
-      draft = buildMode === 'construct'
-        ? copy((redo ? entry.afterDraft : entry.beforeDraft) ?? draftFromScene(restored))
-        : undefined
+      draft = restoredDraft
       history = redo
         ? freeze({ past: [...history.past, entry], future: history.future.slice(1) })
         : freeze({ past: history.past.slice(0, -1), future: [entry, ...history.future] })
       instanceEditRevision += 1
       if (!Number.isSafeInteger(instanceEditRevision)) throw new RangeError('The instance edit revision is exhausted.')
       pendingWire = undefined
-      highlighted = []
       diagnostics = []
       publish(latest)
       notifyCommitted(redo ? 'redo' : 'undo')
@@ -696,6 +704,7 @@ export const createWorkbenchInstanceRuntime = (options: CreateWorkbenchInstanceO
       notebook = beforeNotebook
       history = beforeHistory
       draft = beforeDraft
+      highlighted = beforeHighlighted
       instanceEditRevision = beforeEditRevision
       try { installRuntime(before, beforeClock); publish(latest) } catch (restoreError: unknown) { report(restoreError) }
       return actionError('HISTORY_RESTORE_REJECTED', 'The physical history could not be restored.')
@@ -724,7 +733,7 @@ export const createWorkbenchInstanceRuntime = (options: CreateWorkbenchInstanceO
     } catch (error: unknown) { report(error); stopScheduledClock(); return actionError('CLOCK_FAILED', 'The physics clock could not advance.') }
   }
   const beginWire = (ref: TerminalRef): WorkbenchInstanceSummary => {
-    if (disposed || runtime.applyDraftEdit === undefined) return summary
+    if (disposed || buildMode !== 'construct' || runtime.applyDraftEdit === undefined) return summary
     const current = draft ?? draftFromScene(committedScene)
     const component = current.components.find(entry => entry.id === ref.componentId)
     if (component?.nets[ref.terminalKey] === undefined) return actionError('INVALID_TERMINAL', 'This terminal is not on the circuit bench.')
@@ -732,7 +741,7 @@ export const createWorkbenchInstanceRuntime = (options: CreateWorkbenchInstanceO
     return publishSummary()
   }
   const completeWire = (ref: TerminalRef): WorkbenchInstanceSummary => {
-    if (disposed || pendingWire === undefined) return summary
+    if (disposed || buildMode !== 'construct' || pendingWire === undefined) return summary
     const from = pendingWire
     const previousSummary = summary
     pendingWire = undefined

@@ -70,6 +70,33 @@ function beginPlacement(root: HTMLElement) {
 }
 
 describe('native instance preview display ownership', () => {
+  it('restores a rejected selected rating and accepts a valid unchanged correction in the real canvas owner', async () => {
+    const owned = await displays()
+    await owned.controller.instanceAction(owned.instanceKey, 'enterBuilder')
+    const component = owned.summary().draft!.components.find(item => item.type === 'resistor')!
+    const original = component.params.resistance!
+    const revision = owned.summary().instanceEditRevision
+    const renderSlot: CanvasInstanceProps['renderSlot'] = (_position, values) => <CanvasFrameStage {...owned.frame('card')} {...values} />
+    const view = render(<CanvasInstanceView {...owned.frame('card')} presentation="card" renderSlot={renderSlot} />)
+    fireEvent.click(view.getByTestId(`builder-row-${component.id}`))
+    const field = await view.findByTestId<HTMLInputElement>(`builder-resistance-${component.id}`)
+    fireEvent.change(field, { target: { value: '-1' } })
+    fireEvent.blur(field)
+    await waitFor(() => expect(field.value).toBe(String(original)))
+    expect(owned.summary().instanceEditRevision).toBe(revision)
+    expect(await view.findByRole('alert')).toBeTruthy()
+    fireEvent.change(field, { target: { value: String(original) } })
+    fireEvent.blur(field)
+    await waitFor(() => expect(view.getByTestId('circuit-builder').getAttribute('aria-busy')).toBe('false'))
+    expect(view.queryByRole('alert')).toBeNull()
+    expect(owned.summary().diagnostics).toEqual([])
+    expect(owned.summary().instanceEditRevision).toBe(revision)
+    fireEvent.change(field, { target: { value: String(original + 5) } })
+    fireEvent.blur(field)
+    await waitFor(() => expect(owned.summary().draft!.components.find(item => item.id === component.id)!.params.resistance).toBe(original + 5))
+    expect(view.getByTestId(`builder-inspector-${component.id}`)).toBeTruthy()
+  })
+
   it('docks all live construction readings outside a narrow diagram and restores the wide overlay without a scene edit', async () => {
     const observers = new Map<Element, () => void>()
     vi.stubGlobal('ResizeObserver', class {

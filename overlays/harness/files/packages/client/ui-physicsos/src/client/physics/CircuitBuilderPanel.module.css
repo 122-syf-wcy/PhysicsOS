@@ -191,6 +191,16 @@
   line-height: 1.6;
 }
 
+.editFeedback {
+  margin: 0;
+  padding: 7px 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 7px;
+  color: var(--physics-danger, var(--dsw-alias-label-primary));
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 /* ---------- placed list ---------- */
 
 .list {

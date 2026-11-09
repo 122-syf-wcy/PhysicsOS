@@ -34,10 +34,13 @@ import {
 } from './circuit-builder-labels.ts'
 import { PARTS3D, part3dUrl } from './parts3d-catalog.ts'
 import { CIRCUIT_PART_MIME, placeBuilderPart } from './circuit-part-drag.ts'
+import { parseCircuitDraft } from './workbench-history-codec.ts'
 import css from './CircuitBuilderPanel.module.css'
 import type { PhysicsosKey } from '../locales.ts'
 
 type Translate = (key: PhysicsosKey) => string
+type EditOutcome = boolean | Promise<boolean>
+type FieldCommitOutcome = void | boolean | Promise<void | boolean>
 
 /** Edits the panel can apply; every one is a pure draft transform. */
 export interface BuilderEditing {
@@ -84,23 +87,69 @@ function NumberField({
   readonly label: string
   readonly unit: string
   readonly value: number
-  readonly onCommit: (next: number) => void
+  readonly onCommit: (next: number) => FieldCommitOutcome
   readonly testId: string
 }) {
   const [text, setText] = useState(String(value))
   const [lastValue, setLastValue] = useState(value)
+  const committedValue = useRef(value)
+  committedValue.current = value
+  const latestAttempt = useRef(0)
+  const dirtyAttempt = useRef<number | undefined>()
+  const submissions = useRef<{ attempt: number; value: number; settled: boolean }[]>([])
+  const mounted = useRef(true)
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
   /* Re-seed when the value changes underneath (undo, or a switch of part). */
   if (value !== lastValue) {
+    const acknowledgement = submissions.current.find(submission => submission.value === value)
+    const newerDraft = acknowledgement !== undefined && dirtyAttempt.current !== undefined &&
+      dirtyAttempt.current > acknowledgement.attempt
+    if (acknowledgement !== undefined) {
+      submissions.current = submissions.current.filter(submission => submission !== acknowledgement &&
+        (!submission.settled || submission.attempt > acknowledgement.attempt))
+    }
     setLastValue(value)
-    setText(String(value))
+    if (!newerDraft) {
+      dirtyAttempt.current = undefined
+      setText(String(value))
+    }
   }
-  const commit = () => {
+  const commit = (): void => {
+    const attempt = ++latestAttempt.current
+    const restore = (): void => {
+      if (mounted.current && attempt === latestAttempt.current) {
+        dirtyAttempt.current = undefined
+        setText(String(committedValue.current))
+      }
+    }
     const parsed = Number(text)
     if (text.trim().length === 0 || !Number.isFinite(parsed)) {
-      setText(String(value))
+      restore()
       return
     }
-    onCommit(parsed)
+    const submission = { attempt, value: parsed, settled: false }
+    submissions.current.push(submission)
+    dirtyAttempt.current = attempt
+    const settle = (accepted: void | boolean): void => {
+      if (accepted === false) {
+        submissions.current = submissions.current.filter(item => item !== submission)
+        restore()
+      } else {
+        submission.settled = true
+        // A resolved request may publish its prop on the next render; keep its marker until observed.
+        if (committedValue.current === submission.value) {
+          submissions.current = submissions.current.filter(item => item !== submission)
+          if (dirtyAttempt.current === attempt) dirtyAttempt.current = undefined
+        }
+      }
+    }
+    let result: FieldCommitOutcome
+    try { result = onCommit(parsed) } catch { settle(false); return }
+    if (result === undefined || typeof result === 'boolean') {
+      settle(result)
+    } else {
+      void result.then((accepted) => { settle(accepted) }, () => { settle(false) })
+    }
   }
   return (
     <label className={css.field}>
@@ -112,6 +161,8 @@ function NumberField({
           data-testid={testId}
           value={text}
           onChange={(event) => {
+            latestAttempt.current += 1
+            dirtyAttempt.current = latestAttempt.current
             setText(event.target.value)
           }}
           onBlur={commit}
@@ -133,7 +184,7 @@ function ParamsFor({
 }: {
   readonly t: Translate
   readonly component: BuilderComponent
-  readonly onCommit: (params: Parameters<typeof setParams>[2]) => void
+  readonly onCommit: (params: Parameters<typeof setParams>[2]) => EditOutcome
 }) {
   const params = component.params
   switch (component.type) {
@@ -146,7 +197,7 @@ function ParamsFor({
             value={params.voltage ?? 6}
             testId={`builder-voltage-${component.id}`}
             onCommit={(next) => {
-              onCommit({ voltage: next })
+              return onCommit({ voltage: next })
             }}
           />
           <NumberField
@@ -155,7 +206,7 @@ function ParamsFor({
             value={params.internalResistance ?? 0}
             testId={`builder-internal-${component.id}`}
             onCommit={(next) => {
-              onCommit({ internalResistance: next })
+              return onCommit({ internalResistance: next })
             }}
           />
         </>
@@ -168,7 +219,7 @@ function ParamsFor({
           value={params.resistance ?? 10}
           testId={`builder-resistance-${component.id}`}
           onCommit={(next) => {
-            onCommit({ resistance: next })
+            return onCommit({ resistance: next })
           }}
         />
       )
@@ -180,7 +231,7 @@ function ParamsFor({
           value={params.totalResistance ?? 20}
           testId={`builder-total-${component.id}`}
           onCommit={(next) => {
-            onCommit({ totalResistance: next })
+            return onCommit({ totalResistance: next })
           }}
         />
       )
@@ -193,7 +244,7 @@ function ParamsFor({
           value={params.internalResistance ?? 0}
           testId={`builder-internal-${component.id}`}
           onCommit={(next) => {
-            onCommit({ internalResistance: next })
+            return onCommit({ internalResistance: next })
           }}
         />
       )
@@ -210,7 +261,7 @@ function ParamsFor({
                 aria-pressed={(params.state ?? 'closed') === state}
                 data-testid={`builder-state-${component.id}-${state}`}
                 onClick={() => {
-                  onCommit({ state })
+                  void onCommit({ state })
                 }}
               >
                 {state === 'closed' ? t('lab.builder.state.closed') : t('lab.builder.state.open')}
@@ -267,24 +318,38 @@ export function CircuitBuilderPanel({
   const [editFailed, setEditFailed] = useState(false)
   const mounted = useRef(true)
   const pendingEdits = useRef(0)
+  const latestEdit = useRef(0)
   useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
   /** Keep synchronous Lab edits synchronous; queued canvas edits select only after settlement. */
-  const apply = (edit: (draft: CircuitDraft) => CircuitDraft, after?: () => void): void => {
+  const apply = (edit: (draft: CircuitDraft) => CircuitDraft, after?: () => void): EditOutcome => {
+    const attempt = ++latestEdit.current
+    let transformAccepted = false
     pendingEdits.current += 1
     setApplying(true)
     setEditFailed(false)
-    const finish = (success: boolean): void => {
+    const finish = (success: boolean): boolean => {
       pendingEdits.current -= 1
-      if (!mounted.current) return
-      if (success) after?.()
-      else setEditFailed(true)
+      if (!mounted.current) return success
+      if (attempt === latestEdit.current) {
+        setEditFailed(!success)
+        if (success) after?.()
+      }
       setApplying(pendingEdits.current > 0)
+      return success
     }
+    let result: void | Promise<void>
     try {
-      const result = editing.apply(edit)
-      if (result === undefined) finish(true)
-      else void result.then(() => { finish(true) }, () => { finish(false) })
-    } catch { finish(false) }
+      result = editing.apply((current) => {
+        transformAccepted = false
+        try {
+          const next = edit(current)
+          if (parseCircuitDraft(next) === undefined) throw new TypeError('Invalid circuit authoring facts.')
+          transformAccepted = true
+          return next
+        } catch (error: unknown) { transformAccepted = false; throw error }
+      })
+    } catch { return finish(false) }
+    return result === undefined ? finish(transformAccepted) : result.then(() => finish(transformAccepted), () => finish(false))
   }
   const selectedComponent = useMemo(
     () => draft.components.find(component => component.id === selected),
@@ -302,7 +367,7 @@ export function CircuitBuilderPanel({
       }}
       onClick={() => {
         let placedId: string | undefined
-        apply((current) => {
+        void apply((current) => {
           const added = placeBuilderPart(current, part)
           placedId = added.componentId
           return added.draft
@@ -316,6 +381,7 @@ export function CircuitBuilderPanel({
 
   return (
     <div className={clsxJoin(css.builder, variant === 'compact' ? css.compact : undefined)} data-testid="circuit-builder" data-builder-variant={variant} aria-busy={applying}>
+      {editFailed && selectedComponent === undefined ? <p className={css.editFeedback} role="alert">{t('lab.builder.editFailed')}</p> : null}
       <section className={css.section}>
         <h4 className={css.heading}>{t('lab.builder.parts')}</h4>
         {variant === 'compact' ? <div className={css.paletteGroups}>{PART_GROUPS.map(group => <section key={group.key} className={css.paletteGroup}>
@@ -377,13 +443,14 @@ export function CircuitBuilderPanel({
             {t('lab.builder.selected')}
             <span className={css.count}>{selectedComponent.id}</span>
           </h4>
+          {editFailed ? <p className={css.editFeedback} role="alert">{t('lab.builder.editFailed')}</p> : null}
           <div className={css.fields}>
             <ParamsFor
               key={selectedComponent.id}
               t={t}
               component={selectedComponent}
               onCommit={(params) => {
-                apply(current => setParams(current, selectedComponent.id, params))
+                return apply(current => setParams(current, selectedComponent.id, params))
               }}
             />
           </div>
@@ -394,7 +461,7 @@ export function CircuitBuilderPanel({
               data-testid={`builder-rotate-${selectedComponent.id}`}
               disabled={applying}
               onClick={() => {
-                apply(current => rotateComponent(current, selectedComponent.id))
+                void apply(current => rotateComponent(current, selectedComponent.id))
               }}
             >
               {t('lab.builder.rotate')}
@@ -405,7 +472,7 @@ export function CircuitBuilderPanel({
               data-testid={`builder-nudge-${selectedComponent.id}`}
               disabled={applying}
               onClick={() => {
-                apply(current =>
+                void apply(current =>
                   moveComponent(current, selectedComponent.id, {
                     x: selectedComponent.placement.x + 1,
                     y: selectedComponent.placement.y,
@@ -421,7 +488,7 @@ export function CircuitBuilderPanel({
               data-testid={`builder-remove-${selectedComponent.id}`}
               disabled={applying}
               onClick={() => {
-                apply(current => removeComponent(current, selectedComponent.id), () => { select(undefined) })
+                void apply(current => removeComponent(current, selectedComponent.id), () => { select(undefined) })
               }}
             >
               {t('lab.builder.remove')}
@@ -435,7 +502,7 @@ export function CircuitBuilderPanel({
               ) > 1
               return <button key={terminalKey} type="button" className={css.action} disabled={applying || !connected}
                 data-testid={`builder-disconnect-${selectedComponent.id}-${terminalKey}`}
-                onClick={() => { apply(current => disconnectTerminal(current, { componentId: selectedComponent.id, terminalKey })) }}>
+                onClick={() => { void apply(current => disconnectTerminal(current, { componentId: selectedComponent.id, terminalKey })) }}>
                 {t('lab.builder.disconnect').replace('{terminal}', TERMINAL_LABELS[terminalKey] ?? terminalKey)}
               </button>
             })}
@@ -464,7 +531,6 @@ export function CircuitBuilderPanel({
             {t('lab.builder.redo')}
           </button>
         </div>
-        {editFailed ? <p className={css.hint} role="alert">{t('lab.builder.editFailed')}</p> : null}
         <p
           className={clsxJoin(css.status, solvable ? undefined : css.statusOpen)}
           data-testid="builder-status"

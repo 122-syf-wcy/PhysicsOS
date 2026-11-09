@@ -21,6 +21,9 @@ import { lensBenchSnapshot } from './lens-bench-view.ts'
 import rendererCss from './CanvasRendererFrame.module.css'
 import css from './CanvasWorkspace.module.css'
 
+const circuitEditRejected = (value: { readonly diagnostics: readonly { readonly code: string }[] }): boolean =>
+  value.diagnostics.some(item => item.code === 'INVALID_DRAFT' || item.code === 'WORKBENCH_EDIT_REJECTED')
+
 /** The stage alone consumes high-frequency frames; neighboring parameter panels use summaries. */
 export function CanvasFrameStage(props: CanvasFrameProps) {
   const { canvasId, instanceId, instanceKey, displayKey, canvasCommands } = props
@@ -110,7 +113,8 @@ export function CanvasFrameStage(props: CanvasFrameProps) {
               const placed = placeBuilderPart(draft, part, at)
               selectedId = placed.componentId
               return placed.draft
-            }).then(() => {
+            }).then(result => {
+              if (circuitEditRejected(result)) throw new Error(props.t('lab.builder.editFailed'))
               if (selectedId !== undefined) act('setHighlight', [selectedId])
             }).catch(error => { props.actions.showToast('canvas.error.generic', error instanceof Error ? error.message : undefined, true) })
           },
@@ -188,7 +192,10 @@ export function CanvasInstanceView(props: CanvasInstanceProps) {
   const selectedComponent = snapshot.view.highlighted?.[0]
   const selectComponent = (id: string | undefined): void => { act('setHighlight', id === undefined ? [] : [id]) }
   const editing = {
-    apply: async (edit: (draft: CircuitDraft) => CircuitDraft): Promise<void> => { await canvasCommands.instanceAction(instanceKey, 'applyDraftEdit', edit) },
+    apply: async (edit: (draft: CircuitDraft) => CircuitDraft): Promise<void> => {
+      const result = await canvasCommands.instanceAction(instanceKey, 'applyDraftEdit', edit)
+      if (circuitEditRejected(result)) throw new Error(t('lab.builder.editFailed'))
+    },
     undo: () => { act('undo') }, redo: () => { act('redo') }, canUndo: summary.history.canUndo, canRedo: summary.history.canRedo,
   }
   const clockScale = timeScaleOf(summary.clock.total)

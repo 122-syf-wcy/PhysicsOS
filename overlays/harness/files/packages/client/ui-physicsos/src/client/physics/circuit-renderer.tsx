@@ -612,7 +612,11 @@ export function CircuitRenderer({
   const wireSurfaceRef = useRef<SVGGElement>(null)
   const [wirePointer, setWirePointer] = useState<ScenePoint | undefined>()
   useEffect(() => {
-    if (componentWiring === undefined) return undefined
+    if (componentWiring === undefined) {
+      wiringRef.current = undefined
+      setWirePointer(undefined)
+      return undefined
+    }
     const move = (event: PointerEvent) => {
       const gesture = wiringRef.current
       if (gesture !== undefined && (gesture.pointerId !== event.pointerId || gesture.completedOnPress)) return
