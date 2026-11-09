@@ -75,6 +75,8 @@ export interface PhysicsCanvasProps {
   view: SceneVisualModel
   /** Accessible description of what the frame shows. */
   ariaLabel: string
+  /** A caller may place the same frame readings beside the diagram. */
+  showReadout?: boolean
   /**
    * Sampled trajectory times, parallel to `view.trajectories[0].points`. Supplied
    * only when the caller can map a point back to a scene time; hover and seek are
@@ -117,6 +119,7 @@ const STROBE_DIVISIONS = 12
 export function PhysicsCanvas({
   view,
   ariaLabel,
+  showReadout = true,
   trajectoryTimes,
   sampleReadout,
   onSeekTime,
@@ -601,7 +604,8 @@ export function PhysicsCanvas({
         )}
 
         {/* ---------- domain drawing ---------- */}
-        <g clipPath={`url(#${clipId})`}>
+        {/* Circuit wiring targets may extend into the schematic gutter; physical diagrams retain their plot clip. */}
+        <g clipPath={view.domain === 'circuit' && componentWiring !== undefined ? undefined : `url(#${clipId})`}>
           <Renderer
             view={view}
             projection={projection}
@@ -652,8 +656,9 @@ export function PhysicsCanvas({
             The card sizes itself to its widest line and parks top-left by
             default; it is chrome over the scene, so the student can drag it
             anywhere inside the canvas when it covers the picture. */}
-        {view.overlay.readout.length === 0 ? null : (
+        {!showReadout || view.overlay.readout.length === 0 ? null : (
           <g
+            data-physics-readout="overlay"
             className={clsx(
               css.readoutDraggable,
               readoutDragging ? css.readoutDragging : undefined,

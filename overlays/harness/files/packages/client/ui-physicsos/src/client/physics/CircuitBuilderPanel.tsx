@@ -96,7 +96,7 @@ function NumberField({
   }
   const commit = () => {
     const parsed = Number(text)
-    if (!Number.isFinite(parsed)) {
+    if (text.trim().length === 0 || !Number.isFinite(parsed)) {
       setText(String(value))
       return
     }
@@ -291,20 +291,6 @@ export function CircuitBuilderPanel({
     [draft, selected],
   )
 
-  /* Placement search: drop the next part to the right of whatever is already
-     there so a new part never lands on top of an existing one. */
-  const nextSpot = useMemo(() => {
-    if (draft.components.length === 0) return { x: 0, y: 0 }
-    const rightmost = draft.components.reduce(
-      (best, component) => (component.placement.x > best.placement.x ? component : best),
-      draft.components[0] as BuilderComponent,
-    )
-    return {
-      x: rightmost.placement.x + (rightmost.type === 'resistor' ? 3 : 4),
-      y: rightmost.placement.y,
-    }
-  }, [draft.components])
-
   const partButton = (part: BuilderPartSpec) => (
     <button key={part.id} type="button" className={css.part} data-testid={`builder-add-${part.id}`}
       disabled={applying} draggable={!applying}
@@ -317,8 +303,7 @@ export function CircuitBuilderPanel({
       onClick={() => {
         let placedId: string | undefined
         apply((current) => {
-          const existingSource = part.type === 'voltage_source' && current.components.some(component => component.type === 'voltage_source')
-          const added = placeBuilderPart(current, part, existingSource ? undefined : nextSpot)
+          const added = placeBuilderPart(current, part)
           placedId = added.componentId
           return added.draft
         }, () => { if (placedId !== undefined) select(placedId) })
@@ -394,6 +379,7 @@ export function CircuitBuilderPanel({
           </h4>
           <div className={css.fields}>
             <ParamsFor
+              key={selectedComponent.id}
               t={t}
               component={selectedComponent}
               onCommit={(params) => {

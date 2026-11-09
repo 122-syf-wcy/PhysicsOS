@@ -423,6 +423,14 @@
   opacity: 0.85;
 }
 
+.circuitTerminalHit {
+  fill: transparent;
+  stroke: none;
+  pointer-events: all;
+  cursor: crosshair;
+  touch-action: none;
+}
+
 .circuitTerminal:hover {
   opacity: 1;
   fill: var(--physics-body-live);

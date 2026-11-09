@@ -70,6 +70,35 @@ function beginPlacement(root: HTMLElement) {
 }
 
 describe('native instance preview display ownership', () => {
+  it('docks all live construction readings outside a narrow diagram and restores the wide overlay without a scene edit', async () => {
+    const observers = new Map<Element, () => void>()
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(private readonly resized: () => void) {}
+      observe(element: Element) { observers.set(element, this.resized) }
+      disconnect() {}
+    })
+    onTestFinished(() => { vi.unstubAllGlobals() })
+    const owned = await displays()
+    await owned.controller.instanceAction(owned.instanceKey, 'enterBuilder')
+    const originalRevision = owned.summary().instanceEditRevision
+    const readings = owned.summary().workspace.view.overlay.readout
+    const view = render(<CanvasFrameStage {...owned.frame('focus')} />)
+    const stage = view.container.querySelector<HTMLElement>('[data-canvas-instance-stage]')!
+    let stageWidth = 320
+    Object.defineProperty(stage, 'clientWidth', { configurable: true, get: () => stageWidth })
+    act(() => { observers.get(stage)?.() })
+    const dock = view.container.querySelector('[data-canvas-readouts="docked"]')
+    expect(dock).not.toBeNull()
+    expect([...dock!.querySelectorAll('span')].map(row => row.textContent)).toEqual(readings)
+    expect(view.container.querySelector('svg [data-physics-readout]')).toBeNull()
+    expect(stage.querySelector('[data-canvas-diagram] svg')).not.toBeNull()
+    stageWidth = 720
+    act(() => { observers.get(stage)?.() })
+    expect(view.container.querySelector('[data-canvas-readouts="docked"]')).toBeNull()
+    expect(view.container.querySelector('svg [data-physics-readout]')).not.toBeNull()
+    expect(owned.summary().instanceEditRevision).toBe(originalRevision)
+  })
+
   it.each(['auth-required', 'deleted'] as const)('keeps the inline apparatus palette read-only for %s documents', async status => {
     const owned = await displays()
     await owned.controller.instanceAction(owned.instanceKey, 'enterBuilder')

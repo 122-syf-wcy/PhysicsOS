@@ -32,6 +32,18 @@ export function CanvasFrameStage(props: CanvasFrameProps) {
   const document = props.useCanvasDocument(canvasId)
   const readOnly = document?.status === 'deleted' || document?.status === 'auth-required' || document?.loading === true
   const root = useRef<HTMLDivElement>(null)
+  const [narrowStage, setNarrowStage] = useState(false)
+  useEffect(() => {
+    const element = root.current
+    if (element === null || typeof ResizeObserver === 'undefined') return
+    const resized = (): void => {
+      if (element.clientWidth > 0) setNarrowStage(element.clientWidth < 480)
+    }
+    resized()
+    const observer = new ResizeObserver(resized)
+    observer.observe(element)
+    return () => { observer.disconnect() }
+  }, [])
   const mounted = useRef(true)
   useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
   const act = useCallback(<K extends CanvasInstanceActionName>(action: K, ...args: CanvasInstanceActionArguments<K>): void => {
@@ -71,6 +83,7 @@ export function CanvasFrameStage(props: CanvasFrameProps) {
     ...(summary.pendingWire === undefined ? {} : { pending: summary.pendingWire }),
   }
   const constructing = summary?.buildMode === 'construct'
+  const dockReadings = constructing && narrowStage
   const failedRenderer = !constructing && (renderer?.status === 'error' || (renderer?.entryUrl !== undefined && failedUrl === renderer.entryUrl))
   const bench = useMemo(() => summary === undefined || frame === undefined ? undefined
     : lensBenchSnapshot({ ...summary.workspace, view: frame.view }), [summary, frame])
@@ -84,7 +97,7 @@ export function CanvasFrameStage(props: CanvasFrameProps) {
     : showBench && benchProps !== undefined && lensMode !== 'native'
       ? lensMode === '2d' ? <LensBench2D {...benchProps} /> : <OptionalLensBench {...benchProps} />
       :
-      <PhysicsCanvas view={frame.view} ariaLabel={frame.ariaLabel} trajectoryTimes={frame.trajectoryTimes}
+      <PhysicsCanvas view={frame.view} ariaLabel={frame.ariaLabel} showReadout={!dockReadings} trajectoryTimes={frame.trajectoryTimes}
         sampleReadout={index => props.getCanvasReadout(instanceKey, index)} onSeekTime={time => { if (!readOnly) act('seek', time) }}
         clockTime={frame.clock.time}
         {...(!constructing || readOnly ? {} : {
@@ -105,14 +118,19 @@ export function CanvasFrameStage(props: CanvasFrameProps) {
         {...(drag === undefined || readOnly ? {} : { componentDrag: drag })}
         {...(controls === undefined || readOnly ? {} : { componentControl: controls })}
         {...(wiring === undefined || readOnly ? {} : { componentWiring: wiring })} />
-  return <div ref={root} className={`${css.physicsStage} ${rendererCss.stack} ${showBench ? css.lensStage : ''} nodrag nopan nowheel`} data-canvas-instance-stage={instanceKey}
+  return <div ref={root} className={`${css.physicsStage} ${rendererCss.stack} ${showBench ? css.lensStage : ''} ${constructing ? css.constructionStage : ''} ${dockReadings ? css.narrowConstructionStage : ''} nodrag nopan nowheel`} data-canvas-instance-stage={instanceKey}
     onKeyDown={event => {
       if (event.key !== 'Escape' || event.defaultPrevented || event.nativeEvent.isComposing || !props.ownsCanvasNativePreview(instanceKey, displayKey)) return
       event.preventDefault(); event.stopPropagation(); props.cancelCanvasRendererPreview(instanceKey, displayKey)
     }}>
     {showBench ? <div className={css.instanceToolbar}>{(['native', '2d', '3d'] as const).map(mode => <Button key={mode} variant={mode === lensMode ? 'primary' : 'toolbar'}
       aria-pressed={mode === lensMode} onClick={() => { props.cancelCanvasRendererPreview(instanceKey, displayKey); setLensMode(mode) }}>{props.t(mode === 'native' ? 'canvas.lens.native' : mode === '2d' ? 'canvas.lens.twoD' : 'canvas.lens.threeD')}</Button>)}</div> : null}
-    {showBench ? <div className={css.lensStageBody}>{platform}</div> : platform}
+    {showBench ? <div className={css.lensStageBody}>{platform}</div> : constructing
+      ? <div className={css.buildDiagramRegion} data-canvas-diagram="">{platform}</div> : platform}
+    {dockReadings && frame !== undefined && frame.view.overlay.readout.length > 0 ? <div
+      className={css.dockedReadings} data-canvas-readouts="docked" role="group" aria-label={props.t('lab.inspectorTab.readings')}>
+      {frame.view.overlay.readout.map((reading, index) => <span key={index}>{reading}</span>)}
+    </div> : null}
     {!constructing && renderer?.status === 'ready' && frame !== undefined && !failedRenderer && !readOnly ?
       <CanvasRendererFrame renderer={renderer} frame={frame}
         onIntent={value => props.applyCanvasRendererIntent(instanceKey, displayKey, value)}

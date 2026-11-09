@@ -95,6 +95,14 @@ describe('inline apparatus palette', () => {
 })
 
 describe('apparatus canvas placement', () => {
+  it('makes edge terminal targets reachable in the schematic gutter while reading-only scenes retain their plot clip', () => {
+    const snapshot = createCircuitWorkspaceRuntime(draftToScene(starterDraft())).getSnapshot()
+    const mounted = render(<PhysicsCanvas view={snapshot.view} ariaLabel="apparatus" />)
+    expect(mounted.container.querySelector('[data-component-id="r0"]')!.closest('[clip-path]')).not.toBeNull()
+    mounted.rerender(<PhysicsCanvas view={snapshot.view} ariaLabel="apparatus" componentWiring={{ start: () => {} }} />)
+    expect(mounted.container.querySelector('[data-component-id="r0"]')!.closest('[clip-path]')).toBeNull()
+  })
+
   it('drops a replacement source at the new position while retaining the existing electrical connections', () => {
     const initial = starterDraft()
     const source = initial.components.find(part => part.type === 'voltage_source')!

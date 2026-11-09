@@ -44,6 +44,7 @@ const SLIDER_KEY_STEP = 0.05
 /** Hit radius of a build-mode terminal target, in scene units. Wide enough to
     press on a touch screen without covering the symbol it belongs to. */
 const TERMINAL_GRAB = 0.3
+const TERMINAL_HIT_SIZE = 28
 
 const isVertical = (rotation: number): boolean => Math.abs(rotation % 180) === 90
 
@@ -107,6 +108,34 @@ const wireTerminalPoint = (
     terminalKey,
   )
   return { x: projection.px(point), y: projection.py(point) }
+}
+
+interface TerminalHitTarget {
+  readonly ref: TerminalRef
+  readonly point: ScenePoint
+  readonly box: { readonly x: number; readonly y: number; readonly width: number; readonly height: number }
+}
+
+/** Slop goes away from the part along its terminal axis, leaving the body available to grab. */
+const terminalHitTarget = (
+  component: CircuitComponentVisual,
+  terminalKey: string,
+  projection: RendererProjection,
+): TerminalHitTarget => {
+  const point = wireTerminalPoint(component, terminalKey, projection)
+  const dx = point.x - projection.px(component.at)
+  const dy = point.y - projection.py(component.at)
+  const horizontal = Math.abs(dx) > Math.abs(dy)
+  return {
+    ref: { componentId: component.id, terminalKey },
+    point,
+    box: {
+      x: point.x - (horizontal ? dx < 0 ? TERMINAL_HIT_SIZE : 0 : TERMINAL_HIT_SIZE / 2),
+      y: point.y - (horizontal ? TERMINAL_HIT_SIZE / 2 : dy < 0 ? TERMINAL_HIT_SIZE : 0),
+      width: TERMINAL_HIT_SIZE,
+      height: TERMINAL_HIT_SIZE,
+    },
+  }
 }
 
 interface SymbolProps {
@@ -851,6 +880,60 @@ export function CircuitRenderer({
   const pendingPart = pendingLead === undefined ? undefined : components.find(part => part.id === pendingLead.componentId)
   const pendingStart = pendingLead === undefined || pendingPart === undefined
     ? undefined : wireTerminalPoint(pendingPart, pendingLead.terminalKey, projection)
+  const terminalTargets = componentWiring === undefined ? [] : components.flatMap(component =>
+    terminalKeysOf(component.kind).map(key => terminalHitTarget(component, key, projection)),
+  )
+  const closestTerminalAt = (point: ScenePoint): TerminalRef | undefined => {
+    let closest: TerminalHitTarget | undefined
+    let distance = Number.POSITIVE_INFINITY
+    for (const target of terminalTargets) {
+      const box = target.box
+      if (point.x < box.x || point.x > box.x + box.width || point.y < box.y || point.y > box.y + box.height) continue
+      const candidate = Math.hypot(point.x - target.point.x, point.y - target.point.y)
+      if (candidate < distance) { closest = target; distance = candidate }
+    }
+    return closest?.ref
+  }
+  const beginTerminalWire = (ref: TerminalRef, event: ReactPointerEvent<SVGElement>, slop = false): void => {
+    event.stopPropagation()
+    if (componentWiring === undefined || event.button !== 0 || wiringRef.current !== undefined) return
+    const svg = event.currentTarget.ownerSVGElement
+    if (svg === null) return
+    const point = svgPointFromClient(svg, event)
+    const from = slop ? point === undefined ? undefined : closestTerminalAt(point) : ref
+    if (from === undefined) return
+    if (event.pointerType !== 'mouse' && typeof event.currentTarget.setPointerCapture === 'function') {
+      event.currentTarget.setPointerCapture(event.pointerId)
+    }
+    wiringRef.current = { pointerId: event.pointerId, from, svg, completedOnPress: componentWiring.pending !== undefined }
+    setWirePointer(componentWiring.pending === undefined ? point : undefined)
+    componentWiring.start(from)
+  }
+  const endTerminalWire = (event: ReactPointerEvent<SVGElement>): void => {
+    const gesture = wiringRef.current
+    if (componentWiring === undefined || gesture === undefined || gesture.pointerId !== event.pointerId) return
+    event.stopPropagation()
+    wiringRef.current = undefined
+    if (gesture.completedOnPress) return
+    // Captured release stays on its source, so inspect the actual target in the same SVG owner.
+    const hit = gesture.svg.ownerDocument.elementFromPoint?.(event.clientX, event.clientY) ?? event.currentTarget
+    const terminal = hit.closest('[data-terminal-component][data-terminal-key]')
+    if (!(terminal instanceof SVGElement) || terminal.ownerSVGElement !== gesture.svg) return
+    let target: TerminalRef | undefined
+    if (terminal.hasAttribute('data-terminal-hit')) {
+      const point = svgPointFromClient(gesture.svg, event)
+      target = point === undefined ? undefined : closestTerminalAt(point)
+    } else {
+      const component = components.find(part => part.id === terminal.getAttribute('data-terminal-component'))
+      const key = component === undefined ? undefined : terminalKeysOf(component.kind)
+        .find(candidate => candidate === terminal.getAttribute('data-terminal-key'))
+      if (component !== undefined && key !== undefined) target = { componentId: component.id, terminalKey: key }
+    }
+    if (target === undefined || target.componentId === gesture.from.componentId && target.terminalKey === gesture.from.terminalKey) return
+    setWirePointer(undefined)
+    const complete = componentWiring.complete ?? componentWiring.start
+    complete(target)
+  }
 
   /* Bodies the annotations have to steer around. A part cannot know what its
      neighbours occupy while it is being laid out, so every drawn sprite is
@@ -949,6 +1032,15 @@ export function CircuitRenderer({
           d={`M${pendingStart.x.toFixed(2)} ${pendingStart.y.toFixed(2)} L${wirePointer.x.toFixed(2)} ${wirePointer.y.toFixed(2)}`}
           fill="none" stroke="var(--physics-body-live)" strokeWidth={2} strokeDasharray="5 4" vectorEffect="non-scaling-stroke" /> : null}
       </g>
+
+      {/* All extended targets sit below all parts: neighboring bodies never lose their drag surface. */}
+      {componentWiring === undefined ? null : <g data-circuit-terminal-hit-layer="true" aria-hidden="true">
+        {terminalTargets.map(target => <rect key={`${target.ref.componentId}.${target.ref.terminalKey}`}
+          className={css.circuitTerminalHit} data-terminal-hit={`${target.ref.componentId}.${target.ref.terminalKey}`}
+          data-terminal-component={target.ref.componentId} data-terminal-key={target.ref.terminalKey}
+          x={target.box.x} y={target.box.y} width={target.box.width} height={target.box.height}
+          onPointerDown={(event) => { beginTerminalWire(target.ref, event, true) }} onPointerUp={endTerminalWire} />)}
+      </g>}
 
       {components.map((component) => {
         const cx = projection.px(component.at)
@@ -1275,35 +1367,8 @@ export function CircuitRenderer({
                       tabIndex={0}
                       role="button"
                       aria-label={`${component.label} ${terminalKey}`}
-                      onPointerDown={(event) => {
-                        event.stopPropagation()
-                        if (event.button !== 0 || wiringRef.current !== undefined) return
-                        const svg = event.currentTarget.ownerSVGElement
-                        if (svg === null) return
-                        if (event.pointerType !== 'mouse' && typeof event.currentTarget.setPointerCapture === 'function') event.currentTarget.setPointerCapture(event.pointerId)
-                        wiringRef.current = { pointerId: event.pointerId, from: { componentId: component.id, terminalKey }, svg,
-                          completedOnPress: componentWiring.pending !== undefined }
-                        setWirePointer(componentWiring.pending === undefined ? svgPointFromClient(svg, event) : undefined)
-                        componentWiring.start({ componentId: component.id, terminalKey })
-                      }}
-                      onPointerUp={(event) => {
-                        const gesture = wiringRef.current
-                        if (gesture === undefined || gesture.pointerId !== event.pointerId) return
-                        event.stopPropagation()
-                        wiringRef.current = undefined
-                        if (gesture.completedOnPress) return
-                        // Pointer capture delivers this event to the source. Hit-test the real release target in the same SVG owner.
-                        const hit = gesture.svg.ownerDocument.elementFromPoint?.(event.clientX, event.clientY) ?? event.currentTarget
-                        const terminal = hit.closest('[data-terminal-component][data-terminal-key]')
-                        if (!(terminal instanceof SVGElement) || terminal.ownerSVGElement !== gesture.svg) return
-                        const targetId = terminal.getAttribute('data-terminal-component')
-                        const target = view.circuitComponents?.find(part => part.id === targetId)
-                        const targetKey = target === undefined ? undefined : terminalKeysOf(target.kind).find(key => key === terminal.getAttribute('data-terminal-key'))
-                        if (target === undefined || targetKey === undefined || target.id === gesture.from.componentId && targetKey === gesture.from.terminalKey) return
-                        setWirePointer(undefined)
-                        const complete = componentWiring.complete ?? componentWiring.start
-                        complete({ componentId: target.id, terminalKey: targetKey })
-                      }}
+                      onPointerDown={(event) => { beginTerminalWire({ componentId: component.id, terminalKey }, event) }}
+                      onPointerUp={endTerminalWire}
                       onKeyDown={(event) => {
                         if (event.defaultPrevented || event.nativeEvent.isComposing) return
                         if (event.key === 'Escape' && componentWiring.pending !== undefined && componentWiring.cancel !== undefined) {
