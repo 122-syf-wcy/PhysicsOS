@@ -80,9 +80,8 @@ export interface CapabilityFrame {
  * Grouped by domain, in the order `EXPERIMENT_TEMPLATES` lists them.
  */
 export const EXPERIMENT_MODEL_KINDS: Readonly<Record<string, ExperimentModelKind>> = {
-  // mechanics — closed-form motion, except the collision integrator, the
-  // time-independent ledgers, the lever at its balanced rest and the spring at
-  // rest.
+  // mechanics — closed-form motion, including the energy benches; the
+  // collision integrator and the resting lever/spring have separate kinds.
   'uniform-linear': 'analytical',
   'average-speed': 'analytical',
   'uniform-acceleration': 'analytical',
@@ -90,8 +89,8 @@ export const EXPERIMENT_MODEL_KINDS: Readonly<Record<string, ExperimentModelKind
   'projectile-oblique': 'analytical',
   'newton-second-law': 'analytical',
   incline: 'analytical',
-  'mechanical-energy': 'static',
-  'ramp-friction': 'static',
+  'mechanical-energy': 'analytical',
+  'ramp-friction': 'analytical',
   'lever-balance': 'static',
   'collision-elastic': 'dynamic',
   'collision-inelastic': 'dynamic',
