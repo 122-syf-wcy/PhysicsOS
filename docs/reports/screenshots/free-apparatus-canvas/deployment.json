@@ -1,0 +1,10 @@
+{
+  "oldImage": "sha256:a2000f6b05a2447a1fc74ad348567af14ac6be4bacaf099df9a95304a97285ec",
+  "newImage": "sha256:39f7a9c7975d66810a7a4587f571d3039b95b9d5de79823ce0261f84cd042317",
+  "revision": "690d0434094ffd6b9aa3bc177c450d06c4a373c8",
+  "backup": "/opt/physicsos/backups/releases/20261109T192006.686837Z-apparatus-20261110",
+  "appVolume": "physicsos_app_data",
+  "redisVolume": "physicsos_redis_data",
+  "rollbackTag": "physicsos:apparatus-base-a2000f6b05a2-20261110",
+  "healthy": true
+}

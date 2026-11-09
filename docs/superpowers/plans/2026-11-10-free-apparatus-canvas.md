@@ -39,8 +39,8 @@ Files: canvas/CanvasInstanceViews.tsx, CanvasWorkspace.tsx, CanvasNodes.tsx, con
 - [x] Run canvas suite and persistence/history tests GREEN.
 
 ### Task 4: Release verification and deployment
-- [ ] Run focused engine/UI tests, affected typecheck/lint and UI/Vite build in server Docker.
+- [x] Run focused engine/UI tests, affected typecheck/lint and UI/Vite build in server Docker.
 - [x] Independently review changes and fix material defects.
-- [ ] Validate candidate via isolated runtime/browser, including actual circuit assembly and reload.
-- [ ] Recheck main, server checkout and running image; acquire release lock; tag exact old image and create fresh paired recovery.
-- [ ] Switch official image and verify health plus public browser behavior; preserve rollback instructions.
+- [x] Validate candidate via isolated runtime/browser, including actual circuit assembly and reload.
+- [x] Recheck main, server checkout and running image; acquire release lock; tag exact old image and create fresh paired recovery.
+- [x] Switch official image and verify health plus public browser behavior; preserve rollback instructions.
