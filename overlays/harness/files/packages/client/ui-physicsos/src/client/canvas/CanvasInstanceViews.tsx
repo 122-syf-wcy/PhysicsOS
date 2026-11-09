@@ -209,7 +209,7 @@ export function CanvasInstanceView(props: CanvasInstanceProps) {
     </div> : presentation === 'focus' ? <div className={css.instanceEditor}>
       <aside className={css.instanceObjects}>
         {summary.buildMode === 'construct' && summary.draft !== undefined ? <fieldset className={css.builderControls} disabled={readOnly}><CircuitBuilderPanel t={t} draft={summary.draft}
-          editing={editing} selectedComponentId={selectedComponent} onSelectComponent={selectComponent} pendingTerminal={summary.pendingWire}
+          editing={editing} variant="compact" selectedComponentId={selectedComponent} onSelectComponent={selectComponent} pendingTerminal={summary.pendingWire}
           solvable={snapshot.status !== 'failed'} /></fieldset> : <SceneTreePanel nodes={snapshot.tree} selected={treeSelection}
           onSelect={id => { setTreeSelection(id); act('setHighlight', [id]) }}
           onToggle={(key, enabled) => { act('setObservable', key, enabled) }} visible={snapshot.view.visible}

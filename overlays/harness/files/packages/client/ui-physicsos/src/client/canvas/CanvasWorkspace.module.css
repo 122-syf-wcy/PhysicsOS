@@ -340,3 +340,6 @@
 
 .builderControls { min-width: 0; margin: 0; padding: 0; border: 0; }
 .apparatusObjects:disabled, .builderControls:disabled { opacity: 0.65; }
+
+.mobileEdit { display: none; }
+@container physics-canvas (max-width: 700px) { .mobileEdit { display: inline-flex; } }

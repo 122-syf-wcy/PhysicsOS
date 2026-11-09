@@ -120,6 +120,9 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
     } finally { if (mounted.current && resolutionRun.current === run) setResolving(false) }
   }
   const selectedNodes = manifest?.nodes.filter(node => view.selected.includes(node.id)) ?? []
+  const selectedExperiments = selectedNodes.filter((node): node is Extract<CanvasNode, { kind: 'experiment' }> => node.kind === 'experiment')
+  const editInstanceId = selectedExperiments.length === 1 ? selectedExperiments[0]?.instanceId
+    : manifest?.instances.length === 1 ? manifest.instances[0]?.instanceId : undefined
   const unlocked = selectedNodes.filter(node => node.locked !== true)
   const groups = selectedNodes.filter(node => node.kind === 'group')
   const selectedResults = selectedNodes.filter((node): node is Extract<CanvasNode, { kind: 'result' }> => node.kind === 'result')
@@ -279,7 +282,10 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
       requestAnimationFrame(() => {
         if (!mounted.current || latestDocument.current?.canvasId !== canvasId) return
         const node = latest.current.manifest?.nodes.find(node => node.kind === 'experiment' && node.instanceId === instanceId)
-        if (node !== undefined) { actions.select([node.id]); fit([node.id]) }
+        if (node !== undefined) {
+          actions.select([node.id]); fit([node.id])
+          if (bounds !== undefined && bounds.width < 700) actions.focus(props.canvasInstanceKey(canvasId, instanceId))
+        }
       })
     }).finally(() => { if (mounted.current) setAddingBench(false) })
   }
@@ -412,6 +418,8 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
       </div>
       <div className={css.toolbarActions}>
         <Button size="sm" variant="primary" disabled={!editable || addingBench} onClick={addBench}>{t('canvas.newBench')}</Button>
+        {editInstanceId === undefined ? null : <Button size="sm" variant="outline" className={css.mobileEdit} data-testid="canvas-edit-experiment"
+          onClick={() => { actions.focus(props.canvasInstanceKey(canvasId, editInstanceId)) }}>{t('canvas.editExperiment')}</Button>}
         <Button size="sm" variant="outline" disabled={!editable} onClick={() => { actions.setLibraryOpen(true) }}>{t('canvas.addExperiment')}</Button>
         <Button size="sm" variant="outline" disabled={!editable} onClick={addNote}>{t('canvas.addNote')}</Button>
         <Button size="sm" variant="outline" disabled={!editable || (manifest?.snapshots.length ?? 0) < 2} onClick={createComparison}>{t('canvas.compare')}</Button>

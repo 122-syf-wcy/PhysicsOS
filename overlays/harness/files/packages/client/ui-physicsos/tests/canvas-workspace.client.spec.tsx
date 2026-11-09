@@ -88,6 +88,14 @@ function groupDocument(): CanvasDocumentState {
 afterEach(() => { cleanup(); observed.current = undefined; vi.restoreAllMocks() })
 
 describe('controlled experiment canvas workspace', () => {
+  it('opens the sole experiment from the toolbar so a narrow board remains editable', () => {
+    const fixture = rootFixture()
+    render(<CanvasWorkspace {...fixture.props} />)
+    fireEvent.click(screen.getByTestId('canvas-edit-experiment'))
+    const instance = canvasTestDocument().manifest!.instances[0]!
+    expect(fixture.view.getSnapshot().focusedInstanceKey).toBe(fixture.props.canvasInstanceKey(fixture.props.canvasId, instance.instanceId))
+  })
+
   it('opens a new apparatus bench directly from the board with a usable construction layout', async () => {
     const fixture = rootFixture()
     fixture.commands.addExperiment.mockResolvedValue('new-bench-instance')
