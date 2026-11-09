@@ -110,7 +110,23 @@
         "value": 9.8
       }
     ],
-    "choices": []
+    "choices": [
+      {
+        "id": "projectile-comparison",
+        "label": "抛射角轨迹",
+        "value": "single",
+        "options": [
+          {
+            "value": "single",
+            "label": "当前角度"
+          },
+          {
+            "value": "angles",
+            "label": "同时比较 30° / 45° / 60°"
+          }
+        ]
+      }
+    ]
   },
   {
     "id": "projectile-oblique",
@@ -151,7 +167,23 @@
         "value": 9.8
       }
     ],
-    "choices": []
+    "choices": [
+      {
+        "id": "projectile-comparison",
+        "label": "抛射角轨迹",
+        "value": "single",
+        "options": [
+          {
+            "value": "single",
+            "label": "当前角度"
+          },
+          {
+            "value": "angles",
+            "label": "同时比较 30° / 45° / 60°"
+          }
+        ]
+      }
+    ]
   },
   {
     "id": "newton-second-law",
@@ -565,14 +597,57 @@
         "value": 0
       },
       {
-        "id": "force",
-        "label": "合外力",
+        "id": "force-magnitude:force-applied",
+        "label": "分力 F1 大小",
         "unit": "N",
-        "step": 1,
+        "min": 0,
+        "step": 0.5,
         "value": 3
+      },
+      {
+        "id": "force-angle:force-applied",
+        "label": "分力 F1 方向",
+        "unit": "°",
+        "min": -180,
+        "max": 180,
+        "step": 5,
+        "value": 0
+      },
+      {
+        "id": "force-magnitude:force-applied-2",
+        "label": "分力 F2 大小",
+        "unit": "N",
+        "min": 0,
+        "step": 0.5,
+        "value": 4
+      },
+      {
+        "id": "force-angle:force-applied-2",
+        "label": "分力 F2 方向",
+        "unit": "°",
+        "min": -180,
+        "max": 180,
+        "step": 5,
+        "value": 90
       }
     ],
-    "choices": []
+    "choices": [
+      {
+        "id": "force-balance",
+        "label": "受力与运动对比",
+        "value": "unbalanced",
+        "options": [
+          {
+            "value": "balanced",
+            "label": "平衡：合力为零"
+          },
+          {
+            "value": "unbalanced",
+            "label": "不平衡：产生加速度"
+          }
+        ]
+      }
+    ]
   },
   {
     "id": "concurrent-equilibrium",
@@ -596,14 +671,74 @@
         "value": 0
       },
       {
-        "id": "force",
-        "label": "合外力",
+        "id": "force-magnitude:force-applied",
+        "label": "分力 F1 大小",
         "unit": "N",
-        "step": 1,
+        "min": 0,
+        "step": 0.5,
         "value": 8
+      },
+      {
+        "id": "force-angle:force-applied",
+        "label": "分力 F1 方向",
+        "unit": "°",
+        "min": -180,
+        "max": 180,
+        "step": 5,
+        "value": 0
+      },
+      {
+        "id": "force-magnitude:force-applied-2",
+        "label": "分力 F2 大小",
+        "unit": "N",
+        "min": 0,
+        "step": 0.5,
+        "value": 8
+      },
+      {
+        "id": "force-angle:force-applied-2",
+        "label": "分力 F2 方向",
+        "unit": "°",
+        "min": -180,
+        "max": 180,
+        "step": 5,
+        "value": 120.00000000000001
+      },
+      {
+        "id": "force-magnitude:force-applied-3",
+        "label": "分力 F3 大小",
+        "unit": "N",
+        "min": 0,
+        "step": 0.5,
+        "value": 8
+      },
+      {
+        "id": "force-angle:force-applied-3",
+        "label": "分力 F3 方向",
+        "unit": "°",
+        "min": -180,
+        "max": 180,
+        "step": 5,
+        "value": -120.00000000000001
       }
     ],
-    "choices": []
+    "choices": [
+      {
+        "id": "force-balance",
+        "label": "受力与运动对比",
+        "value": "balanced",
+        "options": [
+          {
+            "value": "balanced",
+            "label": "平衡：合力为零"
+          },
+          {
+            "value": "unbalanced",
+            "label": "不平衡：产生加速度"
+          }
+        ]
+      }
+    ]
   },
   {
     "id": "apparent-weight",
@@ -752,18 +887,18 @@
     "parameters": [
       {
         "id": "mass",
-        "label": "质量",
+        "label": "卫星质量",
         "unit": "kg",
         "min": 0.1,
-        "step": 0.5,
+        "step": 1,
         "value": 420000
       },
       {
         "id": "speed",
-        "label": "初速度",
+        "label": "轨道速度（r = GM/v²）",
         "unit": "m/s",
-        "min": 0,
-        "step": 1,
+        "min": 0.1,
+        "step": 153.12440958829754,
         "value": 7656.2204794148765
       }
     ],
@@ -1369,7 +1504,23 @@
         "value": 2
       }
     ],
-    "choices": []
+    "choices": [
+      {
+        "id": "standing-mode",
+        "label": "演示阶段",
+        "value": "steady",
+        "options": [
+          {
+            "value": "formation",
+            "label": "两端起振 → 驻波形成"
+          },
+          {
+            "value": "steady",
+            "label": "稳定驻波（两端固定）"
+          }
+        ]
+      }
+    ]
   },
   {
     "id": "wave-longitudinal",
