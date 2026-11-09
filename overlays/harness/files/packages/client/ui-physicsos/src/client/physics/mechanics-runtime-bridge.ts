@@ -194,7 +194,8 @@ export class MechanicsRuntimeBridge {
     )
     this.recompute()
     if (this.snapshot.modelId === 'circular_orbit' && this.snapshot.clock.total > 0) {
-      this.orbitTimeScale = this.snapshot.clock.total / 20
+      const model = resolveMechanicsModel(this.snapshot.scene)
+      if (model.modelId === 'circular_orbit') this.orbitTimeScale = model.period / 20
       this.recompute()
     }
   }
@@ -705,7 +706,8 @@ export class MechanicsRuntimeBridge {
            stops at impact — it does not restart in mid-air — and a uniformly
            accelerated run stops too, because the finished v–t area IS the
            reading the student takes. */
-        if (CYCLIC_MODELS.has(this.snapshot.modelId)) {
+        const finiteOrbit = this.snapshot.modelId === 'circular_orbit' && this.snapshot.scene.timeline.endTime !== undefined
+        if (CYCLIC_MODELS.has(this.snapshot.modelId) && !finiteOrbit) {
           this.currentTime = next % total
         } else {
           this.currentTime = total

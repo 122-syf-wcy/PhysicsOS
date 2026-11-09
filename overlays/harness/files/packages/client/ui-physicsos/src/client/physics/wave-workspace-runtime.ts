@@ -223,7 +223,7 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
         initialState: this.engine.stateAt(scene, quantity(0, 's', 'time')),
         runSeconds,
       }
-      this.currentTime = Math.min(this.currentTime, this.runSeconds)
+      if (model.subModel !== 'wave_interference') this.currentTime = Math.min(this.currentTime, this.runSeconds)
     } catch (error: unknown) {
       this.failure = error instanceof Error ? error.message : '波动 Runtime 无法启动。'
       this.computed = undefined
@@ -255,7 +255,19 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
       this.failure = result.error.message
       return
     }
+    // A changed interference setup starts a new propagation experiment. Merely
+    // hiding a layer preserves the accumulated age of its travelling fronts.
+    if (type !== 'SetObservableEnabled' && waveBenchOf(this.sceneRuntime.getScene())?.type === 'interference') {
+      this.currentTime = 0
+      this.running = false
+    }
     this.recompute()
+  }
+
+  /** One physical clock; the chart cursor is only its periodic projection. */
+  private get displayTime(): number {
+    return this.computed?.model.subModel === 'wave_interference' && this.currentTime > this.runSeconds
+      ? this.currentTime % this.runSeconds : this.currentTime
   }
 
   private get runSeconds(): number {
@@ -339,7 +351,7 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
         ...(this.standingMode === 'formation' ? { charts: this.formationCharts(simulation, { scene, model }) } : {}),
       }),
       clock: {
-        time: this.currentTime,
+        time: this.displayTime,
         total: this.runSeconds,
         running: this.running,
         rate: this.rate,
@@ -712,7 +724,7 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
 
   setRunning(running: boolean): WorkspaceSnapshot {
     if (running && this.computed !== undefined) {
-      if (this.currentTime >= this.runSeconds) this.currentTime = 0
+      if (this.computed.model.subModel !== 'wave_interference' && this.currentTime >= this.runSeconds) this.currentTime = 0
     }
     this.running = running
     return this.getSnapshot()
@@ -724,20 +736,24 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
   }
 
   seek(time: number): WorkspaceSnapshot {
+    // Scrubbing chooses a new physical starting instant, including seek(0)
+    // resetting propagation; a pause/resume alone never resets that age.
     this.currentTime = Number.isFinite(time) ? Math.min(this.runSeconds, Math.max(0, time)) : 0
     this.running = false
     return this.getSnapshot()
   }
 
   step(delta: number): WorkspaceSnapshot {
-    return this.seek(this.currentTime + delta)
+    return this.seek(this.displayTime + delta)
   }
 
   advance(wallClockSeconds: number): WorkspaceSnapshot {
     if (this.running && this.computed !== undefined && Number.isFinite(wallClockSeconds) && wallClockSeconds > 0) {
       const next = this.currentTime + wallClockSeconds * this.rate
       if (Number.isFinite(next)) {
-        if (this.computed.model.subModel === 'wave_doppler' || this.computed.model.subModel === 'reflection_refraction') {
+        if (this.computed.model.subModel === 'wave_interference') {
+          this.currentTime = next
+        } else if (this.computed.model.subModel === 'wave_doppler' || this.computed.model.subModel === 'reflection_refraction') {
           this.currentTime = Math.min(next, this.runSeconds)
           if (this.currentTime >= this.runSeconds) this.running = false
         } else this.currentTime = next % this.runSeconds

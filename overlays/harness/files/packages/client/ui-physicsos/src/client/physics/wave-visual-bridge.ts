@@ -599,6 +599,7 @@ export const waveSceneVisual = (input: WaveVisualInput): SceneVisualModel => {
       overlay: {
         readout: [
           '双源干涉与波的叠加',
+          `累计传播时间 ${timeText.slice(4)}；时间轴显示本周期。`,
           `A = ${fmtWaveValue(amplitudeCm)} cm · λ = ${fmtWaveValue(model.wavelength)} m · f = ${fmtWaveValue(model.frequency)} Hz${showSpeed ? ` · v = ${fmtWaveValue(speed)} m/s` : ''}`,
           `Δ = |r₂ − r₁| = ${fmtWaveValue(pathDifference)} m = ${fmtWaveValue(ratio)} λ → ${interferenceVerdictText(verdict)}`,
           `A_P = |2A·cos(πΔ/λ)| = ${fmtWaveValue(cmOf(resultant))} cm · y_P(${timeText.slice(4)}) = ${fmtWaveValue(cmOf(displacement))} cm`,

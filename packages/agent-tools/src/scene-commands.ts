@@ -184,6 +184,14 @@ export const COMMAND_SPECS: Readonly<Record<SceneCommandType, CommandSpec>> = {
       vector: vector('force', '如 {x:10, y:0, unit:"N"}'),
     },
   },
+  SetOrbitRadius: {
+    domain: 'mechanics（圆轨道）',
+    summary: '以米为单位改圆轨道半径（> 0），保持中心天体 GM 并同步初位置和轨道速度',
+    fields: {
+      observableId: { kind: 'observable_id', description: '圆轨道几何可观察量 id' },
+      radius: number('轨道半径，SI 单位 m，必须大于 0'),
+    },
+  },
   SetGroundLevel: {
     domain: 'mechanics（抛体）',
     summary: '改地面高度',
