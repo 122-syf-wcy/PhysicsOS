@@ -1,0 +1,9 @@
+{
+  "productionImage": "sha256:93305af6299d02423a38a99a3ec0a4d140b8d04125523f7b9ddb256e85a771cd",
+  "archivedOwnMockHomeBytes": 1129791,
+  "removedOwnGenerated": {
+    "runtime-home": 47703330,
+    "runtime-context/web-dist": 40493274,
+    "runtime-context/ui-physicsos/lib": 26519906
+  }
+}
