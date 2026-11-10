@@ -7,10 +7,11 @@ BACKUP_SCRIPT="$PROJECT_DIR/scripts/deploy/backup-postgres.sh"
 FULL_BACKUP_KEY=${PHYSICSOS_BACKUP_KEY_FILE:-}
 FULL_BACKUP_NODE=
 if [[ -n "$FULL_BACKUP_KEY" ]]; then
-  # Full backups run on the host (Docker CLI + host files); validate before
-  # changing apt packages, SSH protection, or the existing cron schedule.
-  FULL_BACKUP_NODE=$(command -v node) || { printf 'install-operations: full backups require host Node.js >=24.7\n' >&2; exit 1; }
-  "$FULL_BACKUP_NODE" -e 'const [major,minor]=process.versions.node.split(".").map(Number); if(major<24 || (major===24 && minor<7)) process.exit(1)' || { printf 'install-operations: full backups require host Node.js >=24.7\n' >&2; exit 1; }
+  # Validate the Docker-backed interpreter before changing host configuration.
+  command -v docker >/dev/null && command -v python3 >/dev/null || { printf 'install-operations: full backups require host Node.js >=24.7 or Docker deployment tools\n' >&2; exit 1; }
+  FULL_BACKUP_NODE="$PROJECT_DIR/scripts/deploy/server-node.sh"
+  [[ -x "$FULL_BACKUP_NODE" ]] || { printf 'install-operations: Docker deployment tools are missing\n' >&2; exit 1; }
+  "$FULL_BACKUP_NODE" --prepare >/dev/null
   [[ -s "$FULL_BACKUP_KEY" ]] || { printf 'install-operations: backup encryption key is missing\n' >&2; exit 1; }
   safe_path_pattern='^/[A-Za-z0-9_./ -]+$'
   for value in "$PROJECT_DIR" "$FULL_BACKUP_KEY" "$FULL_BACKUP_NODE" "${PHYSICSOS_BACKUP_OFFSITE_DIR:-}"; do

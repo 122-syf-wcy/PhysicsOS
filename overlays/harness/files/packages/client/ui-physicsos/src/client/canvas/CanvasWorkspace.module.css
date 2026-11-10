@@ -367,3 +367,155 @@
 .compactCard .apparatusEditor { display:flex; flex-direction:column; overflow:auto; }
 .compactCard .apparatusObjects { flex:none; max-height:200px; border-right:0; border-bottom:1px solid var(--canvas-border); }
 .compactCard .apparatusCenter { flex:1 0 360px; min-height:360px; }
+
+/* Free-canvas controls share the teaching board's floating glass shelf. */
+.workspace {
+  gap: 8px;
+  background-color: var(--dsw-alias-bg-module-platform);
+  background-image: var(--physics-glass-ambient, none);
+}
+.workspace .toolbar,
+.workspace > .notice {
+  border-color: var(--physics-glass-border-soft);
+  background-color: var(--physics-glass-fill);
+  background-image: var(--physics-glass-sheen);
+  box-shadow: var(--physics-glass-rim), var(--physics-glass-shadow);
+  -webkit-backdrop-filter: var(--physics-glass-blur-soft);
+  backdrop-filter: var(--physics-glass-blur-soft);
+}
+.workspace .toolbar { align-items: center; padding: 8px 12px; border-radius: 16px; }
+.toolbar .identity { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px 12px; flex-basis: auto; width: 100%; }
+.toolbar .identityTitle { flex: 1 1 180px; }
+.toolbar .saveState { display: flex; align-items: center; gap: 5px; margin-left: auto; text-align: right; }
+.workspace .board { min-height: min(180px, 28dvh); border-color: var(--physics-glass-border-soft); border-radius: 18px; box-shadow: var(--physics-glass-shadow); }
+.workspace .flow { min-height: 0; }
+.dockShelf {
+  position: relative;
+  z-index: 8;
+  flex: none;
+  display: flex;
+  justify-content: center;
+  padding: 12px 14px max(14px, env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  pointer-events: none;
+  background-image: radial-gradient(ellipse at 50% 100%, color-mix(in srgb, var(--dsw-alias-button-info-fill) 11%, transparent), transparent 70%);
+}
+.toolDock {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: max-content;
+  max-width: 100%;
+  padding: 8px;
+  box-sizing: border-box;
+  border: 1px solid var(--physics-glass-border);
+  border-radius: 24px;
+  color: var(--dsw-alias-label-primary);
+  background-color: var(--physics-glass-fill);
+  background-image: var(--physics-glass-sheen);
+  box-shadow: var(--physics-glass-rim), var(--physics-glass-lift-raised), 0 2px 8px color-mix(in srgb, var(--dsw-alias-label-primary) 8%, transparent);
+  -webkit-backdrop-filter: var(--physics-glass-blur);
+  backdrop-filter: var(--physics-glass-blur);
+  pointer-events: auto;
+}
+.toolDock::before {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  z-index: -1;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 22px;
+  mask-image: linear-gradient(135deg, black, transparent 42%, transparent 65%, black);
+  pointer-events: none;
+}
+.navigationControls,
+.toolGroup,
+.historyGroup,
+.toolDock .toolbarActions,
+.toolDock .selectionTools {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+.navigationControls { gap: 6px 10px; }
+.toolGroup, .historyGroup { flex-wrap: nowrap; }
+.historyGroup { padding-left: 9px; border-left: 1px solid var(--physics-glass-border-soft); }
+.toolDock button {
+  min-width: 38px;
+  min-height: 40px;
+  height: auto;
+  padding: 7px 12px;
+  border: 1px solid transparent;
+  border-radius: 13px;
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-primary);
+  background: transparent;
+  transition: background-color 120ms ease, box-shadow 120ms ease;
+}
+.toolDock button:hover:not(:disabled) { background: color-mix(in srgb, var(--dsw-alias-label-primary) 8%, transparent); }
+.toolDock button[aria-pressed='true'], .toolDock .dockPrimary {
+  border-color: color-mix(in srgb, var(--dsw-alias-button-info-fill) 36%, var(--physics-glass-border-soft));
+  background-color: var(--physics-glass-fill-strong);
+  background-image: var(--physics-glass-sheen);
+  box-shadow: var(--physics-glass-inset), var(--physics-glass-lift);
+}
+.toolDock button[aria-pressed='true'] { background-color: color-mix(in srgb, var(--dsw-alias-button-info-fill) 15%, var(--physics-glass-fill-strong)); }
+.toolDock button:focus-visible { outline: 2px solid var(--dsw-alias-button-info-fill); outline-offset: 2px; }
+.toolDock .boardControls {
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px;
+  padding: 0 0 0 8px;
+  border: 0;
+  border-left: 1px solid var(--physics-glass-border-soft);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--dsw-alias-label-secondary);
+}
+.toolDock .boardControls button { min-width: 32px; padding: 5px 6px; }
+.toolDock .zoomValue { min-width: 36px; }
+.toolDock .toolbarActions { flex: none; gap: 6px; padding-top: 6px; border-top: 1px solid var(--physics-glass-border-soft); }
+.toolDock .selectionTools { padding: 6px 0 0; border: 0; border-top: 1px solid var(--physics-glass-border-soft); }
+.toolDock .selectionCount { padding: 0 8px; color: var(--dsw-alias-label-secondary); }
+.dockMenu:global([role='menu']) {
+  width: min(280px, calc(100vw - 24px));
+  min-width: 0;
+  max-width: calc(100vw - 24px);
+  max-height: min(320px, 44dvh);
+  padding: 7px;
+  border-radius: 18px;
+  box-shadow: var(--physics-glass-rim), var(--physics-glass-shadow-raised);
+}
+.dockMenu :global([role='menuitem']) { min-height: 42px; padding: 10px 12px; border-radius: 11px; white-space: normal; }
+@container physics-canvas (max-width: 700px) {
+  .dockShelf { padding-inline: 6px; }
+  .toolDock { border-radius: 21px; padding: 7px; }
+  .navigationControls { gap: 5px 8px; }
+  .toolDock button { padding-inline: 10px; }
+}
+@container physics-canvas (max-width: 430px) {
+  .workspace .toolbar { padding: 5px 7px; border-radius: 13px; }
+  .toolbar .identityTitle { flex-basis: 120px; }
+  .identityTitle button h1 { font-size: 15px; line-height: 22px; }
+  .navigationControls { gap: 4px 6px; }
+  .historyGroup { padding-left: 6px; }
+  .toolDock .boardControls { width: 100%; padding-left: 0; border-left: 0; }
+  .toolDock button { min-width: 32px; padding-inline: 8px; }
+  .dockMenu:global([role='menu']) { max-height: min(240px, 36dvh); }
+}
+@media (max-height: 600px) {
+  .workspace .board { min-height: 0; }
+  .dockShelf { padding-top: 6px; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+  .toolDock { max-height: 44dvh; overflow: auto; overscroll-behavior: contain; }
+}
+@media (pointer: coarse) { .toolDock button { min-height: 44px; } }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) { .toolDock { background-color: var(--physics-glass-fill-strong); } }
+@media (prefers-reduced-motion: reduce) { .toolDock button { transition: none; } }

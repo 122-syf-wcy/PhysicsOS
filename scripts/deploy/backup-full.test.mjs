@@ -3,11 +3,12 @@ import process from 'node:process'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { createServer } from 'node:http'
-import { mkdtemp, writeFile, readFile, mkdir, readdir, rm } from 'node:fs/promises'
+import { mkdtemp, writeFile, readFile, mkdir, readdir, rm, lstat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomBytes, createCipheriv, hkdfSync } from 'node:crypto'
 import { spawn, spawnSync } from 'node:child_process'
+import { gzipSync } from 'node:zlib'
 import {
   encryptFile,
   decryptFile,
@@ -176,6 +177,7 @@ async function dockerFixture(t, running = ['app', 'postgres', 'redis']) {
   const tar = spawnSync('tar', ['-C', volume, '-cf', '-', '.'])
   assert.equal(tar.status, 0)
   const calls = []
+  const active = new Set(running)
   const docker = async (args, options = {}) => {
     calls.push(args)
     const command = args.join(' ')
@@ -188,7 +190,9 @@ async function dockerFixture(t, running = ['app', 'postgres', 'redis']) {
     }
     let output = ''
     if (command.includes('config --format json')) output = JSON.stringify(config)
-    else if (command.includes('ps --status running --services')) output = running.join('\n')
+    else if (command.includes('ps --status running --services')) output = [...active].join('\n')
+    else if (args.includes('stop')) active.delete(args.at(-1))
+    else if (args.includes('start')) active.add(args.at(-1))
     else if (args[0] === 'compose' && command.includes('ps --all --quiet'))
       output = `container-${args.at(-1)}`
     else if (args[0] === 'inspect')
@@ -212,7 +216,7 @@ async function dockerFixture(t, running = ['app', 'postgres', 'redis']) {
         },
       ])
     else if (command.includes('pg_dump')) output = Buffer.from('PGDMP fixture binary archive')
-    else if (command.includes('pg_restore --list')) output = 'fixture toc'
+    else if (args.includes('pg_restore') && args.includes('--list')) output = 'fixture toc'
     else if (command.includes('backup_counts'))
       output = JSON.stringify({
         'physicsos.accounts': 2,
@@ -225,6 +229,7 @@ async function dockerFixture(t, running = ['app', 'postgres', 'redis']) {
       output = JSON.stringify(state.modelRecords ?? [])
     else if (command.includes('DBSIZE')) output = '1'
     else if (command.includes('find /source/sessions')) output = '1'
+    else if (command.includes('tar') && command.includes('-czpf')) output = gzipSync(tar.stdout)
     else if (command.includes('tar') && command.includes('-cpf')) output = tar.stdout
     if (options.stdoutFile) await writeFile(options.stdoutFile, output, { mode: 0o600 })
     return Buffer.from(output)
@@ -254,6 +259,65 @@ test('full backup captures all stores and secrets, resumes original services, co
     ),
     false,
   )
+})
+
+test('missing file secrets fail before any service is stopped', async t => {
+  const f = await dockerFixture(t)
+  await rm(f.config.secrets.admin_password.file)
+  await assert.rejects(backupFull({ projectDir: f.projectDir, output: join(f.root, 'bad.pbackup'), keyFile: f.keyFile }, { docker: f.docker }))
+  assert.equal(f.calls.some(args => args.includes('stop')), false)
+})
+
+test('quiesced capture refuses active writers without stopping or restarting services', async t => {
+  const { captureQuiescedStores } = await import('./backup-full.mjs')
+  assert.equal(typeof captureQuiescedStores, 'function', 'a caller-owned quiesced capture is missing')
+  const f = await dockerFixture(t)
+  await assert.rejects(captureQuiescedStores({ projectDir: f.projectDir, output: join(f.root, 'bad.pbackup'), keyFile: f.keyFile }, { docker: f.docker }), /quiesced/i)
+  assert.equal(f.calls.some(args => args.includes('stop') || args.includes('start')), false)
+})
+
+test('private paired capture uses verified gzip volumes without a new encryption key or service restart', async t => {
+  const { captureQuiescedStores } = await import('./backup-full.mjs')
+  const f = await dockerFixture(t, ['postgres'])
+  const outputDir = join(f.projectDir, 'paired-recovery')
+  const result = await captureQuiescedStores({ mode: 'paired', projectDir: f.projectDir, outputDir }, { docker: f.docker })
+  const manifest = JSON.parse(await readFile(result.manifest, 'utf8'))
+  assert.equal(manifest.consistent, true)
+  assert.deepEqual(Object.keys(manifest.files).sort(), ['app_data.tar.gz', 'postgres.dump', 'redis_data.tar.gz'])
+  for (const name of ['app_data.tar.gz', 'redis_data.tar.gz']) {
+    const listing = spawnSync('tar', ['-tzf', join(outputDir, name)])
+    assert.equal(listing.status, 0)
+    assert.match(listing.stdout.toString(), /sessions\/s1.json/)
+  }
+  assert.equal(JSON.stringify(manifest).includes('fixture-admin_password'), false)
+  assert.equal(f.calls.some(args => args.includes('stop') || args.includes('start')), false)
+  assert.equal((await readdir(outputDir)).some(name => name.includes('partial')), false)
+})
+
+test('paired recovery retains private secret bytes if the live mounted file is later lost', async t => {
+  const { captureQuiescedStores } = await import('./backup-full.mjs')
+  const f = await dockerFixture(t, ['postgres'])
+  const outputDir = join(f.projectDir, 'paired-recovery')
+  const result = await captureQuiescedStores({ mode: 'paired', projectDir: f.projectDir, outputDir }, { docker: f.docker })
+  await rm(f.config.secrets.model_pool_secret.file)
+  const preserved = join(outputDir, 'secrets', 'model_pool_secret')
+  assert.equal(await readFile(preserved, 'utf8'), 'fixture-master-secret-32-characters')
+  assert.equal((await lstat(preserved)).mode & 0o777, 0o600)
+  assert.equal((await lstat(join(outputDir, 'secrets'))).mode & 0o777, 0o700)
+  const manifest = JSON.parse(await readFile(result.manifest, 'utf8'))
+  assert.equal(manifest.secretReferences.model_pool_secret.recoveryFile, 'secrets/model_pool_secret')
+  assert.equal(JSON.stringify(manifest).includes('fixture-master-secret-32-characters'), false)
+})
+
+test('a release operation lock refuses a scheduled full backup before any Docker command', async t => {
+  const { acquireOperationLock } = await import('./operation-lock.mjs').catch(() => ({}))
+  assert.equal(typeof acquireOperationLock, 'function', 'shared operation locking is missing')
+  const f = await dockerFixture(t)
+  const lock = await acquireOperationLock(f.projectDir, 'release')
+  try {
+    await assert.rejects(backupFull({ projectDir: f.projectDir, output: join(f.root, 'blocked.pbackup'), keyFile: f.keyFile }, { docker: f.docker }), /operation.*already active/i)
+    assert.equal(f.calls.length, 0)
+  } finally { await lock.release() }
 })
 
 test('failed capture resumes only services that were running and removes plaintext staging', async (t) => {

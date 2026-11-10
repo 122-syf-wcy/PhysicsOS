@@ -419,52 +419,6 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
         </div>
         <span className={css.saveState} role="status"><StateDot state={document?.status === 'syncing' || document?.status === 'saving-local' ? 'ongoing' : document?.status === 'saved' || document?.status === 'local-saved' ? 'done' : document?.status === 'error' || document?.status === 'conflict' ? 'warning' : 'idle'} /> {t(`canvas.sync.${document?.status ?? 'loading'}`)}</span>
       </div>
-      <div className={css.toolbarActions}>
-        <Button size="sm" variant="primary" disabled={!editable || addingBench} onClick={addBench}>{t('canvas.newBench')}</Button>
-        {editInstanceId === undefined ? null : <Button size="sm" variant="outline" className={css.mobileEdit} data-testid="canvas-edit-experiment"
-          onClick={() => { actions.focus(props.canvasInstanceKey(canvasId, editInstanceId)) }}>{t('canvas.editExperiment')}</Button>}
-        <Button size="sm" variant="outline" disabled={!editable} onClick={() => { actions.setLibraryOpen(true) }}>{t('canvas.addExperiment')}</Button>
-        <Button size="sm" variant="outline" disabled={!editable} onClick={addNote}>{t('canvas.addNote')}</Button>
-        <Button size="sm" variant="outline" disabled={!editable || (manifest?.snapshots.length ?? 0) < 2} onClick={createComparison}>{t('canvas.compare')}</Button>
-        <Tooltip label={t('canvas.undo')} portal><Button size="sm" variant="toolbar" disabled={!editable || document?.canUndo !== true} aria-label={t('canvas.undo')} onClick={() => { void run(() => canvasCommands.undo(canvasId)) }}>{t('canvas.undo')}</Button></Tooltip>
-        <Tooltip label={t('canvas.redo')} portal><Button size="sm" variant="toolbar" disabled={!editable || document?.canRedo !== true} aria-label={t('canvas.redo')} onClick={() => { void run(() => canvasCommands.redo(canvasId)) }}>{t('canvas.redo')}</Button></Tooltip>
-        <Button size="sm" variant={view.tool === 'hand' ? 'primary' : 'toolbar'} aria-pressed={view.tool === 'hand'} onClick={() => { actions.setTool('hand') }}>{t('canvas.hand')}</Button>
-        <Button size="sm" variant={view.tool === 'select' ? 'primary' : 'toolbar'} aria-pressed={view.tool === 'select'} onClick={() => { actions.setTool('select') }}>{t('canvas.select')}</Button>
-        <Button size="sm" variant="toolbar" onClick={() => { setLocateOpen(true) }}>{t('canvas.locate')}</Button>
-        <Button size="sm" variant="outline" disabled={!editable || document?.status === 'syncing'} onClick={() => { void run(async () => { await canvasCommands.flush(canvasId); await canvasCommands.sync(canvasId) }) }}>{t('canvas.save')}</Button>
-        <Menu open={menuOpen} portal autoFocus onClose={() => { setMenuOpen(false) }}
-          anchor={<Button size="sm" variant="toolbar" aria-label={t('canvas.more')} onClick={() => { setMenuOpen(!menuOpen) }}><IconEllipsisOutlineRegular size={14} /></Button>}
-          items={[
-            { id: 'rename', label: t('canvas.rename'), disabled: !editable },
-            { id: 'copy', label: t('canvas.copy'), disabled: !editable },
-            { id: 'copy-selection', label: t('canvas.node.copySelection'), disabled: view.selected.length === 0 },
-            { id: 'paste', label: t('canvas.node.paste'), disabled: !editable },
-            { id: 'lock', label: t('canvas.node.lock'), disabled: !editable || view.selected.length === 0 },
-            { id: 'unlock', label: t('canvas.node.unlock'), disabled: !editable || view.selected.length === 0 },
-            { id: 'group', label: t('canvas.node.group'), disabled: !editable || view.selected.length < 2 },
-            { id: 'ungroup', label: t('canvas.node.ungroup'), disabled: !editable || groups.length === 0 },
-            { id: 'front', label: t('canvas.node.front'), disabled: !editable || unlocked.length === 0 },
-            { id: 'back', label: t('canvas.node.back'), disabled: !editable || unlocked.length === 0 },
-            { id: 'forward', label: t('canvas.node.forward'), disabled: !editable || unlocked.length === 0 },
-            { id: 'backward', label: t('canvas.node.backward'), disabled: !editable || unlocked.length === 0 },
-            { id: 'export', label: t('canvas.export'), disabled: manifest === undefined },
-            { id: 'import', label: t('canvas.import') },
-            { id: 'remove', label: t('canvas.node.delete'), danger: true, disabled: !editable || unlocked.length === 0 },
-          ]} onSelect={actionMenu} />
-      </div>
-      {view.selected.length === 0 ? null : <div className={css.selectionTools}>
-        <span className={css.selectionCount}>{String(view.selected.length)}</span>
-        <Button size="sm" variant="toolbar" onClick={() => { fit(view.selected) }}>{t('canvas.fitSelected')}</Button>
-        <Menu open={alignOpen} portal autoFocus onClose={() => { setAlignOpen(false) }}
-          anchor={<Button size="sm" variant="toolbar" disabled={!editable || unlocked.length < 2} onClick={() => { setAlignOpen(!alignOpen) }}>{t('canvas.align')}</Button>}
-          items={[
-            { id: 'left', label: t('canvas.align.left') }, { id: 'center', label: t('canvas.align.center') },
-            { id: 'right', label: t('canvas.align.right') }, { id: 'top', label: t('canvas.align.top') },
-            { id: 'middle', label: t('canvas.align.middle') }, { id: 'bottom', label: t('canvas.align.bottom') },
-            { id: 'horizontal', label: t('canvas.distribute.horizontal'), disabled: unlocked.length < 3 },
-            { id: 'vertical', label: t('canvas.distribute.vertical'), disabled: unlocked.length < 3 },
-          ]} onSelect={choice => { setAlignOpen(false); if (choice === 'horizontal' || choice === 'vertical') void run(() => canvasCommands.distribute(canvasId, view.selected, choice)); else if (choice === 'left' || choice === 'center' || choice === 'right' || choice === 'top' || choice === 'middle' || choice === 'bottom') void run(() => canvasCommands.align(canvasId, view.selected, choice)) }} />
-      </div>}
     </header>
     {document?.error === undefined ? null : <div className={css.notice} role="alert">{document.error.message}<Button size="sm" variant="ghost" onClick={() => { void run(() => canvasCommands.retry(canvasId)) }}>{t('canvas.retry')}</Button></div>}
     {document?.status === 'conflict' ? <div className={css.notice} role="alert">
@@ -513,13 +467,6 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
           elevateNodesOnSelect={false} elevateEdgesOnSelect={false}>
           <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="var(--dsw-alias-border-l2)" />
           {minimap ? <MiniMap aria-label={t('canvas.minimap')} pannable zoomable nodeColor={node => node.type === 'group' ? 'var(--dsw-alias-bg-module-platform)' : 'var(--dsw-alias-button-info-fill)'} maskColor="color-mix(in srgb, var(--dsw-alias-bg-base) 75%, transparent)" /> : null}
-          <Panel position="bottom-left"><div className={css.boardControls}>
-            <Tooltip label={t('canvas.zoomOut')} portal><Button size="sm" variant="toolbar" aria-label={t('canvas.zoomOut')} onClick={() => { zoom(-1) }}>−</Button></Tooltip>
-            <span className={css.zoomValue}>{String(Math.round(viewport.zoom * 100))}%</span>
-            <Tooltip label={t('canvas.zoomIn')} portal><Button size="sm" variant="toolbar" aria-label={t('canvas.zoomIn')} onClick={() => { zoom(1) }}>+</Button></Tooltip>
-            <Button size="sm" variant="toolbar" onClick={() => { fit() }}>{t('canvas.fit')}</Button>
-            <Button size="sm" variant={minimap ? 'primary' : 'toolbar'} aria-pressed={minimap} onClick={() => { setMinimap(!minimap) }}>{t('canvas.minimap')}</Button>
-          </div></Panel>
           <Panel position="bottom-right"><div className={css.boardStatus}>{t('canvas.keyboardHint')}</div></Panel>
         </ReactFlow>}
       {manifest?.nodes.length === 0 ? <div className={css.boardEmpty}><h2>{t('canvas.emptyBoard')}</h2><p>{t('canvas.emptyBoardHint')}</p><div className={css.actionRow}>
@@ -527,6 +474,69 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
         <Button variant="outline" disabled={!editable} onClick={() => { actions.setLibraryOpen(true) }}>{t('canvas.addExperiment')}</Button>
         <Button variant="outline" disabled={!editable} onClick={addNote}>{t('canvas.addNote')}</Button>
       </div></div> : null}
+    </div>
+    <div className={css.dockShelf}>
+      <div className={css.toolDock} role="toolbar" aria-label={t('canvas.title')}>
+        <div className={css.navigationControls}>
+          <div className={css.toolGroup}>
+            <Button size="sm" variant={view.tool === 'hand' ? 'primary' : 'toolbar'} aria-pressed={view.tool === 'hand'} onClick={() => { actions.setTool('hand') }}>{t('canvas.hand')}</Button>
+            <Button size="sm" variant={view.tool === 'select' ? 'primary' : 'toolbar'} aria-pressed={view.tool === 'select'} onClick={() => { actions.setTool('select') }}>{t('canvas.select')}</Button>
+            <Button size="sm" variant="toolbar" onClick={() => { setLocateOpen(true) }}>{t('canvas.locate')}</Button>
+          </div>
+          <div className={css.historyGroup}>
+            <Tooltip label={t('canvas.undo')} portal><Button size="sm" variant="toolbar" disabled={!editable || document?.canUndo !== true} aria-label={t('canvas.undo')} onClick={() => { void run(() => canvasCommands.undo(canvasId)) }}>{t('canvas.undo')}</Button></Tooltip>
+            <Tooltip label={t('canvas.redo')} portal><Button size="sm" variant="toolbar" disabled={!editable || document?.canRedo !== true} aria-label={t('canvas.redo')} onClick={() => { void run(() => canvasCommands.redo(canvasId)) }}>{t('canvas.redo')}</Button></Tooltip>
+          </div>
+          <div className={css.boardControls}>
+            <Tooltip label={t('canvas.zoomOut')} portal><Button size="sm" variant="toolbar" aria-label={t('canvas.zoomOut')} onClick={() => { zoom(-1) }}>−</Button></Tooltip>
+            <span className={css.zoomValue}>{String(Math.round(viewport.zoom * 100))}%</span>
+            <Tooltip label={t('canvas.zoomIn')} portal><Button size="sm" variant="toolbar" aria-label={t('canvas.zoomIn')} onClick={() => { zoom(1) }}>+</Button></Tooltip>
+            <Button size="sm" variant="toolbar" onClick={() => { fit() }}>{t('canvas.fit')}</Button>
+            <Button size="sm" variant={minimap ? 'primary' : 'toolbar'} aria-pressed={minimap} onClick={() => { setMinimap(!minimap) }}>{t('canvas.minimap')}</Button>
+          </div>
+        </div>
+        <div className={css.toolbarActions}>
+          <Button size="sm" variant="primary" className={css.dockPrimary} disabled={!editable || addingBench} onClick={addBench}>{t('canvas.newBench')}</Button>
+          {editInstanceId === undefined ? null : <Button size="sm" variant="outline" className={css.mobileEdit} data-testid="canvas-edit-experiment"
+            onClick={() => { actions.focus(props.canvasInstanceKey(canvasId, editInstanceId)) }}>{t('canvas.editExperiment')}</Button>}
+          <Button size="sm" variant="outline" disabled={!editable} onClick={() => { actions.setLibraryOpen(true) }}>{t('canvas.addExperiment')}</Button>
+          <Button size="sm" variant="outline" disabled={!editable} onClick={addNote}>{t('canvas.addNote')}</Button>
+          <Button size="sm" variant="outline" disabled={!editable || (manifest?.snapshots.length ?? 0) < 2} onClick={createComparison}>{t('canvas.compare')}</Button>
+          <Button size="sm" variant="outline" disabled={!editable || document?.status === 'syncing'} onClick={() => { void run(async () => { await canvasCommands.flush(canvasId); await canvasCommands.sync(canvasId) }) }}>{t('canvas.save')}</Button>
+          <Menu open={menuOpen} portal autoFocus side="top" align="end" listClassName={css.dockMenu} onClose={() => { setMenuOpen(false) }}
+            anchor={<Button size="sm" variant="toolbar" aria-label={t('canvas.more')} onClick={() => { setMenuOpen(!menuOpen) }}><IconEllipsisOutlineRegular size={14} /></Button>}
+            items={[
+              { id: 'rename', label: t('canvas.rename'), disabled: !editable },
+              { id: 'copy', label: t('canvas.copy'), disabled: !editable },
+              { id: 'copy-selection', label: t('canvas.node.copySelection'), disabled: view.selected.length === 0 },
+              { id: 'paste', label: t('canvas.node.paste'), disabled: !editable },
+              { id: 'lock', label: t('canvas.node.lock'), disabled: !editable || view.selected.length === 0 },
+              { id: 'unlock', label: t('canvas.node.unlock'), disabled: !editable || view.selected.length === 0 },
+              { id: 'group', label: t('canvas.node.group'), disabled: !editable || view.selected.length < 2 },
+              { id: 'ungroup', label: t('canvas.node.ungroup'), disabled: !editable || groups.length === 0 },
+              { id: 'front', label: t('canvas.node.front'), disabled: !editable || unlocked.length === 0 },
+              { id: 'back', label: t('canvas.node.back'), disabled: !editable || unlocked.length === 0 },
+              { id: 'forward', label: t('canvas.node.forward'), disabled: !editable || unlocked.length === 0 },
+              { id: 'backward', label: t('canvas.node.backward'), disabled: !editable || unlocked.length === 0 },
+              { id: 'export', label: t('canvas.export'), disabled: manifest === undefined },
+              { id: 'import', label: t('canvas.import') },
+              { id: 'remove', label: t('canvas.node.delete'), danger: true, disabled: !editable || unlocked.length === 0 },
+            ]} onSelect={actionMenu} />
+        </div>
+        {view.selected.length === 0 ? null : <div className={css.selectionTools}>
+          <span className={css.selectionCount}>{String(view.selected.length)}</span>
+          <Button size="sm" variant="toolbar" onClick={() => { fit(view.selected) }}>{t('canvas.fitSelected')}</Button>
+          <Menu open={alignOpen} portal autoFocus side="top" align="end" listClassName={css.dockMenu} onClose={() => { setAlignOpen(false) }}
+            anchor={<Button size="sm" variant="toolbar" disabled={!editable || unlocked.length < 2} onClick={() => { setAlignOpen(!alignOpen) }}>{t('canvas.align')}</Button>}
+            items={[
+              { id: 'left', label: t('canvas.align.left') }, { id: 'center', label: t('canvas.align.center') },
+              { id: 'right', label: t('canvas.align.right') }, { id: 'top', label: t('canvas.align.top') },
+              { id: 'middle', label: t('canvas.align.middle') }, { id: 'bottom', label: t('canvas.align.bottom') },
+              { id: 'horizontal', label: t('canvas.distribute.horizontal'), disabled: unlocked.length < 3 },
+              { id: 'vertical', label: t('canvas.distribute.vertical'), disabled: unlocked.length < 3 },
+            ]} onSelect={choice => { setAlignOpen(false); if (choice === 'horizontal' || choice === 'vertical') void run(() => canvasCommands.distribute(canvasId, view.selected, choice)); else if (choice === 'left' || choice === 'center' || choice === 'right' || choice === 'top' || choice === 'middle' || choice === 'bottom') void run(() => canvasCommands.align(canvasId, view.selected, choice)) }} />
+        </div>}
+      </div>
     </div>
     <input ref={importInput} className={css.hiddenInput} type="file" accept=".json,.physicsos-canvas" aria-label={t('canvas.import')} onChange={event => {
       const file = event.currentTarget.files?.[0]; event.currentTarget.value = ''; if (file === undefined) return

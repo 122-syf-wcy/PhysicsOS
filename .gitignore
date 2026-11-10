@@ -80,3 +80,9 @@ vendor/deepseek-harness/.env
 vendor/deepseek-harness/node_modules/
 vendor/deepseek-harness/.turbo/
 vendor/deepseek-harness/dist/
+
+# Host deployment state, credentials references and build caches
+.physicsos-release/
+.physicsos-operation-lock/
+.physicsos-backup-lock/
+.physicsos-backup-work-*/
