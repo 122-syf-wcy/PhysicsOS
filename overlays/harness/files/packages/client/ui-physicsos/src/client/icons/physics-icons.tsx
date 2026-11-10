@@ -709,6 +709,14 @@ export const IconLibrary = (props: PhysicsIconProps) => (
   </Glyph>
 )
 
+/** Experiment contribution: a wrench meeting a plus — build something, add it. */
+export const IconContribution = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <path d="M14.8 3.6a5.2 5.2 0 0 0-4.4 7.9l-6.1 6.1a1.8 1.8 0 0 0 2.5 2.5l6.1-6.1a5.2 5.2 0 0 0 7.9-4.4l-3 3-2.6-.6-.6-2.6z" />
+    <path d="M18.5 15.5v5M16 18h5" />
+  </Glyph>
+)
+
 /* ---------------------------------------------------------------- transport -- */
 
 /** Play. */

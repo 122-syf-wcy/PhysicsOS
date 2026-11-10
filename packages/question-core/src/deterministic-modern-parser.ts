@@ -7,6 +7,7 @@
  * fabricate an answer.
  */
 import type { QuestionDocument } from './question-document.ts'
+import { normalizeStemText } from './latex-text.ts'
 import type { QuestionParseCandidate, QuestionParserProvider } from './question-parser.ts'
 import type {
   KnownValue,
@@ -95,7 +96,9 @@ export const DeterministicModernPhysicsQuestionParser: QuestionParserProvider = 
   id: 'deterministic-modern-v1',
 
   parse(document: QuestionDocument): QuestionParseCandidate {
-    const text = document.content.extractedText || document.content.rawText || ''
+    /* Normalised once here: drafted stems carry LaTeX, and every pattern in
+       this file is written against plain text. */
+    const text = normalizeStemText(document.content.extractedText || document.content.rawText || '')
     const unsupportedModel = unsupportedModelOf(text)
     const targets = unsupportedModel === undefined ? targetsOf(text) : []
     const knowns: KnownValue[] = []

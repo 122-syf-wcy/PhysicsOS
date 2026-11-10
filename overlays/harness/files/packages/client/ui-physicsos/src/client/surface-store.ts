@@ -12,6 +12,7 @@ export type PhysicsSurfaceId =
   | 'record'
   | 'paper'
   | 'library'
+  | 'contribute'
   | 'notice'
   | 'admin'
 
@@ -28,6 +29,7 @@ export const PHYSICS_PANEL_IDS = {
   paper: 'physicsos-paper' as MainPanelId,
   notice: 'physicsos-notice' as MainPanelId,
   library: 'physicsos-library' as MainPanelId,
+  contribute: 'physicsos-contribute' as MainPanelId,
   record: 'physicsos-record' as MainPanelId,
   admin: 'physicsos-admin' as MainPanelId,
 } satisfies Record<Exclude<PhysicsSurfaceId, 'home'>, MainPanelId>
@@ -37,6 +39,7 @@ const SURFACE_BY_PANEL: Readonly<Record<string, PhysicsSurfaceId>> = {
   [PHYSICS_PANEL_IDS.paper]: 'paper',
   [PHYSICS_PANEL_IDS.notice]: 'notice',
   [PHYSICS_PANEL_IDS.library]: 'library',
+  [PHYSICS_PANEL_IDS.contribute]: 'contribute',
   [PHYSICS_PANEL_IDS.record]: 'record',
   [PHYSICS_PANEL_IDS.admin]: 'admin',
 }

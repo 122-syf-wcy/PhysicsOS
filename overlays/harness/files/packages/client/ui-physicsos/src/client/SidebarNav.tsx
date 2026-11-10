@@ -24,7 +24,7 @@ import {
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { isTeachingRole, type AuthState } from './auth-store.ts'
 import {
-  IconAnnouncement, IconLibrary, IconPhysicsLab, IconQuestionSheet,
+  IconAnnouncement, IconContribution, IconLibrary, IconPhysicsLab, IconQuestionSheet,
 } from './icons/physics-icons.tsx'
 import type { PhysicsosKey } from './locales.ts'
 import type { SnapshotStore } from './runtime-compat.ts'
@@ -134,6 +134,7 @@ export function SidebarNav({ wide, openSurface, usePhysicsSurface, useAuth, t }:
           {teaching && item('paper', 'nav.paper', <IconQuestionSheet size={iconSize} />)}
           {item('notice', 'nav.notice', <IconAnnouncement size={iconSize} />)}
           {item('library', 'nav.library', <IconLibrary size={iconSize} />)}
+          {item('contribute', 'nav.contribute', <IconContribution size={iconSize} />)}
         </>
       )}
     </nav>

@@ -41,14 +41,16 @@
     "format": "prettier --check .",
     "format:write": "prettier --write .",
     "build:hosts": "pnpm -C vendor/deepseek-harness --filter @deepseek-ai/dsh-auth-host --filter @deepseek-ai/dsh-paper-host --filter @deepseek-ai/dsh-notice-host --filter @deepseek-ai/dsh-update-host --filter @deepseek-ai/dsh-learning-host --filter @deepseek-ai/dsh-class-host --filter @deepseek-ai/dsh-shared-state-host --filter @deepseek-ai/dsh-health-host --filter @deepseek-ai/dsh-ops-host --filter @deepseek-ai/dsh-plugin-center --filter @deepseek-ai/dsh-model-pool-host run bundle",
-    "test:tooling": "node --test scripts/overlay/*.test.mjs scripts/deploy/*.test.mjs scripts/dev/*.test.mjs",
+    "test:tooling": "node --test scripts/overlay/*.test.mjs scripts/deploy/*.test.mjs scripts/dev/*.test.mjs scripts/developers/*.test.mjs",
     "test:upstream": "cd vendor/deepseek-harness && node_modules/.bin/vitest run packages/client/modules/tests packages/client/connection/tests packages/session/session-persistence-jsonl/tests packages/credentials/credentials-local/tests",
     "test:storage": "cd vendor/deepseek-harness && node_modules/.bin/vitest run packages/storage/storage-postgres/tests",
     "test:headless": "node tests/agent/headless-physics-acceptance.mjs",
     "verify:overlay": "node scripts/overlay/harness-overlay.mjs verify",
     "verify:dependencies": "node scripts/dev/check-workspace-dependencies.mjs",
     "test:acceptance:visual": "node tests/acceptance/glass-surfaces.mjs",
-    "lint:tooling": "eslint scripts/overlay/*.mjs scripts/deploy/*.mjs scripts/dev/*.mjs"
+    "lint:tooling": "eslint scripts/overlay/*.mjs scripts/deploy/*.mjs scripts/dev/*.mjs",
+    "docs:developers:build": "node scripts/developers/generate.mjs",
+    "docs:developers:check": "node --test scripts/developers/standards.test.mjs && node scripts/developers/generate.mjs --check"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",

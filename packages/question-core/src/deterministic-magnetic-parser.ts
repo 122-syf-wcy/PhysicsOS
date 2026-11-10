@@ -1,4 +1,5 @@
 import type { QuestionDocument } from './question-document.ts'
+import { normalizeStemText } from './latex-text.ts'
 import type { QuestionParserProvider, QuestionParseCandidate } from './question-parser.ts'
 import type {
   PhysicsSemanticIR,
@@ -154,7 +155,9 @@ export const DeterministicMagneticQuestionParser: QuestionParserProvider = {
   id: 'deterministic-magnetic-v1',
 
   parse(document: QuestionDocument): QuestionParseCandidate {
-    const text = document.content.extractedText || document.content.rawText || ''
+    /* Normalised once here: drafted stems carry LaTeX, and every pattern in
+       this file is written against plain text. */
+    const text = normalizeStemText(document.content.extractedText || document.content.rawText || '')
     const issues: QuestionParseIssue[] = []
     const knowns: KnownValue[] = []
 

@@ -294,6 +294,25 @@ describe('solveFindings', () => {
     expect(findings).toHaveLength(1)
     expect(findings[0]?.code).toBe('solve-mismatch')
   })
+
+  it('keeps a real disagreement blocking', () => {
+    const findings = solveFindings([
+      { questionNo: 2, consistent: false, comparable: true, note: '独立解题得 43.9' },
+    ])
+    expect(findings[0]?.severity).toBe('error')
+  })
+
+  it('downgrades a mismatch the engine could not have judged', () => {
+    /* A choice question whose options share none of the engine's magnitudes:
+       the engine solved a different question, so its answer is not evidence
+       against the draft and must not block approval. */
+    const findings = solveFindings([
+      { questionNo: 5, consistent: false, comparable: false, note: '引擎得 s = 0.00 m' },
+    ])
+    expect(findings).toHaveLength(1)
+    expect(findings[0]?.severity).toBe('warning')
+    expect(findings[0]?.detail).toContain('引擎')
+  })
 })
 
 /* ------------------------------------------------------ export render -- */

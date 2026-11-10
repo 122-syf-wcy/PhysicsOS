@@ -1,13 +1,52 @@
-# 线上环境不可用诊断（2026-10-22）
+# 线上环境不可用诊断与复盘（2026-10-22）
 
 - 入口：`https://physics.dongsiwei.com`
 - 服务器：`38.76.190.3`（`/opt/physicsos`，Docker Compose：app / postgres / redis）
-- 结论：**主机本身在网络层失联，不是应用、Docker、nginx 或证书问题**。同一 /21、/22 网段的其他地址正常存活，只有这台主机（及它的 IP）不可达，符合“VPS 被关机 / 停机 / 欠费暂停 / IP 被回收”这一类供应商侧状态。
-- 影响：无法 SSH、无法查看容器、无法发布或回滚；正式站点对所有访客不可用。
+- 结论：**主机在 2026-10-16 09:36（CST）被 ACPI“电源键”正常关机，之后停机 6 天 11 小时，
+  2026-10-22 20:55（CST）由用户重启后恢复。** 不是应用崩溃、不是 OOM、不是磁盘满、
+  不是证书或 nginx 故障；数据完整，无需恢复操作。
 
-## 1. 实测证据（2026-10-22 20:34–20:50 CST）
+## 1. 故障时间线
 
-### 1.1 DNS 正常，仍指向原 IP
+| 时刻（CST） | 事件 |
+| --- | --- |
+| 2026-10-16 09:36:39 | `systemd-logind: Power key pressed short.` → `Powering off...` |
+| 2026-10-16 09:37:08 | 系统完成优雅关机（`poweroff.target`），容器随之停止 |
+| 2026-10-16 09:37 – 2026-10-22 20:55 | **停机 6 天 11 小时 17 分**，主机不响应 ICMP/TCP |
+| 2026-10-22 20:34 | 开始排障：DNS 正常，全球多节点 `No route to host` |
+| 2026-10-22 20:55 | 用户重启服务器，主机恢复 |
+| 2026-10-22 20:59 | 三个容器 healthy，`/healthz` 与 `/readyz` 均 200 |
+
+关键日志（上一启动会话末尾）：
+
+```text
+2026-10-16T01:36:39+00:00 systemd-logind[827]: Power key pressed short.
+2026-10-16T01:36:39+00:00 systemd-logind[827]: Powering off...
+2026-10-16T01:36:40+00:00 systemd-logind[827]: System is powering down.
+2026-10-16T01:37:08+00:00 systemd[1]: Reached target poweroff.target - System Power Off.
+```
+
+`last -x` 同样记为 `shutdown system down ... Fri Oct 16 01:37 - 12:55 (6+11:17)`，
+`journalctl --list-boots` 在 `-1` 与 `0` 之间正好缺这 6 天。
+
+## 2. 为什么判定是“电源键关机”
+
+- 是**优雅关机**：systemd 依次停止服务、卸载文件系统、停 journal，没有 panic、
+  没有 OOM kill、没有磁盘只读，也没有内核崩溃痕迹。
+- 触发源是 **ACPI power button 事件**（`Power key pressed short.`），而不是
+  `reboot`、`shutdown` 命令或 `systemctl poweroff`。VPS 供应商控制台上的
+  “关机/停止实例”就是通过 ACPI 电源键下发的；也可能是有人在控制台点了关机。
+- 关机前最后 1 分钟没有 SSH 登录会话，只有公网扫描噪音（`Invalid user admin` 等），
+  因此不是被入侵后关机。
+- 2026-10-16 前后有 `unattended-upgrades` 活动，内核从 `6.8.0-142` 升到 `6.8.0-147`，
+  但自动升级只会在需要时重启，不会在 01:36 触发 ACPI 电源键关机。
+
+**最可能的原因：供应商侧暂停/关机，或控制台误操作。** 鉴于本项目没有欠费预警，
+建议在供应商后台确认 10-16 09:36 的实例操作记录与账单状态，并开启到期/欠费提醒。
+
+## 3. 排障过程（恢复前）
+
+### 3.1 DNS 正常，仍指向原 IP
 
 Google DoH 与 Cloudflare DoH 均返回：
 
@@ -16,79 +55,58 @@ physics.dongsiwei.com. 600 IN A 38.76.190.3
 NS: dns21.hichina.com / dns22.hichina.com
 ```
 
-即域名没有漂移，问题不在解析。
+### 3.2 全球多节点不可达，但同网段邻居正常
 
-### 1.2 全球多节点均不可达
+[check-host.net](https://check-host.net) 多节点结果：
 
-[check-host.net](https://check-host.net) 多节点结果（不同大洲）：
-
-| 探测 | 节点结果 |
+| 探测 | 结果 |
 | --- | --- |
-| HTTPS `physics.dongsiwei.com` | 巴西、德国、西班牙、以色列、伊朗×2：`No route to host` |
-| TCP `38.76.190.3:22` | 巴西、伊朗、哈萨克斯坦、塞尔维亚：`No route to host` |
-| TCP `38.76.190.3:443` | 伊朗×2、摩尔多瓦：`No route to host`；美国：`Connect timeout` |
-| TCP `38.76.190.3:80` | 瑞士、荷兰、土耳其：`No route to host`；哈萨克斯坦：`Connection timed out` |
-| ICMP `38.76.190.3` | 澳大利亚、瑞士、斯洛文尼亚：`TIMEOUT` / `DEST_UNREACH` |
+| HTTPS `physics.dongsiwei.com` | 巴西/德国/西班牙/以色列/伊朗×2：`No route to host` |
+| TCP `38.76.190.3:22` | 巴西/伊朗/哈萨克斯坦/塞尔维亚：`No route to host` |
+| TCP `38.76.190.3:443` | 伊朗×2/摩尔多瓦：`No route to host`；美国：超时 |
+| TCP `38.76.190.3:80` | 瑞士/荷兰/土耳其：`No route to host`；哈萨克斯坦：超时 |
+| ICMP `38.76.190.3` | 澳大利亚/瑞士/斯洛文尼亚：`TIMEOUT` / `DEST_UNREACH` |
 
-关键对照：**同网段其他地址全部正常**：
+对照：`38.76.184.1`、`38.76.185.1`、`38.76.188.1`、`38.76.189.1`、`38.76.191.1`
+（同 /21、/22 网段）全部 ping 正常。说明不是整段路由或地区封锁，而是本机不在线。
 
-| 地址 | 结果 |
+RIPE RIS 显示 `38.76.188.0/22` 仍由 AS401701（cognetcloud INC）公告，
+159/164 观测点可见——网段在路由表里，但主机不响应任何协议，与“实例已关机”完全一致。
+
+本机侧一致：直连 `Network is unreachable`；走本机代理对站点返回 `502`/TLS 重置，
+而同一代理访问 `example.com` 正常。
+
+## 4. 恢复后核验（2026-10-22 20:59–21:05 CST）
+
+| 项目 | 结果 |
 | --- | --- |
-| `38.76.184.1` | 法国、印尼、俄罗斯 ping OK（约 0.2 ms） |
-| `38.76.185.1` | 香港、美国 ping OK |
-| `38.76.188.1` | 以色列、美国 ping OK |
-| `38.76.189.1` | 伊朗、荷兰 ping OK |
-| `38.76.191.1` | 西班牙、乌克兰 ping OK |
+| 主机 | 已启动，`uname -r` 6.8.0-147-generic |
+| 容器 | `physicsos-app-1`、`physicsos-postgres-1`、`physicsos-redis-1` 均 `Up (healthy)` |
+| 运行镜像 | `physicsos-app:global-a25c6ee26583`（= 远端 `main` 的 `a25c6ee`） |
+| 服务器检出 | `/opt/physicsos` @ `a25c6ee26583b80ec40e75665cd3d1a92b54f6de`，无本地改动 |
+| 健康检查 | `/healthz` → `{"status":"ok"}`；`/readyz` → `{"status":"ready",checks:{postgres:ok,redis:ok}}` |
+| HTTPS | 200，nginx/1.24.0，安全响应头齐全 |
+| 证书 | `CN=physics.dongsiwei.com`，有效期至 2026-12-25 |
+| 磁盘 | 78G 用 54G（70%），剩 24G |
+| 数据卷 | `app_data` 15M（54 个会话）、`postgres_data` 69M（`physicsos` schema 84 张表）、`redis_data` 316K |
+| 每日备份 | `/opt/physicsos/backups/postgres/` 最近一份 `20261015T021501Z` |
 
-所以不是整段路由或地区封锁，而是**这台主机/这个 IP 自身**从互联网上消失。
+**重要修复点：本次断线时长里，2026-10-15 23:06 之后就没有新的 PostgreSQL 每日备份，
+直到主机恢复。停机期间的数据本来也不会变化（服务未运行），但说明备份任务与主机同生共死。**
 
-### 1.3 BGP 路由仍在公告
+## 5. 遗留风险与建议
 
-RIPE RIS（`stat.ripe.net`）显示 `38.76.188.0/22` 仍由 **AS401701（cognetcloud INC）** 公告，
-159/164 个 RIS 观测点可见，路径 `... 2914 40779 401701 401701 401701`。
-即“网段在路由表里”，但该网段内的这台主机不响应任何协议——常见于实例被供应商关机/挂起。
+1. **异地备份缺失（最高优先级）**：`scripts/deploy/backup-lib.mjs` 的 `copyOffsite()`
+   只是在同一台主机的另一个目录里复制，文档也没有对象存储/另一台机器的配置。
+   如果这次磁盘没救回来，业务数据将无法恢复。建议把每日 dump 推到对象存储（COS/OSS）
+   或另一台机器，并做一次真实恢复演练。
+2. **关机/欠费告警**：加一条外部可用性监控（如 UptimeRobot/BetterStack）指向
+   `/healthz`，以及供应商账单到期提醒。本次故障 6 天无人知晓，正是缺这两项。
+3. **`unattended-upgrades` 自动升级内核**：如需可控，改为维护窗口手动升级并记录重启。
+4. **恢复演练**：`docs/restore-drill.md` 的步骤应在异地副本上重跑一次，确认可用。
 
-### 1.4 本机侧现象一致
+## 6. 与项目接续的关系
 
-- 直连：`ssh root@38.76.190.3` → `Network is unreachable`；`nc` 到 22/443/80 全部不可达。
-- 走本机代理（127.0.0.1:7897）：`https://physics.dongsiwei.com/` → TLS 握手被重置；`http://` → `502 Bad Gateway`；同一代理访问 `example.com` 正常（200）。
-- 其他已知用户服务器同样异常：`154.21.200.228:31058`、`216.167.70.94:2222` 全球多节点 TCP 超时；目前只有 `39.97.232.141:22` 可达。
-  （这两台也可能只是端口白名单，但“多台同时异常”值得一并检查供应商账号状态。）
-
-## 2. 排除项
-
-- 不是 DNS：解析正确且 TTL 只有 600 秒，修改后会很快生效。
-- 不是 nginx / 证书：TCP 层就到不了主机，任何 HTTP 层检查都无从谈起。
-- 不是 Docker / Compose / 数据库：同样没有 SSH，容器状态不可知；此前 2026-10-15 23:06 的记录显示三个容器均 healthy。
-- 不是本次实验美化改动：那批改动从未发布（见 [2026-10-15 报告](./2026-10-15-lab-visual-polish.md)），当时正式服务仍运行 `a25c6ee` 镜像且健康。
-
-## 3. 恢复步骤（需要服务器控制台权限）
-
-1. **登录 VPS 供应商控制台**，检查该实例状态：是否关机 / 到期欠费 / 被暂停 / 工单处理中；先尝试开机或续费。
-2. 若实例已销毁或磁盘丢失：确认是否有快照/备份套餐；没有快照则只剩代码仓库可恢复，**账号、学习作答、会话数据会丢失**。
-3. 若恢复后公网 IP 变化：到阿里云 DNS（`dns21/dns22.hichina.com`）把 `physics.dongsiwei.com` 的 A 记录改成新 IP。
-4. 主机恢复后依次核对：
-   ```sh
-   ssh -i ~/.ssh/id_ed25519 root@38.76.190.3 \
-     'cd /opt/physicsos && docker compose ps && docker compose images && git rev-parse HEAD'
-   curl -sS https://physics.dongsiwei.com/healthz
-   curl -sS https://physics.dongsiwei.com/readyz
-   ```
-   确认实际运行镜像仍是发布时的 `physicsos-app:global-a25c6ee26583`（或更新的已发布版本），再决定是否继续实验美化发布。
-5. 长时间停机后检查 Let's Encrypt 证书有效期；到期前需在服务器恢复后重新签发。
-
-## 4. 数据恢复风险
-
-`scripts/deploy/backup-lib.mjs` 的 `copyOffsite()` 只是复制到**同一台主机的另一个目录**，
-文档里也没有异地（对象存储/另一台机器）备份的配置。因此：
-
-- 如果供应商能把实例救回来（磁盘完好）：PostgreSQL 卷、`app_data` 会话卷都还在，风险较低。
-- 如果磁盘丢失：没有仓库内可用的异地备份，业务数据无法从代码仓库重建。
-
-**这一条应在恢复后立刻补上异地备份**，否则下一次故障仍是同样的风险。
-
-## 5. 与项目接续的关系
-
-- 代码侧不受阻：本地仓库、`overlays/` 里的全部未提交改动都还在（见 [线程接续备忘](./2026-10-22-codex-thread-handover.md)）。
-- 部署/验证受阻：按项目约定构建、测试、发布都必须在 `38.76.190.3` 的 Docker 环境完成，主机恢复前无法执行。
-- 恢复后第一件事：重新核对远端 `main`、服务器检出版本、实际运行镜像，确认没有丢失已上线功能，再继续实验美化收尾。
+- 本次故障与实验美化改动无关：那批改动从未发布，主机停机时运行的仍是 `a25c6ee` 镜像。
+- 代码侧不受影响，本地仓库与 `overlays/` 未提交改动都在。
+- 主机已恢复，按项目约定继续在服务器 Docker 环境验证实验美化改动。

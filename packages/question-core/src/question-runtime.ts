@@ -39,6 +39,10 @@ import type { QuestionWorkflowState } from './workflow.ts'
 import { DeterministicMagneticQuestionParser } from './deterministic-magnetic-parser.ts'
 import { DeterministicMechanicsQuestionParser } from './deterministic-mechanics-parser.ts'
 import {
+  DeterministicCollisionQuestionParser,
+  COLLISION_SIGNAL,
+} from './deterministic-collision-parser.ts'
+import {
   DeterministicElectricQuestionParser,
   isElectricQuestionText,
 } from './deterministic-electric-parser.ts'
@@ -68,6 +72,7 @@ import {
 import { validateSemanticIR } from './semantic-validator.ts'
 import { buildSceneFromIR } from './scene-builder.ts'
 import { buildMechanicsSceneFromIR } from './mechanics-scene-builder.ts'
+import { buildCollisionSceneFromIR } from './collision-scene-builder.ts'
 import { buildCompositeSceneFromIR } from './composite-scene-builder.ts'
 import {
   buildElectricSceneFromIR,
@@ -184,10 +189,19 @@ export function processQuestion(document: QuestionDocument): QuestionRuntimeResu
     !isInduction &&
     !isWave &&
     /匀强磁场|磁感应强度|磁场方向|洛伦兹力|\bB\s*=/i.test(text)
+  /* A collision is a two-body model and must not reach the single-body
+     mechanics parser, which would solve one of the two and report it as the
+     answer. Tested before 力学 for the same reason induction is tested before
+     the magnetic fallback. */
+  const isCollision = !isComposite && !isWave && COLLISION_SIGNAL.test(text)
+  /* The apparatus words matter as much as the kinematics ones: a 弹簧振子
+     question asks for 周期 and never says 加速度, so without them the text fell
+     through every parser and returned PARSE_FAILED. */
   const isMechanics =
     !isComposite &&
     !isWave &&
-    /匀速|匀加速|匀变速|平抛|斜抛|抛体|斜面|牛顿|加速度|位移|射程|运动.*时间|末速度/.test(text)
+    !isCollision &&
+    /匀速|匀加速|匀变速|平抛|斜抛|抛体|斜面|牛顿|加速度|位移|射程|运动.*时间|末速度|弹簧|劲度|单摆|摆长|摆球|摩擦因数|卫星|轨道半径|万有引力|简谐/.test(text)
 
   const parseResult = isModernPhysics
     ? DeterministicModernPhysicsQuestionParser.parse(document)
@@ -205,9 +219,11 @@ export function processQuestion(document: QuestionDocument): QuestionRuntimeResu
                 ? DeterministicElectricQuestionParser.parse(document)
                 : isMagnetic
                   ? DeterministicMagneticQuestionParser.parse(document)
-                  : isMechanics
-                    ? DeterministicMechanicsQuestionParser.parse(document)
-                    : null
+                  : isCollision
+                    ? DeterministicCollisionQuestionParser.parse(document)
+                    : isMechanics
+                      ? DeterministicMechanicsQuestionParser.parse(document)
+                      : null
 
   if (!parseResult || !parseResult.ir) {
     return {
@@ -267,7 +283,13 @@ export function processQuestion(document: QuestionDocument): QuestionRuntimeResu
   const isCompositeModel = COMPOSITE_MODEL_IDS.has(ir.model)
   let scene: PhysicsScene
 
-  if (ir.domain === 'mechanics') {
+  if (ir.domain === 'mechanics' && ir.model === 'one_dimensional_collision') {
+    const buildResult = buildCollisionSceneFromIR(ir, {
+      sceneId: 'question-' + docId,
+      questionId: docId,
+    })
+    scene = buildResult.scene
+  } else if (ir.domain === 'mechanics') {
     const buildResult = buildMechanicsSceneFromIR(ir, {
       sceneId: 'question-' + docId,
       questionId: docId,
@@ -1263,7 +1285,61 @@ function buildSolution(
     }
   } else if (ir.domain === 'mechanics') {
     const model = ir.model
-    if (model === 'uniformly_accelerated_motion') {
+    if (model === 'one_dimensional_collision') {
+      /* The bench reports the state after the impact: both bodies' velocities
+         in the final time sample, and the totals that make energy loss the
+         difference between the two. */
+      steps.push({
+        index: steps.length + 1,
+        title: '一维碰撞',
+        description: '动量守恒；机械能损失取决于恢复系数',
+      })
+      const finalStates = simulation.states?.at(-1)?.objects ?? []
+      const velocityOf = (id: string): number | undefined => {
+        const body = finalStates.find(object => object.id === id)
+        const velocity = body?.velocity
+        if (velocity === undefined || !('vector' in velocity)) return undefined
+        return (velocity as QuantityVector<'velocity'>).vector.x
+      }
+      const va = velocityOf('body_a')
+      const vb = velocityOf('body_b')
+      if (va !== undefined) {
+        results['velocity_a'] = { symbol: 'v₁′', label: 'A 碰后速度', value: va.toFixed(2), unit: 'm/s' }
+        steps.push({
+          index: steps.length + 1,
+          title: 'v₁′',
+          resultSymbol: 'v₁′',
+          resultValue: va.toFixed(2),
+          resultUnit: 'm/s',
+          description: '',
+        })
+      }
+      if (vb !== undefined) {
+        results['velocity_b'] = { symbol: 'v₂′', label: 'B 碰后速度', value: vb.toFixed(2), unit: 'm/s' }
+      }
+      /* A perfectly inelastic collision leaves both at the same speed; that
+         common value is what 求共同速度 asks for. */
+      if (va !== undefined && vb !== undefined && Math.abs(va - vb) < 1e-9) {
+        results['common_velocity'] = { symbol: 'v', label: '共同速度', value: va.toFixed(2), unit: 'm/s' }
+      }
+      const energy = dq.find(d => d.key === 'total_kinetic_energy')
+      if (energy !== undefined && !('vector' in energy.value)) {
+        const after = (energy.value as Quantity).value
+        const bodies = ir.collisionBodies ?? []
+        const before = bodies.reduce((sum, body) => sum + 0.5 * body.mass * body.velocity ** 2, 0)
+        const loss = before - after
+        results['energy_loss'] = { symbol: 'ΔE', label: '机械能损失', value: loss.toFixed(2), unit: 'J' }
+        steps.push({
+          index: steps.length + 1,
+          title: 'ΔE = E前 − E后',
+          resultSymbol: 'ΔE',
+          resultValue: loss.toFixed(2),
+          resultUnit: 'J',
+          description: '',
+        })
+      }
+      derivationFormulas.push({ id: 'f-momentum', expression: 'm₁v₁ + m₂v₂ = m₁v₁′ + m₂v₂′' })
+    } else if (model === 'uniformly_accelerated_motion') {
       steps.push({
         index: steps.length + 1,
         title: '匀变速直线运动',
@@ -1436,6 +1512,123 @@ function buildSolution(
         })
       }
       derivationFormulas.push({ id: 'f-ulm', expression: 's = vt' })
+    } else if (model === 'spring_oscillator') {
+      steps.push({
+        index: steps.length + 1,
+        title: '简谐运动',
+        description: 'T = 2π√(m/k)',
+      })
+      const period = dq.find(d => d.key === 'period')
+      if (period && !('vector' in period.value)) {
+        const val = (period.value as Quantity).value
+        results['period'] = { symbol: 'T', label: '振动周期', value: val.toFixed(2), unit: 's' }
+        steps.push({
+          index: steps.length + 1,
+          title: 'T = 2π√(m/k)',
+          resultSymbol: 'T',
+          resultValue: val.toFixed(2),
+          resultUnit: 's',
+          description: '',
+        })
+      }
+      derivationFormulas.push({ id: 'f-spring-t', expression: 'T = 2π√(m/k)' })
+    } else if (model === 'spring_statics') {
+      steps.push({
+        index: steps.length + 1,
+        title: '胡克定律',
+        description: 'kx = mg',
+      })
+      const ext = dq.find(d => d.key === 'spring_extension')
+      if (ext && !('vector' in ext.value)) {
+        const val = (ext.value as Quantity).value
+        results['spring_extension'] = { symbol: 'x', label: '弹簧伸长量', value: val.toFixed(3), unit: 'm' }
+        steps.push({
+          index: steps.length + 1,
+          title: 'x = mg/k',
+          resultSymbol: 'x',
+          resultValue: val.toFixed(3),
+          resultUnit: 'm',
+          description: '',
+        })
+      }
+      derivationFormulas.push({ id: 'f-hooke', expression: 'kx = mg' })
+    } else if (model === 'simple_pendulum') {
+      steps.push({
+        index: steps.length + 1,
+        title: '单摆周期',
+        description: 'T = 2π√(L/g)',
+      })
+      const period = dq.find(d => d.key === 'period')
+      if (period && !('vector' in period.value)) {
+        const val = (period.value as Quantity).value
+        results['period'] = { symbol: 'T', label: '振动周期', value: val.toFixed(2), unit: 's' }
+        steps.push({
+          index: steps.length + 1,
+          title: 'T = 2π√(L/g)',
+          resultSymbol: 'T',
+          resultValue: val.toFixed(2),
+          resultUnit: 's',
+          description: '',
+        })
+      }
+      derivationFormulas.push({ id: 'f-pendulum-t', expression: 'T = 2π√(L/g)' })
+    } else if (model === 'horizontal_friction') {
+      steps.push({
+        index: steps.length + 1,
+        title: '水平面摩擦',
+        description: 'f = μN = μmg',
+      })
+      /* Acceleration lives on the body's motion sample, not in the derived
+         quantities: the engine reports it as `objects[].acceleration`. */
+      const motion = simulation.states?.at(-1)?.objects?.[0]
+      const accel = motion?.acceleration
+      if (accel !== undefined && 'vector' in accel) {
+        const v = (accel as QuantityVector<'acceleration'>).vector
+        const mag = Math.hypot(v.x, v.y, v.z)
+        results['acceleration'] = { symbol: 'a', label: '加速度', value: mag.toFixed(2), unit: 'm/s²' }
+        steps.push({
+          index: steps.length + 1,
+          title: 'a = μg',
+          resultSymbol: 'a',
+          resultValue: mag.toFixed(2),
+          resultUnit: 'm/s²',
+          description: '',
+        })
+      }
+      derivationFormulas.push({ id: 'f-friction-a', expression: 'a = μg' })
+    } else if (model === 'circular_orbit') {
+      steps.push({
+        index: steps.length + 1,
+        title: '万有引力提供向心力',
+        description: 'GMm/r² = mv²/r',
+      })
+      const v = dq.find(d => d.key === 'orbital_speed')
+      if (v && !('vector' in v.value)) {
+        const val = (v.value as Quantity).value
+        results['linear_speed'] = { symbol: 'v', label: '线速度', value: val.toFixed(0), unit: 'm/s' }
+        steps.push({
+          index: steps.length + 1,
+          title: 'v = √(GM/r)',
+          resultSymbol: 'v',
+          resultValue: val.toFixed(0),
+          resultUnit: 'm/s',
+          description: '',
+        })
+      }
+      const period = dq.find(d => d.key === 'orbital_period')
+      if (period && !('vector' in period.value)) {
+        const val = (period.value as Quantity).value
+        results['period'] = { symbol: 'T', label: '运行周期', value: val.toFixed(0), unit: 's' }
+        steps.push({
+          index: steps.length + 1,
+          title: 'T = 2π√(r³/GM)',
+          resultSymbol: 'T',
+          resultValue: val.toFixed(0),
+          resultUnit: 's',
+          description: '',
+        })
+      }
+      derivationFormulas.push({ id: 'f-orbit-v', expression: 'v = √(GM/r)' })
     }
   } else if (ir.domain === 'circuit') {
     steps.push({

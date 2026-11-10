@@ -206,7 +206,31 @@ const QUESTION_MODELS: Readonly<Record<string, { domain?: string; models?: reado
     models: ['charged_particle_uniform_electric_field', 'point_charge_electrostatic_field'],
   },
   'engine-magnetic': { domain: 'magnetic', models: ['charged_particle_uniform_magnetic_field'] },
-  'engine-mechanics': { domain: 'mechanics' },
+  /* Named explicitly rather than by domain: `one_dimensional_collision` is a
+     mechanics question, but the single-body engine must not claim it — with a
+     bare `domain: 'mechanics'` its capability matched first and the collision
+     engine was never reached, so every collision question reported
+     UNSUPPORTED_MODEL. */
+  'engine-mechanics': {
+    domain: 'mechanics',
+    models: [
+      'uniform_linear_motion',
+      'uniformly_accelerated_motion',
+      'projectile_motion',
+      'newton_second_law',
+      'inclined_plane',
+      'spring_oscillator',
+      'spring_statics',
+      'simple_pendulum',
+      'horizontal_friction',
+      'circular_orbit',
+    ],
+  },
+  /* The collision bench solves a two-body model. It is listed by model name so
+     a single-body mechanics question never reaches it — the engine itself also
+     refuses scenes without two bodies, but naming the model here keeps the
+     dispatch honest at the capability layer too. */
+  'engine-collision': { domain: 'mechanics', models: ['one_dimensional_collision'] },
   'engine-optics': { domain: 'optics' },
   'engine-circuit': { domain: 'circuit', models: ['dc_steady_state_mna'] },
   'engine-induction': { domain: 'induction', models: ['bar_motion_emf', 'flux_change_emf'] },

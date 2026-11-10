@@ -285,6 +285,9 @@ export function ExperimentPicker({
           <div className={css.headerCopy}>
             <h2 className={css.title}>{t('lab.template.empty.title')}</h2>
             <p className={css.body}>{t('lab.template.empty.body')}</p>
+            <a className={css.developerLink} href="/physicsos/developers/index.html" target="_blank" rel="noopener noreferrer">
+              开发者文档与贡献规范 ↗
+            </a>
           </div>
           <span className={css.headerCount}>
             {/* The badge numbers what a student can actually open; the grid

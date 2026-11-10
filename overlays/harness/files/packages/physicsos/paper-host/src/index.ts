@@ -304,17 +304,30 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
         if (job.document === undefined) throw new PaperError(409, 'NO_DOCUMENT', `job ${jobId} has no document`)
         trace(`check ${jobId} — running document checks`)
         await service.reportProgress(jobId, 'check', 0, 1, '规范与覆盖检查')
-        const findings = service.runJobChecks(jobId, bankPolicy.freshnessPapers)
-        const questions = job.document.sections.flatMap(section => section.items)
-        trace(`check ${jobId} — ${String(findings.length)} findings, solving ${String(questions.length)} questions`)
+
+        /* Solve against the document the teacher will actually see, then check
+           that document. The previous order checked the pre-solve copy and
+           stamped the engine's answers over it afterwards, so the findings
+           described a version that no longer existed — and a second check
+           compared the engine's own output against itself, which reported
+           agreement the engine never earned. */
+        const draftQuestions = job.document.sections.flatMap(section => section.items)
+        trace(`check ${jobId} — solving ${String(draftQuestions.length)} questions`)
         const solve = await independentSolve(
-          questions, config.solveDelayMs, config.solveTimeoutMs, undefined,
+          draftQuestions, config.solveDelayMs, config.solveTimeoutMs, undefined,
           (done, total, questionNo) => {
             void service.reportProgress(jobId, 'solve', done, total, `物理引擎复核第 ${questionNo} 题`)
           },
         )
         trace(`check ${jobId} — solve done`)
         await applyEngine(jobId, solve)
+
+        /* Re-read: applyEngine committed a new version, and every check below
+           has to run against it. */
+        const checked = service.getJob(jobId)
+        const findings = service.runJobChecks(jobId, bankPolicy.freshnessPapers)
+        const questions = (checked.document ?? job.document).sections
+          .flatMap(section => section.items)
         await service.recordCheckResults(jobId,
           [...findings, ...engineFindingsFor(solve, new Map(questions.map(q => [q.number, q.kind])))],
           solve)

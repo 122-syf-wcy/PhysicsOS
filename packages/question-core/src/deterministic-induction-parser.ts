@@ -1,6 +1,7 @@
 import { canonicalValue, isKnownUnit, parseQuantity } from '@physicsos/physics-units'
 
 import type { QuestionDocument } from './question-document.ts'
+import { normalizeStemText } from './latex-text.ts'
 import type { QuestionParseCandidate, QuestionParserProvider } from './question-parser.ts'
 import type {
   InductionModelId,
@@ -34,7 +35,23 @@ import type {
  * is a magnetic-force question (rejected), and a bare 电路/电动势 is a circuit
  * question (rejected).
  */
+/**
+ * Signals that name the phenomenon directly.
+ */
 const INDUCTION_SIGNAL = /电磁感应|感应电动势|感应电流|切割磁感线|磁通量|感生电场|动生电动势/
+
+/**
+ * A conductor crossing a loop is the canonical rod-on-rails apparatus, and it
+ * is often written without ever naming 电磁感应: "两根平行金属导轨…金属棒 ab
+ * 垂直放置…匀强磁场垂直斜面向上". Without a signal that text fell through to
+ * the magnetic-particle parser and reported a missing charge.
+ *
+ * The conductor alone is not enough — a bare 导体棒 in a field question is a
+ * particle problem — so the apparatus needs a circuit for the charge to flow
+ * through: a rail, a closed loop, or a stated resistance.
+ */
+const INDUCTION_APPARATUS =
+  /(?:金属棒|导体棒|金属杆|导体杆)[\s\S]*?(?:导轨|回路|阻值|\bR\s*=)|(?:导轨|回路)[\s\S]*?(?:金属棒|导体棒|金属杆|导体杆)/
 
 /**
  * Signals that mark a question as NOT induction even when the induction signal
@@ -44,7 +61,7 @@ const INDUCTION_SIGNAL = /电磁感应|感应电动势|感应电流|切割磁感
 const NON_INDUCTION_SIGNAL = /回旋加速器|速度选择器|质谱仪|正交.*场|复合场/
 
 export const isInductionQuestionText = (text: string): boolean =>
-  INDUCTION_SIGNAL.test(text) && !NON_INDUCTION_SIGNAL.test(text)
+  (INDUCTION_SIGNAL.test(text) || INDUCTION_APPARATUS.test(text)) && !NON_INDUCTION_SIGNAL.test(text)
 
 function parseScientificNumber(text: string): number | null {
   const normalized = text.replace(/\s+/g, '')
@@ -209,7 +226,9 @@ export const DeterministicInductionQuestionParser: QuestionParserProvider = {
   id: 'deterministic-induction-v1',
 
   parse(document: QuestionDocument): QuestionParseCandidate {
-    const text = document.content.extractedText || document.content.rawText || ''
+    /* Normalised once here: drafted stems carry LaTeX, and every pattern in
+       this file is written against plain text. */
+    const text = normalizeStemText(document.content.extractedText || document.content.rawText || '')
     const issues: QuestionParseIssue[] = []
     const knowns: KnownValue[] = []
 

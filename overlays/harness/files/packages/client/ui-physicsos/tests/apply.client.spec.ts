@@ -125,7 +125,8 @@ describe('ui-physicsos apply', () => {
     expect(b.slots.entries('sidebar.footer.action')).toHaveLength(1)
     expect(b.slots.entries('sidebar.workspaces')).toHaveLength(1)
     const mainPanels = b.slots.entries('main')
-    expect(mainPanels).toHaveLength(6)
+    /* 实验贡献 joined the rail: one `main` key per PHYSICS_PANEL_IDS surface. */
+    expect(mainPanels).toHaveLength(Object.values(PHYSICS_PANEL_IDS).length)
     expect(mainPanels.map(entry => entry.options.key))
       .toEqual(expect.arrayContaining(Object.values(PHYSICS_PANEL_IDS)))
     expect(b.slots.entries('conversation.hero.brand.mark')).toHaveLength(1)

@@ -730,10 +730,15 @@ export class PaperService {
     if (job.status !== 'checking') {
       throw new PaperError(409, 'BAD_STATE', `job ${id} is '${job.status}', not checking`)
     }
+    const current = job.versions.at(-1)
     const next: PaperJob = {
       ...job,
       findings: [...findings],
       solveReport: [...solve],
+      /* Bind the findings to the content they describe. A later edit mints a
+         new version and leaves this hash behind, so a reader can see at once
+         that the findings no longer cover what is on screen. */
+      ...(current === undefined ? {} : { checkedVersionHash: current.hash }),
       /* Checks always hand the paper to the teacher: `findings` carries the
          severities, so even an error-free run needs a human verdict before
          approval. This was a ternary whose two branches were identical. */
@@ -827,6 +832,13 @@ export class PaperService {
     const current = job.versions.at(-1)
     if (current === undefined) throw new PaperError(409, 'NO_VERSION', `job ${id} has no version`)
 
+    /* A check result only speaks for the version it was computed on. After an
+       edit the findings describe a paper that is no longer on screen, and
+       approving on their strength would clear a document nobody checked. */
+    if (job.checkedVersionHash !== current.hash) {
+      throw new PaperError(409, 'STALE_CHECKS',
+        `job ${id} changed since its last check; run the check again before approving`)
+    }
     const errors = job.findings.filter(f => f.severity === 'error')
     if (errors.length > 0) {
       throw new PaperError(409, 'UNRESOLVED_FINDINGS',

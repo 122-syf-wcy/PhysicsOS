@@ -444,6 +444,14 @@ export interface SolveResult {
   readonly draftAnswer: string
   readonly solvedAnswer: string
   readonly consistent: boolean
+  /**
+   * Whether the engine's answer could be matched to the question that was
+   * asked. A choice question's draft answer is a letter and the engine reports
+   * quantities, so a mismatch there says nothing about the draft — only that
+   * the two answers are not comparable. Absent means comparable, which keeps
+   * every existing producer's results meaningful.
+   */
+  readonly comparable?: boolean
   readonly note?: string
 }
 
@@ -477,6 +485,15 @@ export interface PaperJob {
   readonly approval?: PaperApproval
   readonly findings: readonly CheckFinding[]
   readonly solveReport: readonly SolveResult[]
+  /**
+   * The document version these findings describe.
+   *
+   * Findings are only meaningful against the exact content they were computed
+   * from. Without this, a run that checked one version and a later run that
+   * checked another both left findings on the job, and a reader could not tell
+   * which paper they referred to — nor whether an approval still matched them.
+   */
+  readonly checkedVersionHash?: string
   /**
    * The bank-assembly plan the draft ran with — per-row supply mode,
    * chosen item, and eligible candidate count, for audit and the spec-tab

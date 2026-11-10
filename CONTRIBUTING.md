@@ -4,6 +4,10 @@
 
 参与本项目即表示你同意遵守 [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md)，并按 [`LICENSE`](./LICENSE)（Apache License 2.0）的条款提交贡献。
 
+## 实验贡献
+
+三维实验开发者请先阅读 [实验开发者文档](docs/EXPERIMENT-DEVELOPERS.md)。文档站提供统一代码风格、物理与渲染边界、可复制的 AGENTS.md，以及可下载的代码风格工具包。当前通过 PR 贡献；公开 SDK 和 ZIP 上传审核尚未上线。
+
 ## 开始之前
 
 - Node.js 需要 `>= 24`；大图资源走 Git LFS，clone 前请先安装 `git-lfs`。
