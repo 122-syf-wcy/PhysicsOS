@@ -8,3 +8,5 @@ User requested continued autonomous improvements and direct deployment; no-quest
 - [ ] Verify old fa573 production and latest main; allocate safe scratch budget before candidate; retain stable images/recoveries; thin image, full manifest check, actual page gate and17fault-tested publish script.
 
 Scopes: agent owns copy helper/panel/tests, root owns renderer/registry/channel integration/locales/keyboard tests. No new physical domain or solver.
+
+- [ ] Follow-up from actual12-apparatus browser reload: restore validated local canvas/draft/history before delayed online upload settles, retaining account isolation/resource-policy validation and sync/merge/outbox authority; add real-IDB deferred upload/commit regression, review, then rebuild/candidate/browser/release gates.

@@ -7,10 +7,12 @@ import { canonicalStringify, copyJsonObject } from '@physicsos/physics-workbench
 import { parseGraph, validateGraph, verifyGraphDigests } from '@physicsos/physics-workbench/graph'
 import { parseDatasetsCsv } from '@physicsos/physics-workbench/csv'
 import type { CanvasGraph } from '@physicsos/physics-workbench/types'
+import { loadCanvasFixture } from '../../../physicsos/learning-host/tests/canvas-fixture.ts'
 import { createCanvasApi } from '../src/client/canvas/api.ts'
 import { createCanvasController } from '../src/client/canvas/controller.ts'
 import { createCanvasPersistence } from '../src/client/canvas/persistence.ts'
 import type { CanvasAccount, CanvasController, CanvasControllerOptions } from '../src/client/canvas/types.ts'
+import { draftToScene, starterDraft } from '../src/client/physics/circuit-builder.ts'
 import { createWorkbenchInstanceRuntime, type CreateWorkbenchInstanceOptions, type WorkbenchInstanceRuntime } from '../src/client/physics/workbench-instance-runtime.ts'
 
 const controllers: CanvasController[] = []
@@ -329,6 +331,147 @@ describe('captured immutable graphs and document editing', () => {
 })
 
 describe('document cache recovery and local cross-tab conflicts', () => {
+  it('opens cached circuit owners before a pending online startup upload finishes', async test => {
+    const host = await loadCanvasFixture({ test })
+    const authenticated = await host.register(`startup_${randomUUID().slice(0, 8)}`)
+    const account: CanvasAccount = { id: authenticated.user.id, schoolId: authenticated.user.schoolId, username: authenticated.user.username }
+    const name = databaseName('physicsos-canvas-online-recovery')
+    let releaseUploads!: () => void
+    let releaseCommits!: () => void
+    const uploads = new Promise<void>(resolve => { releaseUploads = resolve })
+    const commits = new Promise<void>(resolve => { releaseCommits = resolve })
+    test.onTestFinished(() => { releaseUploads(); releaseCommits() })
+    let uploading = false
+    let committing = false
+    const api = createCanvasApi(async (input, init) => {
+      const raw = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+      const url = new URL(raw, host.base)
+      const method = init?.method ?? 'GET'
+      if (method === 'PUT' && url.pathname.includes('/objects/')) { uploading = true; await uploads }
+      if (method === 'POST' && url.pathname.endsWith('/commit')) { committing = true; await commits }
+      const headers = Object.fromEntries(new Headers(init?.headers).entries())
+      return typeof init?.body === 'string'
+        ? host.raw(method, `${url.pathname}${url.search}`, init.body, authenticated, headers)
+        : host.call(method, `${url.pathname}${url.search}`, undefined, authenticated, headers)
+    })
+    const first = fixture({ api, getAccount: () => account, persistence: createCanvasPersistence({ name, hash }) })
+    const canvas = await first.controller.create('Pending circuit before reload')
+    const instance = await first.controller.addExperiment(canvas, { scene: draftToScene(starterDraft()), source: { kind: 'free-build' },
+      buildMode: 'construct', layout: { x: 120, y: 80 } })
+    const key = first.controller.instanceKey(canvas, instance)
+    const node = first.controller.documentSource(canvas).getSnapshot().manifest!.nodes.find(value => value.kind === 'experiment')!
+    await first.controller.instanceAction(key, 'setComponentParams', 'r0', { resistance: 30 })
+    await first.controller.instanceAction(key, 'addComponent', 'resistor', { x: 2, y: 4 }, { resistance: 100 })
+    await first.controller.flush(canvas)
+    await first.controller.updateLayout(canvas, [{ id: node.id, layout: { x: 620, y: 180 } }])
+    await first.controller.dispose()
+
+    const persistence = createCanvasPersistence({ name, hash })
+    const second = fixture({ api, getAccount: () => account, persistence, online: () => true })
+    let opened = false
+    const opening = second.controller.open(canvas).then(() => { opened = true })
+    void opening.catch(() => undefined)
+    try {
+      await vi.waitFor(() => expect(uploading).toBe(true), { timeout: 10_000 })
+      // Network completion is deliberately unavailable; the authenticated local view must be usable first.
+      await vi.waitFor(() => expect(opened).toBe(true), { timeout: 1_000 })
+      const restoredKey = second.controller.instanceKey(canvas, instance)
+      await vi.waitFor(() => expect(second.controller.instanceSource(restoredKey).getSnapshot()?.draft?.components).toHaveLength(4))
+      const restored = second.runtimes.find(owner => owner.instanceKey === restoredKey && !owner.getSnapshot().disposed)!
+      expect(second.controller.getSnapshot().loading).toBe(false)
+      expect(second.controller.documentSource(canvas).getSnapshot()).toMatchObject({ status: 'syncing', localSaved: true, canUndo: true })
+      expect(restored.getSnapshot()).toMatchObject({ buildMode: 'construct', history: { canUndo: true } })
+      expect(restored.getSnapshot().draft!.components.find(component => component.id === 'r0')!.params.resistance).toBe(30)
+      expect(restored.getSnapshot().draft!.components.find(component => component.id === 'r1')!.params.resistance).toBe(100)
+      expect((await persistence.read(`${encodeURIComponent(account.id)}|${encodeURIComponent(account.schoolId)}`, canvas))?.pending?.kind).toBe('commit')
+      await second.controller.undo(canvas)
+      expect(second.controller.documentSource(canvas).getSnapshot().manifest!.nodes.find(value => value.id === node.id)!.layout).toMatchObject({ x: 120, y: 80 })
+      await second.controller.redo(canvas)
+      await second.controller.instanceAction(restoredKey, 'undo')
+      expect(restored.getSnapshot().draft!.components.map(component => component.id)).toEqual(['bat', 'sw', 'r0'])
+      await second.controller.instanceAction(restoredKey, 'redo')
+      await second.controller.flush(canvas)
+      const retainedScene = restored.getScene()
+      const retainedHistory = restored.serialize().history
+      const retainedDraft = restored.serialize().draft
+      releaseUploads()
+      await vi.waitFor(() => expect(committing).toBe(true), { timeout: 10_000 })
+      expect(second.controller.documentSource(canvas).getSnapshot().status).toBe('syncing')
+      releaseCommits()
+      await second.controller.sync(canvas)
+      const acknowledged = second.controller.documentSource(canvas).getSnapshot()
+      expect(acknowledged.status).toBe('saved')
+      expect(acknowledged.acknowledgedSequence).toBe(acknowledged.editSequence)
+      expect(acknowledged.manifest!.nodes.find(value => value.id === node.id)!.layout).toMatchObject({ x: 620, y: 180 })
+      expect(restored.getSnapshot().disposed).toBe(false)
+      expect(restored.getScene()).toEqual(retainedScene)
+      expect(restored.serialize()).toMatchObject({ history: retainedHistory, draft: retainedDraft })
+      const published = await api.forOwner(account).open(canvas)
+      expect(published.manifest.instances[0]!.currentScene).toEqual(currentInstance(second.controller, canvas, instance).currentScene)
+    } finally {
+      releaseUploads(); releaseCommits()
+      await opening.catch(() => undefined)
+    }
+  }, 120_000)
+
+  it('keeps the initial object inventory when startup acknowledgment advances the cache during hydration', async test => {
+    const host = await loadCanvasFixture({ test })
+    const authenticated = await host.register(`hydrate_${randomUUID().slice(0, 8)}`)
+    const account: CanvasAccount = { id: authenticated.user.id, schoolId: authenticated.user.schoolId, username: authenticated.user.username }
+    const name = databaseName('physicsos-canvas-hydration-race')
+    let releaseCreate!: () => void, releaseObjects!: () => void, releaseUploads!: () => void
+    const creating = new Promise<void>(resolve => { releaseCreate = resolve })
+    const reading = new Promise<void>(resolve => { releaseObjects = resolve })
+    const uploading = new Promise<void>(resolve => { releaseUploads = resolve })
+    test.onTestFinished(() => { releaseCreate(); releaseObjects(); releaseUploads() })
+    let createStarted = false, uploadStarted = false, objectsRead = false, holdObjects = false
+    const api = createCanvasApi(async (input, init) => {
+      const raw = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+      const url = new URL(raw, host.base)
+      const method = init?.method ?? 'GET'
+      if (method === 'POST' && url.pathname === '/physicsos/learning/canvases') { createStarted = true; await creating }
+      if (method === 'PUT' && url.pathname.includes('/objects/')) { uploadStarted = true; await uploading }
+      const headers = Object.fromEntries(new Headers(init?.headers).entries())
+      return typeof init?.body === 'string' ? host.raw(method, `${url.pathname}${url.search}`, init.body, authenticated, headers)
+        : host.call(method, `${url.pathname}${url.search}`, undefined, authenticated, headers)
+    })
+    const first = fixture({ api, getAccount: () => account, persistence: createCanvasPersistence({ name, hash }) })
+    const canvas = await first.controller.create('Hydration across acknowledgment')
+    const instance = await first.controller.addExperiment(canvas, { scene: draftToScene(starterDraft()), source: { kind: 'free-build' }, buildMode: 'construct' })
+    await first.controller.instanceAction(first.controller.instanceKey(canvas, instance), 'addComponent', 'resistor', { x: 2, y: 4 }, { resistance: 100 })
+    await first.controller.flush(canvas)
+    await first.controller.dispose()
+    const backing = createCanvasPersistence({ name, hash })
+    const persistence = { ...backing, objects: async (...args: Parameters<typeof backing.objects>) => {
+      const snapshot = await backing.objects(...args)
+      if (holdObjects) { holdObjects = false; objectsRead = true; await reading }
+      return snapshot
+    } }
+    const second = fixture({ api, getAccount: () => account, persistence, online: () => true })
+    let opening: Promise<void> | undefined
+    try {
+      await vi.waitFor(() => expect(createStarted).toBe(true), { timeout: 10_000 })
+      const namespace = `${encodeURIComponent(account.id)}|${encodeURIComponent(account.schoolId)}`
+      const before = (await backing.read(namespace, canvas))!.cacheVersion
+      holdObjects = true
+      opening = second.controller.open(canvas)
+      void opening.catch(() => undefined)
+      await vi.waitFor(() => expect(objectsRead).toBe(true), { timeout: 10_000 })
+      releaseCreate()
+      await vi.waitFor(async () => expect((await backing.read(namespace, canvas))!.cacheVersion).toBeGreaterThan(before), { timeout: 10_000 })
+      await vi.waitFor(() => expect(uploadStarted).toBe(true), { timeout: 10_000 })
+      releaseObjects()
+      await opening
+      const key = second.controller.instanceKey(canvas, instance)
+      await vi.waitFor(() => expect(second.controller.instanceSource(key).getSnapshot()?.draft?.components).toHaveLength(4))
+      expect(second.controller.documentSource(canvas).getSnapshot().error).toBeUndefined()
+      expect(second.controller.instanceSource(key).getSnapshot()!.draft!.components.find(part => part.id === 'r1')!.params.resistance).toBe(100)
+    } finally {
+      releaseCreate(); releaseObjects(); releaseUploads()
+      await opening?.catch(() => undefined)
+    }
+  }, 120_000)
+
   it('restores field-patch undo and physical owner history on reload without replaying another instance state', async () => {
     const name = databaseName('physicsos-canvas-recovery')
     const first = fixture({ persistence: createCanvasPersistence({ name, hash }) })

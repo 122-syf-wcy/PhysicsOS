@@ -999,7 +999,14 @@ export function createCanvasController(options: CanvasControllerOptions): Canvas
     const { validateGraph } = await import('@physicsos/physics-workbench/graph')
     const validated = unwrap(validateGraph(value.working, reachableCanvasGraph(value.working, objects).objects, limitsFor(entry.namespace)))
     // The IDB object reader has already checked every blob's hash before exposing it.
-    adoptRecord(entry, value, { ...objects, ...validated.objects })
+    const inventory = { ...objects, ...validated.objects }
+    if (entry.record !== undefined && value.cacheVersion < entry.record.cacheVersion) {
+      entry.objects = mergeObjectInventory(entry.objects, inventory)
+      // An acknowledgment may advance the record while IDB objects are loading.
+      // Validate its current working graph before marking the entry hydrated.
+      return loadLocal(entry)
+    }
+    adoptRecord(entry, value, inventory)
     entry.loaded = true
   }
   const openEntry = async (entry: DocumentEntry): Promise<void> => {
@@ -1336,12 +1343,20 @@ export function createCanvasController(options: CanvasControllerOptions): Canvas
       }
       if (api !== undefined && online()) await listHeads({}, scope)
       if (synchronizer !== undefined && online() && scope.epoch === activeEpoch) {
-        for (const entry of entries.values()) {
-          if (entry.namespace !== namespace || entry.record === undefined) continue
-          if ((entry.record.pendingNoteDrafts?.length ?? 0) > 0) await flushEntryNotes(entry)
-          await synchronizer.sync(entry.id)
-          if (scope?.epoch !== activeEpoch || paused) return
-        }
+        // Restore authenticated local views while the retained outbox drains in the background.
+        void (async () => {
+          for (const entry of entries.values()) {
+            if (disposed || scope?.epoch !== activeEpoch || paused || fingerprintOf(options.getAccount()) !== fingerprint) return
+            if (entry.namespace !== namespace || entry.record === undefined) continue
+            if ((entry.record.pendingNoteDrafts?.length ?? 0) > 0) await flushEntryNotes(entry)
+            await synchronizer.sync(entry.id)
+            if (scope?.epoch !== activeEpoch || paused) return
+          }
+        })().catch(error => {
+          if (disposed || scope?.epoch !== activeEpoch || fingerprintOf(options.getAccount()) !== fingerprint) return
+          if (error instanceof CanvasRequestError && [401, 403].includes(error.status)) pauseScope(error)
+          else { rootError = canvasErrorOf(error); report(error); publishRoster() }
+        })
       }
       for (const entry of entries.values()) if (entry.namespace === namespace && entry.loaded) startOwners(entry)
     } catch (error) {
