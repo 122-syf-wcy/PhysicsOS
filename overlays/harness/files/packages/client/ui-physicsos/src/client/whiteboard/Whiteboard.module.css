@@ -36,8 +36,8 @@
   background-color: var(--physics-glass-fill);
   background-image: var(--physics-glass-sheen);
   box-shadow: var(--physics-glass-rim), var(--physics-glass-shadow);
-  backdrop-filter: var(--physics-glass-blur-soft);
   -webkit-backdrop-filter: var(--physics-glass-blur-soft);
+  backdrop-filter: var(--physics-glass-blur-soft);
 }
 .workspace .header { border-radius: 16px; padding: 8px 12px; }
 .workspace .header .titleInput { width: auto; min-width: 80px; }
@@ -79,8 +79,8 @@
   background-color: var(--physics-glass-fill);
   background-image: var(--physics-glass-sheen);
   box-shadow: var(--physics-glass-rim), var(--physics-glass-lift-raised), 0 2px 8px color-mix(in srgb, var(--dsw-alias-label-primary) 8%, transparent);
-  backdrop-filter: var(--physics-glass-blur);
   -webkit-backdrop-filter: var(--physics-glass-blur);
+  backdrop-filter: var(--physics-glass-blur);
   pointer-events: auto;
 }
 .tools::before {
@@ -189,8 +189,8 @@
   background-color: var(--physics-glass-fill-strong);
   background-image: var(--physics-glass-sheen);
   box-shadow: var(--physics-glass-rim), var(--physics-glass-shadow-raised);
-  backdrop-filter: var(--physics-glass-blur);
   -webkit-backdrop-filter: var(--physics-glass-blur);
+  backdrop-filter: var(--physics-glass-blur);
 }
 .tools .more > div > button { min-height: 42px; height: auto; padding: 10px 12px; border-radius: 11px; font-size: 13px; line-height: 1.4; white-space: normal; }
 .menuDivider { height: 1px; margin: 5px 7px; background: var(--physics-glass-border-soft); }
@@ -231,5 +231,5 @@
   .tools .viewportControls span { min-width: 28px; font-size: 10px; }
 }
 .workspace .sync { max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: right; }
-.tools .more > div { max-height: min(320px, max(72px, calc(100dvh - 400px))); }
+.tools .more > div { box-sizing: border-box; max-height: min(320px, var(--whiteboard-menu-height, 36dvh)); }
 .dockShelf, .tools { box-sizing: border-box; }

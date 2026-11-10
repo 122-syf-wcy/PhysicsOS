@@ -40,14 +40,21 @@ export function WhiteboardWorkspace(props: WhiteboardFactoryProps) {
     const workspace = root.current
     const dock = workspace?.querySelector<HTMLElement>('[data-whiteboard-dock]')
     if (!workspace || !dock) return
+    const editor = dock.parentElement
     const measure = () => {
-      const height = Math.ceil(dock.getBoundingClientRect().height)
+      const bounds = dock.getBoundingClientRect()
+      const height = Math.ceil(bounds.height)
       if (height > 0 && workspace.style.getPropertyValue('--whiteboard-dock-height') !== `${height}px`) workspace.style.setProperty('--whiteboard-dock-height', `${height}px`)
+      const clippingTop = Math.max(0, editor?.getBoundingClientRect().top ?? 0, editor?.parentElement?.getBoundingClientRect().top ?? 0)
+      const menuHeight = `${Math.max(1, Math.floor(bounds.top - clippingTop) - 16)}px`
+      if (workspace.style.getPropertyValue('--whiteboard-menu-height') !== menuHeight) workspace.style.setProperty('--whiteboard-menu-height', menuHeight)
     }
     measure()
     const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure)
     observer?.observe(dock)
-    return () => { observer?.disconnect(); workspace.style.removeProperty('--whiteboard-dock-height') }
+    observer?.observe(workspace)
+    if (editor) observer?.observe(editor)
+    return () => { observer?.disconnect(); workspace.style.removeProperty('--whiteboard-dock-height'); workspace.style.removeProperty('--whiteboard-menu-height') }
   }, [recordReady, whiteboardId, state.namespace])
   const sourceIds = record?.document.sourceImages.map(image => image.id).join(',') ?? ''
   useEffect(() => {
