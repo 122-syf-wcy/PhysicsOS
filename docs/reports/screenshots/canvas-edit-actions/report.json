@@ -1,0 +1,28 @@
+{
+  "success": true,
+  "checks": [
+    "Created apparatus bench directly on free canvas",
+    "Clearing a source rating restores its value without changing physical facts",
+    "Rejected resistance restores20Ω locally; Undo andanotheredit preserve the selectedapparatus",
+    "Added rated resistor, rotated it, removed it and restored it with undo",
+    "Reload restored assembled apparatus and rated parameters",
+    "Panel copy preserves custom37Ω and rotation, selects the copy, and leaves original circuit current unchanged",
+    "Focused body rotates/moves/copies with keys; Delete/Backspace remove only it, Undo restores it, and input arrows remain native",
+    "The nested rheostat handle keeps its5% arrows and cannot delete its apparatus",
+    "Moved an apparatus body directly on its bench",
+    "Connected a parallel resistor: total current rose to 0.225 A; cutting a lead restored 0.15 A",
+    "Leaving and reenteringconstruction duringpointerinput keepswiring usable",
+    "Twelve apparatus are arranged in bounded rows",
+    "Reload preserves the circuit after copy and keyboard history operations",
+    "The390px editor copies apparatus directly and selects its new parameter panel",
+    "Mobile live readings sit below the full diagram without covering ports",
+    "A touch outside the tiny pole starts wiring; Escape cancels it while keeping the editor open",
+    "Mobile toolbar opens a usable focused apparatus editor at 390 px"
+  ],
+  "errors": {
+    "console": 0,
+    "page": 0,
+    "failedRequests": 0
+  },
+  "base": "https://127.0.0.1:13443"
+}

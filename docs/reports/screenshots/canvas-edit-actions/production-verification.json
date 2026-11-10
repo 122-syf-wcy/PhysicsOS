@@ -1,0 +1,18 @@
+{
+  "image": "sha256:93305af6299d02423a38a99a3ec0a4d140b8d04125523f7b9ddb256e85a771cd",
+  "codeRevision": "3e8c5e427e36ff524daa3cbcf09c997f6a40c35e",
+  "publicRoot": 200,
+  "publicReadyz": 200,
+  "serverHttpsRoot": 200,
+  "app": "healthy",
+  "postgres": "healthy",
+  "redis": "healthy",
+  "candidateChecks": 17,
+  "candidateErrors": {
+    "console": 0,
+    "page": 0,
+    "failedRequests": 0
+  },
+  "faultChecks": 17,
+  "cutoverScriptSha256": "bf1e9178096b219aab7d849f42588e0e2234b99168d1ce070add088f5647b174"
+}

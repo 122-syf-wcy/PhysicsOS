@@ -1,0 +1,20 @@
+{
+  "deployed": true,
+  "image": "sha256:93305af6299d02423a38a99a3ec0a4d140b8d04125523f7b9ddb256e85a771cd",
+  "revision": "3e8c5e427e36ff524daa3cbcf09c997f6a40c35e",
+  "recovery": "/opt/physicsos/backups/releases/20261110T043627.146387Z-apparatus-actions-20261110",
+  "files": {
+    "postgres.dump": {
+      "size": 872215,
+      "sha256": "d89f847a9d452dfab5a79ba9afdd121ac8c80d75c88711921bf8f2cd26fd2543"
+    },
+    "app_data.tar.gz": {
+      "size": 227339706,
+      "sha256": "0d2e3deccf26408358eb4a215363495c72e680fd2805810c51d201163186b2f1"
+    },
+    "redis_data.tar.gz": {
+      "size": 23373,
+      "sha256": "c722986a3d29e11d038af93b93e6e38e0799121022ce3f31098caefdedda7d6e"
+    }
+  }
+}
