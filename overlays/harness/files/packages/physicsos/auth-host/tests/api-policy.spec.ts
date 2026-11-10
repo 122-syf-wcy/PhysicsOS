@@ -125,6 +125,25 @@ const makePolicy = (options: {
 }
 
 describe('PhysicsOS shared /api policy', () => {
+  it('keeps an owned chapter workspace when a student starts a conversation', async () => {
+    const store = makeStore({ workspace: ['chapter-momentum'] })
+    const ensureWorkspace = vi.fn(async () => workspace)
+    const { policy } = makePolicy({ store, ensureWorkspace })
+    let forwarded: Record<string, unknown> | undefined
+    const next = vi.fn(async (req: Request) => {
+      const body = await req.json() as { payload: Record<string, unknown> }
+      forwarded = body.payload
+      return rpc({ sessionId: 'chapter-question' })
+    })
+    await policy.wrapFetch(next)(request('session.create', {
+      workspaceId: 'chapter-momentum', cwd: '/etc', agentPreset: 'standard',
+    }))
+    expect(forwarded).toMatchObject({ workspaceId: 'chapter-momentum', agentPreset: 'physics-student' })
+    expect(forwarded).not.toHaveProperty('cwd')
+    expect(ensureWorkspace).not.toHaveBeenCalled()
+    expect(store.claims).toContain('session:chapter-question')
+  })
+
   it('rechecks an original credential after asynchronous request preparation', async () => {
     let active = true
     let release!: () => void

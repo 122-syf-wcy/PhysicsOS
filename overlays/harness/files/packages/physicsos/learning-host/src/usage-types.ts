@@ -7,6 +7,7 @@ export const USAGE_SURFACES = [
   'experiment',
   'canvas',
   'whiteboard',
+  'projects',
   'chat',
   'record',
   'usage',

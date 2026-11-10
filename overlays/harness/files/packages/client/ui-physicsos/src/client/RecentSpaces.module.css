@@ -147,3 +147,5 @@
   outline: 2px solid var(--physicsos-focus, #3b82f6);
   outline-offset: 1px;
 }
+
+.foldHeading { display:flex; align-items:center; justify-content:space-between; width:100%; padding:4px 0; border:0; background:none; color:inherit; font:inherit; cursor:pointer; text-align:start; }

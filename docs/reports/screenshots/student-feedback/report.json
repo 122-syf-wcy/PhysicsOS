@@ -1,0 +1,14 @@
+{
+  "success": true,
+  "checks": [
+    "Create a persistent chapter project",
+    "Start a conversation from the chapter project",
+    "An image-only message enables and invokes Send",
+    "The configured mock model receives the image turn",
+    "Chapter retains its new conversation",
+    "Project creates a linked apparatus workbench and exposes edit/pan modes",
+    "Resize a tablet experiment window using width and height",
+    "iPad viewport keeps the resized workspace available"
+  ],
+  "base": "https://127.0.0.1:13443"
+}

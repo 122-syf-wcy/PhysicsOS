@@ -107,6 +107,20 @@ const chat = async (
 }
 
 describe('model pool proxy', () => {
+  it('forwards admitted question images above the old 2 MiB JSON limit', async () => {
+    const upstream = await startUpstream((_body, res) => { res.writeHead(200, { 'content-type': 'application/json' }); res.end('{"choices":[]}') })
+    cleanup.push(upstream.close)
+    const store = await makeStore()
+    const channel = await store.createChannel(ADMIN, { name: 'question-images', baseURL: upstream.url, priority: 10 })
+    await store.addKey(ADMIN, channel.id, { key: 'fixture-question-images' })
+    const base = await startPool(store)
+    const response = await chat(base, { messages: [{ role: 'user', content: [
+      { type: 'text', text: '请识别题干并梳理解题思路。' },
+      { type: 'image_url', image_url: { url: `data:image/png;base64,${'A'.repeat(3 * 1024 * 1024)}` } },
+    ] }] })
+    expect(response.status).toBe(200)
+    expect(upstream.hits()).toBe(1)
+  })
   it('forces only the first image call in the strict chunked code workflow and releases later steps', async () => {
     const received: Record<string, unknown>[] = []
     const upstream = await startUpstream((body, res) => { received.push(body); res.writeHead(200, { 'content-type': 'application/json' }); res.end('{}') })

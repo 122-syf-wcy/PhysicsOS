@@ -128,15 +128,15 @@
 .boardStatus { max-width: min(520px, calc(100vw - 44px)); padding: 6px 10px; border-radius: 8px; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-secondary); font-size: 12px; }
 .zoomValue { min-width: 42px; text-align: center; font-variant-numeric: tabular-nums; }
 .nodeCard { display: flex; flex-direction: column; width: 100%; height: 100%; min-width: 0; min-height: 0; border: 1px solid var(--dsw-alias-border-l2); border-radius: 12px; background: var(--dsw-alias-bg-base); box-shadow: var(--canvas-shadow); box-sizing: border-box; }
-.nodeHeader { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 6px; min-height: 34px; padding: 6px 10px; border-bottom: 1px solid var(--dsw-alias-border-l2); border-radius: 12px 12px 0 0; cursor: grab; user-select: none; }
+.nodeHeader { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 6px; min-height: 44px; padding: 6px 10px; border-bottom: 1px solid var(--dsw-alias-border-l2); border-radius: 12px 12px 0 0; cursor: grab; user-select: none; }
 .nodeHeader:active { cursor: grabbing; }
 .nodeTitle { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
 .nodeHeaderActions { display: flex; gap: 3px; align-items: center; flex: none; }
 .nodeBody { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; min-height: 0; overflow: auto; padding: 10px; gap: 10px; border-radius: 0 0 12px 12px; }
-.experimentBody { padding: 0; overflow: hidden; }
+.experimentBody { padding: 0; overflow: auto; }
 .lockMark { color: var(--dsw-alias-label-secondary); font-size: 12px; }
 .edgeHandle { opacity: 0; pointer-events: none; }
-.resizeHandle { width: 10px !important; height: 10px !important; border: 2px solid var(--dsw-alias-bg-base) !important; border-radius: 4px !important; background: var(--dsw-alias-button-info-fill) !important; }
+.resizeHandle { width: 22px !important; height: 22px !important; border: 2px solid var(--dsw-alias-bg-base) !important; border-radius: 4px !important; background: var(--dsw-alias-button-info-fill) !important; }
 .resizeLine { border-color: var(--dsw-alias-button-info-fill) !important; }
 .groupCard { background: color-mix(in srgb, var(--dsw-alias-bg-module-platform) 78%, transparent); border: 1px dashed var(--dsw-alias-border-l2); box-shadow: none; }
 .groupCard .nodeHeader { background: var(--dsw-alias-bg-module-platform); }
@@ -356,3 +356,9 @@
   .instanceConstructing.instanceFocused .instanceProperties { flex: none; min-height: 160px; max-height: 260px; }
   .instanceConstructing.instanceFocused .instanceCenter { flex: none; min-height: 360px; overflow: visible; }
 }
+
+.handMode .nodeBody, .handMode .nodeBody * { pointer-events: none !important; }
+.handMode .nodeCard { cursor: grab; }
+.compactCard .apparatusEditor { display:flex; flex-direction:column; overflow:auto; }
+.compactCard .apparatusObjects { flex:none; max-height:200px; border-right:0; border-bottom:1px solid var(--canvas-border); }
+.compactCard .apparatusCenter { flex:1 0 360px; min-height:360px; }

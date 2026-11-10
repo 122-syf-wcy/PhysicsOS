@@ -40,6 +40,13 @@ function final(session: Session, usage?: TokenUsage, turn = 1, step = 1) {
     ...(usage === undefined ? {} : { usage }) }, { surfaceOp: 'append' })
 }
 describe('durable account usage', () => {
+  it('admits chapter-project visits and persists their uses without a bad-request retry', async () => {
+    const f = await fixture()
+    await expect(f.service.recordEvent(a, { id: 'project-visit', kind: 'visit', surface: 'projects', action: 'view' })).resolves.toMatchObject({ surface: 'projects' })
+    await expect(f.service.recordEvent(a, { id: 'project-use', kind: 'use', surface: 'projects', action: 'view' })).resolves.toMatchObject({ surface: 'projects' })
+    await f.restart()
+    expect(await f.service.summary(a)).toMatchObject({ visits: 1, uses: 1 })
+  })
   it('counts one idempotent visit on the Shanghai day and preserves it across restart', async () => {
     const f = await fixture()
     const event = { id: 'navigation-1', kind: 'visit', surface: 'home' }
