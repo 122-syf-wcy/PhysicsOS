@@ -41,11 +41,15 @@ export interface Config {
   questionArtifactsRoot?: string
   packagesRoot?: string
   assetOrigin?: string
+  drawingTimeoutMs?: number
+  drawingConcurrency?: number
 }
 export const Config: z<Config> = z.object({
   questionArtifactsRoot: z.string(),
   packagesRoot: z.string(),
   assetOrigin: z.string(),
+  drawingTimeoutMs: z.number().step(1).min(1).max(60_000),
+  drawingConcurrency: z.number().step(1).min(1).max(16),
 })
 export async function apply(ctx: Context, config: Config = {}): Promise<() => Promise<void>> {
   return ctx.effect(async function* () {
@@ -75,6 +79,8 @@ export async function apply(ctx: Context, config: Config = {}): Promise<() => Pr
           : dshHomePath('question-code-artifacts')),
       identity: questionIdentity,
       prompts,
+      ...(config.drawingTimeoutMs === undefined ? {} : { drawingTimeoutMs: config.drawingTimeoutMs }),
+      ...(config.drawingConcurrency === undefined ? {} : { drawingConcurrency: config.drawingConcurrency }),
       ...(config.assetOrigin === undefined ? {} : { assetOrigin: config.assetOrigin }),
     })
     yield () => questionDomain.close()

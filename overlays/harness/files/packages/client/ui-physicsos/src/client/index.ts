@@ -17,6 +17,9 @@ import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import { mountPhysicsOSChrome } from './chrome.ts'
 import { createAdminApi, createAuthApi } from './auth-api.ts'
 import { createLearningApi } from './learning-api.ts'
+import { createUsageApi } from './usage-api.ts'
+import { registerWhiteboard } from './whiteboard-entry.tsx'
+import { startUsageTelemetry } from './usage-telemetry.ts'
 import { createModelPoolApi } from './model-pool-api.ts'
 import { createNoticeApi } from './notice-api.ts'
 import { PlatformNoticeDialog, UpstreamOnboardingSink } from './PlatformNoticeDialog.tsx'
@@ -163,6 +166,10 @@ export function apply(ctx: ClientContext): void {
   /* 账号同步通路: `/physicsos/learning` holds the signed-in student's own
      attempts and saved scenes, so two devices see the same record. */
   const learningApi = createLearningApi()
+  const usageApi = createUsageApi({ owner: () => {
+    const user = auth.store.getSnapshot().user
+    return user === undefined ? undefined : { schoolId: user.schoolId, username: user.username }
+  } })
   const auth = createAuthController(authApi, globalThis.localStorage)
   void auth.boot()
 
@@ -198,6 +205,8 @@ export function apply(ctx: ClientContext): void {
   const learningRecord = createLearningRecordController(auth.userStorage, learningApi)
   const canvasEntry = registerCanvasViews(ctx, canvas, surface, auth, learningRecord)
   ctx.effect(() => startCanvasNavigation(surface, window), 'ui-physicsos: canvas navigation')
+  registerWhiteboard(ctx, auth, surface)
+  ctx.effect(() => startUsageTelemetry(auth, surface), 'ui-physicsos: usage telemetry')
   ctx.effect(() => {
     let disposed = false
     let starting = false
@@ -781,6 +790,7 @@ export function apply(ctx: ClientContext): void {
         questionCodeOwner,
         paperApi,
         adminApi,
+        usageApi,
         noticeApi,
         modelPoolApi,
         openSurface: (
@@ -811,7 +821,7 @@ export function apply(ctx: ClientContext): void {
         practiceQuestion,
       })
       for (const panelId of Object.values(PHYSICS_PANEL_IDS)) {
-        if (panelId === PHYSICS_PANEL_IDS.canvas) continue
+        if (panelId === PHYSICS_PANEL_IDS.canvas || panelId === PHYSICS_PANEL_IDS.whiteboard) continue
         yield scope.slots.register({
           name: 'main',
           key: panelId,

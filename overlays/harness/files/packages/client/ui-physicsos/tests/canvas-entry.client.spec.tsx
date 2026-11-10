@@ -306,6 +306,22 @@ describe('canvas normal-user entry controls', () => {
 })
 
 describe('canvas independent URL ownership', () => {
+  it('keeps classroom-board and experiment document routes independent while retaining the live experiment', () => {
+    const surface = createPhysicsSurfaceController()
+    const original = createMagneticScene()
+    surface.open('lab', { sceneId: String(original.id), scene: original })
+    window.history.replaceState(null, '', '#/whiteboards/board%3Aone')
+    const stopCanvas = startCanvasNavigation(surface, window)
+    const stopBoard = startCanvasNavigation(surface, window, 'whiteboard')
+    expect(surface.store.getSnapshot()).toMatchObject({ surface: 'whiteboard', whiteboardId: 'board:one', sceneRef: { scene: original } })
+    surface.openCanvas('experiment-two')
+    expect(window.location.hash).toBe('#/canvases/experiment-two')
+    surface.openWhiteboard('board-three')
+    expect(window.location.hash).toBe('#/whiteboards/board-three')
+    expect(surface.store.getSnapshot().sceneRef?.scene).toBe(original)
+    stopBoard(); stopCanvas()
+  })
+
   it('restores encoded workbench IDs and never creates a fallback document for malformed history', () => {
     const surface = createPhysicsSurfaceController()
     const original = createMagneticScene()

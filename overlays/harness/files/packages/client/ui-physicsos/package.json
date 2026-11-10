@@ -117,7 +117,8 @@
     "@xyflow/react": "12.12.1",
     "idb": "8.0.4",
     "fake-indexeddb": "6.2.7",
-    "@physicsos/physics-workbench": "link:../../../../../packages/physics-workbench"
+    "@physicsos/physics-workbench": "link:../../../../../packages/physics-workbench",
+    "@physicsos/physics-whiteboard": "link:../../../../../packages/physics-whiteboard"
   },
   "files": [
     "lib/index.js",

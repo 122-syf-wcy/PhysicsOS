@@ -7,6 +7,7 @@
  * first, then here.
  */
 
+import { isModelUsageOutboxRecord, type ModelUsageOutboxRecord } from '@physicsos/model-usage-outbox'
 import { z } from 'zod'
 import { defineDomain, domainTable } from '@deepseek-ai/dsh-storage-domain'
 import { CHECK_CODES } from '@physicsos/question-paper'
@@ -370,6 +371,7 @@ export const paperDomain = defineDomain({
   name: 'physicsos_paper',
   version: 0,
   tables: {
+    usage_receipts: domainTable<string, ModelUsageOutboxRecord>(z.custom<ModelUsageOutboxRecord>(isModelUsageOutboxRecord)),
     source_papers: domainTable<string, SourcePaper>(sourcePaper),
     annotations: domainTable<string, KnowledgeAnnotation>(annotation),
     blueprints: domainTable<string, ExamBlueprint>(blueprint),

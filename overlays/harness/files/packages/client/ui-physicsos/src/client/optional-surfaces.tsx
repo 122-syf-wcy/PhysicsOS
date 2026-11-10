@@ -19,10 +19,11 @@ const loadCanvasFrame = async () => ({ default: (await loadWorkspaceModule()).Ca
 /** Registration remains small: physical runtimes load when a workspace or card is shown. */
 export function OptionalPhysicsSurface(props: PhysicsSurfaceProps) {
   const surface = props.usePhysicsSurface(state => state.surface)
-  if (surface === 'home' || surface === 'canvas') return null
+  if (surface === 'home' || surface === 'canvas' || surface === 'whiteboard') return null
   if (surface === 'admin') {
     if (props.adminApi === undefined) return null
     return <OptionalAdminWorkspace api={props.adminApi} useAuth={props.useAuth} t={props.t}
+      {...(props.usageApi === undefined ? {} : { usageApi: props.usageApi })}
       {...(props.paperApi === undefined ? {} : { paperApi: props.paperApi })}
       {...(props.noticeApi === undefined ? {} : { noticeApi: props.noticeApi })}
       {...(props.modelPoolApi === undefined ? {} : { modelPoolApi: props.modelPoolApi })} />

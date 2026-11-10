@@ -8,6 +8,8 @@ export const questionCodeRecordSchema = z
     ownerSessionId: z.string().min(1).max(200),
     ownerKey: z.string().min(1).max(300),
     childSessionId: z.string().min(1).max(200),
+    generationId: z.string().min(1).max(200).optional(),
+    requestSha256: digest.optional(),
     sceneId: z.string().min(1).max(200),
     sceneRevision: z.number().int().nonnegative(),
     sceneSha256: digest,

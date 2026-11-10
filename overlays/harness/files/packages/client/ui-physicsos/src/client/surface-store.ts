@@ -11,6 +11,7 @@ export type PhysicsSurfaceId =
   | 'home'
   | 'lab'
   | 'canvas'
+  | 'whiteboard'
   | 'record'
   | 'paper'
   | 'library'
@@ -29,6 +30,7 @@ export type PhysicsSurfaceId =
 export const PHYSICS_PANEL_IDS = {
   lab: 'physicsos-lab' as MainPanelId,
   canvas: 'physicsos-canvas' as MainPanelId,
+  whiteboard: 'physicsos-whiteboard' as MainPanelId,
   paper: 'physicsos-paper' as MainPanelId,
   notice: 'physicsos-notice' as MainPanelId,
   library: 'physicsos-library' as MainPanelId,
@@ -40,6 +42,7 @@ export const PHYSICS_PANEL_IDS = {
 const SURFACE_BY_PANEL: Readonly<Record<string, PhysicsSurfaceId>> = {
   [PHYSICS_PANEL_IDS.lab]: 'lab',
   [PHYSICS_PANEL_IDS.canvas]: 'canvas',
+  [PHYSICS_PANEL_IDS.whiteboard]: 'whiteboard',
   [PHYSICS_PANEL_IDS.paper]: 'paper',
   [PHYSICS_PANEL_IDS.notice]: 'notice',
   [PHYSICS_PANEL_IDS.library]: 'library',
@@ -90,6 +93,7 @@ export const sceneRefOf = (entry: PhysicsSceneRef): PhysicsSceneRef => ({
 export interface PhysicsSurfaceState {
   surface: PhysicsSurfaceId
   canvasId?: string
+  whiteboardId?: string
   routeNotice?: string
   /** Changes only on an explicit handover, never a write-back. */
   sceneGeneration?: number
@@ -174,6 +178,7 @@ export interface PhysicsSurfaceController {
   open: (surface: PhysicsSurfaceId, sceneRef?: PhysicsSceneRef) => void
   /** Select a workbench without replacing the independently resumable lab scene. */
   openCanvas: (canvasId?: string) => void
+  openWhiteboard: (whiteboardId?: string) => void
   /**
    * Show a scene without adding it to 最近空间.
    *
@@ -409,6 +414,14 @@ export function createPhysicsSurfaceController(
       delete next.experimentPicker
       store.set(canvasId === undefined ? next : { ...next, canvasId })
       navigation?.selectSurface('canvas')
+    },
+    openWhiteboard: (whiteboardId) => {
+      const next = { ...store.getSnapshot(), surface: 'whiteboard' as const }
+      delete next.whiteboardId
+      delete next.routeNotice
+      delete next.experimentPicker
+      store.set(whiteboardId === undefined ? next : { ...next, whiteboardId })
+      navigation?.selectSurface('whiteboard')
     },
     openTransient: show,
     remember: record,

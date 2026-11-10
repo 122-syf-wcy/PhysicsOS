@@ -34,6 +34,7 @@ const work = new WeakMap<AuthDomain, DomainWork>()
 const safeModelCodes = new Set([
   'REVIEW_TIMEOUT', 'REVIEW_ABORTED', 'REVIEW_DISABLED', 'REVIEW_INVALID_OUTPUT',
   'REVIEW_INVALID_INPUT', 'REVIEW_FAILED', 'REVIEW_TOOL_OUTPUT', 'REVIEW_OUTPUT_LIMIT', 'REVIEW_EMPTY',
+  'REVIEW_JSON_INVALID', 'REVIEW_SCHEMA_INVALID', 'REVIEW_EVIDENCE_INVALID',
 ])
 
 /** Stable immutable evidence identity; hash before truncating either evidence field. */

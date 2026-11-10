@@ -1,9 +1,13 @@
 /** PhysicsOS overlay copy. */
 import type { ObservableKey } from './physics/scene-visual-model.ts'
 import { canvasEn, canvasZh } from './canvas/locales.ts'
+import { usageEn, usageZh } from './usage-locales.ts'
+import { whiteboardEn, whiteboardZh } from './whiteboard/locales.ts'
 
 export const zh = {
   ...canvasZh,
+  ...usageZh,
+  ...whiteboardZh,
   'brand.name': 'PhysicsOS',
   'brand.tagline': '探索一个物理世界',
   'brand.support': '描述一个物理现象、创建实验，或直接输入一道试题。',
@@ -15,7 +19,7 @@ export const zh = {
   'nav.group.unfold': '展开分组',
   'nav.lab': '物理实验室',
   'nav.paper': '出卷专区',
-  'nav.history': '学习记录',
+  'nav.history': '访问与用量',
   'nav.notice': '反馈',
   'notice.title': '反馈',
   'notice.announcements': '公告',
@@ -292,8 +296,8 @@ export const zh = {
   'lab.report.events': '实验过程（区域事件）',
   'lab.report.verification': '物理验证',
   'lab.report.conclusion': '实验结论',
-  'record.title': '学习记录',
-  'record.heading': '我的物理学习记录',
+  'record.title': '访问与用量',
+  'record.heading': '我的访问与用量',
   'record.totalAttempts': '自测次数',
   'record.accuracy': '正确率',
   'record.mistakes': '错题数',
@@ -1165,6 +1169,8 @@ export type PhysicsosKey = keyof typeof zh
 /** The English table, keyed by `PhysicsosKey`. */
 export const en = {
   ...canvasEn,
+  ...usageEn,
+  ...whiteboardEn,
   'brand.name': 'PhysicsOS',
   'brand.tagline': 'Explore a physics world',
   'brand.support': 'Describe a phenomenon, create an experiment, or enter a problem.',
@@ -1453,8 +1459,8 @@ export const en = {
   'lab.report.events': 'Timeline events',
   'lab.report.verification': 'Verification',
   'lab.report.conclusion': 'Conclusion',
-  'record.title': 'Learning record',
-  'record.heading': 'My physics learning record',
+  'record.title': 'Visits and usage',
+  'record.heading': 'My visits and usage',
   'record.totalAttempts': 'Attempts',
   'record.accuracy': 'Accuracy',
   'record.mistakes': 'Mistakes',

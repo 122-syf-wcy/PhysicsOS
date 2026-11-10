@@ -12,8 +12,8 @@
       ],
       "entry": "packages/physicsos/tool-physicsos/src/index.ts",
       "publisher": "PhysicsOS",
-      "sha256": "04b999a96971d8a2adb539b7506fbbad4038605adbac82f25b617c90a22237f8",
-      "signature": "ed25519:812O+cHBngGuRY2/cPjfx0WOZ4o2k+DuuHZFWZP0j1Swy4QNUl1w5G/6OmaTnBhq5K19icoo1AZmsUvG5uLLBw==",
+      "sha256": "5c465a70a8147e09d422f9130d9220c6b9974f1610833fe87b28d0a73d120e2f",
+      "signature": "ed25519:lxLUHJM7Ovdq/smx0IVN5eaj5GGAzJtQiaxfWmY2EACMmqAUhCtpkt++Nkk3/8vNQldu8O08dJGEzFH9FsdEBw==",
       "description": "PhysicsOS experiments, simulation, observation, and question-solving tools."
     },
     {
@@ -28,8 +28,8 @@
       ],
       "entry": "packages/physicsos/auth-host/src/index.ts",
       "publisher": "PhysicsOS",
-      "sha256": "7d3ae120a59dc66ebe146c4673f1f58efb51d52b214b8ae1a062dd3591d2c178",
-      "signature": "ed25519:eRe9/zwHIFW9zt/SDN/uclpVKm44jUggOkkMqwsLIPdtqfWgTc1Yo3dA5NB6rKvoHLqtS7uzIkXabIUG/9F+Cw==",
+      "sha256": "5c000f61e97350ffc3ae61d4f30ad2a7db52c93057f177d126adea703dcee9b7",
+      "signature": "ed25519:lO/yNEH0oOCwEXvG1Dgp8Jfn8kuDuSgEghAi1DqsY/6R6ohLhm4JbrHb53x1Q7kA/n3eJPzKSNH7mw2uvuKbDQ==",
       "description": "School tenants, accounts, sessions, password reset, and audit ledger."
     },
     {
@@ -47,8 +47,8 @@
       ],
       "entry": "packages/physicsos/paper-host/src/index.ts",
       "publisher": "PhysicsOS",
-      "sha256": "e4d68db18e3c304617e4236b07372dee0098549e3533fc181a9df339448fc58b",
-      "signature": "ed25519:KiAvFqBYu9h0TnHarXg8z92Iyt1qfxMYhYU87VTSk+NWMAuzUcxzCBZEjv6O6z96j1laA3mLTWX6Oowo629WCg==",
+      "sha256": "8c0bef8ef0549758111a43ff019ac2445d8e7e3d3a3555026082c80cf2860984",
+      "signature": "ed25519:P3y01Xoka7qdKmp90Pxfyf5r5AxJAcO3xn1E/jC547iX7pjEzV/5HFxl97QaXHfC3zXfiZ1yI0U6/YbaCDAHDg==",
       "description": "Question-paper intake, drafting, verification, approval, and export."
     },
     {
@@ -105,8 +105,8 @@
       ],
       "entry": "packages/physicsos/learning-host/src/index.ts",
       "publisher": "PhysicsOS",
-      "sha256": "55c0124a3395aa82f7c0597fedaa62a30dd2f04fe3131ba992cf7e52da630a0c",
-      "signature": "ed25519:mTgHoFjbuQOD+6LNlZZh44rzatQ2NyQx4vzc07XLqdS8TXgBWY9nQDyZ6zF6D41S46pCls98MJu/ccYzrPsYBQ==",
+      "sha256": "44dcaf7465e57e1ded87d4057cfe670d55e487c1e7e0cd34d315d625f81947e7",
+      "signature": "ed25519:lPKr/cwxbqFUJFS1vhq/7reZNredqabsHkqY2Inp2VvJ6ZL25ksI8w+M01201TIQEaw5OHUeDmDRZlWJWXn1Cg==",
       "description": "Account-scoped attempts and saved-scene synchronization."
     },
     {

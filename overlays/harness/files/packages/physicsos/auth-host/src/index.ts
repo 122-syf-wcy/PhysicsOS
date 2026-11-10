@@ -12,6 +12,7 @@
  * @module @deepseek-ai/dsh-auth-host
  */
 
+import { ModelUsageOutbox, type ReceiptSink } from '@physicsos/model-usage-outbox'
 import { Context } from '@deepseek-ai/cordis'
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
@@ -187,10 +188,19 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     if (!domain.table('moderation_settings').get('default') && config.moderationEnabled === false) {
       await domain.table('moderation_settings').put('default', { version: 1, enabled: false, updatedAt: new Date().toISOString(), captureFailures: 0 })
     }
+    const moderationReceipts = new ModelUsageOutbox({
+      source: 'moderation', table: domain.table('usage_receipts'),
+      sink: () => ctx.get('physicsosUsage') as ReceiptSink | undefined,
+      onError: phase => ctx.logger.warn(`auth-host: moderation usage ${phase} pending; receipt retained for retry`),
+    })
+    await moderationReceipts.initialize()
+    yield () => moderationReceipts.close()
     const moderation = await ModerationRuntime.create(ctx, domain, service, (input, signal) => {
       const llm = ctx.get('llm')
       if (!llm) throw new ModerationModelError('REVIEW_FAILED')
-      return createModerationReviewer(llm, { provider: config.moderationProvider ?? 'physicsos-pool', model: config.moderationModel ?? 'deepseek-v4.1-flash' })(input, signal)
+      return moderationReceipts.run(() => createModerationReviewer(llm, {
+        provider: config.moderationProvider ?? 'physicsos-pool', model: config.moderationModel ?? 'deepseek-v4.1-flash',
+      }, { receiptOutbox: moderationReceipts })(input, signal))
     }, () => ctx.get('llm') !== undefined)
     yield () => moderation.dispose()
 

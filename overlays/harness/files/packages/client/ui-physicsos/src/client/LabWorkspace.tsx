@@ -24,7 +24,8 @@ import type { ModelPoolApi } from './model-pool-api.ts'
 import { NoticeBoard } from './NoticeBoard.tsx'
 import type { AuthState } from './auth-store.ts'
 import { LabEmptyState } from './LabEmptyState.tsx'
-import { LearningRecordWorkspace } from './LearningRecordWorkspace.tsx'
+import { UsageWorkspace } from './UsageWorkspace.tsx'
+import type { UsageApi } from './usage-api.ts'
 import { LibraryWorkspace } from './LibraryWorkspace.tsx'
 import { ContributeWorkspace } from './ContributeWorkspace.tsx'
 import { PaperWorkspace } from './PaperWorkspace.tsx'
@@ -35,7 +36,6 @@ import { PhysicsWorkspace } from './PhysicsWorkspace.tsx'
 import type { LearningRecordState, SelfCheckAttemptInput } from './learning-record-store.ts'
 import { domainOfScene, type SupportedSceneDomain } from './physics/domain-of-scene.ts'
 import { FREE_BUILD_SCENE_ID, draftToScene, starterDraft } from './physics/circuit-builder.ts'
-import { createExperimentSceneRef, findExperimentTemplate } from './physics/experiment-templates.ts'
 import { experimentMetaOf } from './physics/experiment-summaries.ts'
 import { artTemplateIdOfSceneId } from './physics/experiment-artwork.tsx'
 import type { WorkspaceRuntime } from './physics/workspace-runtime.ts'
@@ -64,6 +64,7 @@ export interface PhysicsSurfaceInjected {
   paperApi?: PaperApi
   /** `/physicsos/admin` client — absent in stripped test compositions. */
   adminApi?: AdminApi
+  usageApi?: UsageApi
   /** `/physicsos/notice` client — absent in stripped test compositions. */
   noticeApi?: NoticeApi
   /** `/physicsos/model-pool` client — absent in stripped test compositions. */
@@ -114,11 +115,13 @@ export function PhysicsSurface({
   useWorkspaces,
   paperApi,
   adminApi,
+  usageApi,
   noticeApi,
   modelPoolApi,
   useAuth,
   questionCodeOwner,
 }: PhysicsSurfaceProps) {
+  const principal = useAuth(state => state.user)
   const surfaceState = usePhysicsSurface(snapshot => snapshot)
   const surface = surfaceState.surface
   const scene = surfaceState.sceneRef?.scene
@@ -148,7 +151,7 @@ export function PhysicsSurface({
   )
   useEffect(() => () => { runtime?.dispose?.() }, [runtime])
 
-  if (surface === 'home' || surface === 'canvas') return null
+  if (surface === 'home' || surface === 'canvas' || surface === 'whiteboard') return null
   /* 出卷专区 is a teacher workflow over the host REST surface, not a lab
      scene: it renders without the physics runtime and covers the composer. */
   if (surface === 'paper') {
@@ -204,6 +207,7 @@ export function PhysicsSurface({
     return (
       <AdminWorkspace
         api={adminApi}
+        {...(usageApi === undefined ? {} : { usageApi })}
         {...(paperApi === undefined ? {} : { paperApi })}
         {...(noticeApi === undefined ? {} : { noticeApi })}
         {...(modelPoolApi === undefined ? {} : { modelPoolApi })}
@@ -213,23 +217,7 @@ export function PhysicsSurface({
     )
   }
   if (surface === 'record') {
-    return (
-      <LearningRecordWorkspace
-        t={t}
-        useLearningRecord={useLearningRecord}
-        practiceQuestion={practiceQuestion}
-        /* 重做实验: a lab attempt deep-links to a FRESH instance of the template
-           that trains its topic — the same scene the picker would build. */
-        openExperiment={(experimentId: string) => {
-          const template = findExperimentTemplate(experimentId)
-          if (template === undefined || template.comingSoon === true) return
-          openSurface?.('lab', { ...createExperimentSceneRef(template, t(template.label)), canvasTemplateId: template.id,
-            canvasSource: { kind: 'template', id: template.id, title: t(template.label) } })
-        }}
-        useSessions={useSessions}
-        useWorkspaces={useWorkspaces}
-      />
-    )
+    return usageApi === undefined ? null : <UsageWorkspace key={`${principal?.schoolId}:${principal?.id}`} api={usageApi} t={t} />
   }
   if (choosing) {
     /* A resumable scene means the chooser was opened OVER a running experiment

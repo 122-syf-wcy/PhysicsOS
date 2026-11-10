@@ -731,6 +731,11 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
     payload: Record<string, unknown>,
     rpcId: string,
   ): Response | undefined => {
+    // Product Web callers cannot install or manage profile plugins. Internal
+    // loader/module services still call their own objects outside this ingress.
+    if (method.startsWith('pluginManager.') || method.startsWith('pluginRegistryProbe.')) {
+      return rpcError(rpcId, 'PLUGIN_MANAGEMENT_DISABLED', '该部署不提供公开插件安装或管理功能', {}, 403)
+    }
     if (HOST_FILESYSTEM_METHODS.has(method)
       && (deps.hostFilesystemAccess !== 'admin' || !admin(actor))) {
       return rpcError(

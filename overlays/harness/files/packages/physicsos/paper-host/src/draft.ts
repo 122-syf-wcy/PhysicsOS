@@ -6,6 +6,8 @@
  * rejection fed back, capped by the plan's two-repair budget.
  */
 
+import type { ModelUsageOutbox } from '@physicsos/model-usage-outbox'
+import { paperUsageOf } from './model-usage.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import { BlockAssembler, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type {
@@ -19,6 +21,7 @@ import { z } from 'zod'
 export interface PaperModelRoute {
   readonly provider: string
   readonly model: string
+  readonly receipts?: ModelUsageOutbox
 }
 
 /* Review status is system-owned: the model's prose never decides it, so the
@@ -109,9 +112,14 @@ const EMPTY_RESPONSE_BACKOFF_MS = 1_500
 const isRetryableEmpty = (_message: string, code: string): boolean => code === 'EMPTY_RESPONSE'
 
 export async function callModel(ctx: Context, route: PaperModelRoute, system: string, prompt: string): Promise<string> {
+  const execute = async (): Promise<string> => {
   let lastFailure = ''
   for (let attempt = 1; attempt <= EMPTY_RESPONSE_ATTEMPTS; attempt += 1) {
     const assembler = new BlockAssembler()
+    route.receipts?.signal.throwIfAborted()
+    const receipt = await route.receipts?.begin(route, route.receipts.signal)
+    if (route.receipts?.signal.aborted) { await receipt?.abandon(); route.receipts.signal.throwIfAborted() }
+    try {
     for await (const chunk of ctx.llm.stream({
       provider: route.provider,
       model: route.model,
@@ -129,9 +137,11 @@ export async function callModel(ctx: Context, route: PaperModelRoute, system: st
          of the biggest section observed. */
       maxTokens: 32768,
       temperature: 0.4,
+      ...(route.receipts ? { signal: route.receipts.signal } : {}),
     })) {
       assembler.push(chunk)
     }
+    } finally { await receipt?.finish(paperUsageOf(assembler)) }
     /* Adapter failures arrive as a terminal finish chunk, not a throw —
        surface them instead of parsing an empty text as "no JSON". */
     const finish = assembler.finish
@@ -152,6 +162,8 @@ export async function callModel(ctx: Context, route: PaperModelRoute, system: st
       .join('')
   }
   throw new Error(lastFailure)
+  }
+  return route.receipts ? route.receipts.run(execute) : execute()
 }
 
 /**

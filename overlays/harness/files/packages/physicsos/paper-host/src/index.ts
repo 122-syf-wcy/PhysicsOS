@@ -19,6 +19,7 @@
  * @module @deepseek-ai/dsh-paper-host
  */
 
+import { ModelUsageOutbox, type ReceiptSink } from '@physicsos/model-usage-outbox'
 import { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import type {} from '@deepseek-ai/dsh-storage-domain'
@@ -142,6 +143,13 @@ const rowsBySection = (job: PaperJob): Map<string, typeof job.specTable> => {
 export function apply(ctx: Context, config: Config): () => Promise<void> {
   return ctx.effect(async function* () {
     const domain: PaperDomain = await openPaperDomain(ctx)
+    yield () => domain.close()
+    const receipts = new ModelUsageOutbox({ source: 'paper', table: domain.table('usage_receipts'),
+      sink: () => ctx.get('physicsosUsage') as ReceiptSink | undefined,
+      onError: phase => ctx.logger.warn(`paper-host: usage ${phase} pending; receipt retained for retry`),
+    })
+    await receipts.initialize()
+    yield () => receipts.close()
     const service = new PaperService(domain)
 
     /* Seed built-in templates as pending rows; verified stays the gate. */
@@ -164,7 +172,7 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
       }
     }
 
-    const route = { provider: config.provider, model: config.model }
+    const route = { provider: config.provider, model: config.model, receipts }
 
     const bankPolicy: BankSelectionPolicy = { ...DEFAULT_BANK_POLICY, ...config.bankPolicy }
 
@@ -582,6 +590,7 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
       path: '/physicsos/paper',
       handler: paperRoutes({
         service, exportDir: config.exportDir, bankPolicy,
+        withUsageOwner: (actor, operation) => receipts.withOwner({ schoolId: actor.schoolId, userKey: actor.userKey }, operation),
         /* Resolved per request: this host is declared before auth-host, so the
            service does not exist yet when this line runs. */
         identity: () => identityOf(ctx),
@@ -591,6 +600,5 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
         runTriage, triageBusy,
       }),
     })
-    yield () => domain.close()
   }, 'paper-host')
 }

@@ -28,6 +28,7 @@ import {
   type LimiterPolicy, type LimiterSnapshot,
 } from './limiter'
 import type { AccountNotifier } from './mail'
+import { normalizeSchoolName, schoolNameKey, isValidSchoolName } from './school-name.ts'
 import { newPasswordResetToken, passwordResetPath, passwordResetTokenHash } from './reset'
 import {
   QUEUE_PASSWORD_RESET_DELIVERY, type PasswordResetDelivery,
@@ -42,6 +43,7 @@ import {
 
 /** Public error codes — the only failure vocabulary the wire exposes. */
 export type AuthErrorCode =
+  | 'SCHOOL_NAME_TAKEN'
   | 'BAD_REQUEST' | 'SCHOOL_NOT_FOUND' | 'USERNAME_TAKEN' | 'SCHOOL_TAKEN'
   | 'SCHOOL_REQUIRED' | 'SCHOOL_AMBIGUOUS'
   | 'INVALID_CREDENTIALS' | 'RATE_LIMITED' | 'UNAUTHENTICATED'
@@ -479,6 +481,19 @@ export class AuthService {
     return row?.kind === 'session' && row.resourceId === sessionId ? row.ownerKey : undefined
   }
 
+  /** Exact account/tenant pair for a persisted session claim; roles never widen this lookup. */
+  usageSessionOwner(sessionId: string): { readonly schoolId: string; readonly userKey: string } | undefined {
+    const row = this.apiResources.get(`session:${sessionId}`)
+    return row?.kind === 'session' && row.resourceId === sessionId && row.id === `session:${sessionId}`
+      ? { schoolId: row.schoolId, userKey: row.ownerKey } : undefined
+  }
+
+  /** Metadata-only session ownership inventory for durable usage catch-up. */
+  usageOwnedSessions(): readonly { readonly sessionId: string; readonly schoolId: string; readonly userKey: string }[] {
+    return [...this.apiResources.entries()].flatMap(([key, row]) => row.kind === 'session' && key === row.id && row.id === `session:${row.resourceId}`
+      ? [{ sessionId: row.resourceId, schoolId: row.schoolId, userKey: row.ownerKey }] : [])
+  }
+
   /**
    * The resources owned by one account, used to filter list responses.
    * @param actor - the server-resolved account.
@@ -586,7 +601,7 @@ export class AuthService {
   } {
     return {
       id: school.id,
-      name: school.name,
+      name: school.canonicalName ?? school.name,
       ...(school.shortName !== undefined ? { shortName: school.shortName } : {}),
       ...(school.city !== undefined ? { city: school.city } : {}),
       ...(school.county !== undefined ? { county: school.county } : {}),
@@ -598,15 +613,28 @@ export class AuthService {
    * match first, then a contains-match — but only a unique result counts.
    */
   private resolveSchoolByName(schoolName: string): { school: School | undefined; ambiguous: School[] } {
-    const needle = schoolName.trim().toLowerCase()
+    const needle = schoolNameKey(schoolName)
     const active = [...this.schools.entries()]
       .map(([, school]) => school)
-      .filter(school => school.status === 'active')
-    const exact = active.filter(school =>
-      school.name.toLowerCase() === needle || school.shortName?.toLowerCase() === needle)
+      .filter(school => school.status === 'active' && school.mergedInto === undefined && school.archivedAt === undefined && school.rosterAliasOf === undefined)
+    const exact = [...new Map([...active.filter(school =>
+      schoolNameKey(school.canonicalName ?? school.name) === needle || school.shortName !== undefined && schoolNameKey(school.shortName) === needle),
+      ...this.registrationAliasTargets(needle)].map(school => [school.id, school])).values()]
     const pool = exact.length > 0 ? exact : active.filter(school =>
-      school.name.toLowerCase().includes(needle) || school.shortName?.toLowerCase().includes(needle) === true)
+      schoolNameKey(school.canonicalName ?? school.name).includes(needle) || school.shortName !== undefined && schoolNameKey(school.shortName).includes(needle))
     return pool.length === 1 ? { school: pool[0], ambiguous: [] } : { school: undefined, ambiguous: pool }
+  }
+
+  private registrationAliasTargets(name: string): School[] {
+    const needle = schoolNameKey(name), schools = new Map([...this.schools.entries()].map(([, row]) => [row.id, row]))
+    const targets = new Map<string, School>()
+    for (const row of schools.values()) {
+      if (row.status !== 'active' || row.rosterAliasOf === undefined || row.archivedAt !== undefined || row.mergedInto !== undefined || !isValidSchoolName(row.name)) continue
+      if (schoolNameKey(row.name) !== needle && (row.shortName === undefined || schoolNameKey(row.shortName) !== needle)) continue
+      const target = schools.get(row.rosterAliasOf)
+      if (target !== undefined && target.status === 'active' && target.rosterAliasOf === undefined && target.archivedAt === undefined && target.mergedInto === undefined) targets.set(target.id, target)
+    }
+    return [...targets.values()]
   }
 
   /**
@@ -631,12 +659,12 @@ export class AuthService {
     schoolName: string,
     email: string,
   ): Promise<{ school: School; request: SchoolRequestRecord }> {
-    const name = schoolName.trim().replaceAll(/\s+/g, ' ')
-    const normalized = name.toLowerCase()
+    const name = normalizeSchoolName(schoolName)
+    const normalized = schoolNameKey(name)
 
     const sameName = [...this.schools.entries()]
       .map(([, school]) => school)
-      .filter(school => school.name.toLowerCase() === normalized && school.mergedInto === undefined)
+      .filter(school => schoolNameKey(school.canonicalName ?? school.name) === normalized && school.mergedInto === undefined && school.archivedAt === undefined && school.rosterAliasOf === undefined)
     const placeholder = sameName.find(school => school.reviewState === 'pending')
     if (placeholder === undefined && sameName.length > 0) {
       throw new AuthError(400, 'SCHOOL_NOT_FOUND', '该学校当前未开放注册')
@@ -646,11 +674,14 @@ export class AuthService {
       .map(([, request]) => request)
       .find(request =>
         request.status === 'pending'
-        && request.schoolName.trim().toLowerCase() === normalized)
+        && schoolNameKey(request.schoolName) === normalized)
 
     const now = this.now().toISOString()
     const schoolId = placeholder?.id ?? `s_${crypto.createHash('sha256')
       .update(normalized, 'utf8').digest('base64url').slice(0, 12)}`
+    if (placeholder === undefined && this.schools.get(schoolId) !== undefined) {
+      throw new AuthError(400, 'SCHOOL_NOT_FOUND', '该学校标识已保留，请联系管理员核对学校信息')
+    }
     const school: School = placeholder ?? {
       id: schoolId,
       name,
@@ -695,10 +726,10 @@ export class AuthService {
       email: string
     },
   ): Promise<PendingRegistrationResult> {
-    const { school, request } = await this.openSchoolApplication(input.schoolName, input.email)
     const username = input.username.toLowerCase()
-    const now = this.now().toISOString()
     return this.credentialMutation(async () => {
+      const { school, request } = await this.openSchoolApplication(input.schoolName, input.email)
+      const now = this.now().toISOString()
       const key = userKey(school.id, username)
       if (this.users.get(key) !== undefined) {
         throw new AuthError(409, 'USERNAME_TAKEN', '该账号已被注册')
@@ -752,15 +783,17 @@ export class AuthService {
    * @returns the ranked candidates, or an empty list for a blank query.
    */
   searchSchools(query: unknown, limit = MAX_SCHOOL_SEARCH): ReturnType<AuthService['toCandidate']>[] {
-    const needle = typeof query === 'string' ? query.trim().toLowerCase() : ''
+    const needle = typeof query === 'string' ? schoolNameKey(query) : ''
     if (needle === '') return []
     const cap = Math.min(Math.max(1, Math.trunc(limit)), MAX_SCHOOL_SEARCH)
+    const aliases = this.registrationAliasTargets(needle)
+    if (aliases.length > 0) return aliases.slice(0, cap).map(row => this.toCandidate(row))
     return [...this.schools.entries()]
       .map(([, school]) => school)
-      .filter(school => school.status === 'active' && school.mergedInto === undefined)
+      .filter(school => school.status === 'active' && school.mergedInto === undefined && school.archivedAt === undefined && school.rosterAliasOf === undefined)
       .map((school) => {
-        const name = school.name.toLowerCase()
-        const short = school.shortName?.toLowerCase() ?? ''
+        const name = schoolNameKey(school.canonicalName ?? school.name)
+        const short = school.shortName === undefined ? '' : schoolNameKey(school.shortName)
         const rank = name === needle || short === needle
           ? 0
           : name.startsWith(needle) || short.startsWith(needle)
@@ -923,7 +956,7 @@ export class AuthService {
     let school: School | undefined
     if (input.data.schoolId !== undefined) {
       const row = this.schools.get(input.data.schoolId)
-      if (row !== undefined && row.status === 'active') school = row
+      if (row !== undefined && row.status === 'active' && row.mergedInto === undefined && row.archivedAt === undefined && row.rosterAliasOf === undefined && isValidSchoolName(row.canonicalName ?? row.name)) school = row
     } else if (input.data.schoolName !== undefined) {
       const resolved = this.resolveSchoolByName(input.data.schoolName)
       if (resolved.ambiguous.length > 0) {
@@ -1961,11 +1994,12 @@ export class AuthService {
     const input = schoolRequestWire.safeParse(body)
     if (!input.success) throw new AuthError(400, 'BAD_REQUEST', '请检查填写内容')
     await this.allow('apply', `apply:${ip ?? 'unknown'}`, '提交过于频繁，请稍后再试')
-    const name = input.data.schoolName.trim()
+    return this.credentialMutation(async () => {
+    const name = normalizeSchoolName(input.data.schoolName)
     const pending = [...this.requests.entries()]
       .map(([, request]) => request)
       .find(request => request.status === 'pending'
-        && request.schoolName.trim().toLowerCase() === name.toLowerCase())
+        && schoolNameKey(request.schoolName) === schoolNameKey(name))
     if (pending !== undefined) return pending
 
     const id = `sr_${crypto.randomBytes(9).toString('base64url')}`
@@ -1980,6 +2014,7 @@ export class AuthService {
     }
     await this.requests.put(id, record)
     return record
+    })
   }
 
   /**
@@ -2026,6 +2061,7 @@ export class AuthService {
     this.requireSuper(actor)
     const input = approveRequestWire.safeParse(body)
     if (!input.success) throw new AuthError(400, 'BAD_REQUEST', '请检查填写内容')
+    return this.credentialMutation(async () => {
     const request = this.requests.get(requestId)
     if (request === undefined) throw new AuthError(404, 'NOT_FOUND', '申请不存在')
     if (request.status !== 'pending') throw new AuthError(400, 'BAD_REQUEST', '该申请已处理')
@@ -2038,6 +2074,12 @@ export class AuthService {
        operator to name one. */
     let school: School
     const placeholder = request.schoolId === undefined ? undefined : this.schools.get(request.schoolId)
+    const displayName = normalizeSchoolName(placeholder?.canonicalName ?? request.schoolName)
+    if (!isValidSchoolName(displayName)) throw new AuthError(400, 'BAD_REQUEST', '请输入真实学校名称')
+    if ([...this.schools.entries()].some(([, row]) => row.id !== placeholder?.id && row.mergedInto === undefined && row.archivedAt === undefined && row.rosterAliasOf === undefined
+      && schoolNameKey(row.canonicalName ?? row.name) === schoolNameKey(displayName))) {
+      throw new AuthError(409, 'SCHOOL_NAME_TAKEN', '该学校名称已存在，请使用已有学校')
+    }
     if (placeholder !== undefined) {
       school = {
         ...placeholder,
@@ -2086,6 +2128,7 @@ export class AuthService {
       ...(admin === undefined ? {} : { admin: this.toAdminRow(admin, school) }),
       activated,
     }
+    })
   }
 
   /**
@@ -2148,7 +2191,7 @@ export class AuthService {
             to: row.email,
             username: record.username,
             displayName: record.displayName,
-            schoolName: school.name,
+            schoolName: school.canonicalName ?? school.name,
           })
         } catch (error) {
           deliveryError = error instanceof Error ? error.message.slice(0, 200) : '发信失败'
@@ -2225,9 +2268,10 @@ export class AuthService {
     this.requireAdmin(actor)
     const all = [...this.schools.entries()].map(([, school]) => school)
     const visible = actor.role === 'SUPER_ADMIN'
-      ? all
+      ? all.filter(school => school.mergedInto === undefined && school.archivedAt === undefined && school.rosterAliasOf === undefined)
       : all.filter(school => school.id === actor.schoolId)
-    return visible.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'))
+    return visible.map(row => row.canonicalName === undefined ? row : { ...row, name: row.canonicalName })
+      .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'))
   }
 
   /**
@@ -2240,6 +2284,10 @@ export class AuthService {
     this.requireSuper(actor)
     const input = createSchoolWire.safeParse(body)
     if (!input.success) throw new AuthError(400, 'BAD_REQUEST', '请检查填写内容')
+    return this.credentialMutation(async () => {
+    if ([...this.schools.entries()].some(([, row]) => row.mergedInto === undefined && row.archivedAt === undefined && row.rosterAliasOf === undefined && schoolNameKey(row.canonicalName ?? row.name) === schoolNameKey(input.data.name))) {
+      throw new AuthError(409, 'SCHOOL_NAME_TAKEN', '该学校名称已存在，请使用已有学校')
+    }
     if (this.schools.get(input.data.id) !== undefined) {
       throw new AuthError(409, 'SCHOOL_TAKEN', '该学校标识已被使用')
     }
@@ -2255,6 +2303,7 @@ export class AuthService {
     await this.schools.put(school.id, school)
     await this.audit(actor, 'school.create', school.id, school.id, { name: school.name })
     return school
+    })
   }
 
   /**
@@ -2645,9 +2694,7 @@ export class AuthService {
       this.limiterSnapshot('apply'),
     ])
 
-    const schools = [...this.schools.entries()]
-      .map(([, school]) => school)
-      .filter(school => scope === undefined || school.id === scope)
+    const schools = this.listSchoolsAdmin(actor)
 
     const users = [...this.users.entries()]
       .map(([, user]) => user)
@@ -3167,7 +3214,7 @@ export class AuthService {
     const pub: PublicUser = {
       id: user.id,
       schoolId: school.id,
-      schoolName: school.name,
+      schoolName: school.canonicalName ?? school.name,
       username: user.username,
       displayName: user.displayName,
       role: user.role,
