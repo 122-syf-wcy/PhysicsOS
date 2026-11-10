@@ -1,15 +1,15 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useRef, useState, type ReactNode, type PointerEvent as ReactPointerEvent } from 'react'
 import { applyScenePatch, diffScene, type JsonObject, type WhiteboardHistory, type WhiteboardScene } from '@physicsos/physics-whiteboard'
 import type { WhiteboardKey } from './locales.ts'
 import { inkElementPoints, readInkSamples, type InkSample } from './ink.ts'
 import { elementBounds, hitElement, numeric, sceneBounds } from './editor-model.ts'
 import { WhiteboardElements } from './Elements.tsx'
 import css from './Whiteboard.module.css'
-export interface NativeEditorProps { readonly documentId: string; readonly scene: WhiteboardScene; readonly history: WhiteboardHistory; readonly onUndo: () => void; readonly onRedo: () => void; readonly onChange: (scene: WhiteboardScene) => void; readonly images: Readonly<Record<string, string>>; readonly t: (key: WhiteboardKey) => string; readonly revealId?: string | undefined; readonly clearRequest: number; readonly onSave: () => void }
+export interface NativeEditorProps { readonly documentId: string; readonly scene: WhiteboardScene; readonly history: WhiteboardHistory; readonly onUndo: () => void; readonly onRedo: () => void; readonly onChange: (scene: WhiteboardScene) => void; readonly images: Readonly<Record<string, string>>; readonly t: (key: WhiteboardKey) => string; readonly revealId?: string | undefined; readonly clearRequest: number; readonly onSave: () => void; readonly toolbarExtras?: ReactNode }
 type Tool = 'select' | 'freedraw' | 'eraser' | 'line' | 'arrow' | 'rectangle' | 'ellipse' | 'text' | 'pan'
 const tools: readonly { id: Tool; symbol: string }[] = [{ id: 'select', symbol: '↖' }, { id: 'freedraw', symbol: '✎' }, { id: 'eraser', symbol: '⌫' }, { id: 'line', symbol: '╱' }, { id: 'arrow', symbol: '↗' }, { id: 'rectangle', symbol: '▭' }, { id: 'ellipse', symbol: '○' }, { id: 'text', symbol: 'T' }, { id: 'pan', symbol: '✥' }]
 interface Gesture { readonly pointerId: number; readonly tool: Tool; readonly before: WhiteboardScene; readonly start: InkSample; readonly elementId: string; readonly selected: readonly string[]; readonly mouse: boolean; samples: InkSample[]; scene: WhiteboardScene }
-export function NativeEditor({ scene, history, onUndo, onRedo, onChange, images, t, revealId, clearRequest, onSave }: NativeEditorProps) {
+export function NativeEditor({ scene, history, onUndo, onRedo, onChange, images, t, revealId, clearRequest, onSave, toolbarExtras }: NativeEditorProps) {
   const svg = useRef<SVGSVGElement>(null)
   const current = useRef(scene); current.current = scene
   const gesture = useRef<Gesture | undefined>()
@@ -134,14 +134,25 @@ export function NativeEditor({ scene, history, onUndo, onRedo, onChange, images,
   const styleSelected = (key: string, value: string | number) => { if (selection.length) commit({ ...current.current, elements: current.current.elements.map(element => selection.includes(String(element.id)) ? { ...element, [key]: value } : element) }) }
   const displayed = draft ?? scene
   return <div className={css.editor} data-history-revision={history.undo.length + history.redo.length}>
-    <div className={css.tools} role="toolbar" aria-label={t('whiteboard.canvasLabel')}>
-      {tools.map(item => <button key={item.id} type="button" data-testid={`toolbar-${item.id}`} aria-label={t(`whiteboard.${item.id}`)} title={t(`whiteboard.${item.id}`)} aria-pressed={tool === item.id} onClick={() => { finishText(); setTool(item.id) }}><span aria-hidden="true">{item.symbol}</span><span className={css.toolName}>{t(`whiteboard.${item.id}`)}</span></button>)}
-      <span className={css.divider} />
-      <label title={t('whiteboard.color')}><input type="color" value={color} aria-label={t('whiteboard.color')} onChange={event => { setColor(event.target.value); styleSelected('strokeColor', event.target.value) }} /></label>
-      <label className={css.strokeWidth}>{t('whiteboard.width')}<input type="range" min="1" max="20" value={width} aria-label={t('whiteboard.width')} onChange={event => { setWidth(Number(event.target.value)) }} onPointerUp={() => styleSelected('strokeWidth', width)} /></label>
-      <button type="button" aria-label={t('whiteboard.undo')} title={t('whiteboard.undo')} onClick={() => undo()} disabled={!history.undo.length}>↶</button>
-      <button type="button" aria-label={t('whiteboard.redo')} title={t('whiteboard.redo')} onClick={() => undo(true)} disabled={!history.redo.length}>↷</button>
-      <button type="button" aria-label={t('whiteboard.delete')} title={t('whiteboard.delete')} onClick={remove} disabled={!selection.length}>⌫</button>
+    <div className={css.dockShelf} data-whiteboard-dock="true">
+      <div className={css.tools} role="toolbar" aria-label={t('whiteboard.dock')}>
+        <div className={css.drawingControls}>
+          <div className={css.toolGroup}>{tools.map(item => <button key={item.id} type="button" data-testid={`toolbar-${item.id}`} aria-label={t(`whiteboard.${item.id}`)} title={t(`whiteboard.${item.id}`)} aria-pressed={tool === item.id} onClick={() => { finishText(); setTool(item.id) }}><span aria-hidden="true">{item.symbol}</span><span className={css.toolName}>{t(`whiteboard.${item.id}`)}</span></button>)}</div>
+          <div className={css.appearanceGroup}>
+            <label title={t('whiteboard.color')}><input type="color" value={color} aria-label={t('whiteboard.color')} onChange={event => { setColor(event.target.value); styleSelected('strokeColor', event.target.value) }} /></label>
+            <label className={css.strokeWidth}>{t('whiteboard.width')}<input type="range" min="1" max="20" value={width} aria-label={t('whiteboard.width')} onChange={event => { setWidth(Number(event.target.value)) }} onPointerUp={() => styleSelected('strokeWidth', width)} /></label>
+          </div>
+          <div className={css.historyGroup}>
+            <button type="button" aria-label={t('whiteboard.undo')} title={t('whiteboard.undo')} onClick={() => undo()} disabled={!history.undo.length}>↶</button>
+            <button type="button" aria-label={t('whiteboard.redo')} title={t('whiteboard.redo')} onClick={() => undo(true)} disabled={!history.redo.length}>↷</button>
+            <button type="button" aria-label={t('whiteboard.delete')} title={t('whiteboard.delete')} onClick={remove} disabled={!selection.length}>⌫</button>
+          </div>
+      <div className={css.viewportControls}>
+        <button type="button" onClick={() => zoom(1 / 1.2)} aria-label={t('whiteboard.zoomOut')}>−</button><span>{Math.round(view.zoom * 100)}%</span><button type="button" onClick={() => zoom(1.2)} aria-label={t('whiteboard.zoomIn')}>＋</button><button type="button" onClick={fit}>{t('whiteboard.fit')}</button>
+      </div>
+        </div>
+        {toolbarExtras === undefined || toolbarExtras === null ? null : <div className={css.dockExtras}>{toolbarExtras}</div>}
+      </div>
     </div>
     <div className={css.stage}>
       <svg ref={svg} className={css.canvas} data-whiteboard-canvas="true" role="application" aria-label={t('whiteboard.canvasLabel')} tabIndex={0}
@@ -161,9 +172,7 @@ export function NativeEditor({ scene, history, onUndo, onRedo, onChange, images,
       </svg>
       {!displayed.elements.length && !text ? <div className={css.boardHint}><strong>{t('whiteboard.emptyBoard')}</strong><span>{t('whiteboard.strokeHint')}</span></div> : null}
       {text ? <textarea autoFocus className={css.textEditor} aria-label={t('whiteboard.editText')} value={text.value} style={{ left: (text.x + view.x) * view.zoom, top: (text.y + view.y) * view.zoom, fontSize: Math.max(16, numeric(selected ?? {}, 'fontSize', 28) * view.zoom) }} onChange={event => setText({ ...text, value: event.target.value })} onBlur={finishText} onKeyDown={event => { event.stopPropagation(); if (event.key === 'Escape' || ((event.ctrlKey || event.metaKey) && event.key === 'Enter')) { event.preventDefault(); finishText() } }} /> : null}
-      <div className={css.viewportControls}>
-        <button type="button" onClick={() => zoom(1 / 1.2)} aria-label={t('whiteboard.zoomOut')}>−</button><span>{Math.round(view.zoom * 100)}%</span><button type="button" onClick={() => zoom(1.2)} aria-label={t('whiteboard.zoomIn')}>＋</button><button type="button" onClick={fit}>{t('whiteboard.fit')}</button>
-      </div>
+
       {selected && tool === 'select' ? <div className={css.inspector}>
         {(['x', 'y', ...(selected.type === 'rectangle' || selected.type === 'ellipse' || selected.type === 'image' ? ['width', 'height'] : [])] as const).map(key => <label key={key}>{key}<input type="number" aria-label={key} value={numeric(selected, key)} onChange={event => { const value = Number(event.target.value); if (Number.isFinite(value) && ((key !== 'width' && key !== 'height') || value > 0)) styleSelected(key, value) }} /></label>)}
         {selected.type === 'text' ? <><button type="button" onClick={() => editText(selected)}>{t('whiteboard.editText')}</button><label>{t('whiteboard.fontSize')}<input type="number" min="1" max="500" value={numeric(selected, 'fontSize', 24)} onChange={event => { const value = Number(event.target.value); if (value > 0 && value <= 500) styleSelected('fontSize', value) }} /></label></> : null}

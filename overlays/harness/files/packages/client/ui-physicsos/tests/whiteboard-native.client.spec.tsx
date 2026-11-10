@@ -65,4 +65,16 @@ describe('native editable whiteboard', () => {
     expect(changes).toEqual([1, 2, 2, 2])
   })
 
+  it('composes workspace actions into the drawing dock without triggering canvas edits', () => {
+    let saved = 0; let edited = 0
+    const view = render(<NativeEditor documentId="dock" scene={{ elements: [], appState: {} }} history={{ undo: [], redo: [] }} onUndo={() => undefined} onRedo={() => undefined}
+      onChange={() => { edited++ }} images={{}} t={key => whiteboardEn[key]} clearRequest={0} onSave={() => undefined}
+      toolbarExtras={<button type="button" onClick={() => { saved++ }}>Save board</button>} />)
+    const action = view.getByRole('button', { name: 'Save board' })
+    expect(view.getByRole('toolbar').contains(action)).toBe(true)
+    expect(view.getByRole('application').contains(action)).toBe(false)
+    fireEvent.click(action)
+    expect(saved).toBe(1); expect(edited).toBe(0)
+  })
+
 })

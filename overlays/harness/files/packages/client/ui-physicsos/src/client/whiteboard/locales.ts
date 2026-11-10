@@ -1,4 +1,12 @@
 export const whiteboardZh = {
+  'whiteboard.dock': '画板工具与操作',
+  'whiteboard.dock.upload': '原图',
+  'whiteboard.dock.compare': '对照',
+  'whiteboard.dock.generate': '生成图元',
+  'whiteboard.dock.save': '保存',
+  'whiteboard.dock.fullscreen': '全屏',
+  'whiteboard.dock.exitFullscreen': '退出全屏',
+
   'whiteboard.select': '选择 / 移动',
   'whiteboard.freedraw': '画笔',
   'whiteboard.eraser': '橡皮',
@@ -87,6 +95,14 @@ export const whiteboardZh = {
 } as const
 export type WhiteboardKey = keyof typeof whiteboardZh
 export const whiteboardEn: Record<WhiteboardKey, string> = {
+  'whiteboard.dock': 'Whiteboard tools and actions',
+  'whiteboard.dock.upload': 'Image',
+  'whiteboard.dock.compare': 'Compare',
+  'whiteboard.dock.generate': 'Generate',
+  'whiteboard.dock.save': 'Save',
+  'whiteboard.dock.fullscreen': 'Fullscreen',
+  'whiteboard.dock.exitFullscreen': 'Exit fullscreen',
+
   'whiteboard.select': 'Select / move',
   'whiteboard.freedraw': 'Pen',
   'whiteboard.eraser': 'Eraser',

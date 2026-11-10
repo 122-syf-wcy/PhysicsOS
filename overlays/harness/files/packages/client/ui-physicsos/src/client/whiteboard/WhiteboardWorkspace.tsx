@@ -15,6 +15,7 @@ export function WhiteboardWorkspace(props: WhiteboardFactoryProps) {
   const { whiteboardController: controller, t, whiteboardId } = props
   const state = props.useWhiteboardState(value => value)
   const record = state.record?.document.id === whiteboardId ? state.record : undefined
+  const recordReady = record !== undefined
   const root = useRef<HTMLElement>(null)
   const confirmation = useRef<HTMLDialogElement>(null)
   const file = useRef<HTMLInputElement>(null)
@@ -34,6 +35,20 @@ export function WhiteboardWorkspace(props: WhiteboardFactoryProps) {
   useEffect(() => { const changed = () => setFullscreen(document.fullscreenElement === root.current); document.addEventListener('fullscreenchange', changed); return () => document.removeEventListener('fullscreenchange', changed) }, [])
   useEffect(() => { const online = () => { if (controller.getSnapshot().dirty) void perform(() => controller.save()); void perform(() => controller.poll()) }; window.addEventListener('online', online); return () => window.removeEventListener('online', online) }, [controller])
   useEffect(() => { const leave = (event: BeforeUnloadEvent) => { if (controller.getSnapshot().dirty) { event.preventDefault(); event.returnValue = '' } }; window.addEventListener('beforeunload', leave); return () => window.removeEventListener('beforeunload', leave) }, [controller])
+  useEffect(() => {
+    if (!recordReady) return
+    const workspace = root.current
+    const dock = workspace?.querySelector<HTMLElement>('[data-whiteboard-dock]')
+    if (!workspace || !dock) return
+    const measure = () => {
+      const height = Math.ceil(dock.getBoundingClientRect().height)
+      if (height > 0 && workspace.style.getPropertyValue('--whiteboard-dock-height') !== `${height}px`) workspace.style.setProperty('--whiteboard-dock-height', `${height}px`)
+    }
+    measure()
+    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure)
+    observer?.observe(dock)
+    return () => { observer?.disconnect(); workspace.style.removeProperty('--whiteboard-dock-height') }
+  }, [recordReady, whiteboardId, state.namespace])
   const sourceIds = record?.document.sourceImages.map(image => image.id).join(',') ?? ''
   useEffect(() => {
     const abort = new AbortController(); const urls: string[] = []
@@ -84,36 +99,39 @@ export function WhiteboardWorkspace(props: WhiteboardFactoryProps) {
     } finally { if (mounted.current) setLocalBusy(false) }
   }
   const running = state.job && !['ready', 'error', 'cancelled'].includes(state.job.status)
+  const toolbarExtras = <>
+    <button type="button" className={css.dockAction} disabled={!record || state.busy} aria-label={t('whiteboard.upload')} title={t('whiteboard.upload')} onClick={() => file.current?.click()}><span aria-hidden="true">↥</span><span className={css.actionText}>{t('whiteboard.dock.upload')}</span></button>
+    <button type="button" className={css.dockAction} aria-pressed={sourceVisible} aria-label={t('whiteboard.sourceToggle')} title={t('whiteboard.sourceToggle')} onClick={() => setSourceVisible(!sourceVisible)}><span aria-hidden="true">▧</span><span className={css.actionText}>{t('whiteboard.dock.compare')}{record?.document.sourceImages.length ? ` (${record.document.sourceImages.length})` : ''}</span></button>
+    {selectedSource ? <button type="button" className={css.dockAction} disabled={Boolean(running) || state.busy || state.status === 'conflict'} aria-label={state.job ? t('whiteboard.generateAgain') : t('whiteboard.generate')} title={state.job ? t('whiteboard.generateAgain') : t('whiteboard.generate')} onClick={() => { setSourceVisible(true); void perform(() => controller.generate(selectedSource.id)) }}><span aria-hidden="true">✦</span><span className={css.actionText}>{t('whiteboard.dock.generate')}</span></button> : null}
+    <button type="button" className={[css.dockAction, css.dockPrimary].filter(Boolean).join(' ')} disabled={!record || state.status === 'saving' || state.status === 'conflict'} aria-label={t('whiteboard.save')} title={t('whiteboard.save')} onClick={() => { void perform(() => controller.save()) }}><span aria-hidden="true">✓</span><span className={css.actionText}>{t('whiteboard.dock.save')}</span></button>
+    <button type="button" className={css.dockAction} aria-label={fullscreen ? t('whiteboard.exitFullscreen') : t('whiteboard.fullscreen')} title={fullscreen ? t('whiteboard.exitFullscreen') : t('whiteboard.fullscreen')} onClick={() => { void perform(async () => { if (document.fullscreenElement) await document.exitFullscreen(); else await root.current?.requestFullscreen() }) }}><span aria-hidden="true">⛶</span><span className={css.actionText}>{fullscreen ? t('whiteboard.dock.exitFullscreen') : t('whiteboard.dock.fullscreen')}</span></button>
+    <details className={css.more}><summary aria-label={t('whiteboard.showTools')} title={t('whiteboard.showTools')}><span aria-hidden="true">···</span><span className={css.actionText}>{t('whiteboard.showTools')}</span></summary><div>
+      <button type="button" disabled={!record} onClick={() => setDialog('reload')}>{t('whiteboard.reload')}</button>
+      <button type="button" disabled={!record} onClick={() => setDialog('clear')}>{t('whiteboard.clear')}</button>
+      <span className={css.menuDivider} aria-hidden="true" />
+      <button type="button" disabled={!record || localBusy} onClick={() => { void perform(() => exportFile('json')) }}>{t('whiteboard.exportJson')}</button>
+      <button type="button" disabled={!record || localBusy} onClick={() => { void perform(() => exportFile('svg')) }}>{t('whiteboard.exportSvg')}</button>
+      <button type="button" disabled={!record || localBusy} onClick={() => { void perform(() => exportFile('png')) }}>{t('whiteboard.exportPng')}</button>
+      {selectedSource ? <><span className={css.menuDivider} aria-hidden="true" />
+        <button type="button" disabled={!originals[selectedSource.id]} onClick={() => { const original = originals[selectedSource.id]; if (original) download(original, `question-${selectedSource.id}.${selectedSource.mimeType.split('/')[1]}`) }}>{t('whiteboard.downloadSource')}</button>
+        <button type="button" disabled={!record} onClick={() => { if (record) controller.edit({ ...record.document.scene, elements: [...record.document.scene.elements, { id: crypto.randomUUID(), type: 'image', fileId: selectedSource.id, x: 0, y: 0, width: selectedSource.width, height: selectedSource.height }] }) }}>{t('whiteboard.insertSource')}</button>
+      </> : null}
+    </div></details>
+  </>
   return <main ref={root} className={css.workspace} data-physicsos-whiteboard-workspace="true">
     <header className={css.header}>
       <Button variant="ghost" onClick={() => { controller.close(); props.openWhiteboardView() }}>{t('whiteboard.back')}</Button>
       <Input className={css.titleInput ?? ''} value={record?.document.title ?? ''} aria-label={t('whiteboard.name')} disabled={!record} onChange={event => controller.rename(event.target.value)} />
       <span className={css.sync} role="status">{t(`whiteboard.sync.${state.status}`)}</span>
-      <div className={css.actions}>
-        <Button variant="primary" disabled={!record || state.status === 'saving' || state.status === 'conflict'} onClick={() => { void perform(() => controller.save()) }}>{t('whiteboard.save')}</Button>
-        <Button variant="outline" onClick={() => { void perform(async () => { if (document.fullscreenElement) await document.exitFullscreen(); else await root.current?.requestFullscreen() }) }}>{fullscreen ? t('whiteboard.exitFullscreen') : t('whiteboard.fullscreen')}</Button>
-        <details className={css.more}><summary>{t('whiteboard.showTools')}</summary><div>
-          <button type="button" disabled={!record} onClick={() => setDialog('reload')}>{t('whiteboard.reload')}</button>
-          <button type="button" disabled={!record} onClick={() => setDialog('clear')}>{t('whiteboard.clear')}</button>
-          <button type="button" disabled={!record || localBusy} onClick={() => { void perform(() => exportFile('json')) }}>{t('whiteboard.exportJson')}</button>
-          <button type="button" disabled={!record || localBusy} onClick={() => { void perform(() => exportFile('svg')) }}>{t('whiteboard.exportSvg')}</button>
-          <button type="button" disabled={!record || localBusy} onClick={() => { void perform(() => exportFile('png')) }}>{t('whiteboard.exportPng')}</button>
-        </div></details>
-      </div>
     </header>
-    <div className={css.imageActions}><Button variant="outline" disabled={!record || state.busy} onClick={() => file.current?.click()}>{t('whiteboard.upload')}</Button><Button variant="ghost" aria-pressed={sourceVisible} onClick={() => setSourceVisible(!sourceVisible)}>{t('whiteboard.sourceToggle')}{record?.document.sourceImages.length ? ` (${record.document.sourceImages.length})` : ''}</Button>
-      {selectedSource ? <Button variant="outline" disabled={Boolean(running) || state.busy || state.status === 'conflict'} onClick={() => { setSourceVisible(true); void perform(() => controller.generate(selectedSource.id)) }}>{state.job ? t('whiteboard.generateAgain') : t('whiteboard.generate')}</Button> : null}
-    </div>
     <input ref={file} hidden type="file" accept="image/png,image/jpeg,image/webp" aria-label={t('whiteboard.upload')} onChange={event => { const image = event.currentTarget.files?.[0]; event.currentTarget.value = ''; if (image) void perform(async () => { const id = await controller.upload(image); if (id) { setImageId(id); setSourceVisible(true) } }) }} />
     {error || state.error ? <div className={css.notice} role="alert">{error ?? state.error}<button type="button" onClick={() => { void perform(async () => { await controller.save(); await controller.poll() }) }}>{t('whiteboard.retry')}</button></div> : null}
     <WhiteboardGenerationStatus job={state.job} t={t} onCancel={() => { void perform(() => controller.cancelGeneration()) }} />
     <div className={css.body}>
-      {record ? <NativeEditor key={`${state.namespace}:${whiteboardId}`} documentId={whiteboardId} scene={record.document.scene} history={record.document.history ?? { undo: [], redo: [] }} onUndo={controller.undo} onRedo={controller.redo} onChange={controller.edit} images={images} t={t} revealId={state.revealId} clearRequest={clearRequest} onSave={() => { void perform(() => controller.save()) }} /> : <p role="status">{t('whiteboard.editorLoading')}</p>}
+      {record ? <NativeEditor key={`${state.namespace}:${whiteboardId}`} documentId={whiteboardId} scene={record.document.scene} history={record.document.history ?? { undo: [], redo: [] }} onUndo={controller.undo} onRedo={controller.redo} onChange={controller.edit} images={images} t={t} revealId={state.revealId} clearRequest={clearRequest} onSave={() => { void perform(() => controller.save()) }} toolbarExtras={toolbarExtras} /> : <p role="status">{t('whiteboard.editorLoading')}</p>}
       {sourceVisible ? <aside className={css.sourcePanel}><header><strong>{t('whiteboard.source')}</strong><button type="button" onClick={() => setSourceVisible(false)} aria-label={t('whiteboard.close')}>×</button></header>
         {!selectedSource ? <p>{t('whiteboard.sourceEmpty')}</p> : <><select aria-label={t('whiteboard.source')} value={imageId} onChange={event => setImageId(event.target.value)}>{record?.document.sourceImages.map((source, index) => <option key={source.id} value={source.id}>{t('whiteboard.source')} {index + 1} · {source.width} × {source.height}</option>)}</select>
           {sourceLoading ? <p role="status">{t('whiteboard.sourceLoading')}</p> : images[selectedSource.id] ? <a href={images[selectedSource.id]} target="_blank" rel="noreferrer"><img src={images[selectedSource.id]} alt={t('whiteboard.source')} width={selectedSource.width} height={selectedSource.height} /></a> : null}
-          <Button variant="outline" disabled={!originals[selectedSource.id]} onClick={() => { const original = originals[selectedSource.id]; if (original) download(original, `question-${selectedSource.id}.${selectedSource.mimeType.split('/')[1]}`) }}>{t('whiteboard.downloadSource')}</Button>
-          <Button variant="ghost" disabled={!record} onClick={() => { if (record) controller.edit({ ...record.document.scene, elements: [...record.document.scene.elements, { id: crypto.randomUUID(), type: 'image', fileId: selectedSource.id, x: 0, y: 0, width: selectedSource.width, height: selectedSource.height }] }) }}>{t('whiteboard.insertSource')}</Button>
         </>}
       </aside> : null}
     </div>
