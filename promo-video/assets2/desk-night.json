@@ -1,0 +1,11 @@
+{
+  "file": "desk-night.png",
+  "prompt": "a lonely middle-school desk at night under a warm desk lamp, an open physics exam paper with a difficult problem, pencil resting on it, dark classroom background, melancholic quiet mood, soft flat vector illustration, physics education theme, palette deep navy #14213D and bright blue #3B82F6 with warm amber accents, cinematic gentle rim light, clean composition, high detail, no text, no watermark",
+  "model": "gpt-image-2.5-sunburst",
+  "endpoint": "https://image.haqiuhaqiu.xyz",
+  "requestedSize": "1536x1024",
+  "pixels": "1536x1024",
+  "bytes": 1803924,
+  "createdAt": "2026-09-30T10:02:47.208Z",
+  "elapsedMs": 126681
+}

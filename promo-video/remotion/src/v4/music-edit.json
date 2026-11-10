@@ -1,0 +1,12 @@
+{
+  "source": "public/audio/music/motivating-mornings.mp3",
+  "out": "public/audio/music/promo-v4.wav",
+  "bpm": 120.999,
+  "firstDownbeat": 1.973,
+  "segments": [
+    { "fromBar": 0, "toBar": 36, "why": "安静前奏 5 小节托住开场两句；第 5 小节满编制进入 = 品牌落定；第 20 小节原曲最强拍 = 点发送；第 28 小节抬升 = 出卷；第 35 小节收束 = 价值字卡" },
+    { "fromBar": 40, "toBar": 48, "why": "跳过原曲 36–39 小节的重复段，直接接口号段：第 44 小节的抬升落在落版，原曲自然收尾（46–47 小节渐弱）托住静止的字标" }
+  ],
+  "duration": 87.273,
+  "fadeOutSeconds": 1.2
+}

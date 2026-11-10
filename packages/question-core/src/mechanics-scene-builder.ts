@@ -108,6 +108,52 @@ export function buildMechanicsSceneFromIR(
     input.inclineAngle = inclineAngle
     input.frictionCoefficient = frictionCoefficient
     if (endTime !== undefined) input.endTime = endTime
+  } else if (model === 'spring_oscillator') {
+    /* A horizontal spring: the body sits at the relaxed length and the solver
+       reads amplitude and period off the stated stiffness. */
+    input.mass = mass
+    input.position = vec3(0, 0, 0)
+    input.velocity = vec3(velocity, 0, 0)
+    input.gravity = vec3(0, -gravity, 0)
+    input.springConstant = ir.springStiffness
+    if (endTime !== undefined) input.endTime = endTime
+  } else if (model === 'spring_statics') {
+    /* Hanging at rest. The engine verifies that the body sits exactly where the
+       equilibrium puts it — anchor − L0 − mg/k — so the scene has to place it
+       there rather than at the origin; a scene that disagrees is rejected as a
+       wrong setup. The factory's defaults are anchor y = 3 and L0 = 2. */
+    const anchorY = 3
+    const naturalLength = 2
+    const extension = ir.springStiffness === undefined ? 0 : (mass * gravity) / ir.springStiffness
+    input.mass = mass
+    input.position = vec3(0, anchorY - naturalLength - extension, 0)
+    input.velocity = vec3(0, 0, 0)
+    input.gravity = vec3(0, -gravity, 0)
+    input.springConstant = ir.springStiffness
+  } else if (model === 'simple_pendulum') {
+    input.mass = mass
+    input.position = vec3(0, 0, 0)
+    input.velocity = vec3(0, 0, 0)
+    input.gravity = vec3(0, -gravity, 0)
+    input.pendulumLength = ir.pendulumLength
+    if (endTime !== undefined) input.endTime = endTime
+  } else if (model === 'horizontal_friction') {
+    input.mass = mass
+    input.position = vec3(0, 0, 0)
+    input.velocity = vec3(velocity, 0, 0)
+    input.gravity = vec3(0, -gravity, 0)
+    input.frictionCoefficient = frictionCoefficient
+    const pull = getKnown(ir, 'applied_force')
+    if (pull !== undefined) input.appliedForce = vec3(pull, 0, 0)
+    if (endTime !== undefined) input.endTime = endTime
+  } else if (model === 'circular_orbit') {
+    /* A circular orbit is fixed by GM and r; the speed follows as √(GM/r), so
+       no velocity is passed — stating both would allow an inconsistent scene. */
+    input.mass = mass
+    input.position = vec3(0, 0, 0)
+    input.gravity = vec3(0, -gravity, 0)
+    input.orbitRadius = ir.orbitRadius
+    input.gravitationalParameter = ir.gravitationalParameter
   }
 
   const scene = createMechanicsScene(input as unknown as MechanicsSceneInput)

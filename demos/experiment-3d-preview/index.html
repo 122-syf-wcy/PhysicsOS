@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="PhysicsOS 空间实验台：单摆、弹簧振子与凸透镜成像的本地 3D 交互设计预览。">
+  <title>PhysicsOS · 空间实验台</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='12' fill='%232e5145'/%3E%3Cpath d='M12 28V11h8a6 6 0 0 1 0 12h-8m0-6h9' fill='none' stroke='%23fff' stroke-width='3'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/chart.css">
+  <script type="importmap">{"imports":{"three":"/shared/three.module.js"}}</script>
+</head>
+<body>
+<svg class="icon-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><defs>
+  <symbol id="i-atom" viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="10" ry="4.2" transform="rotate(-32 12 12)"/><ellipse cx="12" cy="12" rx="10" ry="4.2" transform="rotate(32 12 12)"/><ellipse cx="12" cy="12" rx="4.2" ry="10"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-cube" viewBox="0 0 24 24"><path d="m12 2 9 5v10l-9 5-9-5V7l9-5Z M3 7l9 5 9-5M12 12v10M7.5 4.5l9 5"/></symbol>
+  <symbol id="i-pendulum" viewBox="0 0 32 32"><path d="M5 27V5h22v22M3 27h26M16 6l6 15"/><circle cx="23" cy="24" r="3.7"/><path d="M10 24a12 12 0 0 0 8 3" stroke-dasharray="2 3" opacity=".5"/></symbol>
+  <symbol id="i-spring" viewBox="0 0 32 32"><path d="M4 7v18M4 16h3l2-5 3 10 3-10 3 10 2-5h3M3 27h26"/><rect x="22" y="10" width="7" height="13" rx="1.8"/></symbol>
+  <symbol id="i-lens" viewBox="0 0 32 32"><ellipse cx="16" cy="15" rx="3.5" ry="11"/><path d="M3 15h26M4 8l12 5 12 11M4 22l12-5 12-10M16 26v3M11 29h10"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-5-5 5 5-5 5"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+  <symbol id="i-reset" viewBox="0 0 24 24"><path d="M3 10a9 9 0 1 1 2 8M3 4v6h6"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 11 9-8 9 8M5 10v10h14V10M10 20v-6h4v6"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="m9 5 11 7-11 7Z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 6v12M16 6v12" stroke-width="3"/></symbol>
+  <symbol id="i-rewind" viewBox="0 0 24 24"><path d="M5 5v14m14-1L8 12l11-6Z"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12h16M12 4v16"/></symbol>
+  <symbol id="i-path" viewBox="0 0 24 24"><path d="M4 17c2-12 5-12 8-3s5 6 8-7"/><circle cx="4" cy="17" r="1.5" fill="currentColor" stroke="none"/><circle cx="20" cy="7" r="1.5" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-vector" viewBox="0 0 24 24"><path d="M5 19 19 5M8 5h11v11"/><circle cx="5" cy="19" r="1.8" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-table" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M10 4v16M3 15h18"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7v.1"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+  <symbol id="i-bulb" viewBox="0 0 24 24"><path d="M8 17c0-3-3-3.5-3-7a7 7 0 1 1 14 0c0 3.5-3 4-3 7H8ZM9 21h6M9 17v2h6v-2M10 10l2 2 2-2M12 12v5"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+  <symbol id="i-focus" viewBox="0 0 24 24"><path d="M8 3H3v5M16 3h5v5M21 16v5h-5M8 21H3v-5"/><circle cx="12" cy="12" r="4"/></symbol>
+</defs></svg>
+<div class="app-shell">
+  <aside class="sidebar" aria-label="实验目录">
+    <a class="brand" href="/" aria-label="PhysicsOS 空间实验台首页"><span class="brand-symbol"><svg class="icon"><use href="#i-atom"/></svg></span><span><strong>PhysicsOS</strong><small>让物理，看得见</small></span></a>
+    <div class="sidebar-section-label"><span>实验目录</span><span class="count">03</span></div>
+    <nav class="experiment-nav" aria-label="选择实验">
+      <button class="experiment-item active" data-experiment="pendulum" aria-current="page"><span class="experiment-icon"><svg class="icon"><use href="#i-pendulum"/></svg></span><span class="experiment-name"><strong>单摆</strong><small>周期与机械能</small></span><span class="experiment-index">01</span></button>
+      <button class="experiment-item" data-experiment="spring"><span class="experiment-icon"><svg class="icon"><use href="#i-spring"/></svg></span><span class="experiment-name"><strong>弹簧振子</strong><small>回复力与简谐运动</small></span><span class="experiment-index">02</span></button>
+      <button class="experiment-item" data-experiment="lens"><span class="experiment-icon"><svg class="icon"><use href="#i-lens"/></svg></span><span class="experiment-name"><strong>凸透镜成像</strong><small>光路与成像规律</small></span><span class="experiment-index">03</span></button>
+    </nav>
+    <div class="sidebar-preview"><span class="preview-cube"><svg class="icon"><use href="#i-cube"/></svg></span><p>换一个维度<br>理解物理。</p><span>SPATIAL LAB / 01</span><div class="preview-lines" aria-hidden="true"></div></div>
+    <footer class="sidebar-footer"><span class="local-marker"></span><div>本地设计预览<small>独立运行 · 未接入线上</small></div></footer>
+  </aside>
+  <div class="main-shell">
+    <header class="topbar"><div class="breadcrumb"><span>实验室</span><svg class="icon"><use href="#i-chevron"/></svg><strong>空间实验台</strong><span class="edition-tag">3D</span></div><div class="topbar-actions"><span class="version-label">DESIGN PREVIEW <span>V.01</span></span><button class="text-button guide-button" id="guide-button"><svg class="icon"><use href="#i-info"/></svg><span>使用指南</span></button></div></header>
+    <main class="workspace">
+      <section class="workspace-heading" aria-labelledby="experiment-title"><div><div class="eyebrow"><span id="experiment-english">SIMPLE PENDULUM</span><span class="eyebrow-dot">/</span><span id="experiment-domain">力学 · 简谐运动</span></div><div class="title-row"><h1 id="experiment-title">单摆</h1><span class="title-chip">交互实验</span></div><p id="experiment-description">改变一根细线的长度，看见周期与能量的关系。</p></div><div class="heading-counter" aria-hidden="true"><span id="experiment-number">01</span><span>/ 03</span></div></section>
+      <div class="lab-layout">
+        <div class="visual-column">
+          <section class="stage" aria-label="三维实验区域">
+            <div class="stage-toolbar"><div class="stage-title"><svg class="icon"><use href="#i-cube"/></svg><span>三维实验台</span><span class="render-label">REAL-TIME</span></div><div class="view-tools"><div class="segmented view-select" role="group" aria-label="观察视角"><button class="active" data-view="perspective" aria-pressed="true">透视</button><button data-view="front" aria-pressed="false">正视</button></div><span class="tool-separator"></span><button class="icon-button" id="home-button" aria-label="复位视角" title="复位视角"><svg class="icon"><use href="#i-home"/></svg></button></div></div>
+            <div class="scene-wrap">
+              <div id="scene-host" class="scene-host" aria-label="可拖动旋转、滚轮缩放的三维实验器材"></div>
+              <div class="scene-loading" id="scene-loading"><span class="loading-ring"></span><strong>正在准备实验台</strong><small>加载本地 3D 器材与材质…</small></div>
+              <div class="scene-status"><span class="status-dot" id="status-dot"></span><span id="scene-status-label">实时模拟</span></div>
+              <div class="scene-error" id="scene-error" role="alert" hidden><svg class="icon"><use href="#i-info"/></svg><strong>三维画面暂时不可用</strong><p id="scene-error-text"></p><button class="small-button" id="retry-button">重新加载</button></div>
+              <div class="scene-hint" id="scene-hint"><span class="mouse-mark" aria-hidden="true"></span><span>拖动旋转<span class="hint-divider">·</span>滚轮缩放</span></div>
+              <div class="layer-tools" role="group" aria-label="辅助显示图层"><button class="layer-button active" data-layer="path" aria-pressed="true"><svg class="icon"><use href="#i-path"/></svg><span id="path-label">运动轨迹</span></button><button class="layer-button" data-layer="vectors" aria-pressed="false"><svg class="icon"><use href="#i-vector"/></svg><span id="vector-label">速度矢量</span></button><button class="layer-button active grid-layer" data-layer="grid" aria-pressed="true"><svg class="icon"><use href="#i-grid"/></svg><span>网格</span></button></div>
+            </div>
+            <div class="transport" id="transport"><button class="play-button" id="play-button" aria-label="暂停模拟"><svg class="icon"><use id="play-symbol" href="#i-pause"/></svg></button><button class="icon-button rewind-button" id="rewind-button" aria-label="回到起点" title="回到起点"><svg class="icon"><use href="#i-rewind"/></svg></button><label class="timeline-label"><span class="sr-only">模拟时间</span><input type="range" id="timeline" min="0" max="12" step="0.01" value="0" aria-label="模拟时间 / 秒"></label><span class="time-readout"><b id="current-time">0.00</b><span>/ 12.00 s</span></span><label class="speed-select"><span class="sr-only">播放速度</span><select id="speed" aria-label="播放速度"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select></label></div>
+            <div class="lens-transport" id="lens-transport" hidden><span class="focus-status" id="focus-status"><svg class="icon"><use href="#i-check"/></svg><span>光屏已合焦</span></span><button class="focus-button" id="focus-button"><svg class="icon"><use href="#i-focus"/></svg>光屏自动对焦</button></div>
+          </section>
+          <section class="chart-panel" aria-labelledby="chart-heading"><div class="chart-header"><div class="chart-heading"><span class="chart-dot"></span><h2 id="chart-heading">同步观测</h2></div><div class="chart-header-actions"><div class="chart-tabs" id="chart-tabs" role="group" aria-label="观测数据类型"><button class="active" data-chart="motion" aria-pressed="true">运动曲线</button><button data-chart="energy" aria-pressed="false">能量转化</button></div><button class="text-button table-button" id="table-button"><svg class="icon"><use href="#i-table"/></svg><span>数据表</span></button></div></div><div id="chart-host" class="chart-host"></div><p class="chart-note" id="chart-note"></p></section>
+        </div>
+        <aside class="inspector" aria-label="实验参数和观测结果">
+          <section class="parameter-section"><div class="section-heading"><h2>实验参数</h2><button class="text-button reset-button" id="reset-button" title="恢复当前实验默认参数"><svg class="icon"><use href="#i-reset"/></svg><span>重置</span></button></div><div id="parameter-fields" class="parameter-fields"></div><div class="lens-presets" id="lens-presets" hidden><span>典型物距</span><div><button data-preset="2">u = 2f</button><button data-preset="1.5">f &lt; u &lt; 2f</button><button data-preset="0.7">u &lt; f</button></div></div><p class="model-assumption" id="model-assumption">小角近似 · 理想细线 · 忽略空气阻力</p></section>
+          <section class="readout-section"><div class="section-heading"><h2 id="readout-heading">实时读数</h2><span class="readout-live" id="readout-mode">LIVE</span></div><div class="hero-readout"><span id="hero-label">理论周期 T</span><div><strong id="hero-value">2.84</strong><span id="hero-unit">s</span></div></div><div class="readout-pair"><div><span id="metric-a-label">当前摆角 θ</span><p><b id="metric-a-value">15.00</b><small id="metric-a-unit">°</small></p></div><div><span id="metric-b-label">瞬时速率 v</span><p><b id="metric-b-value">0.00</b><small id="metric-b-unit">m/s</small></p></div></div><div class="formula-box" id="formula">T = 2π √(L / g)</div></section>
+          <section class="discovery-section"><div class="discovery-heading"><svg class="icon"><use href="#i-bulb"/></svg><span>试着发现</span></div><h3 id="discovery-question">摆球更重，摆动会更快吗？</h3><p id="discovery-insight">试着增加摆球质量。小角度下，周期只由摆长和重力加速度决定，与质量无关。</p></section>
+        </aside>
+      </div>
+      <footer class="workspace-footer"><span>把公式放进空间，让理解自然发生。</span><span>PHYSICSOS · SPATIAL LAB</span></footer>
+    </main>
+  </div>
+</div>
+<dialog id="guide-dialog" class="guide-dialog"><div class="dialog-header"><div><span class="eyebrow">WELCOME TO SPATIAL LAB</span><h2>从一个视角，到真正理解。</h2></div><button class="icon-button" data-close="guide-dialog" aria-label="关闭使用指南"><svg class="icon"><use href="#i-close"/></svg></button></div><div class="guide-grid"><article><span>01</span><h3>靠近器材</h3><p>在画面空白处拖动来旋转，滚轮缩放。切换「正视」可以回到清晰的教学观察面。</p></article><article><span>02</span><h3>改变一个条件</h3><p>拖动参数滑块或直接输入数字。器材、运动、读数与曲线会同步变化；每次改参数从零时刻重新开始。</p></article><article><span>03</span><h3>让运动慢下来</h3><p>暂停后拖动时间轴，逐帧观察。也可以降低播放速度，打开速度矢量，或在曲线上点击定位。</p></article><article><span>04</span><h3>从画面读到规律</h3><p>切换运动与能量曲线。鼠标悬停查看数据，也可聚焦图表后用方向键浏览、Enter 定位；数据表提供完整采样值。</p></article></div><p class="preview-disclaimer">这是独立的本地设计预览，采用现有实验的理想物理关系，尚未接入正式实验运行时、账号或后台。单摆使用小角线性化模型；凸透镜为静态成像实验。</p><button class="primary-button" data-close="guide-dialog">进入实验台<svg class="icon"><use href="#i-arrow"/></svg></button></dialog>
+<dialog id="table-dialog" class="table-dialog"><div class="dialog-header"><div><span class="eyebrow">OBSERVATION DATA</span><h2 id="table-title">实验采样数据</h2><p id="table-description"></p></div><button class="icon-button" data-close="table-dialog" aria-label="关闭数据表"><svg class="icon"><use href="#i-close"/></svg></button></div><div class="table-scroll"><table id="sample-table"><caption class="sr-only" id="table-caption">与曲线相同的实验采样数据</caption><thead></thead><tbody></tbody></table></div></dialog>
+<div class="toast" id="toast" role="status" hidden></div>
+<noscript><p class="noscript-message">空间实验台需要 JavaScript。请启用后重新加载；本页不会连接生产服务。</p></noscript>
+<script type="module" src="/app.mjs"></script>
+</body>
+</html>

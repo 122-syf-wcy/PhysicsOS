@@ -1,0 +1,42 @@
+{
+  "tool": "mcp__baocode__generate_image",
+  "model": "@provider-3/gpt-image-2.5-sunburst",
+  "quality": "high",
+  "purpose": "User requested all characters and product IP be cute chibi cartoons. Original teacher is a fictional role, not a real person or testimonial.",
+  "assets": [
+    {
+      "file": "C01-chibi-cast-master.png",
+      "aspectRatio": "16:9",
+      "requestedSize": null,
+      "actualPixels": [1360, 768],
+      "references": ["repository:overlays/harness/files/apps/web/public/physicsos/mascot/mascot-wave-640.webp"],
+      "prompt": "为 PhysicsOS 物理教师产品的90秒宣传片创作【Q版可爱角色定妆图】，严格使用参考图1中的现有品牌IP作为身份基础，所有人物都必须是同一种高品质Q版卡通风，不要写实人物、不要真人质感、不要照片。制作一张干净可爱的横向双角色定妆立绘，纯净极浅蓝白背景，影棚柔光，类似精品动画的哑光软陶/手绘结合材质但原创设计，不模仿任何已有影视角色。左侧是新创作的“Q版成年物理教师”：外观表达为成年人，3头身，大头短小身体，温和明亮的圆眼，短栗色头发，圆框眼镜，奶白针织衫外搭灰蓝短外套、深蓝长裤、白运动鞋，手持无文字的浅蓝备课本，站姿亲切自信。右侧是现有品牌“小物理老师”忠实Q版化：保留参考中的黑色微卷长发、大棕色圆眼、米色可爱贴布棒球帽、淡黄T恤、棕色短裤、奶白袜与米白鞋、细小教鞭，2.5至3头身，可爱圆润、清晰剪影，向观众轻轻挥手；右下脚边是参考中同一只灰白虎斑小猫，保留灰色条纹、白胸、粉鼻子、铃铛项圈，胖乎乎且Q版。两个角色完全分离，站在同一水平地面，各自周围有充分留白，全身完整不裁切，脸部清楚，手指自然且简化，服装与配件细节简洁可复用，整体蓝白与淡黄色协调。不要改变已有IP的识别色和服装，不给教师和品牌人物混脸，不生成任何文字、标签、字母、数字、水印或logo。此图用于后续小云雀图生视频的同一角色身份参考。"
+    },
+    {
+      "file": "C02-teacher-reference.png",
+      "aspectRatio": "1:1",
+      "requestedSize": "1024x1024",
+      "actualPixels": [1024, 1024],
+      "references": ["C01-chibi-cast-master.png"],
+      "prompt": "生成同一角色的单独身份参考立绘，纯净浅蓝白底，方形画幅，高品质可爱Q版卡通，绝不写实。严格只画参考图中左侧同一位栗色短发圆眼镜物理教师，保持脸型、明亮棕眼、灰蓝夹克、奶白针织衫、深蓝裤、白鞋，手拿无文字浅蓝备课本。加强Q版到总高2.8个头高，大头、短小圆润身体、小手小脚，全身完整，简洁易于动画化。温暖自信亲切，成年人教师角色而不是学生，造型与参考一致。图中不要小物理老师、不要小猫、不要其他人物，不要文字、标签、logo、水印，不要写实长腿，不要摄影。角色居中，四周留白，柔软卡通插画质感与参考完全一致。"
+    },
+    {
+      "file": "C03-brand-ip-reference.png",
+      "aspectRatio": "1:1",
+      "requestedSize": "1024x1024",
+      "actualPixels": [1024, 1024],
+      "references": ["C01-chibi-cast-master.png", "repository:overlays/harness/files/apps/web/public/physicsos/mascot/mascot-wave-640.webp"],
+      "prompt": "PhysicsOS现有品牌IP的独立Q版身份立绘，高品质可爱卡通插画，绝不写实。方形纯净浅蓝白背景。只画参考图1中右侧同一位小物理老师与同一只灰白虎斑小猫，参考图2用于原有IP服饰特征，不要引入新人物。忠实保留米色动物贴布棒球帽、黑色微卷长发、大棕圆眼、淡黄T恤、棕色短裤、奶白袜、米白鞋、细木教鞭，向观众挥手微笑。强化Q版为2.8头身，头很大、身体短小圆润、小手小脚，完整全身。小猫是胖乎乎Q版灰白条纹虎斑，白胸、粉鼻子、红棕铃铛项圈，坐在右下脚边。相同脸型，服饰精简适合视频一致性，清楚轮廓，柔光。不要参考图左侧戴眼镜教师，不要真人，不要长腿写实比例，不要文字、logo、标签、水印或其他角色。"
+    },
+    {
+      "file": "C04-official-planet-reference.png",
+      "aspectRatio": "1:1",
+      "requestedSize": "1024x1024",
+      "actualPixels": [1024, 1024],
+      "references": ["repository:demos/official-site/assets/mascot-glass.webp, visually matched to the real live official homepage W01"],
+      "prompt": "为PhysicsOS官网IP制作忠实Q版卡通参考立绘，只画参考图里同一个可爱的薄荷绿色玻璃星球伙伴。保留圆圆的大头、短小圆润身体、黑色椭圆眼睛、微笑小嘴、透明环绕头部的星环、淡蓝与青柠小卫星。整体非常可爱、友好，像精致可动小手办，保持原有薄荷玻璃质感但用更清晰的卡通轮廓、柔软光影，与产品宣传片的Q版人物协调。不加入任何真人、机器人、写实面部或新角色。方形画幅，纯净奶油白与极浅薄荷底色，主体完整居中，周围充分留白。不要文字、logo、水印、字母、公式或任何产品界面。这个角色是官网已有星球IP的宣传片适配，不是新的品牌标志，头部星环形状要忠实参考。"
+    }
+  ],
+  "consistencyNote": "Identity references guide generation; perfect cross-shot identity is not guaranteed. C02/C03 are the preferred independent identity references, C01 is the initial combined cast. No 小云雀 videos have yet been generated.",
+  "licenseNote": "Original user-owned product references were used. Confirm the image generation service terms before final public/commercial release; no new rights guarantee is asserted."
+}

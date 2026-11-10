@@ -10,7 +10,7 @@
 import { describe, expect, it } from 'vitest'
 import { createPhysicsToolRuntime, type PhysicsToolRuntime } from '@physicsos/agent-tools'
 import { solveFindings, type PaperDocument, type PaperQuestion, type SpecRow } from '@physicsos/question-paper'
-import { applyEngineAnswers, engineRefusalFindings, independentSolve } from '../src/solve.ts'
+import { applyEngineAnswers, engineAnswerComparable, engineRefusalFindings, independentSolve } from '../src/solve.ts'
 
 /* A free-text Lorentz-force question the engine parses, solves and verifies. */
 const SUPPORTED_STEM =
@@ -104,16 +104,33 @@ describe('independentSolve: the engine decides', () => {
     expect(result!.consistent).toBe(false)
     expect(result!.note).toContain('UNSUPPORTED_MODEL')
 
+    /* A model the engine does not implement is a capability boundary, not a
+       defect in the question: it stays readable but never blocks approval. */
     const refusals = engineRefusalFindings([result!], new Map([[1, 'experiment']]))
     expect(refusals).toHaveLength(1)
-    expect(refusals[0]).toMatchObject({ questionNo: 1, code: 'engine-mismatch', severity: 'error' })
-    /* A CONCEPT kind the engine refuses by design is a warning, not a blocker. */
+    expect(refusals[0]).toMatchObject({ questionNo: 1, code: 'engine-mismatch', severity: 'warning' })
+    /* A CONCEPT kind the engine refuses by design is a warning too. */
     expect(engineRefusalFindings([result!], new Map([[1, 'choice-single']]))[0])
       .toMatchObject({ severity: 'warning' })
 
     /* No number is stamped onto the paper for a refused question. */
     const doc = documentOf('光子能量 E = 10.2 eV')
     expect(applyEngineAnswers(doc, [result!])).toBeUndefined()
+  })
+
+  /* A calculation question whose stem cannot be solved by anything is the
+     author's problem, and stays blocking. */
+  it('keeps a missing-known refusal blocking', () => {
+    const refusal = {
+      questionNo: 2,
+      draftAnswer: '12 m',
+      solvedAnswer: '',
+      consistent: false,
+      note: 'INVALID_SEMANTICS：INSUFFICIENT_KNOWNS: 已知条件不足，至少需要 2 个已知量。',
+    }
+    const [finding] = engineRefusalFindings([refusal], new Map([[2, 'calculation']]))
+    expect(finding).toMatchObject({ severity: 'error' })
+    expect(finding!.detail).toContain('缺少可解所需的条件')
   })
 
   it('reports a runtime fault as a failed solve after the retry, not a silent pass', async () => {
@@ -151,5 +168,25 @@ describe('applyEngineAnswers: the engine value lands in the paper', () => {
     const engineAnswer = engineAnswerOf(runtime, SUPPORTED_STEM)
     const [result] = await independentSolve([question(SUPPORTED_STEM, engineAnswer)], 0, 120_000, runtime)
     expect(applyEngineAnswers(documentOf(engineAnswer), [result!])).toBeUndefined()
+  })
+
+  /* A choice question's draft answer is a letter while the engine reports
+     quantities. Comparing those two is meaningless, and doing it anyway made
+     every choice question fail its check on a real paper. */
+  it('treats an engine answer as incomparable when no option shares its magnitude', () => {
+    const choice = {
+      ...question(SUPPORTED_STEM, 'A'),
+      options: ['A. 20 m', 'B. 40 m', 'C. 80 m', 'D. 160 m'],
+    }
+    expect(engineAnswerComparable(choice, '位移 s = 200.00 m')).toBe(false)
+    expect(engineAnswerComparable(choice, '位移 s = 40.00 m')).toBe(true)
+    /* Rounding: the engine prints 2.00 where an option says 2.0. */
+    expect(engineAnswerComparable({ ...choice, options: ['A. 2.0 m/s', 'B. 4.0 m/s'] }, '末速度 v = 2.00 m/s')).toBe(true)
+  })
+
+  it('takes a calculation question at face value', () => {
+    const free = { ...question(SUPPORTED_STEM, 'r = 0.078 m'), options: [] }
+    expect(engineAnswerComparable(free, '轨道半径 r = 0.078 m')).toBe(true)
+    expect(engineAnswerComparable(free, '')).toBe(false)
   })
 })

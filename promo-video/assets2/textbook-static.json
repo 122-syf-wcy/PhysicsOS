@@ -1,0 +1,11 @@
+{
+  "file": "textbook-static.png",
+  "prompt": "an open printed physics textbook showing a boring static diagram of a block on an inclined plane, the printed page looks flat dull and frozen, cold flat lighting, feeling of \"dead knowledge\", soft flat vector illustration, physics education theme, palette deep navy #14213D and bright blue #3B82F6 with warm amber accents, cinematic gentle rim light, clean composition, high detail, no text, no watermark",
+  "model": "gpt-image-2.5-sunburst",
+  "endpoint": "https://image.haqiuhaqiu.xyz",
+  "requestedSize": "1536x1024",
+  "pixels": "1536x1024",
+  "bytes": 1931517,
+  "createdAt": "2026-09-30T10:04:58.193Z",
+  "elapsedMs": 42749
+}

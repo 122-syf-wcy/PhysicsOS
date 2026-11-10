@@ -1,0 +1,229 @@
+[
+  {
+    "id": "H01",
+    "file": "01-real-ui/H01-projectile-start.png",
+    "source": "promo-video/remotion/public/live4/proj-0.png",
+    "sourceUrlAccordingToExistingCapturePipeline": "https://physics.dongsiwei.com/",
+    "sourceFileModifiedAt": "2026-11-06T16:06:43.331393+00:00",
+    "captureTimestampIndependentlyVerified": false,
+    "sourceClass": "historical-real-product-capture",
+    "pixelSize": [
+      3260,
+      2160
+    ],
+    "cropBoxSourcePixels": [
+      580,
+      0,
+      3840,
+      2160
+    ],
+    "treatment": "Rectangular privacy/editorial crop only; original pixels retained, no generated UI, no new badge or changed text",
+    "note": "Historical real deployed product screenshot; start state, 0.25x playback visible."
+  },
+  {
+    "id": "H03",
+    "file": "01-real-ui/H03-projectile-end.png",
+    "source": "promo-video/remotion/public/live4/proj-1.png",
+    "sourceUrlAccordingToExistingCapturePipeline": "https://physics.dongsiwei.com/",
+    "sourceFileModifiedAt": "2026-11-06T16:07:04.454719+00:00",
+    "captureTimestampIndependentlyVerified": false,
+    "sourceClass": "historical-real-product-capture",
+    "pixelSize": [
+      3260,
+      2160
+    ],
+    "cropBoxSourcePixels": [
+      580,
+      0,
+      3840,
+      2160
+    ],
+    "treatment": "Rectangular privacy/editorial crop only; original pixels retained, no generated UI, no new badge or changed text",
+    "note": "Historical real deployed product screenshot; end state of the same projectile scene."
+  },
+  {
+    "id": "H04",
+    "file": "01-real-ui/H04-experiment-gallery.png",
+    "source": "promo-video/remotion/public/live4/lab-grid.png",
+    "sourceUrlAccordingToExistingCapturePipeline": "https://physics.dongsiwei.com/",
+    "sourceFileModifiedAt": "2026-11-06T15:19:25.054332+00:00",
+    "captureTimestampIndependentlyVerified": false,
+    "sourceClass": "historical-real-product-capture",
+    "pixelSize": [
+      2360,
+      2110
+    ],
+    "cropBoxSourcePixels": [
+      1020,
+      0,
+      3380,
+      2110
+    ],
+    "treatment": "Rectangular privacy/editorial crop only; original pixels retained, no generated UI, no new badge or changed text",
+    "note": "Historical experiment gallery; sidebar and private recent/history items excluded."
+  },
+  {
+    "id": "H05",
+    "file": "01-real-ui/H05-ai-explanation.png",
+    "source": "promo-video/remotion/public/live4/chat-answer.png",
+    "sourceUrlAccordingToExistingCapturePipeline": "https://physics.dongsiwei.com/",
+    "sourceFileModifiedAt": "2026-11-06T16:30:45.872693+00:00",
+    "captureTimestampIndependentlyVerified": false,
+    "sourceClass": "historical-real-product-capture",
+    "pixelSize": [
+      1890,
+      1760
+    ],
+    "cropBoxSourcePixels": [
+      1245,
+      140,
+      3135,
+      1900
+    ],
+    "treatment": "Rectangular privacy/editorial crop only; original pixels retained, no generated UI, no new badge or changed text",
+    "note": "Historical AI answer, Lorentz force example; no invented verification badge. Crop does not imply that a separate code experiment succeeded."
+  },
+  {
+    "id": "H06",
+    "file": "01-real-ui/H06-verified-answer.png",
+    "source": "docs/reports/screenshots/promo/09-solved-question.png",
+    "sourceUrlAccordingToExistingCapturePipeline": "https://physics.dongsiwei.com/",
+    "sourceFileModifiedAt": "2026-10-11T10:06:31.261828+00:00",
+    "captureTimestampIndependentlyVerified": false,
+    "sourceClass": "historical-real-product-capture",
+    "pixelSize": [
+      715,
+      710
+    ],
+    "cropBoxSourcePixels": [
+      520,
+      90,
+      1235,
+      800
+    ],
+    "treatment": "Rectangular privacy/editorial crop only; original pixels retained, no generated UI, no new badge or changed text",
+    "note": "Historical inclined-plane answer with original renderer verification and matching scene card. Older UI version."
+  },
+  {
+    "id": "H06a",
+    "file": "01-real-ui/H06a-verification-detail.png",
+    "source": "docs/reports/screenshots/promo/09-solved-question.png",
+    "sourceUrlAccordingToExistingCapturePipeline": "https://physics.dongsiwei.com/",
+    "sourceFileModifiedAt": "2026-10-11T10:06:31.261828+00:00",
+    "captureTimestampIndependentlyVerified": false,
+    "sourceClass": "historical-real-product-capture",
+    "pixelSize": [
+      690,
+      270
+    ],
+    "cropBoxSourcePixels": [
+      535,
+      90,
+      1225,
+      360
+    ],
+    "treatment": "Rectangular privacy/editorial crop only; original pixels retained, no generated UI, no new badge or changed text",
+    "note": "Native verification card crop from the same inclined-plane example; no checks added."
+  },
+  {
+    "id": "H06b",
+    "file": "01-real-ui/H06b-matching-scene.png",
+    "source": "docs/reports/screenshots/promo/09-solved-question.png",
+    "sourceUrlAccordingToExistingCapturePipeline": "https://physics.dongsiwei.com/",
+    "sourceFileModifiedAt": "2026-10-11T10:06:31.261828+00:00",
+    "captureTimestampIndependentlyVerified": false,
+    "sourceClass": "historical-real-product-capture",
+    "pixelSize": [
+      705,
+      435
+    ],
+    "cropBoxSourcePixels": [
+      530,
+      365,
+      1235,
+      800
+    ],
+    "treatment": "Rectangular privacy/editorial crop only; original pixels retained, no generated UI, no new badge or changed text",
+    "note": "Native scene card from the SAME inclined-plane answer; not the Lorentz or projectile problem."
+  },
+  {
+    "id": "H07",
+    "file": "01-real-ui/H07-paper-setup.png",
+    "source": "promo-video/physicsos-tour/ref/exam-new.png",
+    "sourceUrlAccordingToExistingCapturePipeline": "https://physics.dongsiwei.com/",
+    "sourceFileModifiedAt": "2026-11-07T06:10:10.836462+00:00",
+    "captureTimestampIndependentlyVerified": false,
+    "sourceClass": "historical-real-product-capture",
+    "pixelSize": [
+      3240,
+      1400
+    ],
+    "cropBoxSourcePixels": [
+      600,
+      0,
+      3840,
+      1400
+    ],
+    "treatment": "Rectangular privacy/editorial crop only; original pixels retained, no generated UI, no new badge or changed text",
+    "note": "Historical real paper setup UI; no draft generated; pending statuses remain pending. Regional scope visible, not a promise of all curricula."
+  },
+  {
+    "id": "H08",
+    "file": "01-real-ui/H08-product-home.png",
+    "source": "promo-video/remotion/public/live4/home.png",
+    "sourceUrlAccordingToExistingCapturePipeline": "https://physics.dongsiwei.com/",
+    "sourceFileModifiedAt": "2026-11-06T15:19:10.123066+00:00",
+    "captureTimestampIndependentlyVerified": false,
+    "sourceClass": "historical-real-product-capture",
+    "pixelSize": [
+      1920,
+      1810
+    ],
+    "cropBoxSourcePixels": [
+      1240,
+      0,
+      3160,
+      1810
+    ],
+    "treatment": "Rectangular privacy/editorial crop only; original pixels retained, no generated UI, no new badge or changed text",
+    "note": "Historical home surface, hero and entry cards; no account/history identifiers."
+  },
+  {
+    "id": "H09",
+    "file": "01-real-ui/H09-resource-library.png",
+    "source": "promo-video/remotion/public/live4/library.png",
+    "sourceUrlAccordingToExistingCapturePipeline": "https://physics.dongsiwei.com/",
+    "sourceFileModifiedAt": "2026-11-06T15:21:03.236609+00:00",
+    "captureTimestampIndependentlyVerified": false,
+    "sourceClass": "historical-real-product-capture",
+    "pixelSize": [
+      3240,
+      1510
+    ],
+    "cropBoxSourcePixels": [
+      600,
+      300,
+      3840,
+      1810
+    ],
+    "treatment": "Rectangular privacy/editorial crop only; original pixels retained, no generated UI, no new badge or changed text",
+    "note": "Historical library body; outdated headline counts and private sidebar excluded."
+  },
+  {
+    "id": "H02",
+    "file": "01-real-ui/H02-projectile-replay.mp4",
+    "source": "promo-video/remotion/public/live4/proj-frames/f_000.png ... f_073.png",
+    "sourceTiming": "promo-video/remotion/src/v4/layout.json / projectile.frames",
+    "sourceClass": "historical-real-browser-screencast-reconstructed",
+    "captureTimestampIndependentlyVerified": false,
+    "originalFrameCount": 74,
+    "originalTimestampSpanSeconds": 8.785,
+    "pixelSize": [
+      1920,
+      1080
+    ],
+    "fps": 30,
+    "treatment": "Restore original CDP timestamps; remove 280px private sidebar; add plain white side padding; no motion interpolation or generated physical paths; silent H.264",
+    "speedMeaning": "Original product UI shows 0.25x slow playback; not AI response-speed evidence."
+  }
+]

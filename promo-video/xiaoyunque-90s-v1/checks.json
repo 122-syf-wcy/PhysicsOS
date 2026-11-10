@@ -1,0 +1,222 @@
+{
+  "checkedAt": "2026-11-09T16:40:57.685127+00:00",
+  "timelineShots": 16,
+  "timelineDurationSeconds": 90,
+  "fps": 30,
+  "totalFrames": 2700,
+  "timelineContiguous": true,
+  "allReferencedPrimaryAssetsExist": true,
+  "imagesDecodeAndDimensionsChecked": [
+    {
+      "file": "01-real-ui/H01-projectile-start.png",
+      "pixels": [
+        3260,
+        2160
+      ]
+    },
+    {
+      "file": "01-real-ui/H03-projectile-end.png",
+      "pixels": [
+        3260,
+        2160
+      ]
+    },
+    {
+      "file": "01-real-ui/H04-experiment-gallery.png",
+      "pixels": [
+        2360,
+        2110
+      ]
+    },
+    {
+      "file": "01-real-ui/H05-ai-explanation.png",
+      "pixels": [
+        1890,
+        1760
+      ]
+    },
+    {
+      "file": "01-real-ui/H06-verified-answer.png",
+      "pixels": [
+        715,
+        710
+      ]
+    },
+    {
+      "file": "01-real-ui/H06a-verification-detail.png",
+      "pixels": [
+        690,
+        270
+      ]
+    },
+    {
+      "file": "01-real-ui/H06b-matching-scene.png",
+      "pixels": [
+        705,
+        435
+      ]
+    },
+    {
+      "file": "01-real-ui/H07-paper-setup.png",
+      "pixels": [
+        3240,
+        1400
+      ]
+    },
+    {
+      "file": "01-real-ui/H08-product-home.png",
+      "pixels": [
+        1920,
+        1810
+      ]
+    },
+    {
+      "file": "01-real-ui/H09-resource-library.png",
+      "pixels": [
+        3240,
+        1510
+      ]
+    },
+    {
+      "file": "01-real-ui/W00-official-fullpage.png",
+      "pixels": [
+        3840,
+        7428
+      ]
+    },
+    {
+      "file": "01-real-ui/W01-official-hero.png",
+      "pixels": [
+        3840,
+        2000
+      ]
+    },
+    {
+      "file": "01-real-ui/W02-official-exploration.png",
+      "pixels": [
+        2720,
+        1408
+      ]
+    },
+    {
+      "file": "01-real-ui/W03-official-ai-workflow.png",
+      "pixels": [
+        2720,
+        1342
+      ]
+    },
+    {
+      "file": "01-real-ui/W04-official-closing.png",
+      "pixels": [
+        2720,
+        1174
+      ]
+    },
+    {
+      "file": "02-characters/C01-chibi-cast-master.png",
+      "pixels": [
+        1360,
+        768
+      ]
+    },
+    {
+      "file": "02-characters/C02-teacher-reference.png",
+      "pixels": [
+        1024,
+        1024
+      ]
+    },
+    {
+      "file": "02-characters/C03-brand-ip-reference.png",
+      "pixels": [
+        1024,
+        1024
+      ]
+    },
+    {
+      "file": "02-characters/C04-official-planet-reference.png",
+      "pixels": [
+        1024,
+        1024
+      ]
+    },
+    {
+      "file": "03-ai-keyframes/K01-desk-opening.png",
+      "pixels": [
+        1920,
+        1080
+      ]
+    },
+    {
+      "file": "03-ai-keyframes/K02-product-reveal-plate.png",
+      "pixels": [
+        1920,
+        1080
+      ]
+    },
+    {
+      "file": "03-ai-keyframes/K03-brand-closing.png",
+      "pixels": [
+        1920,
+        1080
+      ]
+    },
+    {
+      "file": "03-ai-keyframes/K04-curiosity-partner.png",
+      "pixels": [
+        1920,
+        1080
+      ]
+    },
+    {
+      "file": "03-ai-keyframes/K05-classroom-payoff.png",
+      "pixels": [
+        1920,
+        1080
+      ]
+    },
+    {
+      "file": "08-brand/B01-physicsos-logo.png",
+      "pixels": [
+        1024,
+        1024
+      ]
+    },
+    {
+      "file": "storyboard-contact-sheet.jpg",
+      "pixels": [
+        1440,
+        1490
+      ]
+    }
+  ],
+  "generatedImageCount": 9,
+  "newOfficialWebsiteImageCount": 5,
+  "historicalProductStillCount": 10,
+  "historicalReplay": {
+    "programs": [],
+    "stream_groups": [],
+    "streams": [
+      {
+        "codec_name": "h264",
+        "width": 1920,
+        "height": 1080,
+        "r_frame_rate": "30/1"
+      }
+    ],
+    "format": {
+      "duration": "8.900000"
+    }
+  },
+  "historicalReplayFullDecodeSucceeded": true,
+  "pdfPages": 18,
+  "pdfBytes": 6757886,
+  "mobileGalleryViewportWidth": 390,
+  "mobileGalleryHorizontalOverflow": false,
+  "newAuthenticatedProductCaptureSucceeded": false,
+  "xiaoyunqueVideosGenerated": false,
+  "bgmAudioGenerated": false,
+  "narrationAudioGenerated": false,
+  "finalFilmRendered": false,
+  "note": "Media/text deliverable validation, not an application build/test/deploy. No live product write protection was removed to obtain a screenshot."
+}

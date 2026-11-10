@@ -30,6 +30,20 @@ describe('DeterministicInductionQuestionParser', () => {
     expect(isInductionQuestionText(compositeText)).toBe(false)
   })
 
+  /* Conductors on rails are the canonical apparatus but are often written
+     without naming 电磁感应; without recognising the shape they fell through
+     to the particle parser and reported a missing charge. */
+  it('recognizes a rod-on-rails apparatus that never names induction', () => {
+    const apparatus =
+      '两根足够长的平行光滑金属导轨固定在倾角 30° 的斜面上，导轨间距 L = 0.50 m，'
+      + '导轨上端接有阻值 R = 0.40 Ω 的电阻，导轨电阻不计。匀强磁场垂直斜面向上，'
+      + '磁感应强度 B = 1.0 T。质量 m = 0.20 kg、电阻 r = 0.10 Ω 的金属棒 ab 垂直导轨放置，'
+      + '与导轨接触良好，由静止释放后沿导轨下滑。'
+    expect(isInductionQuestionText(apparatus)).toBe(true)
+    /* A conductor with no circuit to close is a particle question. */
+    expect(isInductionQuestionText('一个质子垂直进入磁感应强度为 B 的匀强磁场，求其运动半径')).toBe(false)
+  })
+
   it('extracts B, L, v, R and the bar-motion model from a cutting question', () => {
     const document = createGoldenQuestionDocument(inductionQuestion('ind-01-bar-motion-emf'))
     const candidate = DeterministicInductionQuestionParser.parse(document)

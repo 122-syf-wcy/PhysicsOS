@@ -329,6 +329,13 @@ export function runChecks(
 
 /**
  * Fold an independent solving report into findings.
+ *
+ * Only a disagreement between two answers that were actually comparable is
+ * evidence about the draft. When the engine reports quantities the question
+ * never asked for — a choice question whose options share none of its
+ * magnitudes — the mismatch describes the engine's mistake, not the model's,
+ * and is reported as a warning the reviewer can read rather than an error that
+ * blocks approval.
  * @param solved - per-question solver results.
  * @returns `solve-mismatch` findings for every disagreement.
  */
@@ -336,15 +343,21 @@ export function solveFindings(
   solved: readonly {
     questionNo: number
     consistent: boolean
+    comparable?: boolean
     note?: string
   }[],
 ): CheckFinding[] {
   return solved
     .filter((result) => !result.consistent)
-    .map((result) => ({
-      questionNo: result.questionNo,
-      severity: 'error' as const,
-      code: 'solve-mismatch' as const,
-      detail: `独立解题与起草答案不一致${result.note === undefined ? '' : `：${result.note}`}`,
-    }))
+    .map((result) => {
+      const comparable = result.comparable !== false
+      return {
+        questionNo: result.questionNo,
+        severity: comparable ? 'error' as const : 'warning' as const,
+        code: 'solve-mismatch' as const,
+        detail: comparable
+          ? `独立解题与起草答案不一致${result.note === undefined ? '' : `：${result.note}`}`
+          : `引擎解出的物理量与本题所问不一致（多半是引擎选错了模型），不足以判断起草答案对错${result.note === undefined ? '' : `：${result.note}`}`,
+      }
+    })
 }

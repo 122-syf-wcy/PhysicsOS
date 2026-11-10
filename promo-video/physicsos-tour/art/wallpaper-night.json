@@ -1,0 +1,11 @@
+{
+  "file": "wallpaper-night.png",
+  "prompt": "Calm abstract macOS-style desktop wallpaper at night. Deep navy to indigo gradient, large softly blurred translucent glass ribbons faintly lit in cool blue, a few very subtle tiny stars, quiet, minimal, low contrast, subtle film grain. No text, no logos, no objects, no people, no UI.",
+  "model": "gpt-image-2.6-sunburst",
+  "endpoint": "https://image.haqiuhaqiu.xyz",
+  "requestedSize": "1536x1024",
+  "pixels": "1536x1024",
+  "bytes": 1741969,
+  "createdAt": "2026-11-07T06:23:43.543Z",
+  "elapsedMs": 46237
+}

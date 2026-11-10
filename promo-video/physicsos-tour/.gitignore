@@ -1,0 +1,5 @@
+.venv-asr
+out/
+stills/
+ref/
+fonts/NotoSansSC-VF.ttf

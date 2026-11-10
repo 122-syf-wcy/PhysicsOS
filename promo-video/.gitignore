@@ -1,0 +1,22 @@
+# Publish source/configuration; generated or separately supplied media stays local.
+.mimosa/
+out/
+capture/
+*.zip
+*.mp4
+*.mov
+*.webm
+*.wav
+*.mp3
+*.m4a
+*.flac
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.ttf
+*.otf
+*.woff
+*.woff2
+*.pdf
+*.ffconcat

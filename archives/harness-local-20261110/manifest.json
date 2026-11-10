@@ -1,0 +1,139 @@
+{
+  "version": 1,
+  "date": "2026-11-10",
+  "source": "vendor/deepseek-harness local worktree",
+  "upstreamCommit": "477b4f420553e8a52c2fbccc464d7561b239c443",
+  "purpose": "Preserve otherwise unpublished local source without applying older files over the current overlay. Not a runtime package.",
+  "files": [
+    {
+      "path": "col.mjs",
+      "sha256": "388f40f067d7ee2afd033cfb342e622418d7cb32fc725b9ca7579a261c28700c",
+      "bytes": 858
+    },
+    {
+      "path": "col2.mjs",
+      "sha256": "311af817639c43ee694d8ce3d3db132a1e6b0a24233b1313d572affc9b2a362a",
+      "bytes": 786
+    },
+    {
+      "path": "e10.mjs",
+      "sha256": "3dc3e313f37d967f5b990f73d53641a6e823eac097145d0af65acef3d03c9244",
+      "bytes": 500
+    },
+    {
+      "path": "e2e-engine.mjs",
+      "sha256": "b0c8fa3329fe0e5c02ec1ef1b291211eefa15ea6b8127095d05c242949f35bc0",
+      "bytes": 1356
+    },
+    {
+      "path": "e2e2.mjs",
+      "sha256": "e684bfe3eca7283d130b9b7076455c7b6b91ca0a56c0405a8c355ef2f08202b8",
+      "bytes": 1241
+    },
+    {
+      "path": "e2e3.mjs",
+      "sha256": "eb115c915012f3adb58668decb9b5b34773075e4248b6c138fd562be4bab1687",
+      "bytes": 338
+    },
+    {
+      "path": "e4.mjs",
+      "sha256": "4de436b23f9f901a3108df857122dfc23bc650c0c29abae53ae692f7c61b73cc",
+      "bytes": 443
+    },
+    {
+      "path": "e5.mjs",
+      "sha256": "655bbec3652b6277065d880606ba96731d3f167fb204b24972c35b22640174c0",
+      "bytes": 806
+    },
+    {
+      "path": "e6.mjs",
+      "sha256": "dc8ccf9e19854d29dd8bb38c12f786240cf494bdb02669e1e5cc977b96d2c625",
+      "bytes": 472
+    },
+    {
+      "path": "e7.mjs",
+      "sha256": "2b805293d2b4de6f774f8b547147bb8d0a5efd4f394f4534fae3bfa1b6534ea7",
+      "bytes": 785
+    },
+    {
+      "path": "e8.mjs",
+      "sha256": "bdb82bc9c4cc142e72f8a1ecc47bec6327b339864880cae887e578a1a528be3e",
+      "bytes": 873
+    },
+    {
+      "path": "e9.mjs",
+      "sha256": "c34893503eec720ff82662942593750130139ed6098aff00a8e9b342cd203d19",
+      "bytes": 778
+    },
+    {
+      "path": "ir.mjs",
+      "sha256": "b589c9f98dc083821951d66d64ab8c92afb2add13a3ff0d9b5e5e7113049c625",
+      "bytes": 911
+    },
+    {
+      "path": "latex-all.mjs",
+      "sha256": "32e77c6af8233a422f52960d3d2c24b5cd9c4445cb396d3d72a1daddb1c81db0",
+      "bytes": 1058
+    },
+    {
+      "path": "latex.mjs",
+      "sha256": "e7a19935a80e99a5e3b26d1829186bea555a49203a84b1fcb9bdbb16640de472",
+      "bytes": 608
+    },
+    {
+      "path": "packages/client/ui-physicsos/src/client/ContributeWorkspace.module.css",
+      "sha256": "854508e22d2e81328fe42dcf1cdda5d5e66a9d2b2ab0a121c824ac46ffa5a079",
+      "bytes": 6095
+    },
+    {
+      "path": "packages/client/ui-physicsos/src/client/ContributeWorkspace.tsx",
+      "sha256": "8b77293615e2de746b57777e20495484adcb13e6879145bdf00b20604a47af34",
+      "bytes": 5534
+    },
+    {
+      "path": "packages/client/ui-physicsos/src/client/LabWorkspace.tsx",
+      "sha256": "a53eaf4237555bda867698f42227d429ea3a698e3a18db975d1f5b491411fa0f",
+      "bytes": 12651
+    },
+    {
+      "path": "packages/client/ui-physicsos/src/client/icons/physics-icons.tsx",
+      "sha256": "47bbeedd0840ac5e1e0ef7fe511f6466d86d71a366210b42681ddbe84dd5df46",
+      "bytes": 27691
+    },
+    {
+      "path": "packages/client/ui-physicsos/src/client/locales.ts",
+      "sha256": "8f1ff660058628482de79292014b738db8b03068969b6148b83ecf8f0448067c",
+      "bytes": 119302
+    },
+    {
+      "path": "packages/client/ui-physicsos/src/client/surface-store.ts",
+      "sha256": "e8b99e1cdd45eca9c9a6cac61a9a8e96a83bf195b68ebc769f88f2ad5ecd3615",
+      "bytes": 17832
+    },
+    {
+      "path": "packages/physicsos/paper-host/src/index.ts",
+      "sha256": "f759d285afb5c2124de9d99801ebc74d5ffcf9801f5c5e4fcf3e48f1e0e4bc0b",
+      "bytes": 30766
+    },
+    {
+      "path": "packages/physicsos/paper-host/src/service.ts",
+      "sha256": "ec1ffcf6f31cffc98c5383890b61e4fb3dfe49df40132e3a16e5c4ebea32e08f",
+      "bytes": 44966
+    },
+    {
+      "path": "reg.mjs",
+      "sha256": "1e36d0e5a79951dd884f79ed60772f7d97c2b6a86dd99bcb320d728842550d97",
+      "bytes": 296
+    },
+    {
+      "path": "t2.mjs",
+      "sha256": "0fc48962c18e513fe78157c24260ba379c6ae717457375b2012e5dbdf959271c",
+      "bytes": 1062
+    },
+    {
+      "path": "v.mjs",
+      "sha256": "303f469a554bcae761759c0c612645ee76909f1c644e8590b11f1bc548d6e133",
+      "bytes": 921
+    }
+  ]
+}

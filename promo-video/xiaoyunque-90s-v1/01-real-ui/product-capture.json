@@ -1,0 +1,20 @@
+{
+  "base": "https://physics.dongsiwei.com",
+  "capturedAt": "2026-11-09T16:09:56.349Z",
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "deviceScaleFactor": 2,
+  "sessionSaved": false,
+  "guards": "No HTTP writes after authentication; all WebSockets blocked",
+  "blocked": {
+    "POST /api/dynamicCordisRunner/syncInspectManifest": 1,
+    "POST /api/credentials/describe": 1
+  },
+  "shots": [],
+  "gaps": [
+    "locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for getByRole('button', { name: '物理实验室', exact: true }).first()\n    - locator resolved to <button type=\"button\" aria-label=\"物理实验室\" class=\"gJIJla_item\">…</button>\n  - attempting click action\n    2 × waiting for element to be visible, enabled and stable\n      - element is visible, enabled and stable\n      - scrolling into view if needed\n      - done scrolling\n      - <main class=\"R9GRTG_stage\">…</main> from <div data-shell-overlay=\"true\" class=\"PNW8VW_overlayLayer\">…</div> subtree intercepts pointer events\n    - retrying click action\n    - waiting 20ms\n    2 × waiting for element to be visible, enabled and stable\n      - element is visible, enabled and stable\n      - scrolling into view if needed\n      - done scrolling\n      - <main class=\"R9GRTG_stage\">…</main> from <div data-shell-overlay=\"true\" class=\"PNW8VW_overlayLayer\">…</div> subtree intercepts pointer events\n    - retrying click action\n      - waiting 100ms\n    4 × waiting for element to be visible, enabled and stable\n      - element is visible, enabled and stable\n      - scrolling into view if needed\n      - done scrolling\n      - <main class=\"R9GRTG_stage\">…</main> from <div data-shell-overlay=\"true\" class=\"PNW8VW_overlayLayer\">…</div> subtree intercepts pointer events\n    - retrying click action\n      - waiting 500ms\n    - waiting for \"https://physics.dongs"
+  ],
+  "noticeDialogs": []
+}

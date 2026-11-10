@@ -1,0 +1,24 @@
+《小球飞起来了》PhysicsOS 宣传片 · 第三方素材与来源
+
+Product (the user's own material)
+- PhysicsOS interface: redrawn in HTML/SVG from the live site https://physics.dongsiwei.com (captured 2026-11-06/07); no screenshots in the film.
+- PhysicsOS product images used inside the redrawn UI (experiment thumbnails, mascot illustration, portal images, brand mark): from the PhysicsOS repository, overlays/harness/files/apps/web/public/physicsos/ (Apache License 2.0).
+- Chat answer text: the product's own answer to "为什么洛伦兹力不做功？" as it appeared in production on 2026-11-06, cut before its note about the failed code experiment.
+
+Voice
+- Narration: Xiaomi MiMo mimo-v2.5-tts, preset voice 茉莉 (https://mimo.mi.com/models/zh-CN/mimo-v2.5-tts), synthesised with the user's API key. Checked line by line with faster-whisper "small" (Systran, MIT; model files from the ModelScope mirror).
+
+Music
+- Piano: "Salamander Grand Piano V3" by Alexander Holm, licensed under CC BY 3.0 (https://creativecommons.org/licenses/by/3.0/)
+- Samples (CC0): Karoryfer Samples / sfzinstruments, Versilian Community Sample Library (Versilian Studios)
+- Score composed for this film; the pulse-wave voice, kick drum, foley and room tone are synthesised in code.
+
+Image
+- Desktop wallpaper: generated for this film with gpt-image-2.6-sunburst (the user's image service).
+
+Fonts
+- Noto Sans SC (Google), SIL Open Font License 1.1 — fonts/OFL-NotoSansSC.txt; subset to the characters the film uses.
+- KaTeX_Main and KaTeX_Math (KaTeX), SIL Open Font License 1.1 — the same files the product ships for its formulas.
+
+Tools
+- Rendering, mixing and mastering tools from the Lemo-Opuscar style library (MIT), style "Living Screencast".

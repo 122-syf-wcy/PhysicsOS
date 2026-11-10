@@ -1,0 +1,11 @@
+{
+  "file": "brand-aurora.png",
+  "prompt": "abstract luminous aurora of flowing blue and cyan particles forming gentle waves over a deep navy background, subtle glowing orbit lines, wide empty center space for typography, soft flat vector illustration, physics education theme, palette deep navy #14213D and bright blue #3B82F6 with warm amber accents, cinematic gentle rim light, clean composition, high detail, no text, no watermark",
+  "model": "gpt-image-2.5-sunburst",
+  "endpoint": "https://image.haqiuhaqiu.xyz",
+  "requestedSize": "1536x1024",
+  "pixels": "1536x1024",
+  "bytes": 2064048,
+  "createdAt": "2026-09-30T10:05:42.937Z",
+  "elapsedMs": 44691
+}

@@ -1,0 +1,316 @@
+{
+  "title": "PhysicsOS · 90秒Q版宣传片制作包",
+  "version": "v1",
+  "createdAt": "2026-11-09T16:40:57.745917+00:00",
+  "confirmedBrief": {
+    "duration": 90,
+    "aspectRatio": "16:9",
+    "audience": "物理教师",
+    "characterStyle": "所有人物与IP均为可爱Q版卡通",
+    "workflow": "小云雀生成人物/空屏底片，真实UI独立剪辑，用户最终融合配乐"
+  },
+  "status": "Production assets and shot-by-shot plan; not a completed film",
+  "realUiSources": [
+    "01-real-ui/website-capture.json",
+    "01-real-ui/historical-assets.json",
+    "01-real-ui/CAPTURE-STATUS.md"
+  ],
+  "imageGenerationRecords": [
+    "02-characters/manifest.json",
+    "03-ai-keyframes/manifest.json"
+  ],
+  "knownGap": "No newly captured authenticated product feature screenshot. H assets are historical and labeled; W assets are freshly captured official website.",
+  "licenseNote": "Font licenses included. Verify actual image/music/SFX service terms before public/commercial use. No Apple music, trademark audio or copied film footage supplied.",
+  "files": [
+    {
+      "file": "00-BRIEF.md",
+      "bytes": 3066,
+      "sha256": "91dc756f7f284312e5ebead22951b524ce85501aaf6760c2fd40343904c49279"
+    },
+    {
+      "file": "01-real-ui/CAPTURE-STATUS.md",
+      "bytes": 2969,
+      "sha256": "eb5e407cfca9607c7243b92c47a4cd69e4f41ec10b08f02ed42b0b27178d40b2"
+    },
+    {
+      "file": "01-real-ui/H01-projectile-start.png",
+      "bytes": 882700,
+      "sha256": "972c88f89da91f57a1467fe2612a4060aa4429cf62a6a8bc7e2d8e10ecc7dce8"
+    },
+    {
+      "file": "01-real-ui/H02-projectile-replay.mp4",
+      "bytes": 844521,
+      "sha256": "357135919572351cf6eb12e0de6df5e58b23244f460bb107482894eaad15649f"
+    },
+    {
+      "file": "01-real-ui/H03-projectile-end.png",
+      "bytes": 880579,
+      "sha256": "ad2ebcd0ef606f1737dd14471f9ca969debe7fb7c7aa75a7a247f707968cb726"
+    },
+    {
+      "file": "01-real-ui/H04-experiment-gallery.png",
+      "bytes": 941946,
+      "sha256": "8e1d6f8e9fedcc300c443c514d34b7571ab8235a593d4005404dc36eb146711e"
+    },
+    {
+      "file": "01-real-ui/H05-ai-explanation.png",
+      "bytes": 218935,
+      "sha256": "ff2aa79ada6e778fa8b10a8046f56181b245894330b3eb20367ea65e9488613c"
+    },
+    {
+      "file": "01-real-ui/H06-verified-answer.png",
+      "bytes": 92868,
+      "sha256": "d5ddc1e34ee9597d51c4305149050f17816d0fd1d49bcd2dddab1e2cc2ed31ab"
+    },
+    {
+      "file": "01-real-ui/H06a-verification-detail.png",
+      "bytes": 23197,
+      "sha256": "b368e72bbaa721cb8966649624e7332c617acba35e770238ea06b3922d14e144"
+    },
+    {
+      "file": "01-real-ui/H06b-matching-scene.png",
+      "bytes": 69175,
+      "sha256": "2dfce0aecb77cbbf8067e0b894c235dee60f81aee44059fa47c968bfe11552f3"
+    },
+    {
+      "file": "01-real-ui/H07-paper-setup.png",
+      "bytes": 617467,
+      "sha256": "6e3a005d6113ef1e8b9fa7c2b8ebfa404f866bc6e8d564141d9612144e9da530"
+    },
+    {
+      "file": "01-real-ui/H08-product-home.png",
+      "bytes": 1127316,
+      "sha256": "6ef781dee30ca5e779fd2a52a492e2fc2c67a9324bd3d6f836b9349f36b031ef"
+    },
+    {
+      "file": "01-real-ui/H09-resource-library.png",
+      "bytes": 309264,
+      "sha256": "58bedd34cdb6c980df21896b35e4d27655cdec41eae6bb60a5c59a58f6e9784c"
+    },
+    {
+      "file": "01-real-ui/W00-official-fullpage.png",
+      "bytes": 4448352,
+      "sha256": "761c1a7ad59372fe8e04d8ad71e61d688a56db64e74e069e685dc355ff705323"
+    },
+    {
+      "file": "01-real-ui/W01-official-hero.png",
+      "bytes": 1836629,
+      "sha256": "2a840f776550a2dfcb075450cf819c5265e1a8a32297487161d6d543bd855b11"
+    },
+    {
+      "file": "01-real-ui/W02-official-exploration.png",
+      "bytes": 272364,
+      "sha256": "4703f6d725493422d8ae0af0e903f59ce0d8ce0303d48b57c3106f53c2bc59d6"
+    },
+    {
+      "file": "01-real-ui/W03-official-ai-workflow.png",
+      "bytes": 312612,
+      "sha256": "4707cfe0a67bd91016c7df9b3ad49129cad2e5ec4fafe5cff1c4c0bc0a76328f"
+    },
+    {
+      "file": "01-real-ui/W04-official-closing.png",
+      "bytes": 673406,
+      "sha256": "56148490d26f5af2e9c11e6100869a5ba991ec09bb52e68bf945b1b8972a6c66"
+    },
+    {
+      "file": "01-real-ui/historical-assets.json",
+      "bytes": 8488,
+      "sha256": "3031c0cfb815e86556fa30df5639f5338a0cfd3c2f23e2d0d2f33b0356a6ee73"
+    },
+    {
+      "file": "01-real-ui/website-capture.json",
+      "bytes": 10439,
+      "sha256": "3aeb316cf6c45402f39bbe5fc4ee8d3419c29f702704729750488fc5e4c3594f"
+    },
+    {
+      "file": "01-real-ui/website-findings.md",
+      "bytes": 3089,
+      "sha256": "a95d41c76748aebd2d7152de446faaba2c955c3279b627c25882c66ab2a1204a"
+    },
+    {
+      "file": "02-characters/C01-chibi-cast-master.png",
+      "bytes": 1165323,
+      "sha256": "4a52bb1b6e234a427fc160e34afa044c8e60a7ae84cc7ec53e0638f96159795a"
+    },
+    {
+      "file": "02-characters/C02-teacher-reference.png",
+      "bytes": 1039350,
+      "sha256": "9ac72a921041f1d5e1a8357d77a2a549ff7076dede20031f46f9199c907b56db"
+    },
+    {
+      "file": "02-characters/C03-brand-ip-reference.png",
+      "bytes": 1333262,
+      "sha256": "acc62a47ebf0724185489c2280eb14d446c778900f103b78c35b78d662d24de3"
+    },
+    {
+      "file": "02-characters/C04-official-planet-reference.png",
+      "bytes": 953150,
+      "sha256": "081213f3c3e22022676596d9b43dd6e35070fd25303862fadd2098e6b0374ac4"
+    },
+    {
+      "file": "02-characters/manifest.json",
+      "bytes": 5858,
+      "sha256": "6742959e5f6edaabbac8964d734c5a73e3ee1f485bc6761cb02a05f5e3d735c2"
+    },
+    {
+      "file": "03-ai-keyframes/K01-desk-opening.png",
+      "bytes": 2041225,
+      "sha256": "fb4836d0783d10018c38e75356418e9956a760cc7fd30aba56757449a6f8ac80"
+    },
+    {
+      "file": "03-ai-keyframes/K02-product-reveal-plate.png",
+      "bytes": 1536017,
+      "sha256": "773da8ec4840b7ac8aa1a86bd16d9111ed37dfaa82d7cd912c028228b9e0a9d5"
+    },
+    {
+      "file": "03-ai-keyframes/K03-brand-closing.png",
+      "bytes": 1782964,
+      "sha256": "0e0467255203bc431e7958d64463a2982480e1e4235a5b1c786879edbd048ef4"
+    },
+    {
+      "file": "03-ai-keyframes/K04-curiosity-partner.png",
+      "bytes": 2330541,
+      "sha256": "e54668ad6af5b817e0515e41233442e9944cae4e609fca3440a7427834d0aecf"
+    },
+    {
+      "file": "03-ai-keyframes/K05-classroom-payoff.png",
+      "bytes": 2144458,
+      "sha256": "1660eea36812d8193bbeb5e32ecd96402f8034359c15457d13e34eea2fbb2d24"
+    },
+    {
+      "file": "03-ai-keyframes/manifest.json",
+      "bytes": 7394,
+      "sha256": "8da75d5586a686e9961748cbdd53a0850d64c17efecc2621a5db06d5fa4e92ed"
+    },
+    {
+      "file": "04-90s-director-script.md",
+      "bytes": 18455,
+      "sha256": "de14955b97ded9246b2b2ba031e4fdd6eca0846cdb5472f847a6143f5defc156"
+    },
+    {
+      "file": "05-xiaoyunque-copy-prompts.md",
+      "bytes": 10993,
+      "sha256": "d6f35a7b038df546d0f0cc52b9b1a188b123648b28022e7b5273e3a38135d469"
+    },
+    {
+      "file": "06-music-and-sound-design.md",
+      "bytes": 9867,
+      "sha256": "0076368848ac603eec242d1d06fa345bebdc3dae9c20810e5a15b4e28aea88b9"
+    },
+    {
+      "file": "07-copy-prompts/A01.txt",
+      "bytes": 1062,
+      "sha256": "3fb23cf09b9437c04f3f47d04a4c179a8957f51d9de00688edb1824531c186a9"
+    },
+    {
+      "file": "07-copy-prompts/A02.txt",
+      "bytes": 1133,
+      "sha256": "8eee87a26f866d67f72512df624dd912f9491592e171ab2a316f796ef492bb40"
+    },
+    {
+      "file": "07-copy-prompts/A03.txt",
+      "bytes": 1044,
+      "sha256": "101ef420e8af9937084f253ea0c6a9361cf1f080b50b95eea88a61b917f101bf"
+    },
+    {
+      "file": "07-copy-prompts/A04.txt",
+      "bytes": 1233,
+      "sha256": "cf5cc60c5482f3a1c4d36bf31af72eb369d9a19b07b0a23ce81fe74854192e9e"
+    },
+    {
+      "file": "07-copy-prompts/A05.txt",
+      "bytes": 922,
+      "sha256": "4d52e9b4ef1b99e37717e20a2e8a3f6a21b8797a2da3b42faa22e0655238d0d1"
+    },
+    {
+      "file": "07-copy-prompts/A06.txt",
+      "bytes": 796,
+      "sha256": "f248e9cf37226cad2df5aee44d64ae6500415011e7268df7619d45d24638013a"
+    },
+    {
+      "file": "07-copy-prompts/BGM-en.txt",
+      "bytes": 1794,
+      "sha256": "65c800a083ca6120dba387346b4e37d44d7942fb6748af0860e3c4428337317f"
+    },
+    {
+      "file": "07-copy-prompts/BGM-zh.txt",
+      "bytes": 1887,
+      "sha256": "859b36241e7b581fd1d9b368953c3b32943cd65e24aa5307fab40b7b72d7a297"
+    },
+    {
+      "file": "08-brand/B01-physicsos-logo.png",
+      "bytes": 464362,
+      "sha256": "cac85acda1d1405b054e480f8f24208de41d3586aa822dbee965aa5a5d4b5070"
+    },
+    {
+      "file": "08-brand/JetBrainsMono-VF.ttf",
+      "bytes": 187208,
+      "sha256": "48715a42ec242c21e9f02692891e147d022299a52e48d5e413e1a942193ffeda"
+    },
+    {
+      "file": "08-brand/NotoSansSC-VF.ttf",
+      "bytes": 17772300,
+      "sha256": "a3041811a78c361b1de50f953c805e0244951c21c5bd412f7232ef0d899af0da"
+    },
+    {
+      "file": "08-brand/OFL-JetBrainsMono.txt",
+      "bytes": 4399,
+      "sha256": "b2fe5e8987594e9ffd1d2ca52a2f5d73eb8335243893c5d6254b5ad69269591d"
+    },
+    {
+      "file": "08-brand/OFL-NotoSansSC.txt",
+      "bytes": 4388,
+      "sha256": "1c05c68c34f9708415aada51f17e1b0092d2cea709bf4a94cd38114f9e73d7d9"
+    },
+    {
+      "file": "09-editing-and-delivery.md",
+      "bytes": 5018,
+      "sha256": "1f9cf4c48f9a2faf8b1bc6faa4db3700a0703b717174c1cc8407bf1bf23ee571"
+    },
+    {
+      "file": "PhysicsOS-90s-storyboard-v1.pdf",
+      "bytes": 6757886,
+      "sha256": "b9fc1962e58b51106b0090b33fd72e5f793a55d88737a42b0dfa85d3181caebf"
+    },
+    {
+      "file": "README.md",
+      "bytes": 4628,
+      "sha256": "116624071404961badface314e7c0d85dc47e83f975a253541a0a7b698985b45"
+    },
+    {
+      "file": "checks.json",
+      "bytes": 4269,
+      "sha256": "3c7974c7c59faefc0cb8218f3271473bf503c52fd2758d8305bd6867aadfa957"
+    },
+    {
+      "file": "index.html",
+      "bytes": 15624,
+      "sha256": "d291dbbc317f56197845e941f2b9cac15b86bdba7ce7e32d4738a3b01ba53487"
+    },
+    {
+      "file": "storyboard-contact-sheet.jpg",
+      "bytes": 300615,
+      "sha256": "157137f20f1dd36b6797b0f379d6dd5215f021d04e11bb35bc721934fc4ad750"
+    },
+    {
+      "file": "timeline.csv",
+      "bytes": 4709,
+      "sha256": "64e9377e137c27cde3eaaff2f162733138e2a31628273e5e1581b3fc4a7750ba"
+    },
+    {
+      "file": "timeline.json",
+      "bytes": 10346,
+      "sha256": "d68dc386cca2d9564582b1a4071bddc71b50180da9d2154860249339b2f8ba4e"
+    },
+    {
+      "file": "voiceover-draft.srt",
+      "bytes": 1202,
+      "sha256": "455ea1260fb88e52ad8fc0efdafe2eda3f614586042dc3c24fa97631b62c41c7"
+    },
+    {
+      "file": "voiceover.txt",
+      "bytes": 762,
+      "sha256": "68800399e80f9557375da9752a909d0263f0dbd491fe2c457a2bfeaec6033f7c"
+    }
+  ]
+}

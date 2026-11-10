@@ -1,0 +1,17 @@
+{
+  "verifiedAt": "2026-11-02",
+  "runtime": "107.151.246.59 Docker, localhost SSH preview",
+  "desktop": {"width":1440,"height":1000},
+  "mobile": {"width":390,"height":844},
+  "checks": [
+    "A/B/C u=15,f=10 gives v=30",
+    "A/B/C u=5,f=10 shows virtual image",
+    "A/B/C u=f shows no finite image",
+    "A/B/C record button adds a measurement row",
+    "A/B/C mobile has no horizontal overflow",
+    "A direct 3D apparatus drag changed u from 30 to 18.5",
+    "comparison contains 3 loaded preview images",
+    "no browser JavaScript errors during checks"
+  ],
+  "scope": "Visual interaction demos only; no production integration or deployment"
+}

@@ -1,0 +1,31 @@
+{
+  "name": "physicsos-promo-remotion",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts PhysicsOSPromo out/v3/physicsos-promo.mp4",
+    "stills": "node scripts/stills.mjs",
+    "audio": "node scripts/sfx.mjs && uv run --with numpy --with imageio-ffmpeg python3 scripts/product-film/audio-edit.py src/music-edit.json",
+    "vo": "node scripts/voiceover.mjs",
+    "render4": "remotion render src/index.ts PhysicsOSPromoV4 out/v4/physicsos-promo-v4.mp4",
+    "render4:nobgm": "remotion render src/index.ts PhysicsOSPromoV4 out/v4/physicsos-promo-v4-nobgm.mp4 --props='{\"bgm\":false}'",
+    "render4:draft": "remotion render src/index.ts PhysicsOSPromoV4 out/v4/draft.mp4 --scale=0.5 --jpeg-quality=70",
+    "audio4": "uv run --offline --with numpy --with imageio-ffmpeg python3 scripts/product-film/audio-edit.py src/v4/music-edit.json",
+    "vo4": "node scripts/voiceover-v4.mjs",
+    "capture4": "node scripts/capture-v4.mjs"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.535",
+    "@remotion/light-leaks": "^4.0.535",
+    "@remotion/motion-blur": "^4.0.535",
+    "@remotion/transitions": "^4.0.535",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "remotion": "4.0.535"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.12",
+    "typescript": "5.6.3"
+  }
+}

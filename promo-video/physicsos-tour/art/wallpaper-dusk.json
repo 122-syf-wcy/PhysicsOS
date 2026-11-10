@@ -1,0 +1,11 @@
+{
+  "file": "wallpaper-dusk.png",
+  "prompt": "Calm abstract macOS-style desktop wallpaper at dusk. Soft gradient from warm apricot and rose near the bottom to pale lavender-blue at the top, large softly blurred translucent glass ribbons catching warm evening light, airy, minimal, low contrast, subtle film grain. No text, no logos, no objects, no people, no UI.",
+  "model": "gpt-image-2.6-sunburst",
+  "endpoint": "https://image.haqiuhaqiu.xyz",
+  "requestedSize": "1536x1024",
+  "pixels": "1536x1024",
+  "bytes": 1782759,
+  "createdAt": "2026-11-07T06:22:57.223Z",
+  "elapsedMs": 51472
+}

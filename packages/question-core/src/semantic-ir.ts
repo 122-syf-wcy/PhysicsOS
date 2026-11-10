@@ -8,12 +8,26 @@ export type ElectricModelId =
   | 'point_charge_electrostatic_field'
   | 'charged_particle_bounded_electric_field'
 
+/**
+ * Every mechanics model the engine resolves. The parser must be able to name
+ * all of them: a 弹簧振子 written as 匀加速 produced a confident, wrong answer,
+ * which is worse than the engine refusing it.
+ */
 export type MechanicsModelId =
   | 'uniform_linear_motion'
   | 'uniformly_accelerated_motion'
   | 'projectile_motion'
   | 'newton_second_law'
   | 'inclined_plane'
+  | 'spring_oscillator'
+  | 'spring_statics'
+  | 'simple_pendulum'
+  | 'horizontal_friction'
+  | 'circular_orbit'
+  /* Two bodies exchanging momentum on a frictionless bench. The collision
+     engine already solves this scene; the parser could not name it, so a
+     perfectly good 碰撞 question parsed to nothing. */
+  | 'one_dimensional_collision'
 
 /**
  * Composite-field models: a charged particle feeling more than one of
@@ -127,6 +141,16 @@ export type SemanticTarget =
   | 'friction_force'
   | 'net_force'
   | 'velocity'
+  /* Apparatus targets: what a 弹簧振子 / 单摆 / 卫星 question actually asks for. */
+  | 'amplitude'
+  | 'spring_extension'
+  | 'orbit_radius'
+  | 'linear_speed'
+  | 'centripetal_force'
+  /* Collision targets: what a 碰撞 question actually asks for. */
+  | 'common_velocity'
+  | 'energy_loss'
+  | 'momentum'
   | 'electric_force'
   | 'electric_field'
   | 'electric_field_direction'
@@ -199,6 +223,11 @@ export type SemanticRelation =
   | 'constant_acceleration'
   | 'free_flight'
   | 'on_incline'
+  /* Apparatus relations the mechanics engine already resolves. */
+  | 'hooke_law'
+  | 'small_angle_oscillation'
+  | 'uniform_circular_motion'
+  | 'momentum_conserved'
   | 'charged_particle_in_uniform_electric_field'
   | 'velocity_parallel_E'
   | 'velocity_perpendicular_E'
@@ -248,6 +277,13 @@ export type SemanticAssumption =
   | 'constant_force'
   | 'kinetic_friction'
   | 'static_friction_pending'
+  /* Apparatus assumptions for the mechanics models named above. */
+  | 'ideal_spring'
+  | 'ideal_rope'
+  | 'small_angle'
+  | 'circular_orbit'
+  /** A collision bench: level, frictionless, no external force along the track. */
+  | 'frictionless_surface'
   | 'uniform_electric_field'
   | 'electric_force_only'
   | 'ignore_magnetic_field'
@@ -384,6 +420,35 @@ export interface PhysicsSemanticIR {
   launchAngle?: number
   groundY?: number
   frictionCoefficient?: number
+
+  /**
+   * Models the mechanics engine already solves but the parser could not name,
+   * so a 弹簧振子 / 单摆 / 圆周轨道 question fell through to the generic
+   * uniformly-accelerated model and produced a meaningless answer. Each field
+   * is present only for its own model.
+   */
+  /** Spring constant in N/m — `spring_oscillator` and `spring_statics`. */
+  springStiffness?: number
+  /** Rope or pendulum length in metres — `simple_pendulum`. */
+  pendulumLength?: number
+  /** Orbit radius in metres — `circular_orbit`. */
+  orbitRadius?: number
+  /** Central-body standard gravitational parameter GM, in m³/s² — `circular_orbit`. */
+  gravitationalParameter?: number
+  /** Body mass for a satellite orbit, in kg — `circular_orbit`. */
+  orbitingMass?: number
+  /**
+   * The two bodies of a `one_dimensional_collision` question. A collision is
+   * not a single-body model with extra parameters: the answer depends on both
+   * masses and both velocities, and on whether they stick together.
+   */
+  collisionBodies?: ReadonlyArray<{
+    readonly mass: number
+    /** Initial velocity along the bench, m/s; negative means leftward. */
+    readonly velocity: number
+  }>
+  /** Restitution 0..1: 0 when the stems says 粘在一起, 1 for 弹性碰撞, else partial. */
+  collisionRestitution?: number
 
   /**
    * Circuit topology. Present only for `domain === 'circuit'`. When the text

@@ -1,0 +1,246 @@
+{
+ "v01": {
+  "dur": 3.84,
+  "speechStart": 0.187,
+  "speechEnd": 3.482,
+  "matched": true,
+  "phrases": [
+   {
+    "text": "不是每一所学校，",
+    "at": 0.187
+   },
+   {
+    "text": "都有一间物理实验室。",
+    "at": 1.885
+   }
+  ]
+ },
+ "v02": {
+  "dur": 4.16,
+  "speechStart": 0,
+  "speechEnd": 3.665,
+  "matched": true,
+  "phrases": [
+   {
+    "text": "可是每一个学生，",
+    "at": 0
+   },
+   {
+    "text": "都应该亲眼看见物理。",
+    "at": 1.759
+   }
+  ]
+ },
+ "v03": {
+  "dur": 6.4,
+  "speechStart": 0.195,
+  "speechEnd": 6.4,
+  "matched": true,
+  "phrases": [
+   {
+    "text": "所以，",
+    "at": 0.195
+   },
+   {
+    "text": "我们做了 PhysicsOS。",
+    "at": 0.995
+   },
+   {
+    "text": "打开网页，",
+    "at": 3.341
+   },
+   {
+    "text": "就是一间物理实验室。",
+    "at": 4.494
+   }
+  ]
+ },
+ "v04": {
+  "dur": 6.4,
+  "speechStart": 0.22,
+  "speechEnd": 6.044,
+  "matched": true,
+  "phrases": [
+   {
+    "text": "这里有七十六个可视化实验，",
+    "at": 0.22
+   },
+   {
+    "text": "从力学、",
+    "at": 2.787
+   },
+   {
+    "text": "光学，",
+    "at": 3.849
+   },
+   {
+    "text": "一直到电磁感应。",
+    "at": 4.678
+   }
+  ]
+ },
+ "v05": {
+  "dur": 10.24,
+  "speechStart": 0.215,
+  "speechEnd": 9.8,
+  "matched": true,
+  "phrases": [
+   {
+    "text": "设好高度和初速度，",
+    "at": 0.215
+   },
+   {
+    "text": "点一下运行，",
+    "at": 2.757
+   },
+   {
+    "text": "小球怎么飞、",
+    "at": 4.566
+   },
+   {
+    "text": "飞多久、",
+    "at": 6.334
+   },
+   {
+    "text": "落地多快，",
+    "at": 7.494
+   },
+   {
+    "text": "都算给你看。",
+    "at": 8.863
+   }
+  ]
+ },
+ "v06": {
+  "dur": 3.04,
+  "speechStart": 0.198,
+  "speechEnd": 2.724,
+  "matched": true,
+  "phrases": [
+   {
+    "text": "遇到想不通的题？",
+    "at": 0.198
+   },
+   {
+    "text": "直接问它。",
+    "at": 1.853
+   }
+  ]
+ },
+ "v07": {
+  "dur": 6.4,
+  "speechStart": 0.144,
+  "speechEnd": 6.108,
+  "matched": false,
+  "phrases": [
+   {
+    "text": "它会一步一步讲清楚，",
+    "at": 0.144
+   },
+   {
+    "text": "还能把答案，",
+    "at": 2.274
+   },
+   {
+    "text": "变成一个能动手跑的实验。",
+    "at": 3.552
+   }
+  ]
+ },
+ "v08": {
+  "dur": 7.52,
+  "speechStart": 0.21,
+  "speechEnd": 7.169,
+  "matched": true,
+  "phrases": [
+   {
+    "text": "老师出卷也一样，",
+    "at": 0.21
+   },
+   {
+    "text": "新建、",
+    "at": 2.413
+   },
+   {
+    "text": "审核、",
+    "at": 3.308
+   },
+   {
+    "text": "定稿，",
+    "at": 4.243
+   },
+   {
+    "text": "一个工作台就能搞定。",
+    "at": 5.366
+   }
+  ]
+ },
+ "v09": {
+  "dur": 7.68,
+  "speechStart": 0.171,
+  "speechEnd": 7.68,
+  "matched": false,
+  "phrases": [
+   {
+    "text": "八十八道题、",
+    "at": 0.171
+   },
+   {
+    "text": "九册教材、",
+    "at": 1.725
+   },
+   {
+    "text": "九百多项资源，",
+    "at": 3.019
+   },
+   {
+    "text": "都按教材章节整理好了。",
+    "at": 4.832
+   }
+  ]
+ },
+ "v10": {
+  "dur": 2.4,
+  "speechStart": 0.168,
+  "speechEnd": 2.053,
+  "matched": true,
+  "phrases": [
+   {
+    "text": "如果物理是一束光，",
+    "at": 0.168
+   }
+  ]
+ },
+ "v11": {
+  "dur": 4.16,
+  "speechStart": 0.221,
+  "speechEnd": 3.923,
+  "matched": false,
+  "phrases": [
+   {
+    "text": "我想让它，",
+    "at": 0.221
+   },
+   {
+    "text": "照到没有实验室的地方。",
+    "at": 1.378
+   }
+  ]
+ },
+ "v12": {
+  "dur": 2.88,
+  "speechStart": 0.15,
+  "speechEnd": 2.452,
+  "matched": true,
+  "phrases": [
+   {
+    "text": "PhysicsOS，",
+    "at": 0.15
+   },
+   {
+    "text": "欢迎你来试试。",
+    "at": 1.453
+   }
+  ]
+ }
+}

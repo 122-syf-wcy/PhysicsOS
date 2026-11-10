@@ -52,6 +52,21 @@ DRELOCA*
 .anna-manifest.json
 .agent-teams/
 .dsh-vision-router/
+.mimosa/
+.video_agent/
+.zcodeignore
+
+# Generated review/capture output, not project source.
+/out/
+/demos/official-site/preview-*.png
+/demos/official-site/preview-*.mp4
+/demos/**/screenshots/*.png
+/demos/**/screenshots/*.jpg
+/demos/**/screenshots/*.webp
+/docs/reports/screenshots/**/*.png
+/docs/reports/screenshots/**/*.jpg
+/docs/reports/screenshots/**/*.webp
+/docs/reports/*.pdf
 
 # Raw AI-generated artwork sources (134MB+); compressed copies live under
 # overlays/harness/files/apps/web/public/physicsos/

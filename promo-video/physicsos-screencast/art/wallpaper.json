@@ -1,0 +1,11 @@
+{
+  "file": "wallpaper.png",
+  "prompt": "Calm abstract macOS-style desktop wallpaper. Very soft pale sky-blue and white gradient with gentle, large, blurred translucent glass ribbons and faint light rays from the upper left; airy, clean, minimal, low contrast, slightly cool, plenty of empty space, subtle film grain. Palette: #F4F6F7, #E4EDFD, #CFE0FB with a faint hint of #4176E6. No text, no logos, no objects, no people, no UI.",
+  "model": "gpt-image-2.6-sunburst",
+  "endpoint": "https://image.haqiuhaqiu.xyz",
+  "requestedSize": "1536x1024",
+  "pixels": "1536x1024",
+  "bytes": 1606976,
+  "createdAt": "2026-11-07T04:36:08.484Z",
+  "elapsedMs": 47869
+}

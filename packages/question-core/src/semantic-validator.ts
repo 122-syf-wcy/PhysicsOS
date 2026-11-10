@@ -695,7 +695,32 @@ function validateMechanicsIR(ir: PhysicsSemanticIR): SemanticValidationResult {
   const issues: QuestionParseIssue[] = []
   const ambiguities: QuestionAmbiguity[] = []
 
-  if (ir.knowns.length < 2) {
+  /* A circular orbit is fixed by the central body's GM and one radius: the
+     speed follows as √(GM/r) and the period from the same two, so a stem that
+     states only r is complete whenever the body is named. Counting it against
+     the generic two-knowns rule rejected every satellite question. */
+  const orbitComplete = ir.model === 'circular_orbit'
+    && ir.orbitRadius !== undefined
+    && ir.gravitationalParameter !== undefined
+
+  /* A collision is complete once both bodies carry a mass: the second
+     velocity may legitimately be zero (the 静止 target), which is not a
+     missing known but a stated fact. */
+  const collisionComplete = ir.model === 'one_dimensional_collision'
+    && (ir.collisionBodies?.length ?? 0) >= 2
+    && (ir.collisionBodies ?? []).every(body => Number.isFinite(body.mass) && body.mass > 0)
+
+  /* A collision whose type is unstated has no single answer: the speeds and
+     the energy loss both depend on it. Refusing is the honest outcome. */
+  if (ir.model === 'one_dimensional_collision' && ir.collisionRestitution === undefined) {
+    issues.push({
+      code: 'AMBIGUOUS_COLLISION_TYPE',
+      message: '未说明碰撞性质（弹性/完全非弹性/恢复系数），碰后速度与能量损失不唯一。',
+      severity: 'error',
+    })
+  }
+
+  if (ir.knowns.length < 2 && !orbitComplete && !collisionComplete) {
     issues.push({
       code: 'INSUFFICIENT_KNOWNS',
       message: '已知条件不足，至少需要 2 个已知量。',

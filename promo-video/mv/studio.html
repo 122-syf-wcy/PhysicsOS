@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>PhysicsOS · MV 场景（PDoomVideo 式九章结构）</title>
+<style>
+  /* 确定性契约：禁 transition/animation，一切由 seek(t) 全量重绘 */
+  html, body { width: 100%; height: 100%; margin: 0; background: #04070F; overflow: hidden; }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { max-width: 100%; max-height: 100%; aspect-ratio: 16 / 9; }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="stage" width="1920" height="1080"></canvas></div>
+
+<!-- 中央契约：时间轴 / 角色 / 九章（经典 script，file:// 兼容） -->
+<script src="src/timeline.js"></script>
+<script src="src/qchar.js"></script>
+<script src="src/ch/ch1.js"></script>
+<script src="src/ch/ch2.js"></script>
+<script src="src/ch/ch3.js"></script>
+<script src="src/ch/ch4.js"></script>
+<script src="src/ch/ch5.js"></script>
+<script src="src/ch/ch6.js"></script>
+<script src="src/ch/ch7.js"></script>
+<script src="src/ch/ch8.js"></script>
+<script src="src/ch/ch9.js"></script>
+
+<script>
+(() => {
+  const TL = window.TL;
+  const stage = document.getElementById('stage');
+  const ctx = stage.getContext('2d');
+
+  window.DURATION = TL.DURATION;
+
+  /* ---------- 静态素材预载 ---------- */
+  const ASSETS = [
+    ['aurora', '../assets2/brand-aurora.png'],
+    ['cosmos', '../assets2/cta-cosmos.png'],
+    ['exp',    '../assets/02-experiment-center.png'],
+    ['cir',    '../assets/03-lab-series-circuit.png'],
+  ];
+  window.IMG = {};
+  window.assetsReady = Promise.all(ASSETS.map(([key, src]) => new Promise((res) => {
+    const img = new Image();
+    img.onload = () => { window.IMG[key] = img; res(); };
+    img.onerror = () => { console.warn('asset missing:', src); res(); };
+    img.src = src;
+  })));
+
+  /* ---------- 解题录屏帧（LRU ≤48，按需加载）---------- */
+  const SOLEN = 330;
+  const solCache = new Map();   /* idx -> HTMLImageElement */
+  const solPending = new Map();
+  function solLoad(idx) {
+    if (solCache.has(idx)) return Promise.resolve(solCache.get(idx));
+    if (solPending.has(idx)) return solPending.get(idx);
+    const p = new Promise((res) => {
+      const img = new Image();
+      img.onload = () => {
+        solCache.set(idx, img);
+        solPending.delete(idx);
+        if (solCache.size > 48) solCache.delete(solCache.keys().next().value);   /* FIFO 淘汰 */
+        res(img);
+      };
+      img.onerror = () => { solPending.delete(idx); res(null); };
+      img.src = `sol-jpg/${String(idx).padStart(5, '0')}.jpg`;
+    });
+    solPending.set(idx, p);
+    return p;
+  }
+  window.SOLGET = (idx) => (solCache.has(idx) ? solCache.get(idx) : null);
+  async function solEnsure(t) {
+    if (t < 48 || t >= 60) return;                     /* 仅 CH6 滚动窗口需要 */
+    const base = Math.floor(clamp01((t - 48) / 11) * (SOLEN - 1));
+    await Promise.all([solLoad(base), solLoad(Math.min(SOLEN - 1, base + 1)), solLoad(Math.min(SOLEN - 1, base + 2))]);
+  }
+  const clamp01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
+
+  /* ---------- 渲染一帧（全量重绘，无跨帧状态）---------- */
+  function paint(t) {
+    const ch = TL.chapterAt(Math.min(t, TL.DURATION - 0.001));
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, 1920, 1080);
+    if (window.CH && window.CH[ch.n]) window.CH[ch.n].draw(ctx, Math.min(t, ch.t0 + ch.dur - 0.001));
+  }
+
+  let seeking = null;
+  window.seek = async (t) => {
+    if (seeking) await seeking.catch(() => {});
+    let done;
+    seeking = new Promise((res) => { done = res; });
+    try {
+      await solEnsure(t);
+      paint(t);
+    } finally { done(); seeking = null; }
+  };
+  window.seekSync = (t) => paint(t);   /* 预览/调试用 */
+
+  /* 首帧 */
+  window.assetsReady.then(() => window.seek(0));
+})();
+</script>
+</body>
+</html>

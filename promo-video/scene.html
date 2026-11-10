@@ -1,0 +1,895 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>PhysicsOS · 宣传片场景（3 分钟叙事版）</title>
+<style>
+  /* 确定性契约：禁用 transition/animation，一切位移由 seek(t) 直接设置 */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
+  #stage {
+    position: absolute; left: 50%; top: 50%;
+    width: 1920px; height: 1080px;
+    transform-origin: center center;
+    background: #0A1428; overflow: hidden;
+    font-family: -apple-system, "SF Pro Display", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  }
+  canvas { position: absolute; inset: 0; }
+  #bg { z-index: 10; }
+  #fx { z-index: 30; }
+  #dom { position: absolute; inset: 0; z-index: 20; }
+  .el { position: absolute; left: 0; top: 0; will-change: transform, opacity; }
+  img { -webkit-user-drag: none; }
+
+  /* ---------- 照片幕 ---------- */
+  .photo { position: absolute; inset: 0; overflow: hidden; }
+  .photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .photo-mask {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(6,12,26,.62) 0%, rgba(6,12,26,.12) 34%, rgba(6,12,26,.16) 52%, rgba(6,12,26,.82) 100%);
+  }
+  .photo-vig { position: absolute; inset: 0; box-shadow: inset 0 0 260px rgba(4,8,18,.8); }
+  .narr { color: #fff; font-size: 58px; font-weight: 700; letter-spacing: 2px; line-height: 1.5;
+    text-shadow: 0 2px 8px rgba(4,10,24,.9), 0 4px 30px rgba(4,10,24,.85), 0 0 70px rgba(4,10,24,.6); }
+  .narr em { font-style: normal; color: #9CC3FF; }
+  .scene-tag {
+    color: rgba(232,240,255,.78); font-size: 26px; letter-spacing: 4px; font-weight: 600;
+    padding-left: 20px; border-left: 4px solid #3B82F6;
+  }
+
+  /* ---------- 通用 ---------- */
+  .kicker { display: inline-flex; align-items: center; gap: 12px; background: #2563EB; color: #fff;
+    font-size: 24px; font-weight: 700; letter-spacing: 3px; padding: 10px 26px; border-radius: 10px; }
+  .kicker .dot { width: 10px; height: 10px; border-radius: 50%; background: #AFCBFF; }
+  .h1 { color: #14213D; font-size: 58px; font-weight: 800; letter-spacing: 1px; }
+  .h1 b { color: #2563EB; }
+  .chip { background: #fff; border: 2px solid #D4E3FF; color: #2563EB; font-size: 32px; font-weight: 700;
+    padding: 16px 38px; border-radius: 999px; box-shadow: 0 10px 30px rgba(37,99,235,.10); }
+  .chip.ok { border-color: #BBE3BC; color: #3D9442; }
+  .win { background: #fff; border-radius: 18px; overflow: hidden; border: 1px solid #E8ECF2;
+    box-shadow: 0 30px 80px rgba(20,33,61,.18), 0 4px 14px rgba(20,33,61,.08); }
+  .win-bar { height: 52px; background: #F5F7FA; border-bottom: 1px solid #E8ECF2;
+    display: flex; align-items: center; gap: 10px; padding: 0 20px; }
+  .win-bar i { width: 15px; height: 15px; border-radius: 50%; display: block; }
+  .win-bar i:nth-child(1) { background: #E95B54; }
+  .win-bar i:nth-child(2) { background: #F2A93B; }
+  .win-bar i:nth-child(3) { background: #4CAF50; }
+  .win-url { margin-left: 18px; flex: 1; height: 34px; background: #fff; border: 1px solid #E8ECF2;
+    border-radius: 8px; color: #5F6B7A; font-size: 20px; display: flex; align-items: center; padding: 0 16px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  .win-img { display: block; width: 100%; object-fit: cover; object-position: left top; background: #fff; }
+  .shot-label { position: absolute; left: 0; bottom: 0; background: rgba(20,33,61,.88); color: #fff;
+    font-size: 30px; font-weight: 600; padding: 14px 28px; border-radius: 0 16px 0 0; letter-spacing: 1px; }
+  .shot-label b { color: #8BB4FF; }
+  #realBadge { color: #3D9442; background: #F2FBF4; border: 1.5px solid #BBE3BC; font-size: 24px;
+    font-weight: 700; padding: 10px 22px; border-radius: 999px; }
+  .cat { background: #fff; border: 1.5px solid #E8ECF2; color: #14213D; font-size: 26px; font-weight: 600;
+    padding: 12px 26px; border-radius: 999px; box-shadow: 0 6px 18px rgba(20,33,61,.06); }
+
+  /* ---------- PART 字卡 ---------- */
+  .part-num { font-size: 300px; font-weight: 900; letter-spacing: -8px; color: transparent;
+    -webkit-text-stroke: 3px #AFCBFF; line-height: 1; }
+  .part-line { width: 120px; height: 6px; background: #2563EB; border-radius: 3px; }
+  .part-title { color: #14213D; font-size: 72px; font-weight: 800; letter-spacing: 2px; }
+  .part-title b { color: #2563EB; }
+  .part-en { color: #8A94A6; font-size: 28px; letter-spacing: 10px; font-weight: 700; }
+
+  /* ---------- 品牌段（极光背景上白色大字）---------- */
+  #brandRow { display: flex; align-items: center; gap: 70px; }
+  #brandRow canvas { width: 240px; height: 240px; flex: none; }
+  #brandName { font-size: 130px; font-weight: 800; letter-spacing: -2px; color: #FFFFFF; line-height: 1;
+    text-shadow: 0 4px 26px rgba(4,10,30,.9), 0 2px 8px rgba(4,10,30,.75); }
+  #brandName b { color: #8FC0FF; }
+  #brandSub { color: #F2F7FF; font-size: 42px; font-weight: 600; letter-spacing: 3px;
+    text-shadow: 0 2px 12px rgba(4,10,30,.95), 0 4px 30px rgba(4,10,30,.75); }
+
+  /* ---------- 定位三行（极光背景上白字）---------- */
+  .claim { color: #F2F7FF; font-size: 56px; font-weight: 700; letter-spacing: 2px; display: flex; align-items: center; gap: 28px;
+    text-shadow: 0 2px 12px rgba(4,10,30,.95), 0 4px 30px rgba(4,10,30,.75); }
+  .claim .no { color: #FF9A8F; font-size: 44px; font-weight: 900; }
+  .claim.yes { color: #CFE5FF; font-size: 66px; font-weight: 800; }
+  .claim.yes .no { color: #7FE89A; }
+
+  /* ---------- 题库轮动 ---------- */
+  #bankWin .win-body { position: relative; width: 780px; height: 640px; overflow: hidden; background: #FAFBFD; }
+  .bank-head { display: flex; gap: 10px; padding: 18px 22px 10px; }
+  .bank-tab { font-size: 22px; font-weight: 700; color: #5F6B7A; padding: 8px 18px; border-radius: 999px;
+    background: #F0F3F8; }
+  .bank-tab.on { background: #2563EB; color: #fff; }
+  .bank-scroll { position: absolute; left: 0; top: 76px; width: 100%; }
+  .bank-cat { display: flex; align-items: center; gap: 14px; padding: 20px 24px 12px; color: #2563EB;
+    font-size: 26px; font-weight: 800; letter-spacing: 1px; }
+  .bank-cat::after { content: ""; flex: 1; height: 1.5px; background: #D4E3FF; }
+  .bank-item { display: flex; align-items: center; gap: 16px; margin: 0 22px 12px; background: #fff;
+    border: 1.5px solid #E8ECF2; border-radius: 14px; padding: 16px 20px;
+    box-shadow: 0 4px 14px rgba(20,33,61,.05); }
+  .bank-item .no { min-width: 52px; height: 52px; border-radius: 12px; background: #E8F0FF; color: #2563EB;
+    display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 800; }
+  .bank-item .tx { color: #14213D; font-size: 25px; font-weight: 500; }
+  .bank-item .lv { margin-left: auto; color: #F2A93B; font-size: 20px; letter-spacing: 2px; }
+  .qbtn { display: inline-block; background: #2563EB; color: #fff; font-size: 26px; font-weight: 700;
+    padding: 14px 30px; border-radius: 12px; box-shadow: 0 14px 34px rgba(37,99,235,.30); }
+  #syncBadge { color: #14213D; font-size: 26px; font-weight: 700; }
+
+  /* ---------- 录屏 ---------- */
+  #capWin .win-body { width: 1150px; height: 640px; background: #0E1B33; }
+  #capWin .win-body video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  #capSub { color: #fff; background: rgba(20,33,61,.85); font-size: 34px; font-weight: 600;
+    padding: 16px 36px; border-radius: 14px; letter-spacing: 1px; }
+  #engineBadge { color: #fff; background: #3D9442; font-size: 26px; font-weight: 800; letter-spacing: 1px;
+    padding: 12px 26px; border-radius: 999px; box-shadow: 0 10px 26px rgba(61,148,66,.4); }
+
+  /* ---------- 公益 / CTA ---------- */
+  .ctaNarr { color: #fff; font-size: 76px; font-weight: 800; letter-spacing: 4px; text-align: center;
+    text-shadow: 0 2px 10px rgba(4,10,24,.9), 0 4px 30px rgba(4,10,24,.8); }
+  .ctaNarr b { color: #C9DFFF; }
+  .ctaSub { color: #D8E7FF; font-size: 34px; font-weight: 600; letter-spacing: 6px; text-align: center;
+    text-shadow: 0 2px 10px rgba(4,10,24,.9); }
+  #ctaUrl { background: #fff; color: #2563EB; font-size: 76px; font-weight: 800; padding: 26px 64px;
+    border-radius: 999px; box-shadow: 0 30px 90px rgba(59,130,246,.45);
+    font-family: ui-monospace, "SF Mono", Menlo, "PingFang SC", monospace; }
+  #ctaCursor { display: inline-block; width: 6px; height: 68px; background: #2563EB; margin-left: 8px; }
+  #ctaBtnSub { color: #E4EEFF; font-size: 32px; letter-spacing: 4px; font-weight: 600; text-align: center;
+    text-shadow: 0 2px 10px rgba(4,10,24,.9); }
+  #endMark { color: #9CC3FF; font-size: 34px; letter-spacing: 3px; font-weight: 700;
+    text-shadow: 0 2px 10px rgba(4,10,24,.9); }
+  #cta1 { font-size: 100px; color: #fff; font-weight: 800; letter-spacing: 4px;
+    text-shadow: 0 2px 10px rgba(4,10,24,.9), 0 4px 30px rgba(4,10,24,.8); }
+  #cta1 b { color: #C9DFFF; }
+  #cta2 { color: #D8E7FF; font-size: 36px; font-weight: 600; letter-spacing: 6px;
+    text-shadow: 0 2px 10px rgba(4,10,24,.9); }
+
+  /* ---------- 错题本 ---------- */
+  .mistake { width: 620px; background: #fff; border-radius: 16px; border: 1.5px solid #E8ECF2;
+    box-shadow: 0 16px 40px rgba(4,10,24,.35); padding: 24px 30px; }
+  .mistake .mt { color: #8A94A6; font-size: 22px; font-weight: 700; letter-spacing: 2px; }
+  .mistake .mq { color: #14213D; font-size: 27px; font-weight: 600; margin-top: 8px; }
+  .mistake .wrong { position: absolute; right: 22px; bottom: 14px; color: #E95B54; font-size: 24px;
+    font-weight: 900; border: 3px solid #E95B54; border-radius: 8px; padding: 2px 12px; transform: rotate(-12deg); }
+
+  /* ---------- 转折大字 ---------- */
+  .turn { color: #fff; font-size: 84px; font-weight: 800; letter-spacing: 3px; text-align: center; line-height: 1.4; }
+  .turn em { font-style: normal; color: #6CE89A; }
+
+  /* ---------- 底部字幕条 ---------- */
+  #cap { position: absolute; left: 0; bottom: 64px; color: #fff; background: rgba(10,20,40,.72);
+    border: 1px solid rgba(174,203,255,.25); font-size: 36px; font-weight: 600; letter-spacing: 2px;
+    padding: 18px 44px; border-radius: 16px; white-space: nowrap; backdrop-filter: blur(6px); z-index: 40; }
+  #cap.light { color: #14213D; background: rgba(255,255,255,.9); border-color: #E8ECF2; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="bg" width="1920" height="1080"></canvas>
+  <div id="dom">
+
+    <!-- P0-P2 照片幕 -->
+    <div class="el photo" id="ph0"><img src="assets2/desk-night.png" alt=""><div class="photo-mask"></div><div class="photo-vig"></div></div>
+    <div class="el photo" id="ph1"><img src="assets2/student-puzzle.png" alt=""><div class="photo-mask"></div><div class="photo-vig"></div></div>
+    <div class="el photo" id="ph2"><img src="assets2/textbook-static.png" alt=""><div class="photo-mask"></div><div class="photo-vig"></div></div>
+    <div class="el narr" id="narr0"></div>
+    <div class="el narr" id="narr1"></div>
+    <div class="el narr" id="narr2"></div>
+    <div class="el scene-tag" id="tag0">晚自习 · 21:47 · 教室</div>
+    <div class="el scene-tag" id="tag1">错题本 · 第 37 题</div>
+    <div class="el scene-tag" id="tag2">物理课本 · 第 64 页</div>
+
+    <!-- P3 错题本堆叠 -->
+    <div class="el mistake" id="mk0"><div class="mt">错题 · 3 月 12 日</div><div class="mq">磁场圆周运动 · 半径算错</div><div class="wrong">又错</div></div>
+    <div class="el mistake" id="mk1"><div class="mt">错题 · 3 月 26 日</div><div class="mq">平抛运动：落地时间与水平射程</div><div class="wrong">又错</div></div>
+    <div class="el mistake" id="mk2"><div class="mt">错题 · 4 月 8 日</div><div class="mq">凸透镜成像：物距在一倍焦距内</div><div class="wrong">又错</div></div>
+    <div class="el narr" id="narr3"></div>
+
+    <!-- P5 转折 -->
+    <div class="el turn" id="turn0">如果——每一道题</div>
+    <div class="el turn" id="turn1">都能<em>亲眼看见</em>呢？</div>
+
+    <!-- B0-B2 品牌 -->
+    <div class="el photo" id="phBrand"><img src="assets2/brand-aurora.png" alt=""></div>
+    <div class="el" id="brandRow">
+      <canvas id="atomCv" width="240" height="240" style="position:static;inset:auto;width:240px;height:240px;flex:none"></canvas>
+      <div id="brandName">Physics<b>OS</b></div>
+    </div>
+    <div class="el" id="brandSub">把抽象的物理过程，变成看得见的实验</div>
+    <div class="el chip" id="chip0">可交互</div>
+    <div class="el chip" id="chip1">可观察</div>
+    <div class="el chip" id="chip2">可计算</div>
+    <div class="el chip ok" id="chip3">✓ 可验证</div>
+    <div class="el claim" id="claim0"><span class="no">✗</span>它不是又一本题库 App</div>
+    <div class="el claim" id="claim1"><span class="no">✗</span>也不是又一门网课</div>
+    <div class="el claim yes" id="claim2"><span class="no">✓</span>是一间装得下整个初高中物理的实验室</div>
+
+    <!-- PART 字卡 ×3 -->
+    <div class="el part-num" id="pn0">01</div>
+    <div class="el part-line" id="pl0"></div>
+    <div class="el part-title" id="pt0">实验中心 · <b>十二大类</b></div>
+    <div class="el part-en" id="pe0">THE LAB CENTER</div>
+    <div class="el part-num" id="pn1">02</div>
+    <div class="el part-line" id="pl1"></div>
+    <div class="el part-title" id="pt1">AI 解题教练 · <b>真调引擎</b></div>
+    <div class="el part-en" id="pe1">AI × PHYSICS ENGINE</div>
+    <div class="el part-num" id="pn2">03</div>
+    <div class="el part-line" id="pl2"></div>
+    <div class="el part-title" id="pt2">题海闭环 · <b>做错就进实验室</b></div>
+    <div class="el part-en" id="pe2">PRACTISE LOOP</div>
+
+    <!-- D0 12 分类 -->
+    <div class="el" id="cats"></div>
+    <div class="el" id="catHint">力学 · 光学 · 电磁学 · 近代物理 …… 全部由真实物理引擎驱动</div>
+
+    <!-- D1 截图轮播 -->
+    <div class="el win" id="shotWin">
+      <div class="win-bar"><i></i><i></i><i></i><span class="win-url">physics.dongsiwei.com</span></div>
+      <img class="win-img" id="shot0" src="assets/03-lab-series-circuit.png" alt="">
+      <img class="win-img" id="shot1" src="assets/04-lab-convex-lens.png" alt="" style="position:absolute;left:0;top:52px;">
+      <img class="win-img" id="shot2" src="assets/05-lab-liquid-pressure.png" alt="" style="position:absolute;left:0;top:52px;">
+      <img class="win-img" id="shot3" src="assets/06-lab-melting.png" alt="" style="position:absolute;left:0;top:52px;">
+      <div class="shot-label" id="shotLabel"></div>
+    </div>
+    <div class="el" id="realBadge">✓ 以下均为真实生产界面</div>
+
+    <!-- D3 解答实录（题目→解答滚动 + 实验动画） -->
+    <div class="el win" id="capWin">
+      <div class="win-bar"><i></i><i></i><i></i><span class="win-url">physics.dongsiwei.com — 从题目到解答 · 实录</span></div>
+      <div class="win-body"><video id="capVid" src="capture/agent-solve-cut3.mp4" muted playsinline preload="auto"></video></div>
+    </div>
+    <div class="el" id="capSub"></div>
+    <div class="el" id="engineBadge">✓ ENGINE VERIFIED · 引擎已验证</div>
+
+    <!-- D5 题库轮动 + 闭环 -->
+    <div class="el win" id="bankWin">
+      <div class="win-bar"><i></i><i></i><i></i><span class="win-url">题库 · Question Space</span></div>
+      <div class="win-body">
+        <div class="bank-head">
+          <div class="bank-tab" id="bt0">磁场</div><div class="bank-tab" id="bt1">电场</div>
+          <div class="bank-tab" id="bt2">力学</div><div class="bank-tab" id="bt3">复合场</div>
+          <div class="bank-tab" id="bt4">光学</div><div class="bank-tab" id="bt5">电路</div>
+          <div class="bank-tab" id="bt6">电磁感应</div><div class="bank-tab" id="bt7">机械波</div>
+        </div>
+        <div class="bank-scroll" id="bankScroll"></div>
+      </div>
+    </div>
+    <div class="el" id="bankCount">第 1 / 80 题 · 8 大分类 · 全部真题库</div>
+    <div class="el qbtn" id="qbtn">在实验室打开 →</div>
+    <div class="el" id="arrowLab"></div>
+    <div class="el" id="syncBadge">学习记录 · 跨设备同步</div>
+    <div class="el win" id="chartWin">
+      <div class="win-bar"><i></i><i></i><i></i><span class="win-url">学习记录 · 正确率</span></div>
+      <canvas id="chartCv" width="520" height="300" style="display:block;position:static;inset:auto"></canvas>
+    </div>
+
+    <!-- C0-C3 -->
+    <div class="el ctaNarr" id="pub0">我们相信：物理不该<b>看不见</b></div>
+    <div class="el ctaNarr" id="pub1">所以 PhysicsOS <b>纯公益 · 永久免费</b></div>
+    <div class="el ctaSub" id="pub2">开源 Apache-2.0 · 初高中物理 · 公测开放 · 欢迎共建</div>
+    <div class="el photo" id="phCta"><img src="assets2/cta-cosmos.png" alt=""><div class="photo-mask"></div></div>
+    <div class="el" id="cta1">纯公益 · <b>永久免费</b></div>
+    <div class="el" id="cta2">开源 Apache-2.0 · 初高中物理 · 公测开放</div>
+    <div class="el" id="ctaUrl">physics.dongsiwei.com<span id="ctaCursor"></span></div>
+    <div class="el" id="ctaBtnSub">— 现在，去做你的第一个实验 —</div>
+    <div class="el" id="endMark">PhysicsOS · 让看不见的物理，被看见</div>
+  </div>
+
+  <canvas id="fx" width="1920" height="1080"></canvas>
+  <div class="el" id="cap"></div>
+</div>
+
+<script>
+'use strict';
+/* ================================================================
+   PhysicsOS 宣传片 · 3 分钟叙事版 · 单文件确定性场景
+   契约：window.DURATION；async window.seek(t) 渲染 t 秒帧。
+   每一像素是 t 的纯函数；随机全部来自固定种子 mulberry32。
+   ================================================================ */
+const W = 1920, H = 1080;
+const DUR = 180.0;
+window.DURATION = DUR;
+
+const C = {
+  ink: '#14213D', blue: '#3B82F6', blueDeep: '#2563EB', blueSoft: '#76A5FF',
+  bgLight: '#F7F9FC', grid: '#DCE6F5', gridSoft: '#EEF3FA',
+  green: '#4CAF50', greenDeep: '#3D9442', amber: '#F2A93B', red: '#E95B54',
+  night: '#0A1428', night2: '#14213D', white: '#FFFFFF',
+};
+
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lerp = (a, b, u) => a + (b - a) * u;
+const seg = (t, a, b) => clamp((t - a) / (b - a), 0, 1);
+const easeOutCubic = (u) => 1 - Math.pow(1 - u, 3);
+const easeOutQuint = (u) => 1 - Math.pow(1 - u, 5);
+const easeOutExpo = (u) => (u >= 1 ? 1 : 1 - Math.pow(2, -10 * u));
+const easeInOutCubic = (u) => (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2);
+const easeOutBack = (u) => { const k = 1.70158 * 1.2; return 1 + (k + 1) * Math.pow(u - 1, 3) + k * Math.pow(u - 1, 2); };
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const $ = (id) => document.getElementById(id);
+function set(el, o) {
+  if (!el) return;
+  el.style.opacity = String(o.o ?? 0);
+  el.style.transform = `translate(${o.x ?? 0}px, ${o.y ?? 0}px) scale(${o.s ?? 1}) rotate(${o.r ?? 0}deg)`;
+  el.style.visibility = (o.o ?? 0) <= 0.001 ? 'hidden' : 'visible';
+}
+function fit() {
+  const st = $('stage');
+  const k = Math.min(innerWidth / W, innerHeight / H);
+  st.style.transform = `translate(-50%, -50%) scale(${k})`;
+}
+addEventListener('resize', fit); fit();
+
+/* ---------- 时间轴 ---------- */
+const T = {
+  p0: 0.0, p1: 8.5, p2: 17.0, p3: 25.5, p4: 34.0, p5: 43.0,
+  b0: 52.0, b1: 60.0, b2: 66.0,
+  d0: 72.0, d1: 78.0, d2: 96.0, d3: 102.0, d4: 124.0, d5: 130.0, d5b: 144.0,
+  c0: 156.0, c1: 165.0, c2: 172.0, c3: 178.0, end: DUR,
+  vidStart: 102.2, vidDur: 21.7,
+};
+
+/* ---------- 背景画布 ---------- */
+const fx = $('fx'), ctx = fx.getContext('2d');
+const bg = $('bg'), bctx = bg.getContext('2d');
+const stars = (() => {
+  const rnd = mulberry32(20260930), arr = [];
+  for (let i = 0; i < 130; i++) arr.push({ x: rnd() * W, y: rnd() * H, r: 0.8 + rnd() * 2.2, ph: rnd() * 6.28, sp: 0.6 + rnd() * 1.6 });
+  return arr;
+})();
+function drawNight(t) {
+  const g = bctx.createRadialGradient(W / 2, H * 0.42, 120, W / 2, H * 0.5, 1200);
+  g.addColorStop(0, '#12234A'); g.addColorStop(0.55, C.night2); g.addColorStop(1, C.night);
+  bctx.fillStyle = g; bctx.fillRect(0, 0, W, H);
+  for (const s of stars) {
+    bctx.globalAlpha = 0.25 + 0.45 * (0.5 + 0.5 * Math.sin(t * s.sp + s.ph));
+    bctx.fillStyle = '#AFCBFF';
+    bctx.beginPath(); bctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); bctx.fill();
+  }
+  bctx.globalAlpha = 1;
+}
+function drawLight(alpha) {
+  bctx.globalAlpha = alpha;
+  bctx.fillStyle = C.bgLight; bctx.fillRect(0, 0, W, H);
+  bctx.lineWidth = 1; bctx.strokeStyle = C.gridSoft; bctx.globalAlpha = alpha * 0.8;
+  for (let x = 0; x <= W; x += 60) { bctx.beginPath(); bctx.moveTo(x, 0); bctx.lineTo(x, H); bctx.stroke(); }
+  bctx.strokeStyle = C.grid; bctx.globalAlpha = alpha * 0.9;
+  for (let x = 0; x <= W; x += 300) { bctx.beginPath(); bctx.moveTo(x, 0); bctx.lineTo(x, H); bctx.stroke(); }
+  bctx.globalAlpha = alpha * 0.55;
+  for (let y = 0; y <= H; y += 60) { bctx.beginPath(); bctx.moveTo(0, y); bctx.lineTo(W, y); bctx.stroke(); }
+  bctx.globalAlpha = 1;
+}
+
+/* ---------- 照片幕（Ken Burns + 旁白）---------- */
+function updatePhoto(t, idx, img, narrEl, tagEl, lines, a, b, kbDir) {
+  const inU = easeOutExpo(seg(t, a, a + 0.7));
+  const outU = easeInOutCubic(seg(t, b - 0.55, b));
+  const hold = seg(t, a, b);
+  const kbs = 1.06 + 0.08 * easeInOutCubic(hold);
+  const kbx = kbDir * 36 * easeInOutCubic(hold);
+  const ph = $('ph' + idx);
+  ph.style.opacity = String(inU * (1 - outU));
+  ph.style.visibility = inU <= 0.001 ? 'hidden' : 'visible';
+  img.style.transform = `translate(${kbx}px, 0) scale(${kbs})`;
+  const u1 = easeOutCubic(seg(t, a + 0.55, a + 1.25));
+  const u2 = easeOutCubic(seg(t, a + 1.45, a + 2.15));
+  narrEl.innerHTML = lines.map((s, i) => `<div>${s}</div>`).join('');
+  const fade = Math.min(seg(t, a + 0.55, a + 1.1), 1 - seg(t, b - 0.5, b - 0.1));
+  set(narrEl, { o: fade, x: 180, y: 790 - (lines.length - 1) * 45 + (1 - u1) * 24 });
+  const ut = seg(t, a + 0.35, a + 0.85);
+  set(tagEl, { o: ut * (1 - outU), x: 184, y: 128 });
+}
+function hidePhoto(idx, narrEl, tagEl) {
+  set($('ph' + idx), { o: 0 }); set(narrEl, { o: 0 }); set(tagEl, { o: 0 });
+}
+
+/* ---------- 原子 ---------- */
+const atomCv = $('atomCv'), actx = atomCv.getContext('2d');
+function drawAtom(t, alpha) {
+  actx.clearRect(0, 0, 240, 240);
+  actx.save(); actx.translate(120, 120); actx.globalAlpha = alpha;
+  actx.strokeStyle = '#AFCBFF'; actx.lineWidth = 3;
+  for (let i = 0; i < 3; i++) {
+    actx.save(); actx.rotate((i * Math.PI) / 3);
+    actx.beginPath(); actx.ellipse(0, 0, 100, 40, 0, 0, Math.PI * 2); actx.stroke();
+    actx.restore();
+  }
+  const g = actx.createRadialGradient(-8, -8, 4, 0, 0, 28);
+  g.addColorStop(0, '#8BB4FF'); g.addColorStop(1, C.blueDeep);
+  actx.beginPath(); actx.arc(0, 0, 26, 0, Math.PI * 2); actx.fillStyle = g; actx.fill();
+  for (let i = 0; i < 3; i++) {
+    const a = t * 1.9 + (i * Math.PI * 2) / 3;
+    const rx = 100 * Math.cos(a), ry = 40 * Math.sin(a);
+    const x = rx * Math.cos((i * Math.PI) / 3) - ry * Math.sin((i * Math.PI) / 3);
+    const y = rx * Math.sin((i * Math.PI) / 3) + ry * Math.cos((i * Math.PI) / 3);
+    actx.beginPath(); actx.arc(x, y, 8, 0, Math.PI * 2);
+    actx.fillStyle = i === 0 ? '#6CE89A' : '#F2A93B'; actx.fill();
+  }
+  actx.restore();
+}
+
+/* ---------- P4 公式雨 ---------- */
+const FORMULAS = ['F = ma', 'v = v₀ + at', 'r = mv / qB', 'E = kQ / r²', 'λ = v / f', 'P = UI',
+  'W = Fs', 'q = It', 'T = 2πm / qB', 'f = 1 / T', 'Q = cmΔt', 'P = F / S', 'E = −dΦ/dt', 'F = qv × B'];
+const rain = (() => {
+  const rnd = mulberry32(42), arr = [];
+  for (let i = 0; i < 26; i++) arr.push({
+    f: FORMULAS[i % FORMULAS.length], x: 60 + rnd() * 1800,
+    y0: -200 - rnd() * 900, v: 60 + rnd() * 110, size: 30 + rnd() * 44, rot: (rnd() - 0.5) * 0.5, ph: rnd() * 6.28,
+  });
+  return arr;
+})();
+function drawFormulaRain(t) {
+  for (const r of rain) {
+    const y = ((r.y0 + r.v * t * 0.55) % 1480) - 200;
+    ctx.save();
+    ctx.translate(r.x + Math.sin(t * 0.7 + r.ph) * 16, y);
+    ctx.rotate(r.rot);
+    ctx.globalAlpha = 0.32 + 0.22 * Math.sin(t + r.ph);
+    ctx.fillStyle = '#8BB4FF';
+    ctx.font = `600 ${r.size}px Georgia, "Times New Roman", serif`;
+    ctx.fillText(r.f, 0, 0);
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+}
+
+/* ---------- P5 转折光点 ---------- */
+function drawTurning(t) {
+  const u = seg(t, T.p5 + 0.2, T.p5 + 3.5);
+  const cx = W / 2, cy = 470;
+  const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 260 + 140 * u);
+  g.addColorStop(0, `rgba(140,190,255,${0.75 - 0.5 * u})`);
+  g.addColorStop(0.4, `rgba(59,130,246,${0.30 - 0.2 * u})`);
+  g.addColorStop(1, 'rgba(59,130,246,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(cx, cy, 400 + 140 * u, 0, Math.PI * 2); ctx.fill();
+}
+
+/* ---------- D0 12 分类 ---------- */
+const CATS = ['力学', '电场', '磁场', '电路', '光学', '声学', '机械波', '流体', '热学', '电磁感应', '复合场', '近代物理'];
+const catsEl = $('cats');
+CATS.forEach((name, i) => {
+  const d = document.createElement('div');
+  d.className = 'cat el'; d.textContent = name; d.id = 'cat' + i;
+  catsEl.appendChild(d);
+});
+const catPos = CATS.map((_, i) => ({ x: 1010 + (i % 3) * 330, y: 210 + Math.floor(i / 3) * 132 }));
+
+/* ---------- D1 截图轮播 ---------- */
+const SHOTS = [
+  { el: 'shot0', label: '串联电路 — <b>读数就地显示</b>', in: 80.0, out: 84.5 },
+  { el: 'shot1', label: '凸透镜成像 — <b>光路实时追迹</b>', in: 84.5, out: 89.0 },
+  { el: 'shot2', label: '液体内部压强 — <b>探头数据说话</b>', in: 89.0, out: 93.5 },
+  { el: 'shot3', label: '晶体熔化 — <b>曲线看懂相变</b>', in: 93.5, out: 98.0 },
+];
+
+/* ---------- D5 题库轮动：80 道题从第一题滚到最后一题 ---------- */
+const BANK_DATA = [
+  { cat: '磁场', n: 10, themes: ['带电粒子垂直射入匀强磁场：求轨道半径与周期', '安培力方向判断（左手定则）', '回旋加速器：粒子的回旋周期', '磁场中圆周运动的临界与几何问题', '洛伦兹力应用：质谱仪与速度选择器'] },
+  { cat: '电场', n: 19, themes: ['点电荷的场强叠加与方向判断', '电势、电势差与电势能的换算', '平行板电容器的动态分析', '带电粒子在匀强电场中的偏转', '电场线与等势面的关系判断'] },
+  { cat: '力学', n: 6, themes: ['光滑斜面上物块的加速度与末速度', '平抛运动：落地时间与水平射程', '牛顿第二定律：连接体问题', '匀变速直线运动的图像分析'] },
+  { cat: '复合场', n: 21, themes: ['速度选择器：电场力与洛伦兹力的平衡', '质谱仪中同位素荷质比的计算', '重力场与电场叠加中的圆周运动', '带电粒子在交变场中的分段运动'] },
+  { cat: '光学', n: 6, themes: ['凸透镜成像：物距小于一倍焦距时的像', '凹面镜成像规律与光路图', '平面镜成像：视场与作图', '凸透镜三区成像规律对比'] },
+  { cat: '电路', n: 6, themes: ['串联电路中滑动变阻器对读数的影响', '并联电路功率分配与总电阻', '测电源电动势与内阻的实验', '含容电路的分析与计算'] },
+  { cat: '电磁感应', n: 6, themes: ['导体棒切割磁感线的感应电动势', '楞次定律判定感应电流方向', '法拉第定律：磁通量变化的计算', '电磁感应中的电荷量与能量'] },
+  { cat: '机械波', n: 6, themes: ['弦驻波：波节间距与波长关系', '双源干涉：加强点与减弱点判定', '波的形成与传播：质点振动方向', '多普勒效应：频率变化的判断'] },
+]
+const BANK_TOTAL = BANK_DATA.reduce((s, g) => s + g.n, 0) /* 80 */
+const SUFFIX = ['· 基础', '· 进阶', '· 挑战', '· 综合']
+const BANK_ROW_H = 72, BANK_CAT_H = 64
+const bankRows = []
+BANK_DATA.forEach((g, gi) => {
+  bankRows.push({ type: 'cat', g: gi })
+  for (let k = 0; k < g.n; k++) {
+    bankRows.push({ type: 'item', no: `${gi + 1}-${String(k + 1).padStart(2, '0')}`, tx: g.themes[k % g.themes.length], lv: SUFFIX[k % SUFFIX.length] })
+  }
+})
+const TOTAL_BANK_H_RESERVE = 0 /* 实际高度动态测量 */
+const BANK_VIEW_H = 545
+const BANK_SCROLL_A = 131.0, BANK_SCROLL_B = 152.3
+const bankScroll = $('bankScroll')
+bankRows.forEach((row) => {
+  if (row.type === 'cat') {
+    const d = document.createElement('div')
+    d.className = 'bank-cat'; d.textContent = `${BANK_DATA[row.g].cat} · ${BANK_DATA[row.g].n} 题`
+    bankScroll.appendChild(d)
+  } else {
+    const d = document.createElement('div')
+    d.className = 'bank-item'
+    d.innerHTML = `<div class="no">${row.no}</div><div class="tx">${row.tx}</div><div class="lv">${row.lv}</div>`
+    bankScroll.appendChild(d)
+  }
+})
+/* 布局后动态测量：总高与各分类区间（鲁棒，不依赖手算行高） */
+let TOTAL_BANK_H = bankScroll.scrollHeight || 5000
+let BANK_MAX_Y = Math.max(0, TOTAL_BANK_H - BANK_VIEW_H)
+const CAT_SPANS = [...bankScroll.children]
+  .filter((el) => el.classList.contains('bank-cat'))
+  .map((el) => [el.offsetTop, el.offsetTop + el.offsetHeight])
+
+/* ---------- 学习曲线 ---------- */
+const chartCv = $('chartCv'), cctx = chartCv.getContext('2d');
+const PTS = [0.58, 0.63, 0.60, 0.70, 0.76, 0.74, 0.83, 0.90];
+function drawChart(p) {
+  cctx.clearRect(0, 0, 520, 300);
+  cctx.fillStyle = '#FAFBFD'; cctx.fillRect(0, 0, 520, 300);
+  cctx.strokeStyle = C.gridSoft; cctx.lineWidth = 1;
+  for (let y = 40; y < 300; y += 52) { cctx.beginPath(); cctx.moveTo(0, y); cctx.lineTo(520, y); cctx.stroke(); }
+  const n = Math.max(2, Math.ceil(PTS.length * p));
+  cctx.strokeStyle = C.greenDeep; cctx.lineWidth = 5; cctx.lineJoin = 'round';
+  cctx.beginPath();
+  for (let i = 0; i < n; i++) {
+    const x = 40 + (i / (PTS.length - 1)) * 440;
+    const y = 260 - PTS[i] * 200;
+    i === 0 ? cctx.moveTo(x, y) : cctx.lineTo(x, y);
+  }
+  cctx.stroke();
+  const lx = 40 + ((Math.min(n, PTS.length) - 1) / (PTS.length - 1)) * 440;
+  const ly = 260 - PTS[Math.min(n, PTS.length) - 1] * 200;
+  cctx.beginPath(); cctx.arc(lx, ly, 8, 0, Math.PI * 2); cctx.fillStyle = C.green; cctx.fill();
+  cctx.fillStyle = '#5F6B7A'; cctx.font = '600 22px -apple-system, "PingFang SC", sans-serif';
+  cctx.fillText('正确率', 40, 40);
+  if (p > 0.95) { cctx.fillStyle = C.greenDeep; cctx.font = '800 30px -apple-system, sans-serif'; cctx.fillText('90%', lx - 34, ly - 22); }
+}
+
+/* ---------- 碰撞彩蛋 ---------- */
+function drawCollision(t) {
+  const u = seg(t, T.c2 + 0.15, T.c2 + 1.35);
+  if (u <= 0 || u >= 1) return;
+  const y = 175, meet = 0.5;
+  let p1, p2;
+  if (u < meet) { p1 = lerp(660, 916, u / meet); p2 = lerp(1240, 984, u / meet); }
+  else { p1 = lerp(916, 660, (u - meet) / (1 - meet)); p2 = lerp(984, 1240, (u - meet) / (1 - meet)); }
+  ctx.shadowBlur = 0;
+  ctx.beginPath(); ctx.arc(p1, y, 34, 0, Math.PI * 2);
+  ctx.fillStyle = C.blue; ctx.shadowColor = C.blue; ctx.shadowBlur = 26; ctx.fill();
+  ctx.beginPath(); ctx.arc(p2, y, 34, 0, Math.PI * 2);
+  ctx.fillStyle = '#6CE89A'; ctx.shadowColor = '#6CE89A'; ctx.fill();
+  ctx.shadowBlur = 0;
+  if (u >= meet) {
+    const fu = (u - meet) / (1 - meet);
+    ctx.globalAlpha = 1 - fu;
+    ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 7 * (1 - fu) + 1;
+    ctx.beginPath(); ctx.arc(950, y, 44 + fu * 130, 0, Math.PI * 2); ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+}
+
+/* ---------- 粒子汇聚（品牌登场）---------- */
+const gather = (() => {
+  const rnd = mulberry32(99), arr = [];
+  for (let i = 0; i < 90; i++) {
+    const a = rnd() * Math.PI * 2, d = 500 + rnd() * 700;
+    arr.push({ x0: W / 2 + Math.cos(a) * d, y0: H / 2 + Math.sin(a) * d, d: 6 + rnd() * 14, ph: rnd() * 6 });
+  }
+  return arr;
+})();
+function drawGather(t) {
+  const u = easeOutCubic(seg(t, T.b0, T.b0 + 0.9));
+  if (u <= 0) return;
+  for (const p of gather) {
+    const x = lerp(p.x0, W / 2 + Math.cos(p.ph) * 220, u);
+    const y = lerp(p.y0, H / 2 + Math.sin(p.ph) * 140, u);
+    bctx.globalAlpha = 0.45 * (1 - u);
+    bctx.fillStyle = '#76A5FF';
+    bctx.beginPath(); bctx.arc(x, y, p.d * (1 - u * 0.5), 0, Math.PI * 2); bctx.fill();
+  }
+  bctx.globalAlpha = 1;
+}
+
+/* ---------- 各幕 ---------- */
+function updateP0(t) {
+  updatePhoto(t, 0, $('ph0').querySelector('img'), $('narr0'), $('tag0'),
+    ['这道题，你刷过三遍。', '换个数字——又不会了。'], T.p0, T.p1, 1);
+}
+function updateP1(t) {
+  updatePhoto(t, 1, $('ph1').querySelector('img'), $('narr1'), $('tag1'),
+    ['公式背得滚瓜烂熟，', '一到新题，脑子一片空白。'], T.p1, T.p2, -1);
+}
+function updateP2(t) {
+  updatePhoto(t, 2, $('ph2').querySelector('img'), $('narr2'), $('tag2'),
+    ['课本上的图是<em>死</em>的：', '小滑块印在纸上，永远不动。'], T.p2, T.p3, 1);
+}
+function updateP3(t) {
+  const base = T.p3;
+  const MK = [
+    { id: 'mk0', x: 640, y: 250, r: -4, a: base + 0.2 },
+    { id: 'mk1', x: 600, y: 420, r: 3, a: base + 1.6 },
+    { id: 'mk2', x: 660, y: 590, r: -2, a: base + 3.0 },
+  ];
+  for (const m of MK) {
+    const u = easeOutBack(seg(t, m.a, m.a + 0.6));
+    set($(m.id), { o: Math.min(1, u * 2) * (1 - easeInOutCubic(seg(t, T.p4 - 0.5, T.p4))), x: m.x + (1 - u) * 60, y: m.y, r: m.r });
+  }
+  const fade = Math.min(seg(t, base + 0.5, base + 1.0), 1 - seg(t, T.p4 - 0.55, T.p4 - 0.15));
+  $('narr3').innerHTML = '<div>错题本抄了半本，</div><div>同一个坑——还是再踩。</div>';
+  set($('narr3'), { o: fade, x: 180, y: 810 });
+}
+function updateP4(t) { drawFormulaRain(t - T.p4); }
+function updateP5(t) {
+  const u1 = easeOutQuint(seg(t, T.p5 + 0.4, T.p5 + 1.2));
+  const u2 = easeOutQuint(seg(t, T.p5 + 1.4, T.p5 + 2.2));
+  const out = easeInOutCubic(seg(t, T.b0 - 0.5, T.b0));
+  set($('turn0'), { o: u1 * (1 - out), x: (W - 900) / 2, y: 380 + (1 - u1) * 40 });
+  set($('turn1'), { o: u2 * (1 - out), x: (W - 980) / 2, y: 540 + (1 - u2) * 40 });
+  drawTurning(t);
+}
+function hidePain() {
+  ['narr0', 'narr1', 'narr2', 'narr3', 'tag0', 'tag1', 'tag2', 'turn0', 'turn1', 'mk0', 'mk1', 'mk2'].forEach((id) => set($(id), { o: 0 }));
+  ['ph0', 'ph1', 'ph2'].forEach((id) => set($(id), { o: 0 }));
+}
+function updateB0(t) {
+  const u = easeOutBack(seg(t, T.b0 + 0.3, T.b0 + 0.95));
+  $('phBrand').style.opacity = String(Math.min(1, seg(t, T.b0 + 0.1, T.b0 + 0.6)));
+  $('phBrand').style.visibility = 'visible';
+  const leave = 1 - easeInOutCubic(seg(t, T.b2 - 0.45, T.b2 - 0.05)); /* b2 前 0.45s 整组上移淡出，让位三行定位 */
+  const rise = (1 - leave) * -46;
+  set($('brandRow'), { o: Math.min(1, seg(t, T.b0 + 0.3, T.b0 + 0.65)) * leave, x: 500, y: 300 + (1 - u) * 60 + rise });
+  drawAtom((t - T.b0) * leave, Math.min(1, seg(t, T.b0 + 0.3, T.b0 + 0.65)) * leave);
+  const us = easeOutCubic(seg(t, T.b0 + 1.15, T.b0 + 1.8));
+  set($('brandSub'), { o: us * leave, x: 505, y: 560 + (1 - us) * 26 + rise });
+  const chipX = [560, 759, 958, 1157];
+  ['chip0', 'chip1', 'chip2', 'chip3'].forEach((id, i) => {
+    const uc = easeOutBack(seg(t, T.b0 + 2.0 + i * 0.22, T.b0 + 2.45 + i * 0.22));
+    set($(id), { o: Math.min(1, uc * 2) * leave, x: chipX[i], y: 680 + rise });
+  });
+}
+function updateB2(t) {
+  const out = easeInOutCubic(seg(t, T.d0 - 0.4, T.d0));
+  const u0 = easeOutQuint(seg(t, T.b2 + 0.1, T.b2 + 0.7));
+  const u1 = easeOutQuint(seg(t, T.b2 + 0.9, T.b2 + 1.5));
+  const u2 = easeOutBack(seg(t, T.b2 + 1.9, T.b2 + 2.6));
+  set($('claim0'), { o: u0 * (1 - out), x: 480, y: 560 + (1 - u0) * 30 });
+  set($('claim1'), { o: u1 * (1 - out), x: 480, y: 660 + (1 - u1) * 30 });
+  set($('claim2'), { o: Math.min(1, u2 * 2) * (1 - out), x: 330, y: 780 + (1 - u2) * 30 });
+}
+function partCard(t, i, a, b) {
+  const inU = easeOutExpo(seg(t, a, a + 0.5));
+  const outU = easeInOutCubic(seg(t, b - 0.4, b));
+  const vis = inU * (1 - outU);
+  const row = (id, dy, du) => set($(id), { o: vis * du, x: 150, y: 260 + dy + (1 - easeOutCubic(seg(t, a, a + 0.7))) * 26 });
+  row('pn' + i, 0, 1);
+  const ul = seg(t, a + 0.25, a + 0.7);
+  set($('pl' + i), { o: vis, x: 210, y: 596, s: ul });
+  row('pt' + i, 366, seg(t, a + 0.35, a + 0.8));
+  row('pe' + i, 476, seg(t, a + 0.5, a + 0.95));
+}
+function updateD0(t) {
+  partCard(t, 0, T.d0, T.d1 - 0.2);
+  CATS.forEach((_, i) => {
+    const uc = easeOutBack(seg(t, T.d0 + 0.6 + i * 0.05, T.d0 + 1.0 + i * 0.05));
+    const pos = catPos[i];
+    set($('cat' + i), { o: Math.min(1, uc * 2), x: pos.x, y: pos.y + (1 - uc) * 30 });
+  });
+  const uh = seg(t, T.d0 + 1.4, T.d0 + 1.9);
+  set($('catHint'), { o: uh * (1 - easeInOutCubic(seg(t, T.d1 - 0.4, T.d1))), x: 1010, y: 800 });
+}
+function updateD1(t) {
+  const winX = 620, winY = 250, winW = 1100, winH = 660;
+  const winU = easeOutExpo(seg(t, T.d1 - 0.3, T.d1 + 0.3));
+  set($('shotWin'), { o: winU * (1 - easeInOutCubic(seg(t, T.d2 - 0.35, T.d2))), x: lerp(W + 100, winX, winU), y: winY });
+  $('shotWin').style.width = winW + 'px';
+  const labelEl = $('shotLabel');
+  SHOTS.forEach((s) => {
+    const el = $(s.el);
+    const uin = easeOutCubic(seg(t, s.in - 0.15, s.in + 0.35));
+    const uout = easeInOutCubic(seg(t, s.out - 0.12, s.out + 0.28));
+    el.style.opacity = String(uin * (1 - uout));
+    el.style.height = (winH - 52) + 'px';
+    if (uin > 0.1 && uout < 1) { labelEl.innerHTML = s.label; set(labelEl, { o: uin * (1 - uout) }); }
+  });
+  const ur = seg(t, T.d1 + 0.6, T.d1 + 1.1);
+  set($('realBadge'), { o: ur * (1 - easeInOutCubic(seg(t, T.d2 - 0.35, T.d2))), x: 150, y: 960 });
+}
+function updateD3(t) {
+  const winU = easeOutExpo(seg(t, T.d3 + 0.3, T.d3 + 0.95));
+  const fade = 1 - easeInOutCubic(seg(t, T.d4 - 0.45, T.d4 - 0.05));
+  set($('capWin'), { o: winU * fade, x: 385, y: 290, s: 0.96 + 0.04 * winU });
+  const SUBS = [
+    { a: T.vidStart - 0.2, b: T.vidStart + 3.2, txt: '① 题目原文进对话 —— AI 用时 3 分 31 秒开始解题' },
+    { a: T.vidStart + 3.4, b: T.vidStart + 10.3, txt: '② 思路分析 · 逐步推导 · 解答全过程，滚动可见' },
+    { a: T.vidStart + 10.5, b: T.vidStart + 17.0, txt: '③ 引擎求解：粒子画出的轨迹，就是答案' },
+    { a: T.vidStart + 17.2, b: T.vidStart + 21.7, txt: '④ r = mv/qB —— 引擎校验 17/17 全通过' },
+  ];
+  let subO = 0, subTxt = '';
+  for (const s of SUBS) if (t >= s.a && t < s.b) {
+    subO = Math.min(seg(t, s.a, s.a + 0.3), 1 - seg(t, s.b - 0.25, s.b));
+    subTxt = s.txt;
+  }
+  $('capSub').textContent = subTxt;
+  set($('capSub'), { o: subO, x: (W - 900) / 2, y: 984 });
+  const ub = easeOutBack(seg(t, T.vidStart + 17.4, T.vidStart + 17.9));
+  set($('engineBadge'), { o: Math.min(1, ub * 2) * fade, s: 0.5 + 0.5 * ub, x: 1440, y: 968 });
+}
+function updateD5(t) {
+  const inU = easeOutExpo(seg(t, T.d5 + 0.2, T.d5 + 0.8));
+  const outU = easeInOutCubic(seg(t, T.c0 - 0.4, T.c0));
+  set($('bankWin'), { o: inU * (1 - outU), x: 140, y: 190 });
+  /* 完整遍历滚动：头尾慢、中段快（easeInOutSine），80 题从第一题到最后一题 */
+  const u = easeInOutCubic(seg(t, BANK_SCROLL_A, BANK_SCROLL_B));
+  const yOff = BANK_MAX_Y * u;
+  bankScroll.style.transform = `translateY(${-yOff}px)`;
+  /* 计数器 + 分类 tab 高亮 */
+  const qIdx = Math.min(BANK_TOTAL, Math.max(1, Math.ceil((yOff / Math.max(1, BANK_MAX_Y)) * BANK_TOTAL)));
+  $('bankCount').textContent = `第 ${qIdx} / ${BANK_TOTAL} 题 · 8 大分类 · 全部真题库`;
+  const pos = yOff + BANK_VIEW_H * 0.4;
+  BANK_DATA.forEach((g, gi) => {
+    const [s, e] = CAT_SPANS[gi]
+    const on = pos >= s && pos < e
+    $('bt' + gi).className = 'bank-tab' + (on ? ' on' : '')
+  });
+  const ub = easeOutQuint(seg(t, T.d5 + 0.8, T.d5 + 1.4));
+  set($('bankCount'), { o: ub * (1 - outU), x: 148, y: 872 });
+  const uq = easeOutBack(seg(t, T.d5b + 0.2, T.d5b + 0.8));
+  set($('qbtn'), { o: Math.min(1, uq * 2) * (1 - outU), x: 1040, y: 700, s: 0.8 + 0.2 * uq });
+  const uc = easeOutExpo(seg(t, T.d5b + 0.7, T.d5b + 1.3));
+  set($('chartWin'), { o: uc * (1 - outU), x: 1030, y: 190 });
+  drawChart(seg(t, T.d5b + 1.0, T.d5b + 3.4));
+  const us = seg(t, T.d5b + 2.0, T.d5b + 2.6);
+  set($('syncBadge'), { o: us * (1 - outU), x: 1040, y: 872 });
+  /* 箭头：题目 → 实验室 */
+  if (t >= T.d5b + 0.3 && t < T.c0) {
+    const au = seg(t, T.d5b + 0.4, T.d5b + 1.0);
+    ctx.save();
+    ctx.globalAlpha = au * (1 - outU);
+    ctx.strokeStyle = C.blueDeep; ctx.lineWidth = 10; ctx.lineCap = 'round';
+    const ay = 760;
+    const dash = (t * 260) % 48;
+    ctx.setLineDash([30, 18]); ctx.lineDashOffset = -dash;
+    ctx.beginPath(); ctx.moveTo(930, ay); ctx.lineTo(1010, ay); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = C.blueDeep;
+    ctx.beginPath(); ctx.moveTo(1010, ay - 20); ctx.lineTo(1046, ay); ctx.lineTo(1010, ay + 20); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+}
+function hideParts() {
+  for (let i = 0; i < 4; i++) ['pn' + i, 'pl' + i, 'pt' + i, 'pe' + i].forEach((id) => set($(id), { o: 0 }));
+  CATS.forEach((_, i) => set($('cat' + i), { o: 0 }));
+  ['catHint', 'shotWin', 'realBadge', 'capWin', 'capSub', 'engineBadge', 'bankWin', 'bankCount', 'qbtn', 'chartWin', 'syncBadge'].forEach((id) => set($(id), { o: 0 }));
+  set($('shotLabel'), { o: 0 });
+}
+function updateC0(t) {
+  const out = easeInOutCubic(seg(t, T.c1 - 0.3, T.c1));
+  const u0 = easeOutQuint(seg(t, T.c0 + 0.4, T.c0 + 1.1));
+  const u1 = easeOutQuint(seg(t, T.c0 + 1.5, T.c0 + 2.2));
+  const u2 = seg(t, T.c0 + 2.7, T.c0 + 3.3);
+  set($('pub0'), { o: u0 * (1 - out), x: (W - 1100) / 2, y: 320 + (1 - u0) * 36 });
+  set($('pub1'), { o: Math.min(1, u1) * (1 - out), x: (W - 1100) / 2, y: 480 + (1 - u1) * 36 });
+  set($('pub2'), { o: u2 * (1 - out), x: (W - 1100) / 2, y: 640 });
+}
+function updateC1(t) {
+  const out = easeInOutCubic(seg(t, T.c3 - 0.2, T.c3));
+  $('phCta').style.opacity = String(Math.min(1, seg(t, T.c1 + 0.1, T.c1 + 0.7)) * (1 - out));
+  $('phCta').style.visibility = 'visible';
+  const u1 = easeOutQuint(seg(t, T.c1 + 0.3, T.c1 + 1.0));
+  set($('cta1'), { o: u1 * (1 - out), x: (W - 860) / 2, y: 300 + (1 - u1) * 44 });
+  const u2 = easeOutCubic(seg(t, T.c1 + 0.9, T.c1 + 1.4));
+  set($('cta2'), { o: u2 * (1 - out), x: (W - 780) / 2, y: 452 });
+  const u3 = easeOutBack(seg(t, T.c1 + 1.5, T.c1 + 2.1));
+  set($('ctaUrl'), { o: Math.min(1, u3 * 2) * (1 - out), s: 0.72 + 0.28 * u3, x: (W - 1100) / 2, y: 560 });
+  const blink = t > T.c1 + 2.2 ? (Math.sin((t - T.c1) * Math.PI * 3.4) > 0 ? 1 : 0.12) : 1;
+  $('ctaCursor').style.opacity = String(u3 > 0.6 ? blink : 0);
+  const u4 = seg(t, T.c1 + 2.6, T.c1 + 3.0);
+  set($('ctaBtnSub'), { o: u4 * (1 - out), x: (W - 640) / 2, y: 786 });
+}
+function updateC3(t) {
+  const u5 = seg(t, T.c3 + 0.4, T.c3 + 0.9);
+  set($('endMark'), { o: u5, x: 1380, y: 980 });
+}
+
+/* ---------- 底部字幕条 ---------- */
+function updateCap(t) {
+  const el = $('cap');
+  const list = [
+    { a: 79.4, b: 95.8, txt: '十二大类 · 上百个实验台 —— 这是真实界面，不是概念图', light: true },
+    { a: 131.2, b: 143.8, txt: '80 道内置黄金题 —— 从第一题，滚到最后一题', light: true },
+    { a: 144.6, b: 155.2, txt: '做错了？一键进实验室，改参数亲手验证', light: true },
+  ];
+  for (const c of list) {
+    if (t >= c.a && t < c.b) {
+      el.textContent = c.txt;
+      el.className = c.light ? 'light' : '';
+      const w = el.offsetWidth || 900;
+      set(el, { o: Math.min(seg(t, c.a, c.a + 0.3), 1 - seg(t, c.b - 0.25, c.b)), x: (W - w) / 2 });
+      el.style.left = '0px';
+      return;
+    }
+  }
+  set(el, { o: 0 });
+}
+
+/* ---------- 录屏视频 ---------- */
+const capVid = $('capVid');
+let videoReady = capVid.readyState >= 2;
+capVid.addEventListener('loadeddata', () => { videoReady = true; });
+async function updateVideo(t) {
+  const local = t - T.vidStart;
+  const active = local >= 0 && local < T.vidDur && videoReady && capVid.duration >= 1;
+  if (!active) return;
+  const target = Math.min(local, Math.max(0, capVid.duration - 0.05));
+  if (Math.abs(capVid.currentTime - target) > 1 / 48) {
+    const done = new Promise((res) => {
+      const to = setTimeout(res, 400);
+      capVid.addEventListener('seeked', () => { clearTimeout(to); res(); }, { once: true });
+    });
+    try { capVid.currentTime = target; } catch { return; }
+    await done;
+  }
+}
+
+/* ---------- 主渲染 ---------- */
+async function seek(t) {
+  t = clamp(t, 0, DUR);
+  const pain = t < T.p3;            /* 照片段：深色 */
+  const darkP4 = t >= T.p4 && t < T.b0;  /* 公式雨/转折：深色 */
+  const brandDark = t >= T.b0 && t < T.b0 + 0.1;
+  const ctaDark = t >= T.c0;
+  const dark = pain || darkP4 || brandDark || ctaDark;
+  bctx.clearRect(0, 0, W, H);
+  ctx.clearRect(0, 0, W, H);
+  if (dark) {
+    drawNight(t);
+    const fli = seg(t, T.b0 - 0.14, T.b0);
+    const flo = seg(t, T.c0 - 0.14, T.c0);
+    if (fli > 0 || flo > 0) drawLight(Math.max(fli, flo));
+  } else {
+    drawLight(1);
+  }
+
+  if (t < T.p1) updateP0(t); else hidePhoto(0, $('narr0'), $('tag0'));
+  if (t >= T.p1 && t < T.p2) updateP1(t); else hidePhoto(1, $('narr1'), $('tag1'));
+  if (t >= T.p2 && t < T.p3) updateP2(t); else hidePhoto(2, $('narr2'), $('tag2'));
+  if (t >= T.p3 && t < T.p4) updateP3(t); else ['mk0', 'mk1', 'mk2', 'narr3'].forEach((id) => set($(id), { o: 0 }));
+  if (t >= T.p4 && t < T.b0) updateP4(t);
+  if (t >= T.p5 && t < T.b0) updateP5(t); else if (t < T.p5 || t >= T.b0) { set($('turn0'), { o: 0 }); set($('turn1'), { o: 0 }); }
+
+  if (t >= T.b0 && t < T.d0) {
+    /* 极光背景横跨品牌与定位两段 */
+    $('phBrand').style.opacity = String(Math.min(1, seg(t, T.b0 + 0.1, T.b0 + 0.6)) * (1 - easeInOutCubic(seg(t, T.d0 - 0.45, T.d0))));
+    $('phBrand').style.visibility = 'visible';
+  } else {
+    set($('phBrand'), { o: 0 });
+  }
+  if (t >= T.b0 && t < T.b2) updateB0(t);
+  else { ['brandRow', 'brandSub', 'chip0', 'chip1', 'chip2', 'chip3'].forEach((id) => set($(id), { o: 0 })); actx.clearRect(0, 0, 240, 240); }
+  if (t >= T.b0 && t < T.b0 + 3.4) drawGather(t);
+
+  if (t >= T.b2 && t < T.d0) updateB2(t); else ['claim0', 'claim1', 'claim2'].forEach((id) => set($(id), { o: 0 }));
+
+  if (t >= T.d0 && t < T.d2) updateD0(t);
+  else { CATS.forEach((_, i) => set($('cat' + i), { o: 0 })); ['catHint', 'pn0', 'pl0', 'pt0', 'pe0'].forEach((id) => set($(id), { o: 0 })); }
+  if (t >= T.d1 && t < T.d2) updateD1(t);
+  else { ['shotWin', 'shotLabel', 'realBadge'].forEach((id) => set($(id), { o: 0 })); }
+  partCard(t, 1, T.d2, T.d3 - 0.1); /* PART 2 常驻其区间 */
+  if (!(t >= T.d2 && t < T.d3)) { ['pn1', 'pl1', 'pt1', 'pe1'].forEach((id) => set($(id), { o: 0 })); }
+  if (t >= T.d3 && t < T.d4) updateD3(t); else ['capWin', 'capSub', 'engineBadge'].forEach((id) => set($(id), { o: 0 }));
+  partCard(t, 2, T.d4, T.d5 - 0.1);
+  if (!(t >= T.d4 && t < T.d5)) { ['pn2', 'pl2', 'pt2', 'pe2'].forEach((id) => set($(id), { o: 0 })); }
+  if (t >= T.d5 && t < T.c0) updateD5(t);
+  else { ['bankWin', 'bankCount', 'qbtn', 'chartWin', 'syncBadge'].forEach((id) => set($(id), { o: 0 })); }
+
+  if (t >= T.c0 && t < T.c1) updateC0(t); else ['pub0', 'pub1', 'pub2'].forEach((id) => set($(id), { o: 0 }));
+  if (t >= T.c1 && t < T.c3) updateC1(t); else { set($('phCta'), { o: 0 }); ['cta1', 'cta2', 'ctaUrl', 'ctaBtnSub'].forEach((id) => set($(id), { o: 0 })); $('ctaCursor').style.opacity = '0'; }
+  if (t >= T.c2 && t < T.c3) drawCollision(t);
+  if (t >= T.c3) updateC3(t); else set($('endMark'), { o: 0 });
+
+  updateCap(t);
+  await updateVideo(t);
+}
+window.seek = seek;
+
+/* ---------- 资源就绪 ---------- */
+window.assetsReady = Promise.all(
+  Array.from(document.images).map((img) =>
+    (img.complete && img.naturalWidth > 0) ? Promise.resolve() :
+    new Promise((res) => { img.addEventListener('load', res, { once: true }); img.addEventListener('error', res, { once: true }); })
+  )
+).then(() => (document.fonts ? document.fonts.ready : Promise.resolve()));
+</script>
+</body>
+</html>

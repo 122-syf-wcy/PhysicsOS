@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>PhysicsOS 宣传片 · 实时预览</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; background: #06090F; overflow: hidden;
+    font-family: -apple-system, "PingFang SC", sans-serif; }
+  #frameWrap { position: absolute; inset: 0 0 84px 0; display: flex; align-items: center; justify-content: center; }
+  iframe { width: 100%; height: 100%; border: 0; background: #000; }
+  #bar {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 84px;
+    background: #0D1522; border-top: 1px solid #1D2B44;
+    display: flex; align-items: center; gap: 18px; padding: 0 26px;
+  }
+  button {
+    background: #2563EB; color: #fff; border: 0; border-radius: 10px;
+    font-size: 16px; font-weight: 700; padding: 10px 22px; cursor: pointer;
+  }
+  button.ghost { background: transparent; border: 1px solid #2E4470; color: #AFCBFF; }
+  input[type="range"] { flex: 1; accent-color: #2563EB; height: 6px; }
+  #time { color: #AFCBFF; font-variant-numeric: tabular-nums; font-size: 15px; min-width: 110px; text-align: right; }
+  #hint { color: #5F6B7A; font-size: 13px; }
+</style>
+</head>
+<body>
+<div id="frameWrap"><iframe id="sc" src="scene.html"></iframe></div>
+<div id="bar">
+  <button id="play">▶ 播放</button>
+  <button id="restart" class="ghost">⟲ 重播</button>
+  <input id="seek" type="range" min="0" max="34000" value="0" step="16">
+  <div id="time">0.0 / 34.0s</div>
+  <div id="hint">空格 播放/暂停 · R 重播 · ←/→ 微调</div>
+</div>
+<script>
+const iframe = document.getElementById('sc');
+const playBtn = document.getElementById('play');
+const seekBar = document.getElementById('seek');
+const timeEl = document.getElementById('time');
+const DUR = 34.0;
+let playing = false;
+let t = 0, last = 0, raf = 0;
+
+async function draw(now) {
+  const api = iframe.contentWindow;
+  if (!api || !api.seek) return;
+  if (playing) {
+    if (last) t += Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (t >= DUR) t = 0;
+  } else last = 0;
+  await api.seek(t);
+  seekBar.value = String(Math.round(t * 1000));
+  timeEl.textContent = `${t.toFixed(1)} / ${DUR.toFixed(1)}s`;
+  raf = requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+
+function setPlaying(v) {
+  playing = v;
+  playBtn.textContent = v ? '❚❚ 暂停' : '▶ 播放';
+}
+playBtn.onclick = () => setPlaying(!playing);
+document.getElementById('restart').onclick = () => { t = 0; setPlaying(true); };
+seekBar.oninput = () => { t = Number(seekBar.value) / 1000; };
+addEventListener('keydown', (e) => {
+  if (e.code === 'Space') { e.preventDefault(); setPlaying(!playing); }
+  if (e.key === 'r' || e.key === 'R') { t = 0; setPlaying(true); }
+  if (e.key === 'ArrowLeft') t = Math.max(0, t - 0.5);
+  if (e.key === 'ArrowRight') t = Math.min(DUR, t + 0.5);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,296 @@
+{
+  "requestedUrl": "https://physicsos.dongsiwei.com/",
+  "startedAt": "2026-11-09T15:48:03.817Z",
+  "viewportCssPixels": {
+    "width": 1920,
+    "height": 1080
+  },
+  "deviceScaleFactor": 2,
+  "colorScheme": "light",
+  "locale": "zh-CN",
+  "serviceWorkers": "block",
+  "proxy": "socks5://127.0.0.1:18963",
+  "networkPolicy": {
+    "allowedMethods": [
+      "GET",
+      "HEAD",
+      "OPTIONS"
+    ],
+    "blockedMethods": {},
+    "blockedWebSockets": 0,
+    "noFormSubmission": true,
+    "noControlClicks": true
+  },
+  "authenticity": {
+    "source": "Live public website rendered by Chromium",
+    "domOrStyleOverrides": false,
+    "masks": false,
+    "imageGeneration": false,
+    "compositing": false,
+    "rescaling": false,
+    "screenshotAnimations": "allow; transient reveals settled; native continuous motion retained"
+  },
+  "shots": [
+    {
+      "file": "/Users/dongsiwei/Desktop/PhysicsOS/promo-video/xiaoyunque-90s-v1/01-real-ui/W01-official-hero.png",
+      "subject": "Official hero, navigation, mascot, tagline, and native value strip",
+      "capturedAt": "2026-11-09T15:48:30.997Z",
+      "url": "https://physicsos.dongsiwei.com/",
+      "scrollCssPixels": {
+        "x": 0,
+        "y": 0
+      },
+      "documentCssPixels": {
+        "width": 1920,
+        "height": 3714
+      },
+      "fontsStatus": "loaded",
+      "viewportCssPixels": {
+        "width": 1920,
+        "height": 1080
+      },
+      "deviceScaleFactor": 2,
+      "fullPage": false,
+      "cropped": true,
+      "cropCoordinates": "absolute document CSS pixels; native browser screenshot, not post-processed",
+      "clipCssPixels": {
+        "x": 0,
+        "y": 0,
+        "width": 1920,
+        "height": 1000
+      },
+      "viewportClipCssPixels": {
+        "x": 0,
+        "y": 0,
+        "width": 1920,
+        "height": 1000
+      },
+      "croppingStatus": "Bottom of the 1080px viewport cropped before the next section heading; no content removal or compositing.",
+      "outputPixels": {
+        "width": 3840,
+        "height": 2000
+      },
+      "bytes": 1836629
+    },
+    {
+      "file": "/Users/dongsiwei/Desktop/PhysicsOS/promo-video/xiaoyunque-90s-v1/01-real-ui/W02-official-exploration.png",
+      "subject": "Interactive exploration feature: heading, live wave demo, tabs, and frequency control; not testimonials",
+      "capturedAt": "2026-11-09T15:48:33.980Z",
+      "url": "https://physicsos.dongsiwei.com/",
+      "scrollCssPixels": {
+        "x": 0,
+        "y": 880
+      },
+      "documentCssPixels": {
+        "width": 1920,
+        "height": 3714
+      },
+      "fontsStatus": "loaded",
+      "viewportCssPixels": {
+        "width": 1920,
+        "height": 1080
+      },
+      "deviceScaleFactor": 2,
+      "fullPage": false,
+      "cropped": true,
+      "cropCoordinates": "absolute document CSS pixels; native browser screenshot, not post-processed",
+      "clipCssPixels": {
+        "x": 280,
+        "y": 1000,
+        "width": 1360,
+        "height": 704
+      },
+      "viewportClipCssPixels": {
+        "x": 280,
+        "y": 120,
+        "width": 1360,
+        "height": 704
+      },
+      "croppingStatus": "Native document crop around exploration heading and complete interactive wave demo; excludes testimonial/feedback section.",
+      "outputPixels": {
+        "width": 2720,
+        "height": 1408
+      },
+      "bytes": 272364
+    },
+    {
+      "file": "/Users/dongsiwei/Desktop/PhysicsOS/promo-video/xiaoyunque-90s-v1/01-real-ui/W03-official-ai-workflow.png",
+      "subject": "Live experiment context plus native AI tutor, question-to-experiment, and learning-record feature text",
+      "capturedAt": "2026-11-09T15:48:36.595Z",
+      "url": "https://physicsos.dongsiwei.com/",
+      "scrollCssPixels": {
+        "x": 0,
+        "y": 1050
+      },
+      "documentCssPixels": {
+        "width": 1920,
+        "height": 3714
+      },
+      "fontsStatus": "loaded",
+      "viewportCssPixels": {
+        "width": 1920,
+        "height": 1080
+      },
+      "deviceScaleFactor": 2,
+      "fullPage": false,
+      "cropped": true,
+      "cropCoordinates": "absolute document CSS pixels; native browser screenshot, not post-processed",
+      "clipCssPixels": {
+        "x": 280,
+        "y": 1194,
+        "width": 1360,
+        "height": 671
+      },
+      "viewportClipCssPixels": {
+        "x": 280,
+        "y": 144,
+        "width": 1360,
+        "height": 671
+      },
+      "croppingStatus": "Native crop emphasizes the experiment and three feature cards. This is public marketing text, not a fabricated AI chat or app workflow.",
+      "outputPixels": {
+        "width": 2720,
+        "height": 1342
+      },
+      "bytes": 312612
+    },
+    {
+      "file": "/Users/dongsiwei/Desktop/PhysicsOS/promo-video/xiaoyunque-90s-v1/01-real-ui/W04-official-closing.png",
+      "subject": "Final discovery call-to-action, native mascot, and footer",
+      "capturedAt": "2026-11-09T15:48:39.196Z",
+      "url": "https://physicsos.dongsiwei.com/",
+      "scrollCssPixels": {
+        "x": 0,
+        "y": 2634
+      },
+      "documentCssPixels": {
+        "width": 1920,
+        "height": 3714
+      },
+      "fontsStatus": "loaded",
+      "viewportCssPixels": {
+        "width": 1920,
+        "height": 1080
+      },
+      "deviceScaleFactor": 2,
+      "fullPage": false,
+      "cropped": true,
+      "cropCoordinates": "absolute document CSS pixels; native browser screenshot, not post-processed",
+      "clipCssPixels": {
+        "x": 280,
+        "y": 3126,
+        "width": 1360,
+        "height": 587
+      },
+      "viewportClipCssPixels": {
+        "x": 280,
+        "y": 492,
+        "width": 1360,
+        "height": 587
+      },
+      "croppingStatus": "Native document crop around the closing CTA and footer; excludes the preceding community empty state and sticky navigation.",
+      "outputPixels": {
+        "width": 2720,
+        "height": 1174
+      },
+      "bytes": 673406
+    },
+    {
+      "file": "/Users/dongsiwei/Desktop/PhysicsOS/promo-video/xiaoyunque-90s-v1/01-real-ui/W00-official-fullpage.png",
+      "subject": "Complete public homepage, including genuine loaded empty states",
+      "capturedAt": "2026-11-09T15:48:41.830Z",
+      "url": "https://physicsos.dongsiwei.com/",
+      "scrollCssPixels": {
+        "x": 0,
+        "y": 0
+      },
+      "documentCssPixels": {
+        "width": 1920,
+        "height": 3714
+      },
+      "fontsStatus": "loaded",
+      "viewportCssPixels": {
+        "width": 1920,
+        "height": 1080
+      },
+      "deviceScaleFactor": 2,
+      "fullPage": true,
+      "cropped": false,
+      "cropCoordinates": null,
+      "clipCssPixels": null,
+      "viewportClipCssPixels": null,
+      "croppingStatus": "Uncropped full-page browser screenshot; 1920px CSS width, actual page height, DPR2.",
+      "outputPixels": {
+        "width": 3840,
+        "height": 7428
+      },
+      "bytes": 4448352
+    }
+  ],
+  "gaps": [],
+  "chromium": {
+    "revision": 1234,
+    "executable": "/Users/dongsiwei/Library/Caches/ms-playwright/chromium-1234/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing",
+    "version": "151.0.7922.34"
+  },
+  "httpStatus": 200,
+  "actualUrl": "https://physicsos.dongsiwei.com/",
+  "title": "PhysicsOS · 让好奇心，有处发生",
+  "aiWorkflowText": "一个问题，接住你的好奇\n\n和 AI 助教聊一聊，让问题连上物理引擎。解题，也理解答案从哪里来。\n\nAI 讲题 · 引擎验证\n从题目，走进实验里\n\n把同一个物理场景带进实验室。改个条件、再试一次，规律就藏在变化里。\n\n试题空间 · 交互实验\n每一点进步，都有回响\n\n留下你的实验与学习记录，换个设备继续探索，让每一次发现都有迹可循。\n\n学习记录 · 跨设备同步",
+  "closingText": "✳\n\nTHE NEXT DISCOVERY IS YOURS\n\n世界有很多「为什么」。\n我们一起，试试看。\n\n不必等到实验课。现在，就让好奇心出发。\n\n开启我的探索",
+  "tagline": "让好奇心，有处发生。",
+  "palette": {
+    "--paper": "#f8faf6",
+    "--ink": "#24392e",
+    "--muted": "#788579",
+    "--green": "#42734d",
+    "--lime": "#d8efab"
+  },
+  "imageReadiness": [
+    {
+      "assetPath": "/physicsos/website/assets/logo.png",
+      "complete": true,
+      "naturalWidth": 128,
+      "naturalHeight": 128
+    },
+    {
+      "assetPath": "/physicsos/website/assets/mascot-glass.webp",
+      "complete": true,
+      "naturalWidth": 800,
+      "naturalHeight": 800
+    },
+    {
+      "assetPath": "/physicsos/website/assets/mascot-glass.webp",
+      "complete": true,
+      "naturalWidth": 800,
+      "naturalHeight": 800
+    },
+    {
+      "assetPath": "/physicsos/website/assets/logo.png",
+      "complete": true,
+      "naturalWidth": 128,
+      "naturalHeight": 128
+    }
+  ],
+  "feedbackStatus": "Loaded genuine empty state; not loading and not invented testimonials.",
+  "communityStatus": "Loaded genuine empty state; not invented contributors/projects.",
+  "completedAt": "2026-11-09T15:48:43.422Z",
+  "visualVerification": {
+    "status": "passed; all five final PNGs visually inspected with the Read tool",
+    "checks": [
+      "Hero tagline, mascot, navigation and value strip are complete and legible.",
+      "Exploration shot contains the live wave demo, not testimonials.",
+      "AI/question-to-experiment feature copy is present; no clipped sticky navigation overlaps the crop.",
+      "Closing CTA, mascot and footer are complete.",
+      "Full-page image has no blank reveal sections or loading feedback; genuine empty states are preserved."
+    ],
+    "files": [
+      "/Users/dongsiwei/Desktop/PhysicsOS/promo-video/xiaoyunque-90s-v1/01-real-ui/W01-official-hero.png",
+      "/Users/dongsiwei/Desktop/PhysicsOS/promo-video/xiaoyunque-90s-v1/01-real-ui/W02-official-exploration.png",
+      "/Users/dongsiwei/Desktop/PhysicsOS/promo-video/xiaoyunque-90s-v1/01-real-ui/W03-official-ai-workflow.png",
+      "/Users/dongsiwei/Desktop/PhysicsOS/promo-video/xiaoyunque-90s-v1/01-real-ui/W04-official-closing.png",
+      "/Users/dongsiwei/Desktop/PhysicsOS/promo-video/xiaoyunque-90s-v1/01-real-ui/W00-official-fullpage.png"
+    ]
+  },
+  "reproduction": "Run node promo-video/xiaoyunque-90s-v1/tools/capture-website.mjs from the repository root with the existing SOCKS proxy available and these target filenames absent. The script refuses to overwrite existing assets."
+}

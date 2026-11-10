@@ -1,0 +1,43 @@
+{
+  "tool": "mcp__baocode__generate_image",
+  "model": "@provider-3/gpt-image-2.5-sunburst",
+  "quality": "high",
+  "requestedSize": "1920x1080",
+  "aspectRatio": "16:9",
+  "status": "Generated still keyframes only. Not video clips and not product UI evidence.",
+  "assets": [
+    {
+      "file": "K01-desk-opening.png",
+      "actualPixels": [1920, 1080],
+      "references": ["../02-characters/C01-chibi-cast-master.png"],
+      "prompt": "PhysicsOS宣传片开场故事关键帧。16:9横幅，严格以参考图的圆眼镜栗发教师作为同一角色，所有人物均为可爱3头身Q版卡通插画，不是真人不写实。深蓝夜色的整洁物理备课书桌，教师在画面左三分之一处坐着看无文字备课本，轻托腮好奇思考，保持灰蓝外套和奶白针织衫、圆眼镜。桌上小台灯、一只小单摆模型、两本书；右侧打开的无品牌笔记本电脑纯浅蓝空白屏幕，不含任何UI。右上大面积深藏青留白，后期添加文字。温暖台灯对比克制蓝色窗光，干净精致卡通动画，柔和阴影，清晰层次，安静高级。不要其他人物、文字、公式、logo、水印、粒子或虚构产品界面。"
+    },
+    {
+      "file": "K02-product-reveal-plate.png",
+      "actualPixels": [1920, 1080],
+      "references": ["../02-characters/C01-chibi-cast-master.png"],
+      "prompt": "PhysicsOS宣传片产品亮相关键帧，16:9，1920x1080。全图为参考图一致的精致Q版可爱卡通插画，不要真人或写实皮肤。极简深藏青到蓝黑渐变发布舞台，克制蓝色边缘光，没有星空粒子霓虹。中央是完整正对镜头的大型空白展示屏，矩形区域从x=240,y=110到x=1600,y=850，细圆角暗蓝框、纯净蓝白空白内屏，严格禁止任何UI、图标、文字、数据或logo，留给后期叠加真实界面。屏幕不能扭曲，要完整无遮挡。参考图右侧的品牌小物理老师在右下外侧，缩小成3头身Q版，保留米色可爱贴布帽、黑色长卷发、大棕眼、淡黄T恤、棕色短裤、奶白袜鞋，挥手介绍产品，教鞭不挡屏幕。脚边是同一只圆胖灰白虎斑猫，红棕铃铛项圈。人物高度约300像素，屏幕是绝对主角。高级留白，清楚轮廓，蓝白主色与人物淡黄点缀。禁止文字、字母、水印、品牌logo、虚构产品界面、机器人、真人，禁止更换人物衣服和小猫颜色。",
+      "reviewNote": "Rendered character approaches the screen right edge. Keep important UI away from that edge; direct cut to full-screen real UI is preferred if screen replacement is unstable. Requested geometry is a prompt, not a measured resulting rectangle."
+    },
+    {
+      "file": "K03-brand-closing.png",
+      "actualPixels": [1920, 1080],
+      "references": ["../02-characters/C01-chibi-cast-master.png"],
+      "prompt": "PhysicsOS产品宣传片【结尾情绪关键帧】，1920x1080，16:9，所有人物和小猫都是参考图同款的Q版可爱卡通，不出现真人，不出现拟真皮肤。清晨明亮蓝白调的极简物理探索教室，画面下方两侧分别放同一位Q版戴圆框眼镜的成年教师（参考左侧：栗色短发、奶白针织衫、灰蓝外套、深蓝长裤）与同一位品牌小物理老师（参考右侧：米色贴布帽、黑色微卷长发、淡黄T恤、棕色短裤、米白鞋），两个人都3头身、大头圆润小身体，同一个风格，不变衣服，不换脸。戴眼镜老师在左下拿着无文字的备课本，品牌IP在右下微笑抬手邀请探索，灰白条纹小猫坐在脚边。画面上半部分与中央60%区域是完整干净的淡蓝白留白，供后期叠加真实logo、PhysicsOS与口号，不要在那里生成任何东西。背景只在边缘暗示窗户、一个很小的单摆模型、简洁透镜模型，没有公式和任何实验数据，没有学生群像，没有漂浮全息UI。温暖有希望、清晰自然的晨光，优雅克制，蓝白主色，品牌人物淡黄点缀。不要文字、字母、标志、水印、照片、长腿成人写实比例。"
+    },
+    {
+      "file": "K04-curiosity-partner.png",
+      "actualPixels": [1920, 1080],
+      "references": ["../02-characters/C02-teacher-reference.png", "../02-characters/C03-brand-ip-reference.png"],
+      "prompt": "PhysicsOS宣传片故事关键帧，所有角色都是参考一致的可爱Q版卡通，绝对不写实，不要真人。16:9横幅，1920x1080，温柔精致卡通插画，蓝白+淡黄。参考1的同一位戴圆眼镜栗发Q版成年教师坐在画面左侧的书桌旁，穿相同奶白针织衫与灰蓝外套，3头身比例，表情从思考到明亮好奇。参考2的同一位品牌小物理老师和灰白虎斑小猫站在书桌右边，保持米色动物贴布帽、长黑卷发、淡黄T恤、棕短裤，3头身圆润小身体。IP抬起一只手邀请教师一起探索，猫抬头看。场景为暖色小台灯加蓝色清晨窗光的简洁备课室，桌上有无文字备课本、一只单摆模型，电脑在两个人中间，屏幕朝向镜头但显示纯浅蓝空白，不能生成任何UI或文字。画面上半中央留出大块干净深蓝到浅蓝的渐变留白，后期可以放一句字幕。人物之间空间分离、无接触，手势清晰，镜头为稳定中景。无文字、公式、logo、水印、学生、其他角色、全息投影或粒子。人物身份与服装严格匹配参考1和参考2，不能混脸。"
+    },
+    {
+      "file": "K05-classroom-payoff.png",
+      "actualPixels": [1920, 1080],
+      "references": ["../02-characters/C02-teacher-reference.png", "../02-characters/C03-brand-ip-reference.png"],
+      "prompt": "PhysicsOS教师产品宣传片的课堂情绪关键帧，16:9，1920x1080，全图是非常可爱Q版卡通插画，不出现真人或写实皮肤。使用参考1同一位栗发圆眼镜教师，在明亮、蓝白简洁的物理教室左下角站立，手持无文字备课本、灰蓝外套与奶白针织衫，3头身大头短小身体，自信愉快。参考2的品牌小物理老师与同一只灰白虎斑猫在右下角，保留全部米色贴布帽/黑卷发/淡黄T恤/棕短裤特征，3头身，在一旁可爱地鼓励。后方中央是一块面对镜头、完全平直无透视的极简浅蓝白大屏幕，占画面宽约65%，其内部严格纯色空白；不要在屏幕生成UI、实验轨迹、文字或logo，此处后期将叠加真实产品截图。画面下缘只有三颗非常简化的Q版学生后脑勺轮廓（无脸、无姓名、无学校标识），暗示课堂聆听；学生也为Q版卡通，不像真实学生，不要提供任何个人信息。环境仅有窗光、单摆与透镜小模型轮廓，干净温暖、不杂乱。主体比例适中不挡住中央屏幕。没有任何文字、公式、浮空科技面板、水印、logo或写实照片。原角色身份和衣服不能改变。"
+    }
+  ],
+  "retryNote": "Two initial keyframe attempts returned connection/TLS failures and did not produce deliverables. Successful files above are the retained version; no failed image is represented as complete.",
+  "technicalNote": "All stated pixel dimensions were verified on saved image files. Empty display regions are post-production plates, not actual product interface. No AI physics animation is treated as verified simulation evidence."
+}

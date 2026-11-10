@@ -1,0 +1,27 @@
+《PhysicsOS 的一天》PhysicsOS 完整功能导览 · 第三方素材与来源
+
+Product (the user's own material)
+- PhysicsOS interface: redrawn in HTML/SVG from the live site https://physics.dongsiwei.com (reference capture 2026-11-06 and 2026-11-07, read-only); no screenshots in the film.
+- Lab pages: scene trees, inspector values and derived quantities as the live pages showed them on 2026-11-07. Their 3D stages did not finish loading during capture, so the stages are drawn in the product's own 正视 (front) view.
+- AI trace: the real tool calls behind the answer to "为什么洛伦兹力不做功？" (physics_create_experiment → physics_simulate → physics_observe ×3 → physics_scene_command ×2), cut before the failed code-experiment row. The answer itself is the product's production answer from 2026-11-06.
+- Exam workbench, resource library and experiment-upload pages: texts and counts as shown live on 2026-11-07 (88 道题 · 0 份真题 · 9 册教材 · 926 项资源; three drafts; four finalised files).
+- PhysicsOS product images used inside the redrawn UI (experiment thumbnails, mascot illustrations, portal images, library icon, empty-state paper, brand mark): from the PhysicsOS repository, overlays/harness/files/apps/web/public/physicsos/ (Apache License 2.0).
+
+Voice
+- Narration: Xiaomi MiMo mimo-v2.5-tts, preset voice 茉莉 (https://mimo.mi.com/models/zh-CN/mimo-v2.5-tts), synthesised with the user's API key. Checked line by line with faster-whisper "small" (Systran, MIT; model files from the ModelScope mirror), and again on the final mix.
+
+Music
+- Piano: "Salamander Grand Piano V3" by Alexander Holm, licensed under CC BY 3.0 (https://creativecommons.org/licenses/by/3.0/)
+- Samples (CC0): Karoryfer Samples / sfzinstruments, Versilian Community Sample Library (Versilian Studios)
+- Score composed for this film; the pulse-wave voice, kick drum, friction, foley and room tone are synthesised in code.
+
+Images
+- Desktop wallpapers (morning, dusk, night): generated for this film with gpt-image-2.6-sunburst (the user's image service).
+
+Fonts
+- Noto Sans SC (Google), SIL Open Font License 1.1 — fonts/OFL-NotoSansSC.txt; subset to the characters the film uses.
+- JetBrains Mono (JetBrains), SIL Open Font License 1.1 — fonts/OFL-JetBrainsMono.txt; the trace's tool names and arguments.
+- KaTeX_Main and KaTeX_Math (KaTeX), SIL Open Font License 1.1 — the same files the product ships for its formulas.
+
+Tools
+- Rendering, mixing and mastering tools from the Lemo-Opuscar style library (MIT), style "Living Screencast".

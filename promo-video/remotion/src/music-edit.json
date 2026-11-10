@@ -1,0 +1,12 @@
+{
+  "source": "public/audio/music/dreaming-big.mp3",
+  "out": "public/audio/music/promo-edit.wav",
+  "bpm": 134.983,
+  "firstDownbeat": 1.7701,
+  "segments": [
+    { "fromBar": 7, "toBar": 12, "why": "安静前奏 5 小节：两张教室插画 + 开场两句" },
+    { "fromBar": 15, "toBar": 54, "why": "渐强段起于品牌亮相；第 40 小节的抬升落在资源库数字；第 48 小节回落托住口号；53 起原曲收尾" }
+  ],
+  "duration": 78.232,
+  "fadeOutSeconds": 2.2
+}

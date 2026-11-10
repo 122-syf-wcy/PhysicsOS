@@ -1,0 +1,259 @@
+.lab-chart {
+  position: relative;
+  isolation: isolate;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  background: #fff;
+  color: #647080;
+  color-scheme: light;
+  font-family: inherit;
+  font-size: 10.5px;
+  line-height: 1.35;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.lab-chart .lab-chart__svg {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 4px;
+  outline: none;
+  touch-action: pan-y;
+}
+
+.lab-chart .lab-chart__svg:focus-visible {
+  outline: 2px solid #77869b;
+  outline-offset: -2px;
+}
+
+.lab-chart .lab-chart__tick,
+.lab-chart .lab-chart__axis-label,
+.lab-chart .lab-chart__legend-label,
+.lab-chart .lab-chart__direct-label,
+.lab-chart .lab-chart__focus-label,
+.lab-chart .lab-chart__empty {
+  fill: #647080;
+  stroke: none;
+  font-family: inherit;
+  font-weight: 400;
+  pointer-events: none;
+}
+
+.lab-chart .lab-chart__tick {
+  font-size: 9.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lab-chart .lab-chart__axis-label {
+  fill: #6a7482;
+  font-size: 9.5px;
+}
+
+.lab-chart .lab-chart__legend-label,
+.lab-chart .lab-chart__direct-label {
+  fill: #596575;
+  font-size: 10.5px;
+}
+
+.lab-chart .lab-chart__focus-label {
+  font-size: 10.5px;
+  font-style: italic;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+.lab-chart .lab-chart__empty {
+  font-size: 11px;
+}
+
+.lab-chart .lab-chart__grid-line,
+.lab-chart .lab-chart__zero,
+.lab-chart .lab-chart__focus-guide,
+.lab-chart .lab-chart__cursor-line {
+  fill: none;
+  stroke-width: 1px;
+  stroke-dasharray: none;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.lab-chart .lab-chart__grid-line {
+  stroke: #edf0f4;
+}
+
+.lab-chart .lab-chart__zero {
+  stroke: #e0e5ec;
+}
+
+.lab-chart .lab-chart__focus-guide {
+  stroke: #b9c1cc;
+}
+
+.lab-chart .lab-chart__series,
+.lab-chart .lab-chart__key-line {
+  fill: none;
+  stroke-width: 2px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.lab-chart .lab-chart__cursor-line {
+  stroke: #acb6c4;
+}
+
+.lab-chart.lab-chart--inspecting .lab-chart__cursor-line {
+  stroke: #7e8b9e;
+}
+
+.lab-chart .lab-chart__dot {
+  stroke: #fff;
+  stroke-width: 2px;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.lab-chart .lab-chart__hit {
+  fill: transparent;
+  stroke: none;
+  pointer-events: all;
+  cursor: crosshair;
+  touch-action: pan-y;
+}
+
+.lab-chart .lab-chart__tooltip {
+  position: absolute;
+  z-index: 2;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: min(260px, calc(100% - 12px));
+  max-height: calc(100% - 8px);
+  padding: 7px 9px;
+  overflow: auto;
+  border: 1px solid #dfe5ed;
+  border-radius: 7px;
+  background: #fff;
+  box-shadow: 0 3px 12px rgb(31 49 76 / 9%);
+  color: #374455;
+  font-size: 10.5px;
+  line-height: 1.4;
+  pointer-events: none;
+}
+
+.lab-chart .lab-chart__tooltip[hidden],
+.lab-chart .lab-chart__tooltip-status[hidden] {
+  display: none;
+}
+
+.lab-chart .lab-chart__tooltip-axis {
+  margin-bottom: 5px;
+  color: #667181;
+  font-size: 9.5px;
+  overflow-wrap: anywhere;
+}
+
+.lab-chart .lab-chart__tooltip-rows {
+  display: grid;
+  gap: 4px;
+}
+
+.lab-chart .lab-chart__tooltip-row {
+  display: grid;
+  grid-template-columns: 18px max-content minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+}
+
+.lab-chart .lab-chart__swatch {
+  display: block;
+  width: 18px;
+  height: 0;
+  border-top-width: 2px;
+  border-top-style: solid;
+}
+
+.lab-chart .lab-chart__swatch--dashed {
+  border-top-style: dashed;
+}
+
+.lab-chart .lab-chart__tooltip-value {
+  color: #273548;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.lab-chart .lab-chart__tooltip-label {
+  min-width: 0;
+  color: #5d6979;
+  overflow-wrap: anywhere;
+}
+
+.lab-chart .lab-chart__tooltip-status {
+  margin-top: 5px;
+  color: #667181;
+  font-size: 9px;
+}
+
+@media (forced-colors: active) {
+  .lab-chart {
+    background: Canvas;
+    color: CanvasText;
+  }
+
+  .lab-chart .lab-chart__tick,
+  .lab-chart .lab-chart__axis-label,
+  .lab-chart .lab-chart__legend-label,
+  .lab-chart .lab-chart__direct-label,
+  .lab-chart .lab-chart__focus-label,
+  .lab-chart .lab-chart__empty {
+    fill: CanvasText;
+  }
+
+  .lab-chart .lab-chart__series,
+  .lab-chart .lab-chart__key-line {
+    stroke: CanvasText;
+  }
+
+  .lab-chart .lab-chart__grid-line,
+  .lab-chart .lab-chart__zero,
+  .lab-chart .lab-chart__focus-guide {
+    stroke: GrayText;
+  }
+
+  .lab-chart .lab-chart__cursor-line,
+  .lab-chart.lab-chart--inspecting .lab-chart__cursor-line {
+    stroke: Highlight;
+  }
+
+  .lab-chart .lab-chart__dot {
+    fill: CanvasText;
+    stroke: Canvas;
+  }
+
+  .lab-chart .lab-chart__focus-label {
+    stroke: Canvas;
+  }
+
+  .lab-chart .lab-chart__tooltip {
+    border-color: CanvasText;
+    background: Canvas;
+    box-shadow: none;
+  }
+
+  .lab-chart .lab-chart__tooltip-axis,
+  .lab-chart .lab-chart__tooltip-value,
+  .lab-chart .lab-chart__tooltip-label,
+  .lab-chart .lab-chart__tooltip-status {
+    color: CanvasText;
+  }
+}

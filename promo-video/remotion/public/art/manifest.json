@@ -1,0 +1,90 @@
+[
+  {
+    "file": "k2-1.png",
+    "model": "gpt-image-2.5-sunburst",
+    "endpoint": "https://image.haqiuhaqiu.xyz/v1/images/edits",
+    "reference": "overlays/harness/files/apps/web/design-assets/splash/splash-campus-wide-master.png",
+    "size": "1536x1024",
+    "prompt": "A sunlit Chinese school corridor with large windows. A soft golden beam of light pours in from the window on the right. The boy and the girl stand side by side looking toward the light with hopeful smiles; the girl holds a notebook, the cat sits at their feet looking up. Characters fill the right ~45% of the frame; the left half is mostly empty bright white wall and light haze for typography. Wide 16:9. Keep EXACTLY the same three characters from the reference image, same faces, hairstyles, outfits and art style: the boy has black short slightly tousled hair and a cream knit short-sleeve tee with a buttoned placket; the girl has long dark wavy hair with bangs, clear round glasses, a navy striped top and a dark knit cardigan; the cat is a silver tabby with a cream patch on its back, white muzzle and chest, amber round eyes, pink nose, dark tail tip and a pale blue collar. Style: bright watercolour cartoon, large expressive eyes, soft rounded faces, clean fine linework, warm daylight, white-leaning airy background. Not photographic, not 3D, not chibi. No text, no letters, no logo, no watermark.",
+    "bytes": 1848651,
+    "elapsedMs": 37083,
+    "createdAt": "2026-10-31T11:09:55.838Z"
+  },
+  {
+    "file": "k1-1.png",
+    "model": "gpt-image-2.5-sunburst",
+    "endpoint": "https://image.haqiuhaqiu.xyz/v1/images/edits",
+    "reference": "overlays/harness/files/apps/web/design-assets/splash/splash-campus-wide-master.png",
+    "size": "1536x1024",
+    "prompt": "A plain ordinary Chinese classroom with simple wooden desks and NO lab equipment. A single warm beam of morning sunlight streams diagonally through the window onto a desk. The boy and the girl sit at that desk, leaning over an open physics textbook, curious and gentle; the cat lies on the windowsill in the sunlight. Wide 16:9 composition, characters in the right half, the left third bright and airy with soft white space. Keep EXACTLY the same three characters from the reference image, same faces, hairstyles, outfits and art style: the boy has black short slightly tousled hair and a cream knit short-sleeve tee with a buttoned placket; the girl has long dark wavy hair with bangs, clear round glasses, a navy striped top and a dark knit cardigan; the cat is a silver tabby with a cream patch on its back, white muzzle and chest, amber round eyes, pink nose, dark tail tip and a pale blue collar. Style: bright watercolour cartoon, large expressive eyes, soft rounded faces, clean fine linework, warm daylight, white-leaning airy background. Not photographic, not 3D, not chibi. No text, no letters, no logo, no watermark.",
+    "bytes": 2415385,
+    "elapsedMs": 40475,
+    "createdAt": "2026-10-31T11:09:59.226Z"
+  },
+  {
+    "file": "k1-2.png",
+    "model": "gpt-image-2.5-sunburst",
+    "endpoint": "https://image.haqiuhaqiu.xyz/v1/images/edits",
+    "reference": "overlays/harness/files/apps/web/design-assets/splash/splash-campus-wide-master.png",
+    "size": "1536x1024",
+    "prompt": "A plain ordinary Chinese classroom with simple wooden desks and NO lab equipment. A single warm beam of morning sunlight streams diagonally through the window onto a desk. The boy and the girl sit at that desk, leaning over an open physics textbook, curious and gentle; the cat lies on the windowsill in the sunlight. Wide 16:9 composition, characters in the right half, the left third bright and airy with soft white space. Keep EXACTLY the same three characters from the reference image, same faces, hairstyles, outfits and art style: the boy has black short slightly tousled hair and a cream knit short-sleeve tee with a buttoned placket; the girl has long dark wavy hair with bangs, clear round glasses, a navy striped top and a dark knit cardigan; the cat is a silver tabby with a cream patch on its back, white muzzle and chest, amber round eyes, pink nose, dark tail tip and a pale blue collar. Style: bright watercolour cartoon, large expressive eyes, soft rounded faces, clean fine linework, warm daylight, white-leaning airy background. Not photographic, not 3D, not chibi. No text, no letters, no logo, no watermark.",
+    "bytes": 2308090,
+    "elapsedMs": 42919,
+    "createdAt": "2026-10-31T11:10:01.673Z"
+  },
+  {
+    "file": "k2-2.png",
+    "model": "gpt-image-2.5-sunburst",
+    "endpoint": "https://image.haqiuhaqiu.xyz/v1/images/edits",
+    "reference": "overlays/harness/files/apps/web/design-assets/splash/splash-campus-wide-master.png",
+    "size": "1536x1024",
+    "prompt": "A sunlit Chinese school corridor with large windows. A soft golden beam of light pours in from the window on the right. The boy and the girl stand side by side looking toward the light with hopeful smiles; the girl holds a notebook, the cat sits at their feet looking up. Characters fill the right ~45% of the frame; the left half is mostly empty bright white wall and light haze for typography. Wide 16:9. Keep EXACTLY the same three characters from the reference image, same faces, hairstyles, outfits and art style: the boy has black short slightly tousled hair and a cream knit short-sleeve tee with a buttoned placket; the girl has long dark wavy hair with bangs, clear round glasses, a navy striped top and a dark knit cardigan; the cat is a silver tabby with a cream patch on its back, white muzzle and chest, amber round eyes, pink nose, dark tail tip and a pale blue collar. Style: bright watercolour cartoon, large expressive eyes, soft rounded faces, clean fine linework, warm daylight, white-leaning airy background. Not photographic, not 3D, not chibi. No text, no letters, no logo, no watermark.",
+    "bytes": 2177788,
+    "elapsedMs": 181398,
+    "createdAt": "2026-10-31T11:12:20.153Z"
+  },
+  {
+    "file": "c-boy-1.png",
+    "model": "gpt-image-2.5-sunburst",
+    "endpoint": "https://image.haqiuhaqiu.xyz/v1/images/edits",
+    "reference": "overlays/harness/files/apps/web/design-assets/splash/splash-campus-wide-master.png",
+    "size": "1536x1024",
+    "prompt": "The boy alone, waist-up, smiling and pointing to the side with one finger as if presenting something on a screen next to him, energetic and friendly. Isolated on a plain pure white background, no scenery, no shadow, no floor, generous white margin around him. Keep EXACTLY the same three characters from the reference image, same faces, hairstyles, outfits and art style: the boy has black short slightly tousled hair and a cream knit short-sleeve tee with a buttoned placket; the girl has long dark wavy hair with bangs, clear round glasses, a navy striped top and a dark knit cardigan; the cat is a silver tabby with a cream patch on its back, white muzzle and chest, amber round eyes, pink nose, dark tail tip and a pale blue collar. Style: bright watercolour cartoon, large expressive eyes, soft rounded faces, clean fine linework, warm daylight, white-leaning airy background. Not photographic, not 3D, not chibi. No text, no letters, no logo, no watermark.",
+    "bytes": 1548878,
+    "elapsedMs": 37305,
+    "createdAt": "2026-10-31T12:09:46.849Z"
+  },
+  {
+    "file": "c-girl-1.png",
+    "model": "gpt-image-2.5-sunburst",
+    "endpoint": "https://image.haqiuhaqiu.xyz/v1/images/edits",
+    "reference": "overlays/harness/files/apps/web/design-assets/splash/splash-campus-wide-master.png",
+    "size": "1536x1024",
+    "prompt": "The girl alone, waist-up, cheerfully raising one hand as if asking a question in class, holding a small notebook in the other hand, friendly smile. Isolated on a plain pure white background, no scenery, no shadow, no floor, generous white margin around her. Keep EXACTLY the same three characters from the reference image, same faces, hairstyles, outfits and art style: the boy has black short slightly tousled hair and a cream knit short-sleeve tee with a buttoned placket; the girl has long dark wavy hair with bangs, clear round glasses, a navy striped top and a dark knit cardigan; the cat is a silver tabby with a cream patch on its back, white muzzle and chest, amber round eyes, pink nose, dark tail tip and a pale blue collar. Style: bright watercolour cartoon, large expressive eyes, soft rounded faces, clean fine linework, warm daylight, white-leaning airy background. Not photographic, not 3D, not chibi. No text, no letters, no logo, no watermark.",
+    "bytes": 1729494,
+    "elapsedMs": 43339,
+    "createdAt": "2026-10-31T12:09:52.883Z"
+  },
+  {
+    "file": "k3-1.png",
+    "model": "gpt-image-2.5-sunburst",
+    "endpoint": "https://image.haqiuhaqiu.xyz/v1/images/edits",
+    "reference": "overlays/harness/files/apps/web/design-assets/splash/splash-campus-wide-master.png",
+    "size": "1536x1024",
+    "prompt": "Close-up in the same sunlit classroom: the open physics textbook on the wooden desk, and from its printed diagram a small glowing translucent ball lifts off the page, leaving a luminous arc-shaped trajectory of warm light hanging in the air. The boy and the girl lean in from the right with amazed, delighted faces; the cat reaches one paw toward the glowing ball. Wide 16:9, soft dust motes in the sunbeam, the left third bright and airy. Keep EXACTLY the same three characters from the reference image, same faces, hairstyles, outfits and art style: the boy has black short slightly tousled hair and a cream knit short-sleeve tee with a buttoned placket; the girl has long dark wavy hair with bangs, clear round glasses, a navy striped top and a dark knit cardigan; the cat is a silver tabby with a cream patch on its back, white muzzle and chest, amber round eyes, pink nose, dark tail tip and a pale blue collar. Style: bright watercolour cartoon, large expressive eyes, soft rounded faces, clean fine linework, warm daylight, white-leaning airy background. Not photographic, not 3D, not chibi. No text, no letters, no logo, no watermark.",
+    "bytes": 2553963,
+    "elapsedMs": 46843,
+    "createdAt": "2026-10-31T12:09:56.384Z"
+  },
+  {
+    "file": "c-cat-1.png",
+    "model": "gpt-image-2.5-sunburst",
+    "endpoint": "https://image.haqiuhaqiu.xyz/v1/images/edits",
+    "reference": "overlays/harness/files/apps/web/design-assets/splash/splash-campus-wide-master.png",
+    "size": "1536x1024",
+    "prompt": "The cat alone, full body, sitting upright and looking up curiously with its tail curled around its paws. Isolated on a plain pure white background, no scenery, no shadow, no floor, generous white margin around it. Keep EXACTLY the same three characters from the reference image, same faces, hairstyles, outfits and art style: the boy has black short slightly tousled hair and a cream knit short-sleeve tee with a buttoned placket; the girl has long dark wavy hair with bangs, clear round glasses, a navy striped top and a dark knit cardigan; the cat is a silver tabby with a cream patch on its back, white muzzle and chest, amber round eyes, pink nose, dark tail tip and a pale blue collar. Style: bright watercolour cartoon, large expressive eyes, soft rounded faces, clean fine linework, warm daylight, white-leaning airy background. Not photographic, not 3D, not chibi. No text, no letters, no logo, no watermark.",
+    "bytes": 1489830,
+    "elapsedMs": 322644,
+    "createdAt": "2026-10-31T12:14:32.189Z"
+  }
+]
