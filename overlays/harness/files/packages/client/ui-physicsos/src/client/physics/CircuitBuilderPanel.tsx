@@ -33,7 +33,7 @@ import {
   spriteIdFor,
 } from './circuit-builder-labels.ts'
 import { PARTS3D, part3dUrl } from './parts3d-catalog.ts'
-import { CIRCUIT_PART_MIME, placeBuilderPart } from './circuit-part-drag.ts'
+import { CIRCUIT_PART_MIME, duplicateBuilderComponent, placeBuilderPart } from './circuit-part-drag.ts'
 import { parseCircuitDraft } from './workbench-history-codec.ts'
 import css from './CircuitBuilderPanel.module.css'
 import type { PhysicsosKey } from '../locales.ts'
@@ -310,7 +310,14 @@ export function CircuitBuilderPanel({
   const [localSelected, setLocalSelected] = useState<string | undefined>(undefined)
   const controlled = onSelectComponent !== undefined || selectedComponentId !== undefined
   const selected = controlled ? selectedComponentId : localSelected
+  const latestEdit = useRef(0)
+  const observedSelection = useRef(selected)
+  if (observedSelection.current !== selected) {
+    observedSelection.current = selected
+    latestEdit.current += 1
+  }
   const select = (id: string | undefined): void => {
+    latestEdit.current += 1
     if (onSelectComponent !== undefined) onSelectComponent(id)
     else if (!controlled) setLocalSelected(id)
   }
@@ -318,7 +325,6 @@ export function CircuitBuilderPanel({
   const [editFailed, setEditFailed] = useState(false)
   const mounted = useRef(true)
   const pendingEdits = useRef(0)
-  const latestEdit = useRef(0)
   useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
   /** Keep synchronous Lab edits synchronous; queued canvas edits select only after settlement. */
   const apply = (edit: (draft: CircuitDraft) => CircuitDraft, after?: () => void): EditOutcome => {
@@ -469,6 +475,24 @@ export function CircuitBuilderPanel({
             <button
               type="button"
               className={css.action}
+              data-testid={`builder-copy-${selectedComponent.id}`}
+              disabled={applying || selectedComponent.type === 'voltage_source'}
+              title={selectedComponent.type === 'voltage_source' ? t('lab.builder.powerHint') : undefined}
+              onClick={() => {
+                let copiedId: string | undefined
+                void apply((current) => {
+                  const copied = duplicateBuilderComponent(current, selectedComponent.id)
+                  if (copied === undefined) return current
+                  copiedId = copied.componentId
+                  return copied.draft
+                }, () => { if (copiedId !== undefined) select(copiedId) })
+              }}
+            >
+              {t('lab.builder.copy')}
+            </button>
+            <button
+              type="button"
+              className={css.action}
               data-testid={`builder-nudge-${selectedComponent.id}`}
               disabled={applying}
               onClick={() => {
@@ -517,7 +541,7 @@ export function CircuitBuilderPanel({
             className={css.action}
             disabled={applying || !editing.canUndo}
             data-testid="builder-undo"
-            onClick={editing.undo}
+            onClick={() => { latestEdit.current += 1; editing.undo() }}
           >
             {t('lab.builder.undo')}
           </button>
@@ -526,7 +550,7 @@ export function CircuitBuilderPanel({
             className={css.action}
             disabled={applying || !editing.canRedo}
             data-testid="builder-redo"
-            onClick={editing.redo}
+            onClick={() => { latestEdit.current += 1; editing.redo() }}
           >
             {t('lab.builder.redo')}
           </button>

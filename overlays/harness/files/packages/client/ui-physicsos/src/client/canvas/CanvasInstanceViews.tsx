@@ -8,6 +8,7 @@ import { PhysicsCanvas } from '../physics/PhysicsCanvas.tsx'
 import { CircuitBuilderPanel } from '../physics/CircuitBuilderPanel.tsx'
 import { placeBuilderPart } from '../physics/circuit-part-drag.ts'
 import { BUILDER_PARTS, type CircuitDraft, type TerminalRef } from '../physics/circuit-builder.ts'
+import type { ComponentEditCommand } from '../physics/renderer-registry.tsx'
 import { DataPanelBody, InspectorTabs, SceneTreePanel, type DataTab } from '../workspace-parts.tsx'
 import { TimelineScrubber } from '../TimelineScrubber.tsx'
 import { formatTimeIn, timeScaleOf } from '../physics/time-format.ts'
@@ -68,6 +69,7 @@ export function CanvasFrameStage(props: CanvasFrameProps) {
   const drag = useMemo(() => summary?.capabilities.componentPlacement !== true ? undefined : {
     preview: (id: string, at: { x: number; y: number }) => { act('previewComponentPlacement', id, at) },
     commit: (id: string, at: { x: number; y: number }) => { act('commitComponentPlacement', id, at) },
+    nudge: (id: string, delta: { x: number; y: number }) => { act('nudgeComponentPlacement', id, delta) },
     cancel: () => { act('cancelComponentPlacement') },
   }, [summary?.capabilities.componentPlacement, act])
   const controls = useMemo(() => summary?.capabilities.switch !== true && summary?.capabilities.slider !== true ? undefined : {
@@ -86,6 +88,10 @@ export function CanvasFrameStage(props: CanvasFrameProps) {
     ...(summary.pendingWire === undefined ? {} : { pending: summary.pendingWire }),
   }
   const constructing = summary?.buildMode === 'construct'
+  const editApparatus = (id: string, command: ComponentEditCommand): void => {
+    if (!constructing || readOnly) return
+    act('editBuilderComponent', id, command)
+  }
   const dockReadings = constructing && narrowStage
   const failedRenderer = !constructing && (renderer?.status === 'error' || (renderer?.entryUrl !== undefined && failedUrl === renderer.entryUrl))
   const bench = useMemo(() => summary === undefined || frame === undefined ? undefined
@@ -104,7 +110,7 @@ export function CanvasFrameStage(props: CanvasFrameProps) {
         sampleReadout={index => props.getCanvasReadout(instanceKey, index)} onSeekTime={time => { if (!readOnly) act('seek', time) }}
         clockTime={frame.clock.time}
         {...(!constructing || readOnly ? {} : {
-          componentSelection: { selected: summary?.workspace.view.highlighted?.[0], select: (id: string) => { act('setHighlight', [id]) } },
+          componentSelection: { selected: summary?.workspace.view.highlighted?.[0], select: (id: string) => { act('setHighlight', [id]) }, edit: editApparatus },
           onDropPart: (partId: string, at: { x: number; y: number }) => {
             const part = BUILDER_PARTS.find(item => item.id === partId)
             if (part === undefined) return
@@ -161,10 +167,13 @@ export function CanvasInstanceView(props: CanvasInstanceProps) {
   const [treeSelection, setTreeSelection] = useState('scene')
   const meta = summary?.templateId === undefined ? undefined : experimentMetaOf(summary.templateId)
   const act = useCallback(<K extends CanvasInstanceActionName>(action: K, ...args: CanvasInstanceActionArguments<K>): void => {
-    void canvasCommands.instanceAction(instanceKey, action, ...args).catch(error => {
+    const result = action === 'undo' || action === 'redo'
+      ? props.applyCanvasNativeAction(instanceKey, displayKey, action, ...args)
+      : canvasCommands.instanceAction(instanceKey, action, ...args)
+    void result.catch(error => {
       props.actions.showToast('canvas.error.generic', error instanceof Error ? error.message : undefined, true)
     })
-  }, [canvasCommands, instanceKey, props.actions])
+  }, [canvasCommands, instanceKey, displayKey, props.applyCanvasNativeAction, props.actions])
   const keyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
     if (event.defaultPrevented || event.nativeEvent.isComposing) return
     const target = event.target
@@ -228,7 +237,7 @@ export function CanvasInstanceView(props: CanvasInstanceProps) {
           pendingTerminal={summary.pendingWire} selectedComponentId={selectedComponent} onSelectComponent={selectComponent} variant="compact" />
       </fieldset>
       <div className={css.apparatusCenter}>
-        <div className={css.benchGuide}><span className={css.benchBadge}>{t('canvas.benchLabel')}</span><span>{t('canvas.benchHint')}</span></div>
+        <div className={css.benchGuide} title={t('canvas.benchKeyboardHint')}><span className={css.benchBadge}>{t('canvas.benchLabel')}</span><span>{t('canvas.benchHint')}</span></div>
         {props.renderSlot('physicsos.canvas.frame', { canvasId: props.canvasId, instanceId: props.instanceId, instanceKey, displayKey, presentation })}
       </div>
     </div> : presentation === 'focus' ? <div className={css.instanceEditor}>

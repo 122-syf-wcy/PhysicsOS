@@ -1,8 +1,9 @@
-import { addPart, BUILDER_PARTS, moveComponent, setParams, type BuilderPartSpec, type CircuitDraft } from './circuit-builder.ts'
+import { addComponent, addPart, BUILDER_PARTS, moveComponent, setParams, type BuilderPartSpec, type CircuitDraft } from './circuit-builder.ts'
 import type { ScenePoint } from './scene-visual-model.ts'
 
 /** A shelf drag carries only a catalog identity; ratings come from the catalog. */
 export const CIRCUIT_PART_MIME = 'application/x-physicsos-circuit-part'
+export type BuilderEditCommand = 'rotate' | 'remove' | 'duplicate'
 
 export function circuitPartIdFromTransfer(transfer: Pick<DataTransfer, 'getData'>): string | undefined {
   let id: string
@@ -22,6 +23,19 @@ export function nextBuilderPlacement(draft: CircuitDraft): ScenePoint {
     }
   }
   return { x: -4, y: (draft.components.length + 1) * 4 }
+}
+
+/** Copy a rated apparatus, not its wiring; the bench still owns exactly one supply. */
+export function duplicateBuilderComponent(
+  draft: CircuitDraft,
+  id: string,
+): { draft: CircuitDraft; componentId: string } | undefined {
+  const original = draft.components.find(component => component.id === id)
+  if (original === undefined || original.type === 'voltage_source') return undefined
+  const added = addComponent(draft, original.type, nextBuilderPlacement(draft), { ...original.params })
+  const components = added.draft.components.map(component => component.id === added.componentId
+    ? { ...component, placement: { ...component.placement, rotation: original.placement.rotation } } : component)
+  return { draft: { ...added.draft, components }, componentId: added.componentId }
 }
 
 /** Select a supply rating without adding an unsupported second source or disturbing its leads. */

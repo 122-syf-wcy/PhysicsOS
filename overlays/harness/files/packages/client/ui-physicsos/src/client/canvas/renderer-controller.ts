@@ -6,6 +6,7 @@ import { contributionReleaseIdentity, selectContributionRelease, type Contributi
 import { sameQuestionCodeRef, questionCodeSceneSha256, questionCodeVisualizationOf } from '../experiments/question-code-api.ts'
 import { isUniversalExperimentIntent } from '../experiments/universal-contract.ts'
 import type { ObservableKey } from '../physics/scene-visual-model.ts'
+import type { WorkbenchInstanceSummary } from '../physics/workbench-instance-runtime.ts'
 
 export interface CanvasRendererState {
   readonly status: 'native' | 'loading' | 'ready' | 'error'
@@ -188,7 +189,7 @@ export function createCanvasRendererController(controller: Pick<CanvasController
     return result
   }
   const previews = new Set<CanvasInstanceActionName>(['previewParameter', 'previewComponentPlacement', 'previewSliderPosition'])
-  const commits = new Set<CanvasInstanceActionName>(['commitParameter', 'commitComponentPlacement', 'commitSliderPosition'])
+  const commits = new Set<CanvasInstanceActionName>(['commitParameter', 'commitComponentPlacement', 'nudgeComponentPlacement', 'commitSliderPosition', 'applyDraftEdit', 'editBuilderComponent'])
   const cancellations = new Set<CanvasInstanceActionName>(['cancelParameterPreview', 'cancelComponentPlacement', 'cancelSliderPosition'])
   const manager: CanvasRendererController = {
     source: key => cell(key).source,
@@ -220,9 +221,10 @@ export function createCanvasRendererController(controller: Pick<CanvasController
       return queued(record, async () => {
         if (disposed || !record.displays.has(display) || controller.getSnapshot().authScope === 'paused'
           || controller.instanceSource(key).getSnapshot() === undefined) return false
+        if ((action === 'applyDraftEdit' || action === 'editBuilderComponent') && controller.instanceSource(key).getSnapshot()?.buildMode !== 'construct') return false
         const preview = previews.has(action)
         const end = commits.has(action) || cancellations.has(action)
-        if (end && record.previewOwner !== undefined && record.previewOwner !== display) return false
+        if ((end || action === 'setHighlight') && record.previewOwner !== undefined && record.previewOwner !== display) return false
         if (cancellations.has(action) && record.previewOwner !== display) return false
         if (preview) {
           if (record.previewOwner !== undefined && record.previewOwner !== display) {
@@ -232,9 +234,11 @@ export function createCanvasRendererController(controller: Pick<CanvasController
           if (!record.displays.has(display)) return false
           record.previewOwner = display
         }
-        await controller.instanceAction(key, action, ...args)
+        const result = await controller.instanceAction(key, action, ...args)
         if (end && record.previewOwner === display) record.previewOwner = undefined
         if (!preview && controller.instanceSource(key).getSnapshot()?.previewing !== true) record.previewOwner = undefined
+        if ((action === 'applyDraftEdit' || action === 'editBuilderComponent') && (result as WorkbenchInstanceSummary).diagnostics.some(item =>
+          item.code === 'INVALID_DRAFT' || item.code === 'WORKBENCH_EDIT_REJECTED')) throw new Error('WORKBENCH_EDIT_REJECTED')
         return true
       })
     },

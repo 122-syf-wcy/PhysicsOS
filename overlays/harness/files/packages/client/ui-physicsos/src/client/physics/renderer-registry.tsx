@@ -11,6 +11,7 @@
 import { useMemo } from 'react'
 import type { ReactElement } from 'react'
 import type { TerminalRef } from './circuit-builder.ts'
+import type { BuilderEditCommand } from './circuit-part-drag.ts'
 import { AcousticsRenderer } from './acoustics-renderer.tsx'
 import { CircuitRenderer } from './circuit-renderer.tsx'
 import { FluidRenderer } from './fluid-renderer.tsx'
@@ -78,14 +79,19 @@ export interface RendererProjection {
 export interface ComponentDragChannel {
   readonly preview: (componentId: string, at: ScenePoint) => void
   readonly commit: (componentId: string, at: ScenePoint) => void
+  /** Resolve relative keyboard steps against the latest queued placement. */
+  readonly nudge?: (componentId: string, delta: ScenePoint) => void
   /** Pointer-cancel path: abandon the in-flight preview without committing. */
   readonly cancel: () => void
 }
 
 /** The selected apparatus is view state shared with its parameter inspector. */
+export type ComponentEditCommand = BuilderEditCommand
 export interface ComponentSelectionChannel {
   readonly selected?: string | undefined
   readonly select: (id: string) => void
+  /** Structural edits settle before changing the shared inspector selection. */
+  readonly edit?: (id: string, command: ComponentEditCommand) => void
 }
 
 /**

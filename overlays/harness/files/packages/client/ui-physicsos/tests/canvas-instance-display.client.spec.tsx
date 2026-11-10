@@ -69,6 +69,247 @@ function beginPlacement(root: HTMLElement) {
   return group
 }
 
+describe('native apparatus keyboard edits in a real canvas instance', () => {
+  it('accumulates every queued arrow from the latest placement, including held and shifted keys', async () => {
+    const owned = await displays()
+    await owned.controller.instanceAction(owned.instanceKey, 'enterBuilder')
+    await owned.controller.instanceAction(owned.instanceKey, 'setHighlight', ['r2'])
+    const before = owned.summary()
+    const original = before.draft!.components.find(component => component.id === 'r1')!
+    const view = render(<CanvasFrameStage {...owned.frame('card')} />)
+    const body = view.container.querySelector<SVGGElement>('[data-component-id="r1"]')!
+    body.focus()
+    await act(async () => {
+      // All events arrive before the real native queue can commit and repaint.
+      fireEvent.keyDown(body, { key: 'ArrowRight' })
+      fireEvent.keyDown(body, { key: 'ArrowRight', repeat: true })
+      fireEvent.keyDown(body, { key: 'ArrowUp', shiftKey: true })
+      fireEvent.keyDown(body, { key: 'ArrowUp', shiftKey: true, repeat: true })
+      await owned.manager.nativeAction(owned.instanceKey, 'card', 'cancelComponentPlacement')
+    })
+    const moved = owned.summary().draft!.components.find(component => component.id === 'r1')!
+    expect(moved.placement).toEqual({ ...original.placement, x: original.placement.x + 1, y: original.placement.y + 4 })
+    expect(moved.params).toEqual(original.params)
+    expect(owned.summary().workspace.view.highlighted).toEqual(['r1'])
+    expect(owned.summary().instanceEditRevision).toBe(before.instanceEditRevision + 4)
+    expect(owned.summary().history.past).toHaveLength(before.history.past.length + 4)
+    await act(async () => { await owned.controller.instanceAction(owned.instanceKey, 'undo') })
+    expect(owned.summary().draft!.components.find(component => component.id === 'r1')!.placement)
+      .toEqual({ ...original.placement, x: original.placement.x + 1, y: original.placement.y + 2 })
+  })
+
+  it('undoes an immediately preceding body copy without leaving a copied apparatus or phantom selection', async () => {
+    const owned = await displays()
+    await owned.controller.instanceAction(owned.instanceKey, 'enterBuilder')
+    await owned.controller.instanceAction(owned.instanceKey, 'setHighlight', ['r1'])
+    const before = owned.summary()
+    const renderSlot: CanvasInstanceProps['renderSlot'] = (_position, values) => <CanvasFrameStage {...owned.frame('card')} {...values} />
+    const view = render(<CanvasInstanceView {...owned.frame('card')} presentation="card" renderSlot={renderSlot} />)
+    const body = view.container.querySelector<SVGGElement>('[data-component-id="r1"]')!
+    body.focus()
+    await act(async () => {
+      fireEvent.keyDown(body, { key: 'd', ctrlKey: true })
+      fireEvent.keyDown(body, { key: 'z', ctrlKey: true })
+      await owned.manager.nativeAction(owned.instanceKey, 'card', 'cancelComponentPlacement')
+      await owned.controller.flush()
+      // Drain post-settlement view callbacks as well as the two user commands.
+      await owned.manager.nativeAction(owned.instanceKey, 'card', 'cancelComponentPlacement')
+    })
+    expect(owned.summary().draft).toEqual(before.draft)
+    expect(owned.summary().history.past).toEqual(before.history.past)
+    expect(owned.summary().history.future).toHaveLength(1)
+    expect(owned.summary().workspace.view.highlighted ?? []).toEqual([])
+    expect(view.container.querySelectorAll('[data-component-id]')).toHaveLength(before.draft!.components.length)
+    expect(view.container.querySelector('[data-testid^="builder-inspector-"]')).toBeNull()
+  })
+
+  it.each([
+    { name: 'Ctrl+D', ctrlKey: true, metaKey: false },
+    { name: 'Cmd+D', ctrlKey: false, metaKey: true },
+  ])('copies the focused rated apparatus with $name as one undoable edit and selects its unwired copy', async shortcut => {
+    const owned = await displays()
+    await owned.controller.instanceAction(owned.instanceKey, 'enterBuilder')
+    await owned.controller.instanceAction(owned.instanceKey, 'setComponentParams', 'r1', { resistance: 37 })
+    const before = owned.summary().draft!
+    const revision = owned.summary().instanceEditRevision
+    const past = owned.summary().history.past.length
+    const renderSlot: CanvasInstanceProps['renderSlot'] = (_position, values) => <CanvasFrameStage {...owned.frame('card')} {...values} />
+    const view = render(<CanvasInstanceView {...owned.frame('card')} presentation="card" renderSlot={renderSlot} />)
+    const body = view.container.querySelector<SVGGElement>('[data-component-id="r1"]')!
+    body.focus()
+    fireEvent.keyDown(body, { key: 'd', ctrlKey: shortcut.ctrlKey, metaKey: shortcut.metaKey })
+    await waitFor(() => expect(owned.summary().draft!.components).toHaveLength(before.components.length + 1))
+    const copy = owned.summary().draft!.components.find(component => !before.components.some(original => original.id === component.id))!
+    expect(copy.type).toBe('resistor')
+    expect(copy.params).toEqual({ resistance: 37 })
+    expect(copy.placement.rotation).toBe(270)
+    expect({ x: copy.placement.x, y: copy.placement.y }).not.toEqual({ x: -1.5, y: 0 })
+    expect(new Set(Object.values(copy.nets)).size).toBe(2)
+    const existingNets = new Set(before.components.flatMap(component => Object.values(component.nets)))
+    expect(Object.values(copy.nets).some(net => existingNets.has(net))).toBe(false)
+    expect(owned.summary().draft!.components.filter(component => component.id !== copy.id)).toEqual(before.components)
+    await waitFor(() => expect(owned.summary().workspace.view.highlighted).toEqual([copy.id]))
+    expect(await view.findByTestId(`builder-inspector-${copy.id}`)).toBeTruthy()
+    expect(owned.summary().instanceEditRevision).toBe(revision + 1)
+    expect(owned.summary().history.past).toHaveLength(past + 1)
+    fireEvent.click(view.getByTestId('builder-undo'))
+    await waitFor(() => expect(owned.summary().draft).toEqual(before))
+    expect(owned.summary().workspace.view.highlighted ?? []).toEqual([])
+    expect(owned.summary().history.past).toHaveLength(past)
+  })
+
+  it.each(['Delete', 'Backspace'])('removes the selected body with %s, clears selection, and restores its wiring on undo', async key => {
+    const owned = await displays()
+    await owned.controller.instanceAction(owned.instanceKey, 'enterBuilder')
+    const before = owned.summary().draft!
+    const past = owned.summary().history.past.length
+    const renderSlot: CanvasInstanceProps['renderSlot'] = (_position, values) => <CanvasFrameStage {...owned.frame('card')} {...values} />
+    const view = render(<CanvasInstanceView {...owned.frame('card')} presentation="card" renderSlot={renderSlot} />)
+    const body = view.container.querySelector<SVGGElement>('[data-component-id="r1"]')!
+    fireEvent.click(body)
+    await waitFor(() => expect(owned.summary().workspace.view.highlighted).toEqual(['r1']))
+    body.focus()
+    fireEvent.keyDown(body, { key })
+    await waitFor(() => expect(owned.summary().draft!.components.some(component => component.id === 'r1')).toBe(false))
+    await waitFor(() => expect(owned.summary().workspace.view.highlighted ?? []).toEqual([]))
+    expect(view.container.querySelector('[data-component-id="r1"]')).toBeNull()
+    expect(owned.summary().history.past).toHaveLength(past + 1)
+    fireEvent.click(view.getByTestId('builder-undo'))
+    await waitFor(() => expect(owned.summary().draft).toEqual(before))
+    expect(owned.summary().workspace.view.highlighted ?? []).toEqual([])
+    expect(owned.summary().history.past).toHaveLength(past)
+    expect(view.container.querySelector('[data-component-id="r1"]')).not.toBeNull()
+  })
+
+  it('keeps one supply when its directly focused body receives copy shortcuts', async () => {
+    const owned = await displays()
+    await owned.controller.instanceAction(owned.instanceKey, 'enterBuilder')
+    const before = owned.summary()
+    const view = render(<CanvasFrameStage {...owned.frame('card')} />)
+    const body = view.container.querySelector<SVGGElement>('[data-component-id="bat"]')!
+    body.focus()
+    await act(async () => {
+      fireEvent.keyDown(body, { key: 'd', ctrlKey: true })
+      fireEvent.keyDown(body, { key: 'd', metaKey: true })
+      await owned.manager.nativeAction(owned.instanceKey, 'card', 'cancelComponentPlacement')
+    })
+    expect(owned.summary().draft).toEqual(before.draft)
+    expect(owned.summary().instanceEditRevision).toBe(before.instanceEditRevision)
+    expect(owned.summary().history).toEqual(before.history)
+  })
+
+  it.each(['inspect', 'auth-required', 'deleted', 'loading'] as const)('does not edit apparatus from body keys in a %s display', async state => {
+    const owned = await displays()
+    if (state !== 'inspect') await owned.controller.instanceAction(owned.instanceKey, 'enterBuilder')
+    const base = owned.frame('card')
+    const document = { ...owned.controller.documentSource(base.canvasId).getSnapshot(),
+      ...(state === 'auth-required' || state === 'deleted' ? { status: state } : {}),
+      ...(state === 'loading' ? { loading: true } : {}),
+    }
+    const source = { getSnapshot: () => document, subscribe: () => () => {} }
+    const useCanvasDocument = keyedSelectorHook<CanvasDocumentState>(key => key === base.canvasId ? source : undefined)
+    const before = owned.summary()
+    const view = render(<CanvasFrameStage {...base} useCanvasDocument={useCanvasDocument} />)
+    const body = view.container.querySelector<SVGGElement>('[data-component-id="r1"]')!
+    await act(async () => {
+      for (const key of ['ArrowRight', 'r', 'Delete', 'Backspace']) fireEvent.keyDown(body, { key })
+      fireEvent.keyDown(body, { key: 'd', ctrlKey: true })
+      await owned.manager.nativeAction(owned.instanceKey, 'card', 'cancelComponentPlacement')
+    })
+    expect(owned.summary().draft).toEqual(before.draft)
+    expect(owned.summary().buildMode).toBe(before.buildMode)
+    expect(owned.summary().instanceEditRevision).toBe(before.instanceEditRevision)
+    expect(owned.summary().history).toEqual(before.history)
+  })
+
+  it('blocks another display from rotating, deleting or copying while the focus display owns a placement preview', async () => {
+    const owned = await displays()
+    await owned.controller.instanceAction(owned.instanceKey, 'enterBuilder')
+    const view = render(<><div data-display="card"><CanvasFrameStage {...owned.frame('card')} /></div>
+      <div data-display="focus"><CanvasFrameStage {...owned.frame('focus')} /></div></>)
+    const card = view.container.querySelector<HTMLElement>('[data-display="card"]')!
+    const focus = view.container.querySelector<HTMLElement>('[data-display="focus"]')!
+    const previewBody = beginPlacement(focus)
+    await waitFor(() => expect(owned.summary().previewing).toBe(true))
+    const before = owned.summary()
+    const body = card.querySelector<SVGGElement>('[data-component-id="r2"]')!
+    body.focus()
+    await act(async () => {
+      for (const key of ['r', 'Delete', 'Backspace']) fireEvent.keyDown(body, { key })
+      fireEvent.keyDown(body, { key: 'd', ctrlKey: true })
+      // Await the real native channel; queued edits must have settled before these checks.
+      expect(await owned.manager.nativeAction(owned.instanceKey, 'card', 'cancelComponentPlacement')).toBe(false)
+    })
+    expect(owned.summary().previewing).toBe(true)
+    expect(owned.summary().draft).toEqual(before.draft)
+    expect(owned.summary().instanceEditRevision).toBe(before.instanceEditRevision)
+    expect(owned.summary().history).toEqual(before.history)
+    expect(owned.summary().workspace.view.highlighted).toEqual(before.workspace.view.highlighted)
+    fireEvent.lostPointerCapture(previewBody, { pointerId: 1 })
+    await waitFor(() => expect(owned.summary().previewing).toBe(false))
+    fireEvent.keyDown(body, { key: 'd', ctrlKey: true })
+    await waitFor(() => expect(owned.summary().draft!.components).toHaveLength(before.draft!.components.length + 1))
+    const copy = owned.summary().draft!.components.find(component => !before.draft!.components.some(original => original.id === component.id))!
+    await waitFor(() => expect(owned.summary().workspace.view.highlighted).toEqual([copy.id]))
+  })
+
+  it('reports a rejected native draft as unsuccessful without adding history or changing selection', async () => {
+    const owned = await displays()
+    await owned.controller.instanceAction(owned.instanceKey, 'enterBuilder')
+    render(<CanvasFrameStage {...owned.frame('card')} />)
+    await act(async () => { await owned.controller.instanceAction(owned.instanceKey, 'setHighlight', ['r1']) })
+    const before = owned.summary()
+    await act(async () => {
+      await expect(owned.manager.nativeAction(owned.instanceKey, 'card', 'applyDraftEdit', draft => ({
+        ...draft,
+        components: draft.components.map(component => component.id === 'r1'
+          ? { ...component, params: { resistance: -1 } } : component),
+      }))).rejects.toThrow('WORKBENCH_EDIT_REJECTED')
+    })
+    expect(owned.summary().draft).toEqual(before.draft)
+    expect(owned.summary().instanceEditRevision).toBe(before.instanceEditRevision)
+    expect(owned.summary().history).toEqual(before.history)
+    expect(owned.summary().workspace.view.highlighted).toEqual(['r1'])
+    expect(owned.summary().diagnostics.some(item => item.code === 'INVALID_DRAFT' || item.code === 'WORKBENCH_EDIT_REJECTED')).toBe(true)
+  })
+
+  it('preserves the slider and terminal keyboard controls nested inside a focusable apparatus body', async () => {
+    const owned = await displays()
+    await owned.controller.instanceAction(owned.instanceKey, 'enterBuilder')
+    const renderSlot: CanvasInstanceProps['renderSlot'] = (_position, values) => <CanvasFrameStage {...owned.frame('card')} {...values} />
+    const view = render(<CanvasInstanceView {...owned.frame('card')} presentation="card" renderSlot={renderSlot} />)
+    const count = owned.summary().draft!.components.length
+    fireEvent.click(view.getByTestId('builder-add-rheostat-20'))
+    await waitFor(() => expect(owned.summary().draft!.components).toHaveLength(count + 1))
+    const added = owned.summary().draft!.components.at(-1)!
+    const body = view.container.querySelector<SVGGElement>(`[data-component-id="${added.id}"]`)!
+    const slider = body.querySelector<SVGRectElement>('[role="slider"]')!
+    slider.focus()
+    fireEvent.keyDown(slider, { key: 'ArrowRight' })
+    await waitFor(() => expect(owned.summary().draft!.components.find(component => component.id === added.id)!.params.sliderPosition).toBe(0.55))
+    expect(owned.summary().draft!.components.find(component => component.id === added.id)!.placement).toEqual(added.placement)
+    const before = owned.summary()
+    const terminal = view.container.querySelector<SVGCircleElement>('[data-terminal="r1.a"]')!
+    await act(async () => {
+      for (const descendant of [slider, terminal]) {
+        descendant.focus()
+        for (const key of ['r', 'Delete', 'Backspace']) fireEvent.keyDown(descendant, { key })
+        fireEvent.keyDown(descendant, { key: 'd', ctrlKey: true })
+      }
+      await owned.manager.nativeAction(owned.instanceKey, 'card', 'cancelComponentPlacement')
+    })
+    expect(owned.summary().draft).toEqual(before.draft)
+    expect(owned.summary().instanceEditRevision).toBe(before.instanceEditRevision)
+    expect(owned.summary().history).toEqual(before.history)
+    fireEvent.keyDown(terminal, { key: 'Enter' })
+    await waitFor(() => expect(owned.summary().pendingWire).toEqual({ componentId: 'r1', terminalKey: 'a' }))
+    fireEvent.keyDown(terminal, { key: 'Escape' })
+    await waitFor(() => expect(owned.summary().pendingWire).toBeUndefined())
+    expect(owned.summary().draft).toEqual(before.draft)
+    expect(owned.summary().history).toEqual(before.history)
+  })
+})
+
 describe('native instance preview display ownership', () => {
   it('restores a rejected selected rating and accepts a valid unchanged correction in the real canvas owner', async () => {
     const owned = await displays()

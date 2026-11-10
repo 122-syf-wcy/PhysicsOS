@@ -1175,6 +1175,7 @@ export function CircuitRenderer({
             role={componentSelection === undefined ? undefined : 'button'}
             aria-label={componentSelection === undefined ? undefined : component.label}
             aria-pressed={componentSelection === undefined ? undefined : selected}
+            aria-keyshortcuts={componentSelection?.edit === undefined ? undefined : 'ArrowUp ArrowDown ArrowLeft ArrowRight R Delete Backspace Control+D Meta+D'}
             onPointerDown={(event) => {
               if (event.button === 0) componentSelection?.select(component.id)
               onComponentPointerDown(component, event, rail)
@@ -1185,10 +1186,32 @@ export function CircuitRenderer({
               componentSelection.select(component.id)
             }}
             onKeyDown={(event) => {
-              if (componentSelection === undefined || event.defaultPrevented || event.nativeEvent.isComposing || (event.key !== 'Enter' && event.key !== ' ')) return
+              if (componentSelection === undefined || event.target !== event.currentTarget || event.defaultPrevented || event.nativeEvent.isComposing || event.altKey) return
+              const modified = event.ctrlKey || event.metaKey
+              const copy = modified && !event.shiftKey && event.key.toLowerCase() === 'd' && componentSelection.edit !== undefined
+              if (modified && !copy) return
+              const step = event.shiftKey ? 2 : 0.5
+              const movement = componentDrag === undefined ? undefined
+                : event.key === 'ArrowRight' ? { x: step, y: 0 }
+                : event.key === 'ArrowLeft' ? { x: -step, y: 0 }
+                : event.key === 'ArrowUp' ? { x: 0, y: step }
+                : event.key === 'ArrowDown' ? { x: 0, y: -step } : undefined
+              const command = copy ? 'duplicate'
+                : event.key.toLowerCase() === 'r' ? 'rotate'
+                : event.key === 'Delete' || event.key === 'Backspace' ? 'remove' : undefined
+              if (movement === undefined && (command === undefined || componentSelection.edit === undefined) && event.key !== 'Enter' && event.key !== ' ') return
               event.preventDefault()
               event.stopPropagation()
-              componentSelection.select(component.id)
+              if (movement !== undefined) {
+                if (componentDrag?.nudge !== undefined) componentDrag.nudge(component.id, movement)
+                else {
+                  componentSelection.select(component.id)
+                  componentDrag?.commit(component.id, { x: component.at.x + movement.x, y: component.at.y + movement.y })
+                }
+              } else if (command !== undefined) {
+                // Hold-to-repeat should only move apparatus, never multiply or delete it.
+                if (!event.repeat && (command !== 'duplicate' || component.kind !== 'voltage_source')) componentSelection.edit?.(component.id, command)
+              } else componentSelection.select(component.id)
             }}
             onPointerMove={onComponentPointerMove}
             onPointerUp={endComponentDrag}

@@ -16,6 +16,7 @@ import { captureWorkspaceRuntime, workspaceFrameOf, WorkspaceCaptureError } from
 import { requiresExperimentalForkForFact } from './experimental-branch.ts'
 import { captureObservation, NOTEBOOK_LIMIT, readNotebook } from '../experiments/experiment-notebook.ts'
 import { parseCircuitDraft, parseWorkbenchHistory } from './workbench-history-codec.ts'
+import { duplicateBuilderComponent, type BuilderEditCommand } from './circuit-part-drag.ts'
 
 export type WorkbenchBuildMode = BuildMode
 
@@ -129,6 +130,7 @@ export interface WorkbenchInstanceActions {
   setHighlight(ids: readonly string[]): WorkbenchInstanceSummary
   previewComponentPlacement(componentId: string, at: ScenePoint): WorkbenchInstanceSummary
   commitComponentPlacement(componentId: string, at: ScenePoint): WorkbenchInstanceSummary
+  nudgeComponentPlacement(componentId: string, delta: ScenePoint): WorkbenchInstanceSummary
   cancelComponentPlacement(): WorkbenchInstanceSummary
   setSwitchState(componentId: string, state: 'open' | 'closed'): WorkbenchInstanceSummary
   previewSliderPosition(componentId: string, position: number): WorkbenchInstanceSummary
@@ -137,6 +139,7 @@ export interface WorkbenchInstanceActions {
   enterBuilder(): WorkbenchInstanceSummary
   leaveBuilder(): WorkbenchInstanceSummary
   applyDraftEdit(edit: (draft: CircuitDraft) => CircuitDraft): WorkbenchInstanceSummary
+  editBuilderComponent(componentId: string, command: BuilderEditCommand): WorkbenchInstanceSummary
   addComponent(type: BuilderComponentType, at?: ScenePoint, params?: BuilderParams): WorkbenchInstanceSummary
   addPart(part: BuilderPartSpec, at?: ScenePoint): WorkbenchInstanceSummary
   removeComponent(componentId: string): WorkbenchInstanceSummary
@@ -785,7 +788,11 @@ export const createWorkbenchInstanceRuntime = (options: CreateWorkbenchInstanceO
     seek: time => Number.isFinite(time) ? viewAction(() => runtime.seek(time), true) : actionError('INVALID_TIME', 'Scene time must be finite.'),
     step: delta => Number.isFinite(delta) ? viewAction(() => runtime.step(delta), true) : actionError('INVALID_TIME', 'Scene time step must be finite.'),
     setHighlight: ids => {
-      highlighted = copy(ids)
+      const surviving = buildMode === 'construct' && draft !== undefined
+        ? ids.filter(id => draft!.components.some(component => component.id === id)) : ids
+      // A delayed inspector acknowledgement must not select apparatus removed by undo.
+      if (ids.length > 0 && surviving.length === 0) return summary
+      highlighted = copy(surviving)
       return viewAction(() => runtime.setHighlight(highlighted))
     },
     previewComponentPlacement: (componentId, at) => {
@@ -801,6 +808,15 @@ export const createWorkbenchInstanceRuntime = (options: CreateWorkbenchInstanceO
       const result = transaction('component:placement', () => runtime.commitComponentPlacement?.(componentId, at) ?? runtime.getSnapshot(), domain === 'optics')
       if (frames.getSnapshot().clock.time !== beforeTime) persist('clock')
       return result
+    },
+    nudgeComponentPlacement: (componentId, delta) => {
+      if (disposed || buildMode !== 'construct' || !Number.isFinite(delta.x) || !Number.isFinite(delta.y)) return summary
+      const component = draft?.components.find(item => item.id === componentId)
+      if (component === undefined) return summary
+      const result = actions.commitComponentPlacement(componentId, {
+        x: component.placement.x + delta.x, y: component.placement.y + delta.y,
+      })
+      return result.diagnostics.length > 0 ? result : actions.setHighlight([componentId])
     },
     cancelComponentPlacement: cancelPreview,
     setSwitchState: (componentId, state) => runtime.setSwitchState === undefined ? summary
@@ -835,6 +851,22 @@ export const createWorkbenchInstanceRuntime = (options: CreateWorkbenchInstanceO
       return summary
     },
     applyDraftEdit,
+    editBuilderComponent: (componentId, command) => {
+      if (disposed || buildMode !== 'construct') return summary
+      let selection: readonly string[] | undefined
+      const result = applyDraftEdit(current => {
+        if (!current.components.some(component => component.id === componentId)) return current
+        if (command === 'duplicate') {
+          const copied = duplicateBuilderComponent(current, componentId)
+          if (copied === undefined) return current
+          selection = [copied.componentId]
+          return copied.draft
+        }
+        selection = command === 'remove' ? [] : [componentId]
+        return command === 'remove' ? removeComponent(current, componentId) : rotateComponent(current, componentId)
+      })
+      return selection === undefined || result.diagnostics.length > 0 ? result : actions.setHighlight(selection)
+    },
     addComponent: (type, at, params) => applyDraftEdit(current => addComponent(current, type, at, params).draft),
     addPart: (part, at) => applyDraftEdit(current => addPart(current, part, at).draft),
     removeComponent: componentId => applyDraftEdit(current => removeComponent(current, componentId)),
