@@ -42,7 +42,12 @@
   border-radius: 8px;
   background: var(--dsw-alias-bg-base);
 }
-.libraryDialog { width: min(1100px, calc(100vw - 32px)); max-width: calc(100vw - 32px); }
+.libraryDialog { width: min(1100px, 100%); max-width: 100%; max-height: 100%; }
+.pickerContent { flex: 1 1 auto; min-height: 0; overflow: hidden; }
+.pickerContent > :first-child { flex: 0 0 auto; }
+.pickerContent > :last-child { flex: 1 1 auto; min-height: 0; overflow: hidden; }
+.pickerContent fieldset { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.pickerContent :global([data-physicsos-state='picker']) { max-height: 100%; }
 .focusDialog { width: min(1440px, calc(100vw - 32px)); max-width: calc(100vw - 32px); }
 .focusContent { min-width: 0; min-height: 0; overflow: hidden; }
 :global([data-platform='darwin']) .workspace,
