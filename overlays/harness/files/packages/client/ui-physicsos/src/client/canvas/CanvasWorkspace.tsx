@@ -69,6 +69,9 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
   const [suspendingPanKeys, setSuspendingPanKeys] = useState(false)
   const importInput = useRef<HTMLInputElement>(null)
   const manifest = document?.manifest
+  useEffect(() => {
+    if (window.matchMedia?.('(pointer: coarse)').matches || navigator.maxTouchPoints > 0) actions.setTool('hand')
+  }, [canvasId, actions])
   const latestDocument = useRef(document)
   latestDocument.current = document
   useEffect(() => {
@@ -101,7 +104,7 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
     try { await operation(); if (success !== undefined) actions.showToast(success, undefined) }
     catch (error) { actions.showToast('canvas.error.generic', errorMessage(error, props), true) }
   }, [actions, props])
-  const editable = manifest !== undefined && document?.status !== 'deleted' && document?.loading !== true
+  const editable = manifest !== undefined && document?.status !== 'deleted' && document?.status !== 'auth-required' && document?.loading !== true
   const canSubmitLocal = editable && document?.status === 'conflict' && document.head?.deletedAt === undefined
   const submitLocal = async (): Promise<void> => {
     const working = latest.current.manifest
@@ -133,7 +136,7 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
     const layouts = new Map(manifest.nodes.map(node => {
       const layout = view.transientLayouts[node.id] ?? node.layout
       const constructing = node.kind === 'experiment' && manifest.instances.some(instance => instance.instanceId === node.instanceId && instance.buildMode === 'construct')
-      return [node.id, constructing ? { ...layout, width: Math.max(layout.width, 1080), height: Math.max(layout.height, 700) } : layout] as const
+      return [node.id, constructing ? { ...layout, width: Math.max(layout.width, 480), height: Math.max(layout.height, 640) } : layout] as const
     }))
     const depth = (node: CanvasNode): number => {
       let parent = node.groupId
@@ -403,7 +406,7 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
   }
   const located = (manifest?.nodes ?? []).filter(node => `${node.title ?? ''} ${node.kind} ${node.id}`.toLocaleLowerCase().includes(locateSearch.toLocaleLowerCase()))
 
-  return <main ref={root} className={css.workspace} data-physicsos-canvas-workspace="true" data-canvas-id={canvasId}
+  return <main ref={root} className={`${css.workspace} ${view.tool === 'hand' ? css.handMode : ''}`} data-physicsos-canvas-workspace="true" data-canvas-id={canvasId}
     tabIndex={0} aria-label={t('canvas.title')} onKeyDown={keyboard}
     onFocusCapture={event => { setSuspendingPanKeys(inputTarget(event.target)) }}
     onBlurCapture={event => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) { setSpacePan(false); setSuspendingPanKeys(false) } }}
@@ -425,7 +428,8 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
         <Button size="sm" variant="outline" disabled={!editable || (manifest?.snapshots.length ?? 0) < 2} onClick={createComparison}>{t('canvas.compare')}</Button>
         <Tooltip label={t('canvas.undo')} portal><Button size="sm" variant="toolbar" disabled={!editable || document?.canUndo !== true} aria-label={t('canvas.undo')} onClick={() => { void run(() => canvasCommands.undo(canvasId)) }}>{t('canvas.undo')}</Button></Tooltip>
         <Tooltip label={t('canvas.redo')} portal><Button size="sm" variant="toolbar" disabled={!editable || document?.canRedo !== true} aria-label={t('canvas.redo')} onClick={() => { void run(() => canvasCommands.redo(canvasId)) }}>{t('canvas.redo')}</Button></Tooltip>
-        <Button size="sm" variant={view.tool === 'hand' ? 'primary' : 'toolbar'} aria-pressed={view.tool === 'hand'} onClick={() => { actions.setTool(view.tool === 'hand' ? 'select' : 'hand') }}>{t(view.tool === 'hand' ? 'canvas.hand' : 'canvas.select')}</Button>
+        <Button size="sm" variant={view.tool === 'hand' ? 'primary' : 'toolbar'} aria-pressed={view.tool === 'hand'} onClick={() => { actions.setTool('hand') }}>{t('canvas.hand')}</Button>
+        <Button size="sm" variant={view.tool === 'select' ? 'primary' : 'toolbar'} aria-pressed={view.tool === 'select'} onClick={() => { actions.setTool('select') }}>{t('canvas.select')}</Button>
         <Button size="sm" variant="toolbar" onClick={() => { setLocateOpen(true) }}>{t('canvas.locate')}</Button>
         <Button size="sm" variant="outline" disabled={!editable || document?.status === 'syncing'} onClick={() => { void run(async () => { await canvasCommands.flush(canvasId); await canvasCommands.sync(canvasId) }) }}>{t('canvas.save')}</Button>
         <Menu open={menuOpen} portal autoFocus onClose={() => { setMenuOpen(false) }}

@@ -871,13 +871,20 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
 
     if (method === 'session.create' && !admin(actor)) {
       guard()
-      const workspace = await deps.ensureWorkspace(actor)
-      guard()
-      await deps.store.claim(actor, 'workspace', workspace.id)
+      const requestedWorkspace = workspaceIdOf(payload)
+      let targetWorkspace: string
+      if (requestedWorkspace !== undefined && deps.store.owns(actor, 'workspace', requestedWorkspace)) {
+        targetWorkspace = requestedWorkspace
+      } else {
+        const workspace = await deps.ensureWorkspace(actor)
+        guard()
+        await deps.store.claim(actor, 'workspace', workspace.id)
+        targetWorkspace = workspace.id
+      }
       guard()
       delete payload['cwd']
       delete payload['sessionId']
-      payload['workspaceId'] = workspace.id
+      payload['workspaceId'] = targetWorkspace
       payload['agentPreset'] = STUDENT_PRESET
     } else if (method === 'session.create') {
       /* Reuse calls (`sessionId` present) keep the Session's own preset —

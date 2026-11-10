@@ -58,6 +58,9 @@
     },
     {
       "path": "../../util/crypto"
+    },
+    {
+      "path": "../file-upload/tsconfig.client.json"
     }
   ]
 }

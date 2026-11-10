@@ -11,6 +11,7 @@ export type PhysicsSurfaceId =
   | 'home'
   | 'lab'
   | 'canvas'
+  | 'projects'
   | 'record'
   | 'paper'
   | 'library'
@@ -29,6 +30,7 @@ export type PhysicsSurfaceId =
 export const PHYSICS_PANEL_IDS = {
   lab: 'physicsos-lab' as MainPanelId,
   canvas: 'physicsos-canvas' as MainPanelId,
+  projects: 'physicsos-projects' as MainPanelId,
   paper: 'physicsos-paper' as MainPanelId,
   notice: 'physicsos-notice' as MainPanelId,
   library: 'physicsos-library' as MainPanelId,
@@ -40,6 +42,7 @@ export const PHYSICS_PANEL_IDS = {
 const SURFACE_BY_PANEL: Readonly<Record<string, PhysicsSurfaceId>> = {
   [PHYSICS_PANEL_IDS.lab]: 'lab',
   [PHYSICS_PANEL_IDS.canvas]: 'canvas',
+  [PHYSICS_PANEL_IDS.projects]: 'projects',
   [PHYSICS_PANEL_IDS.paper]: 'paper',
   [PHYSICS_PANEL_IDS.notice]: 'notice',
   [PHYSICS_PANEL_IDS.library]: 'library',

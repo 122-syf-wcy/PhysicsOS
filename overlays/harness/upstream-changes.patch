@@ -19121,3 +19121,108 @@ index 0f97822..ab19295 100644
    it('retries EPERM only when the lock path currently exists', async () => {
      const dir = await scratch()
      const target = join(dir, 'document')
+
+diff --git a/packages/client/file-upload/src/client/index.ts b/packages/client/file-upload/src/client/index.ts
+--- a/packages/client/file-upload/src/client/index.ts
++++ b/packages/client/file-upload/src/client/index.ts
+@@ -24,3 +24,5 @@
+ export function apply(ctx: Context): void {
+   ctx.plugin(FileUploadRuntime)
+ }
++
++export { browserPhotoType, isBrowserPhoto, normalizePhoto } from './photo-input.ts'
+diff --git a/packages/client/ui-conversation/src/client/service.ts b/packages/client/ui-conversation/src/client/service.ts
+--- a/packages/client/ui-conversation/src/client/service.ts
++++ b/packages/client/ui-conversation/src/client/service.ts
+@@ -1,3 +1,4 @@
++import { isBrowserPhoto, normalizePhoto } from '@deepseek-ai/dsh-client-file-upload/client'
+ /**
+  * Scope-addressed conversation send, cancel, and history orchestration.
+  *
+@@ -308,7 +309,7 @@
+    */
+   createDrafts(sessionId: SessionId, files: readonly File[]): readonly ComposerAttachment[] {
+     return files.map((file) => {
+-      if (isImageMediaType(file.type)) {
++      if (isBrowserPhoto(file)) {
+         const attachment = browserDraftAttachment(file)
+         this.draftAttachments.set(attachment.id, attachment)
+         probeDimensions(attachment)
+@@ -574,6 +575,7 @@
+ 
+   /** Canonical base64 wire form of one browser image file. */
+   private async encodeImage(file: File): Promise<Omit<Extract<SubmitAttachment, { type: 'image' }>, 'type'>> {
++    file = await normalizePhoto(file)
+     return {
+       mediaType: imageMediaType(file.type),
+       data: await base64ImageOf(file),
+diff --git a/packages/client/ui-conversation/src/client/skeleton/InputBar.tsx b/packages/client/ui-conversation/src/client/skeleton/InputBar.tsx
+--- a/packages/client/ui-conversation/src/client/skeleton/InputBar.tsx
++++ b/packages/client/ui-conversation/src/client/skeleton/InputBar.tsx
+@@ -1,3 +1,4 @@
++import { isBrowserPhoto } from '@deepseek-ai/dsh-client-file-upload/client'
+ /** The default composer body: the 'conversation.composer.bar' slot entry.
+  * Machine state arrives through the standard provide channel
+  * (useInput + inputActions); the keyboard/DOM command face and stop arrive
+@@ -213,7 +214,7 @@
+     const rejected = ((): string | null => {
+       if (imageLimits !== undefined) {
+         const mediaTypes = imageLimits.mediaTypes as readonly string[]
+-        const images = files.filter(file => mediaTypes.includes(file.type))
++        const images = files.filter(file => mediaTypes.includes(file.type) || isBrowserPhoto(file))
+         const imageAttachments = attachments.filter(attachment => attachment.kind === 'image')
+         if (imageAttachments.length + images.length > imageLimits.maxImagesPerMessage) {
+           return t('image.tooMany', { count: imageLimits.maxImagesPerMessage })
+
+diff --git a/packages/client/file-upload/tsconfig.client.json b/packages/client/file-upload/tsconfig.client.json
+--- a/packages/client/file-upload/tsconfig.client.json
++++ b/packages/client/file-upload/tsconfig.client.json
+@@ -13,11 +13,26 @@
+     "src/types.ts"
+   ],
+   "references": [
+-    { "path": "../../../vendor/cordis" },
+-    { "path": "../../util/brand" },
+-    { "path": "../../util/crypto" },
+-    { "path": "../../attachment/attachment" },
+-    { "path": "../../core/session" },
+-    { "path": "../../typert/protocol" }
++    {
++      "path": "../../../vendor/cordis"
++    },
++    {
++      "path": "../../util/brand"
++    },
++    {
++      "path": "../../util/crypto"
++    },
++    {
++      "path": "../../attachment/attachment"
++    },
++    {
++      "path": "../../core/session"
++    },
++    {
++      "path": "../../typert/protocol"
++    }
++  ],
++  "include": [
++    "src/client/photo-input.ts"
+   ]
+ }
+
+diff --git a/packages/client/ui-conversation/package.json b/packages/client/ui-conversation/package.json
+--- a/packages/client/ui-conversation/package.json
++++ b/packages/client/ui-conversation/package.json
+@@ -37,7 +37,10 @@
+         "@deepseek-ai/dsh-client-ui-settings",
+         "@deepseek-ai/dsh-client-ui-workspace"
+       ],
+-      "platform": "web"
++      "platform": "web",
++      "external": [
++        "@deepseek-ai/dsh-client-file-upload/client"
++      ]
+     }
+   },
+   "scripts": {

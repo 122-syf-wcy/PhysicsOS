@@ -92,7 +92,7 @@ export function CanvasFrameStage(props: CanvasFrameProps) {
     if (!constructing || readOnly) return
     act('editBuilderComponent', id, command)
   }
-  const dockReadings = constructing && narrowStage
+  const dockReadings = narrowStage
   const failedRenderer = !constructing && (renderer?.status === 'error' || (renderer?.entryUrl !== undefined && failedUrl === renderer.entryUrl))
   const bench = useMemo(() => summary === undefined || frame === undefined ? undefined
     : lensBenchSnapshot({ ...summary.workspace, view: frame.view }), [summary, frame])

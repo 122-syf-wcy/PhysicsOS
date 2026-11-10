@@ -131,6 +131,7 @@ export function SidebarNav({ wide, openSurface, usePhysicsSurface, useAuth, t }:
       {isOpen('explore') && (
         <>
           {item('lab', 'nav.lab', <IconPhysicsLab size={iconSize} />)}
+          {item('projects', 'nav.projects', <IconScene size={iconSize} />)}
           {item('canvas', 'nav.canvas', <IconScene size={iconSize} />)}
           {teaching && item('paper', 'nav.paper', <IconQuestionSheet size={iconSize} />)}
           {item('notice', 'nav.notice', <IconAnnouncement size={iconSize} />)}

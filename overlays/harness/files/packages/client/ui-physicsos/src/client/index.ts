@@ -30,6 +30,7 @@ import { createCanvasController } from './canvas/controller.ts'
 import { createCanvasPersistence } from './canvas/persistence.ts'
 import { registerCanvasViews } from './canvas/register.ts'
 import { startCanvasNavigation } from './canvas/navigation.ts'
+import { StudyProjects, type ProjectBoard } from './StudyProjects.tsx'
 import { loadWorkspaceModule } from './optional-modules.ts'
 import { startSyncRetry } from './sync-retry.ts'
 import { requestDirectRegeneration } from './question-code-regenerate.ts'
@@ -246,6 +247,48 @@ export function apply(ctx: ClientContext): void {
     })
     return { id: workspace.workspaceId, name }
   }
+
+  const listProjectBoards = async (): Promise<readonly ProjectBoard[]> => {
+    const current = auth.store.getSnapshot()
+    if (current.status !== 'authed' || current.user === undefined) return []
+    const api = createCanvasApi().forOwner(current.user)
+    const result = new Map<string, ProjectBoard>()
+    if (navigator.onLine) {
+      const heads = await api.list({ limit: 100, deleted: 'live' })
+      for (let at = 0; at < heads.items.length; at += 4) {
+        const entries = await Promise.all(heads.items.slice(at, at + 4).map(head => api.open(head.id)))
+        const active = auth.store.getSnapshot()
+        if (active.status !== 'authed' || active.user === undefined || active.user.id !== current.user.id) return []
+        for (const value of entries) result.set(value.head.id, { id: value.head.id, title: value.head.title,
+          ...(typeof value.manifest.metadata?.studyProjectId === 'string' ? { projectId: value.manifest.metadata.studyProjectId } : {}) })
+      }
+    }
+    for (const value of canvas.getSnapshot().documents) if (!value.deleted && canvas.documentSource(value.id).getSnapshot().manifest !== undefined) {
+      result.set(value.id, { id: value.id, title: value.title, ...(value.projectId === undefined ? {} : { projectId: value.projectId }) })
+    }
+    return [...result.values()]
+  }
+  const assertProject = (projectId: string): void => {
+    if (!ctx.workspaces.list.getSnapshot().items.some(value => value.workspaceId === projectId)) throw new Error('PROJECT_NOT_FOUND')
+  }
+  ctx.slots.inject('main', () => ctx.slots.register({
+    name: 'main', key: PHYSICS_PANEL_IDS.projects, locale: NS,
+    inject: () => ({
+      createProject: createAccountWorkspace,
+      renameProject: async (id: string, title: string) => { await ctx.workspaces.rename(id as WorkspaceId, title) },
+      openConversation: (id: SessionId) => { ctx.uiWorkspace.openSession(id) },
+      newConversation: (id: WorkspaceId) => ctx.uiWorkspace.openWorkspace(id),
+      renameConversation: async (id: SessionId, title: string) => {
+        const result = await ctx.sessions.using(id, { source: 'workspaceOperation' }, reference => reference.binding.session.rename(title))
+        if (!result.ok) throw new Error(result.error.message)
+      },
+      addConversation: async (workspaceId: WorkspaceId, sessionId: SessionId) => { await ctx.workspaces.insertSessionBefore(workspaceId, sessionId) },
+      listBoards: listProjectBoards,
+      assignBoard: async (id: string, projectId: string) => { assertProject(projectId); await canvas.assignProject(id, projectId) },
+      newBoard: async (projectId: string, title: string) => { assertProject(projectId); const id = await canvas.create(title); await canvas.assignProject(id, projectId); surface.openCanvas(id) },
+      openBoard: (id: string) => { surface.openCanvas(id) },
+    }),
+  }, StudyProjects))
 
   /* The student's attempt history: written by self-checks (the Lab's 自测 tab
      and golden-question cards), read by the 学习记录 surface. Persisted so the
@@ -541,6 +584,7 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     inject: () => ({
       hooks: { recentExperiments: surface.recent },
+      startQuestion: () => { ctx.uiWorkspace.startSession() },
       openCanvasView: canvasEntry.openCanvasView,
       newCanvas: canvasEntry.newCanvas,
       requestSceneInCanvas: canvasEntry.requestSceneInCanvas,
@@ -548,7 +592,7 @@ export function apply(ctx: ClientContext): void {
          than on the magnetic demo — the same chooser the sidebar uses. A recent
          entry hands its stored scene over and restores it directly. */
       openSurface: (
-        id: 'home' | 'lab' | 'record' | 'canvas',
+        id: 'home' | 'lab' | 'record' | 'canvas' | 'projects',
         sceneRef?: Parameters<typeof surface.open>[1],
       ) => {
         if (id === 'lab' && sceneRef === undefined) surface.openExperimentPicker()
@@ -811,7 +855,7 @@ export function apply(ctx: ClientContext): void {
         practiceQuestion,
       })
       for (const panelId of Object.values(PHYSICS_PANEL_IDS)) {
-        if (panelId === PHYSICS_PANEL_IDS.canvas) continue
+        if (panelId === PHYSICS_PANEL_IDS.canvas || panelId === PHYSICS_PANEL_IDS.projects) continue
         yield scope.slots.register({
           name: 'main',
           key: panelId,
