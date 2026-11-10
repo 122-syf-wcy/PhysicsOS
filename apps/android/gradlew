@@ -1,0 +1,37 @@
+#!/bin/sh
+# Small launcher for the official, checksum-verified Gradle 8.13 wrapper JAR.
+set -eu
+APP_HOME=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+WRAPPER_JAR="$APP_HOME/gradle/wrapper/gradle-wrapper.jar"
+EXPECTED_SHA256=81a82aaea5abcc8ff68b3dfcb58b3c3c429378efd98e7433460610fecd7ae45f
+
+if [ ! -f "$WRAPPER_JAR" ]; then
+    printf '%s\n' 'The official Gradle wrapper JAR has not been generated yet.' \
+        'Run scripts/android/prepare-wrapper.sh inside the server Android toolchain.' >&2
+    exit 78
+fi
+if command -v sha256sum >/dev/null 2>&1; then
+    actual_sha256=$(sha256sum "$WRAPPER_JAR")
+elif command -v shasum >/dev/null 2>&1; then
+    actual_sha256=$(shasum -a 256 "$WRAPPER_JAR")
+else
+    printf '%s\n' 'A SHA-256 verifier is required before launching the Gradle wrapper.' >&2
+    exit 78
+fi
+actual_sha256=${actual_sha256%% *}
+if [ "$actual_sha256" != "$EXPECTED_SHA256" ]; then
+    printf '%s\n' 'Gradle wrapper JAR checksum mismatch. Do not run this JAR.' >&2
+    exit 78
+fi
+
+if [ -n "${JAVA_HOME:-}" ]; then
+    JAVA_CMD="$JAVA_HOME/bin/java"
+else
+    JAVA_CMD=$(command -v java || true)
+fi
+if [ -z "$JAVA_CMD" ] || [ ! -x "$JAVA_CMD" ]; then
+    printf '%s\n' 'Use the JDK 17 Android toolchain container on the build server.' >&2
+    exit 78
+fi
+exec "$JAVA_CMD" -Xms64m -Xmx64m -Dorg.gradle.appname=gradlew \
+    -classpath "$WRAPPER_JAR" org.gradle.wrapper.GradleWrapperMain "$@"

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="navigation_document_missing">This content is unavailable or was cleared when you signed out. Open it again from its original screen.</string>
+    <string name="navigation_external_invalid">This link cannot be opened. Only web links without embedded credentials are supported.</string>
+    <string name="navigation_operation_failed">Unable to save or open this content. Check device storage and try again.</string>
+    <string name="navigation_document_title">Learning content</string>
+    <string name="navigation_privacy_title">Privacy information</string>
+    <string name="navigation_terms_title">Terms of use</string>
+    <string name="navigation_sdks_title">Third-party components</string>
+    <string name="navigation_reauthenticate">Your online session needs verification. Saved content remains available on this device.</string>
+    <string name="navigation_sign_in">Sign in again</string>
+</resources>

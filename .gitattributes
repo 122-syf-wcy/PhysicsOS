@@ -1,5 +1,13 @@
 * text=auto eol=lf
 
+# Native Windows launchers need CRLF; shared source stays LF on every machine.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=lf
+*.kt text eol=lf
+*.kts text eol=lf
+*.jar binary
+
 *.png binary
 *.jpg binary
 *.jpeg binary

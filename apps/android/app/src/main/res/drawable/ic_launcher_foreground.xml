@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Native vector of the existing desktop atom mark, using the learning brand green. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="@android:color/transparent" android:strokeColor="@color/physics_brand_green"
+        android:strokeWidth="4.6" android:pathData="M23,54C23,46 37,40 54,40C71,40 85,46 85,54C85,62 71,68 54,68C37,68 23,62 23,54Z" />
+    <group android:rotation="60" android:pivotX="54" android:pivotY="54">
+        <path android:fillColor="@android:color/transparent" android:strokeColor="@color/physics_brand_green"
+            android:strokeWidth="4.6" android:pathData="M23,54C23,46 37,40 54,40C71,40 85,46 85,54C85,62 71,68 54,68C37,68 23,62 23,54Z" />
+    </group>
+    <group android:rotation="120" android:pivotX="54" android:pivotY="54">
+        <path android:fillColor="@android:color/transparent" android:strokeColor="@color/physics_brand_green"
+            android:strokeWidth="4.6" android:pathData="M23,54C23,46 37,40 54,40C71,40 85,46 85,54C85,62 71,68 54,68C37,68 23,62 23,54Z" />
+    </group>
+    <path android:fillColor="@color/physics_brand_green" android:pathData="M54,46a8,8 0,1 0,0 16a8,8 0,1 0,0 -16" />
+</vector>

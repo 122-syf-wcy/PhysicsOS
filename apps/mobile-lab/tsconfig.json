@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "allowImportingTsExtensions": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "baseUrl": ".",
+    "paths": {
+      "@lab/physics/*": ["../../overlays/harness/files/packages/client/ui-physicsos/src/client/physics/*"],
+      "@lab/client/*": ["../../overlays/harness/files/packages/client/ui-physicsos/src/client/*"],
+      "@physicsos/*": ["../../packages/*/src/index.ts"],
+      "@physicsos/physics-workbench/*": ["../../packages/physics-workbench/src/*.ts"],
+      "@physicsos/question-core/*": ["../../packages/question-core/src/*.ts"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "tests/**/*.ts"]
+}

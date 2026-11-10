@@ -16,6 +16,8 @@
 
 ## 开发环境
 
+安卓开发在 Windows 使用原生 Android Studio、JDK 17 和项目 Gradle Wrapper；Mac 负责网页/服务端源码，网页与后端正式验证仍在服务器 Docker 完成。入口见 [安卓开发说明](apps/android/README.md) 与 [跨平台开发规范](docs/CROSS-PLATFORM-DEVELOPMENT.md)。开发中交接快照必须声明缺口，不等同于已通过发布门禁。
+
 仓库根与 `vendor/deepseek-harness` 是两个独立的 pnpm 工作区，pnpm 版本由各自的 `packageManager` 字段固定，不要用全局版本覆盖它：
 
 | 位置                      | pnpm 版本     | 来源                                   |

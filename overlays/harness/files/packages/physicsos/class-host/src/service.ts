@@ -40,7 +40,15 @@ export const assignmentWire = z.object({
   instructions: z.string().max(4000).optional(),
   target: assignmentTargetWire,
   dueAt: z.iso.datetime({ offset: true }),
+  publishedAt: z.iso.datetime({ offset: true }).optional(),
+  answerPolicy: z.enum(['never', 'after-due', 'after-review']).optional(),
 })
+
+export const assignmentPublicationWire = z.object({
+  publishedAt: z.iso.datetime({ offset: true }).optional(),
+  retired: z.boolean().optional(),
+  answerPolicy: z.enum(['never', 'after-due', 'after-review']).optional(),
+}).strict().refine(value => Object.keys(value).length > 0)
 
 export const submissionWire = z.object({
   content: z.string().min(1).max(16_000),
@@ -56,6 +64,7 @@ export interface SubmissionReceipt {
   readonly assignmentId: string
   readonly classId: string
   readonly studentKey: string
+  readonly revision: number
   readonly submittedAt: string
   readonly dueAt: string
   readonly late: boolean
@@ -114,8 +123,28 @@ const normalizeUserKey = (userKey: string): string => {
 const MAX_CLASS_MEMBERS = 500
 const MAX_CLASS_ASSIGNMENTS = 500
 
+export interface SubmissionMutation { readonly baseRevision: number; readonly mutationId: string }
+export interface StudentAssignmentGrant {
+  readonly assignment: AssignmentRecord
+  readonly answerPolicy: { readonly mode: 'never' | 'after-due' | 'after-review'; readonly released: boolean }
+}
+
 export class ClassService {
+  private readonly queues = new Map<string, Promise<void>>()
   constructor(private readonly domain: Domain<typeof classDomain>) {}
+
+  private serial<T>(actor: IdentityActor, operation: () => Promise<T>): Promise<T> {
+    const key = JSON.stringify([actor.schoolId, actor.userKey])
+    const result = (this.queues.get(key) ?? Promise.resolve()).then(operation)
+    const settled = result.then(() => {}, () => {})
+    this.queues.set(key, settled)
+    void settled.then(() => { if (this.queues.get(key) === settled) this.queues.delete(key) })
+    return result
+  }
+  private assertActive(actor: IdentityActor): void {
+    const fence = this.domain.table('erased_accounts').get(actor.userKey)
+    if (fence !== undefined && fence.schoolId === actor.schoolId && (!fence.complete || actor.userId === undefined || actor.userId === fence.userId)) throw new ClassError(410, 'ACCOUNT_ERASED', '账户已删除或正在删除')
+  }
 
   private get classes() {
     return this.domain.table('classes')
@@ -131,6 +160,7 @@ export class ClassService {
   }
 
   private classFor(actor: IdentityActor, classId: string): ClassRecord {
+    this.assertActive(actor)
     const classroom = this.classes.get(classId)
     if (classroom === undefined) throw new ClassError(404, 'NOT_FOUND', '班级不存在')
     if (classroom.schoolId !== actor.schoolId) {
@@ -147,7 +177,8 @@ export class ClassService {
   }
 
   private isMember(actor: IdentityActor, classId: string): boolean {
-    return this.memberships.get(membershipId(classId, actor.userKey)) !== undefined
+    const row = this.memberships.get(membershipId(classId, actor.userKey))
+    return row !== undefined && row.classId === classId && row.userKey === actor.userKey && row.schoolId === actor.schoolId
   }
 
   private assertVisible(actor: IdentityActor, classroom: ClassRecord): void {
@@ -176,9 +207,10 @@ export class ClassService {
       assignmentId: assignment.id,
       classId: assignment.classId,
       studentKey: submission.studentKey,
+      revision: submission.revision ?? 1,
       submittedAt: submission.submittedAt,
       dueAt: assignment.dueAt,
-      late: submission.submittedAt > assignment.dueAt,
+      late: Date.parse(submission.submittedAt) > Date.parse(assignment.dueAt),
       status: submission.review?.status ?? 'submitted',
       ...(submission.review === undefined ? {} : { review: submission.review }),
     }
@@ -284,6 +316,8 @@ export class ClassService {
       title: input.data.title,
       target: input.data.target satisfies AssignmentTarget,
       dueAt: input.data.dueAt,
+      publishedAt: input.data.publishedAt ?? now,
+      answerPolicy: input.data.answerPolicy ?? 'never',
       createdBy: actor.userKey,
       createdAt: now,
       updatedAt: now,
@@ -303,37 +337,88 @@ export class ClassService {
       .slice(0, limit)
   }
 
-  async submitAssignment(
+  private published(assignment: AssignmentRecord): boolean {
+    const at = Date.parse(assignment.publishedAt ?? assignment.createdAt)
+    return assignment.retiredAt === undefined && Number.isFinite(at) && at <= Date.now()
+  }
+
+  /** A paper reader must obtain this grant anew, rather than accepting target/tenant fields from a device. */
+  assignmentForStudent(actor: IdentityActor, classId: string, assignmentId: string): StudentAssignmentGrant {
+    if (actor.role !== 'STUDENT') throw new ClassError(403, 'STUDENT_REQUIRED', '仅学生可读取作业目标')
+    const classroom = this.classFor(actor, classId)
+    if (!this.isMember(actor, classId)) throw new ClassError(403, 'FORBIDDEN', '仅班级成员可读取作业')
+    const assignment = this.assignmentFor(classroom, assignmentId)
+    if (!this.published(assignment)) throw new ClassError(404, 'NOT_FOUND', '作业未发布或已撤回')
+    const mode = assignment.answerPolicy ?? 'never'
+    const submitted = this.submissions.get(submissionId(classId, assignmentId, actor.userKey))
+    const released = mode === 'after-due' ? Date.now() >= Date.parse(assignment.dueAt)
+      : mode === 'after-review' && submitted?.schoolId === actor.schoolId && submitted.studentKey === actor.userKey && submitted.review?.status === 'accepted'
+    return { assignment, answerPolicy: { mode, released } }
+  }
+
+  studentClasses(actor: IdentityActor): ClassRecord[] {
+    if (actor.role !== 'STUDENT') throw new ClassError(403, 'STUDENT_REQUIRED', '仅学生可读取本人班级')
+    this.assertActive(actor)
+    return this.listClasses(actor, Number.MAX_SAFE_INTEGER).filter(row => this.isMember(actor, row.id))
+  }
+
+  studentAssignments(actor: IdentityActor, classId: string): AssignmentRecord[] {
+    if (actor.role !== 'STUDENT') throw new ClassError(403, 'STUDENT_REQUIRED', '仅学生可读取本人作业')
+    this.classFor(actor, classId)
+    if (!this.isMember(actor, classId)) throw new ClassError(403, 'FORBIDDEN', '仅班级成员可读取作业')
+    return this.listAssignments(actor, classId, MAX_CLASS_ASSIGNMENTS).filter(row => this.published(row))
+  }
+
+  async setAssignmentPublication(actor: IdentityActor, classId: string, assignmentId: string, body: unknown): Promise<AssignmentRecord> {
+    const classroom = this.classFor(actor, classId)
+    this.assertOwner(actor, classroom)
+    this.assignmentFor(classroom, assignmentId)
+    const input = assignmentPublicationWire.safeParse(body)
+    if (!input.success) throw new ClassError(400, 'BAD_REQUEST', '发布或答案规则无效')
+    return this.assignments.update(assignmentId, current => ({ ...current,
+      ...(input.data.publishedAt === undefined ? {} : { publishedAt: input.data.publishedAt }),
+      ...(input.data.answerPolicy === undefined ? {} : { answerPolicy: input.data.answerPolicy }),
+      ...(input.data.retired === undefined ? {} : { retiredAt: input.data.retired ? new Date().toISOString() : undefined }),
+      updatedAt: new Date().toISOString(),
+    }))
+  }
+
+  submitAssignment(
     actor: IdentityActor,
     classId: string,
     assignmentId: string,
     body: unknown,
-  ): Promise<SubmissionResult> {
-    if (actor.role !== 'STUDENT') {
-      throw new ClassError(403, 'FORBIDDEN', '只有学生可以提交作业')
-    }
-    const classroom = this.classFor(actor, classId)
-    if (!this.isMember(actor, classId)) {
-      throw new ClassError(403, 'FORBIDDEN', '只有班级成员可以提交作业')
-    }
-    const assignment = this.assignmentFor(classroom, assignmentId)
-    const input = submissionWire.safeParse(body)
-    if (!input.success) throw new ClassError(400, 'BAD_REQUEST', '请填写 1 至 16000 字的作业内容')
-    const key = submissionId(classId, assignmentId, actor.userKey)
-    const existing = this.submissions.get(key)
-    const now = new Date().toISOString()
-    const record: SubmissionRecord = {
-      id: key,
-      classId,
-      assignmentId,
-      schoolId: classroom.schoolId,
-      studentKey: actor.userKey,
-      content: input.data.content,
-      submittedAt: existing?.submittedAt ?? now,
-      updatedAt: now,
-    }
-    await this.submissions.put(record.id, record)
-    return { item: record, receipt: this.receiptOf(assignment, record) }
+    mutation?: SubmissionMutation,
+  ): Promise<SubmissionResult & { replayed: boolean; appliedRevision: number }> {
+    return this.serial(actor, async () => {
+      const { assignment } = this.assignmentForStudent(actor, classId, assignmentId)
+      const input = submissionWire.safeParse(body)
+      if (!input.success || Buffer.byteLength(JSON.stringify(input.data)) > 64 * 1024) throw new ClassError(400, 'BAD_REQUEST', '请填写 1 至 16000 字的作业内容')
+      const key = submissionId(classId, assignmentId, actor.userKey)
+      const existing = this.submissions.get(key)
+      if (existing !== undefined && (existing.studentKey !== actor.userKey || existing.schoolId !== actor.schoolId)) throw new ClassError(404, 'NOT_FOUND', '提交不存在')
+      const currentRevision = existing === undefined ? 0 : existing.revision ?? 1
+      if (mutation !== undefined && (!Number.isSafeInteger(mutation.baseRevision) || mutation.baseRevision < 0 || !/^[A-Za-z0-9._:-]{1,128}$/.test(mutation.mutationId))) throw new ClassError(400, 'BAD_REQUEST', 'baseRevision 或幂等键无效')
+      const hash = crypto.createHash('sha256').update(JSON.stringify([classId, assignmentId, input.data.content, mutation?.baseRevision])).digest('hex')
+      const prior = mutation === undefined ? undefined : existing?.mutations?.find(value => value.id === mutation.mutationId)
+      const current = existing === undefined ? null : { ...this.receiptOf(assignment, existing), content: existing.content }
+      if (prior !== undefined && existing !== undefined) {
+        if (prior.hash !== hash) throw new ClassError(409, 'IDEMPOTENCY_CONFLICT', '幂等键已用于不同提交', { currentRevision, current })
+        return { item: existing, receipt: this.receiptOf(assignment, existing), replayed: true, appliedRevision: prior.revision }
+      }
+      if (mutation !== undefined && mutation.baseRevision !== currentRevision) throw new ClassError(409, 'VERSION_CONFLICT', '提交或教师反馈已更新，请先读取当前回执', { currentRevision, current })
+      if (mutation === undefined && existing?.content === input.data.content) return { item: existing, receipt: this.receiptOf(assignment, existing), replayed: true, appliedRevision: currentRevision }
+      const revision = currentRevision + 1
+      if (!Number.isSafeInteger(revision)) throw new ClassError(409, 'REVISION_EXHAUSTED', '提交版本已达上限')
+      const at = new Date().toISOString()
+      const record: SubmissionRecord = {
+        id: key, classId, assignmentId, schoolId: actor.schoolId, studentKey: actor.userKey,
+        content: input.data.content, submittedAt: existing?.submittedAt ?? at, updatedAt: at, revision,
+        mutations: [...(existing?.mutations ?? []), ...(mutation === undefined ? [] : [{ id: mutation.mutationId, hash, revision }])].slice(-128),
+      }
+      await this.submissions.put(record.id, record)
+      return { item: record, receipt: this.receiptOf(assignment, record), replayed: false, appliedRevision: revision }
+    })
   }
 
   getReceipt(
@@ -348,9 +433,9 @@ export class ClassService {
     if (!this.isMember(actor, classId)) {
       throw new ClassError(403, 'FORBIDDEN', '只有班级成员可以查看作业回执')
     }
-    const assignment = this.assignmentFor(classroom, assignmentId)
+    const { assignment } = this.assignmentForStudent(actor, classId, assignmentId)
     const submission = this.submissions.get(submissionId(classId, assignmentId, actor.userKey))
-    return submission === undefined
+    return submission === undefined || submission.schoolId !== actor.schoolId || submission.studentKey !== actor.userKey
       ? undefined
       : { item: submission, receipt: this.receiptOf(assignment, submission) }
   }
@@ -376,7 +461,12 @@ export class ClassService {
       .slice(0, limit)
   }
 
-  async reviewSubmission(
+  reviewSubmission(actor: IdentityActor, classId: string, assignmentId: string, studentKey: string, body: unknown): Promise<SubmissionRecord> {
+    const key = normalizeUserKey(studentKey)
+    return this.serial({ ...actor, userKey: key }, () => this.reviewSubmissionNow(actor, classId, assignmentId, key, body))
+  }
+
+  private async reviewSubmissionNow(
     actor: IdentityActor,
     classId: string,
     assignmentId: string,
@@ -395,8 +485,11 @@ export class ClassService {
     const key = submissionId(classId, assignmentId, normalizedKey)
     const existing = this.submissions.get(key)
     if (existing === undefined) throw new ClassError(404, 'NOT_FOUND', '作业提交不存在')
+    const revision = (existing.revision ?? 1) + 1
+    if (!Number.isSafeInteger(revision)) throw new ClassError(409, 'REVISION_EXHAUSTED', '提交版本已达上限')
     const updated: SubmissionRecord = {
       ...existing,
+      revision,
       updatedAt: new Date().toISOString(),
       review: {
         status: input.data.status,
@@ -477,7 +570,35 @@ export class ClassService {
     }
   }
 
+  exportMemberships(actor: IdentityActor): MembershipRecord[] {
+    this.assertActive(actor)
+    return [...this.memberships.entries()].map(([, row]) => row).filter(row => row.userKey === actor.userKey && row.schoolId === actor.schoolId)
+  }
+
+  exportSubmissions(actor: IdentityActor): SubmissionRecord[] {
+    this.assertActive(actor)
+    return [...this.submissions.entries()].map(([, row]) => row).filter(row => row.studentKey === actor.userKey && row.schoolId === actor.schoolId)
+  }
+
+  /** Clear only the disabled account's membership/submission rows, never a teacher's shared assignments. */
+  eraseAccount(actor: IdentityActor, request: { requestId: string; userId: string; userKey: string; schoolId: string }): Promise<void> {
+    return this.serial(actor, async () => {
+      if (request.userKey !== actor.userKey || request.schoolId !== actor.schoolId) throw new ClassError(403, 'FORBIDDEN', '清理账户不匹配')
+      const fences = this.domain.table('erased_accounts')
+      const prior = fences.get(actor.userKey)
+      if (prior?.requestId === request.requestId && prior.complete) return
+      if (prior !== undefined && !prior.complete && prior.requestId !== request.requestId) throw new ClassError(409, 'ERASURE_CONFLICT', '其他账户清理仍在进行')
+      await fences.put(actor.userKey, { ...request, complete: false })
+      for (const [key, row] of this.memberships.entries()) if (row.userKey === actor.userKey && row.schoolId === actor.schoolId) await this.memberships.delete(key)
+      for (const [key, row] of this.submissions.entries()) if (row.studentKey === actor.userKey && row.schoolId === actor.schoolId) await this.submissions.delete(key)
+      await fences.put(actor.userKey, { ...request, complete: true })
+    })
+  }
+
+  async dispose(): Promise<void> { await Promise.all([...this.queues.values()]) }
+
   listClasses(actor: IdentityActor, limit = 100): ClassRecord[] {
+    this.assertActive(actor)
     const memberClassIds = new Set(
       [...this.memberships.entries()]
         .map(([, row]) => row)

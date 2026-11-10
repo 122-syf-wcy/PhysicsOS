@@ -20,6 +20,11 @@ import { CanvasBlobStore } from './canvas-blob-store.ts'
 import { learningHostConfig, resolveCanvasConfig, type LearningHostConfig } from './canvas-config.ts'
 import { canvasRoutes, isCanvasPath } from './canvas-routes.ts'
 import { CanvasService } from './canvas-service.ts'
+import { dirname, join } from 'node:path'
+import { CheckpointStore } from './checkpoint-store.ts'
+import { createMobileLearning, MOBILE_LEARNING_SERVICE } from './mobile.ts'
+
+export type { MobileLearningFacade, AccountErasureRequest } from './mobile.ts'
 
 export { CanvasService } from './canvas-service.ts'
 export { CanvasBlobStore } from './canvas-blob-store.ts'
@@ -45,13 +50,17 @@ export async function apply(ctx: Context, config: Config = {}): Promise<() => Pr
   const resolved = resolveCanvasConfig(config)
   return ctx.effect(async function* () {
     const domain = await openLearningDomain(ctx)
-    const service = new LearningService(domain)
     yield () => domain.close()
+    const checkpoints = new CheckpointStore(join(dirname(dirname(resolved.root)), 'learning-checkpoints', 'v1'))
+    await checkpoints.initialize()
+    const service = new LearningService(domain, checkpoints)
+    yield () => service.dispose()
     const canvasDomain = await openCanvasDomain(ctx)
     yield () => canvasDomain.close()
     const canvas = new CanvasService(canvasDomain, new CanvasBlobStore(resolved.root), resolved)
     yield () => canvas.dispose()
     await canvas.initialize()
+    ctx.provide(MOBILE_LEARNING_SERVICE, createMobileLearning(service, canvas))
     const identity = () => identityOf(ctx)
     const learningHandler = learningRoutes({ service, identity })
     const canvasHandler = canvasRoutes({ service: canvas, identity })

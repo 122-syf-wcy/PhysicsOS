@@ -329,6 +329,28 @@ export class CanvasBlobStore {
     return removed
   }
 
+  /** Remove all private files for an auth-fenced account, including unindexed interrupted uploads. */
+  eraseAccount(scope: Pick<CanvasBlobScope, 'schoolId' | 'userKey'>): Promise<void> {
+    return this.track(async () => {
+      const path = join(this.root, 'accounts', canvasScopeKey(scope.schoolId, scope.userKey))
+      try { await this.assertPrivateAncestors(path) } catch (error) { if (hasErrorCode(error, 'ENOENT')) return; throw error }
+      const removeDirectory = async (directory: string): Promise<void> => {
+        await assertDirectory(directory, true)
+        for (const entry of await readdir(directory, { withFileTypes: true })) {
+          const child = join(directory, entry.name)
+          if (entry.isSymbolicLink()) throw new CanvasError(503, 'BLOB_UNSAFE_PATH', 'Account erasure encountered a symbolic link.')
+          if (entry.isDirectory()) await removeDirectory(child)
+          else if (entry.isFile()) await unlink(child)
+          else throw new CanvasError(503, 'BLOB_UNSAFE_PATH', 'Account erasure encountered a non-file entry.')
+        }
+        await syncDirectory(directory)
+        await rmdir(directory)
+        await syncDirectory(dirname(directory))
+      }
+      await removeDirectory(path)
+    })
+  }
+
   /**
    * Refuse new operations and wait for every acquired file handle to settle.
    * @returns One shared quiescent disposal promise.

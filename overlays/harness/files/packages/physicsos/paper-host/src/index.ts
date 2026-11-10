@@ -26,7 +26,7 @@ import type {} from '@deepseek-ai/dsh-llm'
 import z from '@deepseek-ai/schemastery'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import {
-  DEFAULT_BANK_POLICY, EXAM_BLUEPRINTS, planRow, questionFromBankItem, solveFindings,
+  DEFAULT_BANK_POLICY, EXAM_BLUEPRINTS, documentHash, planRow, questionFromBankItem, solveFindings,
   type BankItem, type BankSelectionPolicy, type CheckFinding, type PaperJob, type PaperQuestion,
   type SolveResult, type SpecRow,
 } from '@physicsos/question-paper'
@@ -39,6 +39,9 @@ import { transcribeQuestionImages, type TranscribeImage } from './transcribe.ts'
 import { exportPaper, generateFigures } from './export.ts'
 import { paperRoutes } from './routes.ts'
 import { identityOf } from './identity.ts'
+import { createMobilePaper, MOBILE_PAPER_SERVICE, type StudentAssignmentReader } from './mobile.ts'
+import { PaperPipeline } from './pipeline.ts'
+export type { MobilePaperFacade } from './mobile.ts'
 import { access } from 'node:fs/promises'
 import { join } from 'node:path'
 import { appendFileSync } from 'node:fs'
@@ -143,24 +146,13 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
   return ctx.effect(async function* () {
     const domain: PaperDomain = await openPaperDomain(ctx)
     const service = new PaperService(domain)
+    yield () => domain.close()
+    ctx.provide(MOBILE_PAPER_SERVICE, createMobilePaper(service, () => ctx.get('physicsosMobileClasses') as StudentAssignmentReader | undefined, config.exportDir))
 
     /* Seed built-in templates as pending rows; verified stays the gate. */
     for (const blueprint of EXAM_BLUEPRINTS) {
       if (domain.table('blueprints').get(blueprint.id) === undefined) {
         await domain.table('blueprints').put(blueprint.id, blueprint)
-      }
-    }
-
-    /* A job left in 'drafting'/'checking' belongs to a dead process — no in-
-       flight generation survives a restart, so mark it failed and let the
-       teacher retry through spec confirmation (paid calls never replay). */
-    for (const [id, job] of domain.table('jobs').entries()) {
-      if (job.status === 'drafting' || job.status === 'checking') {
-        await domain.table('jobs').put(id, {
-          ...job, status: 'failed',
-          lastError: 'interrupted by service restart — confirm the spec table to retry',
-          updatedAt: new Date().toISOString(),
-        })
       }
     }
 
@@ -297,24 +289,53 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
       }
     }
 
-    const runChecks = async (jobId: string): Promise<void> => {
+    const runChecks = async (jobId: string, allowPaidEffects = true): Promise<void> => {
       await service.markStage(jobId, 'checking')
       try {
         const job = service.getJob(jobId)
         if (job.document === undefined) throw new PaperError(409, 'NO_DOCUMENT', `job ${jobId} has no document`)
         trace(`check ${jobId} — running document checks`)
         await service.reportProgress(jobId, 'check', 0, 1, '规范与覆盖检查')
-        const findings = service.runJobChecks(jobId, bankPolicy.freshnessPapers)
-        const questions = job.document.sections.flatMap(section => section.items)
-        trace(`check ${jobId} — ${String(findings.length)} findings, solving ${String(questions.length)} questions`)
-        const solve = await independentSolve(
-          questions, config.solveDelayMs, config.solveTimeoutMs, undefined,
+
+        /* Solve against the document the teacher will actually see, then check
+           that document. The previous order checked the pre-solve copy and
+           stamped the engine's answers over it afterwards, so the findings
+           described a version that no longer existed — and a second check
+           compared the engine's own output against itself, which reported
+           agreement the engine never earned. */
+        const draftQuestions = job.document.sections.flatMap(section => section.items)
+        trace(`check ${jobId} — solving ${String(draftQuestions.length)} questions`)
+        // A crash after answer correction must reuse the original blind solve,
+        // not compare the engine's corrected answer against itself.
+        const inputHash = documentHash(job.document)
+        const retained = domain.table('check_outcomes').get(jobId)
+        const reusable = retained !== undefined && (retained.inputHash === inputHash || retained.correctedHash === inputHash)
+        const solve = reusable ? retained.solve : await independentSolve(
+          draftQuestions, config.solveDelayMs, config.solveTimeoutMs, undefined,
           (done, total, questionNo) => {
             void service.reportProgress(jobId, 'solve', done, total, `物理引擎复核第 ${questionNo} 题`)
           },
         )
+        const correctedHash = reusable ? retained.correctedHash : documentHash(applyEngineAnswers(job.document, solve) ?? job.document)
+        if (!reusable) await domain.table('check_outcomes').put(jobId, {
+          jobId, inputHash, correctedHash, document: job.document, solve: [...solve], at: new Date().toISOString(),
+        })
         trace(`check ${jobId} — solve done`)
-        await applyEngine(jobId, solve)
+        if (inputHash !== correctedHash) await applyEngine(jobId, solve)
+        // Reconstruct any bank usage whose draft committed just before a restart.
+        for (const question of draftQuestions) {
+          const provenance = question.provenance
+          if (provenance?.bankItemId !== undefined && (provenance.mode === 'verbatim' || provenance.mode === 'adapted')) {
+            await service.recordBankUsage(provenance.bankItemId, jobId, provenance.mode)
+          }
+        }
+
+        /* Re-read: applyEngine committed a new version, and every check below
+           has to run against it. */
+        const checked = service.getJob(jobId)
+        const findings = service.runJobChecks(jobId, bankPolicy.freshnessPapers)
+        const questions = (checked.document ?? job.document).sections
+          .flatMap(section => section.items)
         await service.recordCheckResults(jobId,
           [...findings, ...engineFindingsFor(solve, new Map(questions.map(q => [q.number, q.kind])))],
           solve)
@@ -324,21 +345,24 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
            the caption placeholder and never fails the check stage. Files
            land in the job's export dir under the export's own names, so the
            later export reuses them (generateFigures skips existing). */
-        if (config.imageApi !== undefined
+        if (allowPaidEffects && config.imageApi !== undefined
           && questions.some(question => question.figure !== undefined)) {
           await service.reportProgress(jobId, 'figure', 0, 1, 'AI 生成题图（预览）')
           try {
-            await generateFigures(
-              { pandoc: config.pandoc, soffice: undefined, exportDir: config.exportDir, imageApi: config.imageApi },
-              job.document,
-              join(config.exportDir, jobId),
-              (done, total, ref) => {
-                void service.reportProgress(jobId, 'figure', done, total, `AI 生成题图 ${ref}`)
-              },
-              (ref, reason) => {
-                ctx.logger.warn(`paper-host: figure ${ref} not drawn, the caption stands (${reason})`)
-              },
-            )
+            const imageApi = config.imageApi
+            await pipeline.figuresOnce(jobId, async () => {
+              await generateFigures(
+                { pandoc: config.pandoc, soffice: undefined, exportDir: config.exportDir, imageApi },
+                job.document!,
+                join(config.exportDir, jobId),
+                (done, total, ref) => {
+                  void service.reportProgress(jobId, 'figure', done, total, `AI 生成题图 ${ref}`)
+                },
+                (ref, reason) => {
+                  ctx.logger.warn(`paper-host: figure ${ref} not drawn, the caption stands (${reason})`)
+                },
+              )
+            })
           } catch (error) {
             ctx.logger.warn(`paper-host: figure pre-generation failed (non-fatal): ${error instanceof Error ? error.message : String(error)}`)
           }
@@ -349,6 +373,10 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
         throw error
       }
     }
+
+    const pipeline = new PaperPipeline(domain, service, { draft: runDraft, check: runChecks })
+    yield () => pipeline.dispose()
+    await pipeline.recover()
 
     /* Single-question repair: record the teacher's verdict, revise the
        question through the model, commit a new version, then refresh
@@ -385,6 +413,7 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
         await service.recordCheckResults(jobId, [...findings, ...engineFindingsFor(merged)], merged)
       } catch (error) {
         ctx.logger.warn(`paper-host: repair ${jobId}#${questionNo} failed: ${error instanceof Error ? error.message : String(error)}`)
+        throw error
       }
     }
 
@@ -466,6 +495,7 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
       } catch (error) {
         ctx.logger.warn(`paper-host: replace ${jobId}#${questionNo} failed: ${error instanceof Error ? error.message : String(error)}`)
         console.error(`[paper-host] replace ${jobId}#${questionNo} failed:`, error)
+        throw error
       }
     }
 
@@ -556,9 +586,16 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
     const runExport = async (jobId: string): Promise<{ files: import('./export.ts').ExportFileSet }> => {
       try {
         const { document, job } = service.requireApprovedDocument(jobId)
+        const prior = service.listExports(jobId).find(bundle => bundle.hash === job.approval?.versionHash)
+        if (prior !== undefined) {
+          const present = await Promise.all(Object.values(prior.files).filter((file): file is string => file !== undefined)
+            .map(file => access(join(config.exportDir, jobId, file)).then(() => true, () => false)))
+          if (present.length > 0 && present.every(Boolean)) return { files: prior.files }
+        }
         const soffice = await binaryPresent(config.soffice)
         const files = await exportPaper(
-          { pandoc: config.pandoc, soffice, exportDir: config.exportDir, imageApi: config.imageApi },
+          // Export reuses figure files; an ambiguous image attempt is never paid again here.
+          { pandoc: config.pandoc, soffice, exportDir: config.exportDir, imageApi: undefined },
           jobId,
           document,
           job.solveReport,
@@ -581,7 +618,7 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
       kind: 'prefix',
       path: '/physicsos/paper',
       handler: paperRoutes({
-        service, exportDir: config.exportDir, bankPolicy,
+        service, exportDir: config.exportDir, bankPolicy, pipeline,
         /* Resolved per request: this host is declared before auth-host, so the
            service does not exist yet when this line runs. */
         identity: () => identityOf(ctx),
@@ -591,6 +628,5 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
         runTriage, triageBusy,
       }),
     })
-    yield () => domain.close()
   }, 'paper-host')
 }

@@ -18,6 +18,8 @@ import { openClassDomain } from './domain.ts'
 import { ClassService } from './service.ts'
 import { classRoutes } from './routes.ts'
 import { identityOf } from './identity.ts'
+import { createMobileClasses, MOBILE_CLASS_SERVICE } from './mobile.ts'
+export type { MobileClassFacade, StudentAssignmentGrant } from './mobile.ts'
 
 export const name = 'class-host'
 export const inject = ['webServer', 'storageDomain']
@@ -31,6 +33,9 @@ export function apply(ctx: Context): () => Promise<void> {
   return ctx.effect(async function* () {
     const domain = await openClassDomain(ctx)
     const service = new ClassService(domain)
+    yield () => domain.close()
+    yield () => service.dispose()
+    ctx.provide(MOBILE_CLASS_SERVICE, createMobileClasses(service))
 
     yield ctx.webServer.register({
       kind: 'prefix',
@@ -40,6 +45,5 @@ export function apply(ctx: Context): () => Promise<void> {
         identity: () => identityOf(ctx),
       }),
     })
-    yield () => domain.close()
   }, 'class-host')
 }

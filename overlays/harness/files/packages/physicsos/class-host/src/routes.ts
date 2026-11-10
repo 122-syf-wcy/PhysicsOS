@@ -176,6 +176,10 @@ export function classRoutes(
         })
         return
       }
+      if (method === 'PATCH' && seg[0] === 'classes' && seg[2] === 'assignments' && seg[4] === 'publication' && seg.length === 5) {
+        send(res, 200, { item: await service.setAssignmentPublication(actor, segment(seg, 1), segment(seg, 3), await readJson(req)) })
+        return
+      }
       if (seg[0] === 'classes' && seg[2] === 'assignments' && seg[4] === 'submission') {
         const classId = segment(seg, 1)
         const assignmentId = segment(seg, 3)

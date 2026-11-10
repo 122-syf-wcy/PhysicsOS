@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="physics_window_background">#101610</color>
+    <color name="physics_window_foreground">#E2E8DE</color>
+</resources>

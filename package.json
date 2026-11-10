@@ -32,6 +32,8 @@
     "test:deploy": "node --test scripts/docker-entrypoint.test.mjs",
     "test:desktop": "pnpm -C apps/desktop run test",
     "test:ci": "pnpm run typecheck && pnpm run lint && pnpm run test",
+    "android:doctor": "node scripts/android/doctor.mjs",
+    "android:source-check": "node scripts/android/doctor.mjs --sources-only",
     "desktop:dev": "pnpm -C apps/desktop run dev",
     "desktop:build": "pnpm -C apps/desktop run build:local",
     "desktop:release": "pnpm -C apps/desktop run build:release",

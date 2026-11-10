@@ -50,6 +50,10 @@ const assignment = z.object({
   createdBy: z.string().min(1),
   createdAt: z.string(),
   updatedAt: z.string(),
+  /** Creating an assignment publishes it; optional fields also support scheduled release and retirement. */
+  publishedAt: z.string().optional(),
+  retiredAt: z.string().optional(),
+  answerPolicy: z.enum(['never', 'after-due', 'after-review']).optional(),
 })
 
 export type AssignmentRecord = z.infer<typeof assignment>
@@ -73,6 +77,8 @@ const submission = z.object({
   submittedAt: z.string(),
   updatedAt: z.string(),
   review: submissionReview.optional(),
+  revision: z.number().int().positive().optional(),
+  mutations: z.array(z.object({ id: z.string().min(1).max(128), hash: z.string().length(64), revision: z.number().int().positive() })).max(128).optional(),
 })
 
 export type SubmissionReview = z.infer<typeof submissionReview>
@@ -86,6 +92,8 @@ export const classDomain = defineDomain({
     memberships: domainTable<string, MembershipRecord>(membership),
     assignments: domainTable<string, AssignmentRecord>(assignment),
     submissions: domainTable<string, SubmissionRecord>(submission),
+    erased_accounts: domainTable<string, { userKey: string; schoolId: string; userId: string; requestId: string; complete: boolean }>(
+      z.object({ userKey: z.string(), schoolId: z.string(), userId: z.string(), requestId: z.string(), complete: z.boolean() })),
   },
 })
 

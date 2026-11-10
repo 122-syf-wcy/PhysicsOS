@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Share a prepared copy, never a database, credential, cache root, or arbitrary path. -->
+    <cache-path name="shared_cache" path="shared/" />
+    <cache-path name="camera_captures" path="captures/" />
+    <files-path name="shared_files" path="shared/" />
+</paths>

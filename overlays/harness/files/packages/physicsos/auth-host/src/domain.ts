@@ -36,6 +36,8 @@ const school = z.object({
   /** 区县 label when the roster source carries one. */
   county: z.string().optional(),
   status: z.enum(['active', 'disabled']),
+  /** Incremented on suspension; old credentials cannot revive on reactivation. */
+  credentialVersion: z.number().int().min(0).optional(),
   /**
    * `'pending'` marks a tenant a registration created while its school was
    * still waiting for a SUPER_ADMIN decision. It is deliberately NOT a
@@ -58,6 +60,8 @@ const user = z.object({
   schoolId: z.string().min(1),
   username: z.string().min(1),
   passwordHash: z.string().min(1),
+  /** Security generation, advanced before account-wide credential invalidation. */
+  credentialVersion: z.number().int().min(0).optional(),
   displayName: z.string().min(1),
   avatarUrl: z.string().optional(),
   role,
@@ -102,6 +106,8 @@ const apiToken = z.object({
   username: z.string().min(1),
   name: z.string().min(1).max(64),
   scope: z.enum(['read', 'write']),
+  credentialVersion: z.number().int().min(0).optional(),
+  schoolCredentialVersion: z.number().int().min(0).optional(),
   createdAt: z.string(),
   expiresAt: z.string().optional(),
   revokedAt: z.string().optional(),
@@ -114,9 +120,15 @@ const loginChallenge = z.object({
   schoolId: z.string().min(1),
   username: z.string().min(1),
   remember: z.boolean(),
+  /** Missing audience on legacy challenges means browser-only. */
+  audience: z.enum(['web', 'mobile']).optional(),
+  credentialVersion: z.number().int().min(0).optional(),
+  schoolCredentialVersion: z.number().int().min(0).optional(),
   ip: z.string(),
   userAgent: z.string().optional(),
   deviceId: z.string().optional(),
+  deviceName: z.string().max(80).optional(),
+  appVersion: z.string().max(32).optional(),
   createdAt: z.string(),
   expiresAt: z.string(),
   usedAt: z.string().optional(),
@@ -141,6 +153,8 @@ const session = z.object({
       session resolution stays O(1) instead of scanning the users table. */
   username: z.string().min(1),
   remember: z.boolean(),
+  credentialVersion: z.number().int().min(0).optional(),
+  schoolCredentialVersion: z.number().int().min(0).optional(),
   createdAt: z.string(),
   expiresAt: z.string(),
   revokedAt: z.string().optional(),
@@ -148,6 +162,56 @@ const session = z.object({
   userAgent: z.string().optional(),
   /** 这次会话是从哪台登记过的设备发起的;只有客户端报了 deviceId 时才有值。 */
   deviceId: z.string().optional(),
+})
+
+/** The authoritative mobile device grant; both token digests change in one write. */
+const mobileGrant = z.object({
+  id: z.string().min(1),
+  userId: z.string().min(1),
+  userKey: z.string().min(1),
+  schoolId: z.string().min(1),
+  username: z.string().min(1),
+  deviceId: z.string().regex(/^[a-f0-9]{16,128}$/),
+  platform: z.literal('android'),
+  deviceName: z.string().min(1).max(80),
+  appVersion: z.string().max(32).optional(),
+  scope: z.enum(['read', 'write']),
+  credentialVersion: z.number().int().min(0),
+  schoolCredentialVersion: z.number().int().min(0),
+  generation: z.number().int().min(0),
+  accessHash: z.string().length(64),
+  refreshHash: z.string().length(64),
+  accessExpiresAt: z.string(),
+  /** Absolute login lifetime; refresh never extends this timestamp. */
+  refreshExpiresAt: z.string(),
+  createdAt: z.string(),
+  lastSeenAt: z.string(),
+  revokedAt: z.string().optional(),
+  revokedReason: z.enum(['logout', 'device', 'account', 'replaced', 'replay', 'school']).optional(),
+})
+
+/** An index alone grants no authority; resolution verifies the authoritative grant. */
+const mobileTokenIndex = z.object({
+  id: z.string().length(64),
+  kind: z.enum(['access', 'refresh']),
+  grantId: z.string().min(1),
+  generation: z.number().int().min(0),
+  expiresAt: z.string(),
+})
+
+/** Accepted erasure jobs keep identity only until every owned domain is erased. */
+const accountDeletion = z.object({
+  id: z.string().min(1),
+  status: z.enum(['pending', 'completed']),
+  subject: z.object({
+    userId: z.string().min(1), userKey: z.string().min(1),
+    schoolId: z.string().min(1), username: z.string().min(1),
+  }).optional(),
+  requestedAt: z.string(),
+  completedAt: z.string().optional(),
+  attempts: z.number().int().min(0),
+  nextAttemptAt: z.string().optional(),
+  lastError: z.enum(['ERASURE_FAILED', 'DEPENDENCY_UNAVAILABLE']).optional(),
 })
 
 const resetRequestStatus = z.enum([
@@ -327,7 +391,7 @@ const device = z.object({
   primaryUserKey: z.string().min(1),
   schoolId: z.string().min(1),
   username: z.string().min(1),
-  platform: z.enum(['macos', 'windows', 'linux', 'web', 'other']).optional(),
+  platform: z.enum(['macos', 'windows', 'linux', 'web', 'android', 'other']).optional(),
   appVersion: z.string().optional(),
   firstSeenAt: z.string(),
   lastSeenAt: z.string(),
@@ -388,6 +452,12 @@ export type LoginChallengeRecord = z.infer<typeof loginChallenge>
 export type TotpRecoveryCode = z.infer<typeof totpRecoveryCode>
 /** One session row, keyed by the token's sha256 — the raw token never persists. */
 export type SessionRecord = z.infer<typeof session>
+/** Authoritative first-party mobile login, independent of personal API tokens. */
+export type MobileGrantRecord = z.infer<typeof mobileGrant>
+/** Hashed mobile access/refresh lookup, including consumed refreshes for replay detection. */
+export type MobileTokenIndex = z.infer<typeof mobileTokenIndex>
+/** Durable account-erasure work, keyed by the opaque account instance id. */
+export type AccountDeletionRecord = z.infer<typeof accountDeletion>
 /** One recorded password-recovery request (the V1 audit-only trail). */
 export type ResetRequest = z.infer<typeof resetRequest>
 /** One hashed password-reset token. */
@@ -613,7 +683,7 @@ export const learningKey = (schoolId: string, date: string, knowledgeId: string)
  */
 export const registerDeviceWire = z.object({
   deviceId: deviceIdWire,
-  platform: z.enum(['macos', 'windows', 'linux', 'web', 'other']).optional(),
+  platform: z.enum(['macos', 'windows', 'linux', 'web', 'android', 'other']).optional(),
   appVersion: z.string().max(32).optional(),
 })
 
@@ -687,6 +757,9 @@ export const authDomain = defineDomain({
     login_challenges: domainTable<string, LoginChallengeRecord>(loginChallenge),
     totp_recovery_codes: domainTable<string, TotpRecoveryCode>(totpRecoveryCode),
     sessions: domainTable<string, SessionRecord>(session),
+    mobile_grants: domainTable<string, MobileGrantRecord>(mobileGrant),
+    mobile_token_index: domainTable<string, MobileTokenIndex>(mobileTokenIndex),
+    account_deletions: domainTable<string, AccountDeletionRecord>(accountDeletion),
     reset_requests: domainTable<string, ResetRequest>(resetRequest),
     password_reset_tokens: domainTable<string, PasswordResetToken>(passwordResetToken),
     school_requests: domainTable<string, SchoolRequestRecord>(schoolRequest),

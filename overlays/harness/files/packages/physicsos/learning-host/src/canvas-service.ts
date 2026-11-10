@@ -777,6 +777,54 @@ export class CanvasService {
     })
   }
 
+  /** Export account-owned metadata, including retained deleted documents, without loading all blobs at once. */
+  exportMetadata(actor: IdentityActor): Promise<{ id: string; table: string; value: unknown }[]> {
+    return this.account(actor, async () => {
+      const rows: { id: string; table: string; value: unknown }[] = []
+      for (const table of ['heads', 'objects', 'reservations', 'receipts', 'verifications'] as const) {
+        for (const [key, value] of this.domain.table(table).entries()) {
+          if (own(actor, value)) rows.push({ id: `${table}:${key}`, table, value })
+        }
+      }
+      return rows
+    })
+  }
+
+  /** Enumerate private object files for bounded account export; authorization is checked again on read. */
+  exportObjectIndex(actor: IdentityActor): Promise<{ id: string; canvasId: string; digest: string; bytes: number }[]> {
+    return this.account(actor, async () => [...this.objects.entries()]
+      .filter(([, row]) => own(actor, row) && row.status === 'ready')
+      .map(([id, row]) => ({ id, canvasId: row.canvasId, digest: row.digest, bytes: row.bytes })))
+  }
+
+  /** Read an exported object through its owned metadata, including orphaned-but-retained durable objects. */
+  exportObject(actor: IdentityActor, id: string): Promise<{ id: string; canvasId: string; digest: string; object: unknown }> {
+    return this.account(actor, async () => {
+      const row = this.objects.get(id)
+      if (row === undefined || !own(actor, row) || row.status !== 'ready') throw notFound()
+      const bytes = await this.blobs.read(this.scope(actor, row.canvasId), row.digest, row.bytes, this.config.limits.maxObjectBytes, this.signal())
+      return { id, canvasId: row.canvasId, digest: row.digest, object: JSON.parse(Buffer.from(bytes).toString('utf8')) }
+    })
+  }
+
+  /** Auth revokes the incarnation before this durable fence and same-account drain removes all Canvas data. */
+  eraseAccount(actor: IdentityActor, request: { userKey: string; schoolId: string; userId: string; requestId: string }): Promise<void> {
+    return this.account(actor, async () => {
+      if (request.userKey !== actor.userKey || request.schoolId !== actor.schoolId) throw new CanvasError(403, 'FORBIDDEN', 'Erasure account differs from its owner.')
+      const key = canvasScopeKey(actor.schoolId, actor.userKey)
+      const fences = this.domain.table('erased_accounts')
+      const prior = fences.get(key)
+      if (prior?.requestId === request.requestId && prior.complete) return
+      if (prior !== undefined && !prior.complete && prior.requestId !== request.requestId) throw new CanvasError(409, 'ERASURE_CONFLICT', 'Another erasure is in progress.')
+      await fences.put(key, { ...request, complete: false })
+      await this.blobs.eraseAccount(actor)
+      for (const table of ['heads', 'objects', 'reservations', 'receipts', 'verifications'] as const) {
+        for (const [id, value] of this.domain.table(table).entries()) if (own(actor, value)) await this.domain.table(table).delete(id)
+      }
+      await fences.put(key, { ...request, complete: true })
+    }, true)
+  }
+
   /**
    * Stop admitting new requests, await complete handlers and account queues, then close file work.
    * @returns One shared quiescence promise; the owning effect closes domains afterwards.
@@ -797,12 +845,16 @@ export class CanvasService {
   private get receipts() { return this.domain.table('receipts') }
   private get verifications() { return this.domain.table('verifications') }
 
-  private account<T>(actor: IdentityActor, operation: () => Promise<T>): Promise<T> {
+  private account<T>(actor: IdentityActor, operation: () => Promise<T>, erasure = false): Promise<T> {
     return this.request(undefined, async () => {
       const key = canvasScopeKey(actor.schoolId, actor.userKey)
       const previous = this.queues.get(key) ?? Promise.resolve()
       const result = previous.then(() => {
         this.signal().throwIfAborted()
+        const fence = this.domain.table('erased_accounts').get(key)
+        if (!erasure && fence !== undefined && (!fence.complete || actor.userId === undefined || actor.userId === fence.userId)) {
+          throw new CanvasError(410, 'ACCOUNT_ERASED', 'Account data is erased or erasure is in progress.')
+        }
         return operation()
       })
       const settled = result.then(() => {}, () => {})

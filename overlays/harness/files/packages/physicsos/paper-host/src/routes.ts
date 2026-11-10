@@ -19,6 +19,7 @@ import {
 } from './domain.ts'
 import type { IngestInput } from './ingest.ts'
 import type { TranscribeImage } from './transcribe.ts'
+import type { PaperPipeline } from './pipeline.ts'
 import type {
   BankItem, BankSelectionPolicy, KnowledgeAnnotation, PaperDocument, PaperRequest, ReviewStatus, SourcePaper,
 } from '@physicsos/question-paper'
@@ -26,42 +27,7 @@ import type {
 const REVIEW_STATUSES: readonly ReviewStatus[] = ['pending', 'verified', 'rejected']
 const STUDENT_READS = new Set(['/sources', '/annotations', '/bank/items'])
 
-const safeSourceRef = (value: string): string => {
-  try {
-    const url = new URL(value)
-    if (url.protocol !== 'https:' || url.username !== '' || url.password !== '') return ''
-    url.search = ''
-    url.hash = ''
-    return url.toString()
-  } catch {
-    return ''
-  }
-}
-
-const studentSource = (source: SourcePaper) => ({
-  id: source.id, level: source.level, subject: source.subject, year: source.year,
-  examName: source.examName, evidenceTier: source.evidenceTier, sourceRef: safeSourceRef(source.sourceRef),
-  pageCount: source.pageCount, totalScore: source.totalScore, minutes: source.minutes,
-  region: source.region, school: source.school, kind: source.kind, featured: source.featured,
-  enteredBy: '', status: source.status, enteredAt: source.enteredAt,
-})
-
-const studentAnnotation = (annotation: KnowledgeAnnotation) => ({
-  id: annotation.id, sourcePaperId: annotation.sourcePaperId, pageNo: annotation.pageNo,
-  questionNo: annotation.questionNo, subject: annotation.subject, kind: annotation.kind,
-  score: annotation.score, knowledgePrimary: annotation.knowledgePrimary,
-  knowledgeSecondary: annotation.knowledgeSecondary, ability: annotation.ability,
-  experimentType: annotation.experimentType, chapter: annotation.chapter, stem: annotation.stem,
-  answerSource: annotation.answerSource, reviewer: '', status: annotation.status,
-})
-
-const studentBankItem = (item: BankItem) => ({
-  id: item.id, level: item.level, subject: item.subject, kind: item.kind,
-  knowledge: item.knowledge, ability: item.ability, difficulty: item.difficulty,
-  chapter: item.chapter, score: item.score, stem: item.stem, options: item.options,
-  subQuestions: item.subQuestions, figure: item.figure, answer: item.answer,
-  answerTier: item.answerTier, anomalies: [], reuseModes: item.reuseModes, status: 'verified' as const,
-})
+import { studentSource, studentAnnotation, studentBankItem } from './student-projection.ts'
 
 /** One 图片录入 request may carry this many pages; a whole 卷 is 4–6. */
 const MAX_INGEST_IMAGES = 8
@@ -169,6 +135,8 @@ const checkCsrf = (req: IncomingMessage): void => {
 /** Route deps the handlers close over. */
 export interface RouteDeps {
   readonly service: PaperService
+  /** Production always wires the durable relay; older isolated route fixtures may provide drivers alone. */
+  readonly pipeline?: Pick<PaperPipeline, 'enqueueDraft' | 'enqueueCheck' | 'enqueueMutation'>
   /** Export-root resolver for file downloads. */
   readonly exportDir: string
   /** Draft+check driver wired by the plugin. */

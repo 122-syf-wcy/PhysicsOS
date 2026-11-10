@@ -27,6 +27,8 @@ export type LimiterName =
   | 'lookup'
   | 'passwordReset'
   | 'totp'
+  | 'mobileRefresh'
+  | 'mobileAccount'
 
 /** One fixed-window policy, named so shared backends can isolate keys. */
 export interface LimiterPolicy {

@@ -13,6 +13,7 @@ export type IdentityRole = 'STUDENT' | 'TEACHER' | 'SCHOOL_ADMIN' | 'SUPER_ADMIN
 
 export interface IdentityActor {
   readonly userKey: string
+  readonly userId?: string
   readonly schoolId: string
   readonly username: string
   readonly role: IdentityRole
@@ -33,6 +34,7 @@ export class ClassError extends Error {
     readonly status: number,
     readonly code: string,
     message: string,
+    readonly details?: Record<string, unknown>,
   ) {
     super(message)
     this.name = 'ClassError'

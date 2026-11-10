@@ -53,6 +53,35 @@ The policy is attached by `client-connection` as an optional `apiPolicy`
 service wrapping the complete shared dispatcher, so both Typert Gateway methods
 and legacy API Proxy methods pass the same gate.
 
+## Native Android authentication (`/physicsos/mobile/v1/auth`)
+
+The mobile routes use the **same `AuthService` instance** as the browser, identity service, moderation runtime and `/api` policy. Every success is `{data:T}`; every failure is `{error:{code,message,details?}}` with its HTTP status. Responses are private/no-store. These routes neither issue nor accept Cookie authentication, never mint a personal API token, and keep the existing JSON/Origin/Fetch-Site checks on every write. No CORS allowlist or browser CSRF rule is broadened.
+
+`MobileUser` is exactly `{userId,userKey,schoolId,username,displayName,role}`. `userId` is the immutable account incarnation (`users.id`); local credentials, caches and outboxes must distinguish it from the reusable `school:username` key. Successful login, registration, two-factor completion and refresh return `T = {status:"authenticated",user:MobileUser,tokens:{accessToken,expiresAt,refreshToken,refreshExpiresAt}}`; timestamps are ISO 8601 UTC. Both credentials contain 256 random bits and have distinct `pma_` / `pmr_` prefixes. Only SHA-256 digests persist. Access lasts 10 minutes by default; the refresh grant has a 30-day absolute lifetime, not an indefinitely sliding session.
+
+| Method | Relative path | Request | `data` |
+| --- | --- | --- | --- |
+| GET | `schools?q=...&limit=20` | Anonymous, existing lookup limiter; `limit` is 1–20 | `{items:[{id,name,shortName?,city?,county?}]}`; empty query returns no rows, never the full roster |
+| POST | `login` | `{username,password,schoolId?,rememberDevice?,deviceId,deviceName?,appVersion?}` | authenticated, or `{status:"challenge",challengeToken,expiresAt}`; a password-verified pending account returns HTTP 202 `{status:"pending",message}` |
+| POST | `register` | `{schoolName?,schoolId?,username,displayName,password,email,inviteCode?,deviceId,deviceName?,appVersion?}` | HTTP 201 authenticated, or HTTP 202 `{status:"pending",requestId,schoolName,username,email}` |
+| POST | `login/2fa` | `{challengeToken,code}` | authenticated; `code` can be an existing one-use recovery code |
+| POST | `refresh` | `{refreshToken}`; no access token required | authenticated, with a new pair |
+| POST | `logout` | `{}` with mobile Bearer access, or `{refreshToken}` without access | `{ok:true}`; revokes that device grant, including when the submitted refresh was already consumed |
+| GET | `me` | mobile Bearer access | `{user:MobileUser}` |
+| GET | `devices` | mobile Bearer access | `{items:[{id,platform,deviceName,appVersion?,createdAt,lastSeenAt,refreshExpiresAt,current,revokedAt?}]}` |
+| DELETE | `devices/:id` | mobile Bearer access; `id` is the returned grant id, not a hardware id | `{ok:true}`; only the caller's grant is revocable |
+| PATCH | `profile` | mobile Bearer access; `{displayName}` | `{user:MobileUser}`; no role, school, username or unverified-email changes |
+| POST | `password` | mobile Bearer access; `{currentPassword,newPassword,code?}` | `{ok:true,reauthenticate:true}`; all account credentials are invalidated |
+| POST | `password-reset/request` | `{username,schoolId?}` | `{ok:true}`; uniform existing recovery-queue/direct-delivery semantics |
+| POST | `password-reset/submit` | `{token,newPassword}` | `{ok:true}`; existing one-use reset, invalidating all account credentials |
+| DELETE | `account` | mobile Bearer access; `{password,confirmation:"DELETE",code?}` | HTTP 200 `{status:"deleted",requestId}` only after erasure, otherwise HTTP 202 `{status:"deletion_pending",requestId}` after durable acceptance |
+
+`deviceId` is required for mobile login/registration: SHA-256 of a random installation id, lowercase hexadecimal (16–128 characters accepted; use 64), **not a hardware identifier**. The server fixes platform to `android`; optional `deviceName` is a display label (at most 80 characters), and `appVersion` is at most 32 characters. Two-factor challenges bind this context server-side and are audience-bound: a browser challenge cannot create a mobile grant or vice versa. `rememberDevice` is accepted for the legacy login DTO but does not alter mobile grant lifetimes. Registration requires the existing `email` field and either `schoolName` or `schoolId`. Login normally omits `schoolId`; `SCHOOL_REQUIRED` / `SCHOOL_AMBIGUOUS` candidates are nested in `error.details` for a disambiguation retry. Accounts with TOTP enabled must also supply `code` for password changes and account deletion.
+
+Refresh is strict single-use rotation. A durable grant row is the single commit point for both digests; staged index rows are not credentials. Reusing a consumed refresh, including a concurrent duplicate, revokes the entire grant. The first concurrent request can return success before the duplicate revokes it: Android must use single-flight refresh, persist an in-flight marker before sending, atomically replace the pair, and require reauthentication rather than retrying an indeterminate old refresh. Unknown, expired, revoked and replayed refresh credentials all return `401 INVALID_REFRESH_TOKEN`; a failed access check returns `401 UNAUTHENTICATED`. Limiter/storage failures are not treated as successful rotation. Revocation, password changes, account/tenant suspension and device revocation are checked on every HTTP/RPC/WS use; restoring an account does not resurrect its prior mobile grants.
+
+Account deletion is a persistent, retryable erasure operation, not a disabled account presented as deletion. `physicsosAccountErasure.eraseAccount({requestId,userKey,userId,schoolId,username}):Promise<void>` combines exact owned Harness resources with `physicsosMobileAccountData.eraseAccount` for sibling-domain data. Missing required services refuse acceptance with `503 DEPENDENCY_UNAVAILABLE`. Accepted jobs immediately withdraw account authority; partial erasure stays `deletion_pending` and resumes after restart. Only completion removes the account and private auth records. Audit retention is content-free and pseudonymized; shared school resources and other accounts are not deleted. Production backup retention and legally required audit retention remain operator policy, not a claim that live erasure also rewrites historical backups.
+
 ## REST surface (`/physicsos/auth`)
 
 | Method | Path | Body | Result |

@@ -266,6 +266,7 @@ const paperJob = z.object({
   approval: paperApproval.optional(),
   findings: z.array(checkFinding),
   solveReport: z.array(solveResult),
+  checkedVersionHash: z.string().optional(),
   bankPlan: z.array(z.object({
     questionNo: z.number().int(),
     mode: z.enum(['verbatim', 'adapt', 'generate', 'gap']),
@@ -361,6 +362,20 @@ const bankUsage = z.object({
   mode: z.enum(['verbatim', 'adapted']),
 }) satisfies z.ZodType<BankUsage>
 
+/** Durable stage claims distinguish resumable engine work from ambiguous paid operations. */
+const pipelineStage = z.object({
+  id: z.string(), jobId: z.string(), kind: z.enum(['draft', 'check', 'figures', 'repair', 'replace']),
+  inputHash: z.string(), baseVersion: z.number().int().nonnegative(),
+  status: z.enum(['running', 'succeeded', 'failed', 'interrupted']),
+  outputHash: z.string().optional(), errorCode: z.string().optional(), startedAt: z.string(), finishedAt: z.string().optional(),
+})
+const checkOutcome = z.object({
+  jobId: z.string(), inputHash: z.string(), correctedHash: z.string(), document: paperDocument,
+  solve: z.array(solveResult), at: z.string(),
+})
+export type PaperPipelineStage = z.infer<typeof pipelineStage>
+export type PaperCheckOutcome = z.infer<typeof checkOutcome>
+
 /**
  * The 出卷 durable unit. `sourcePapers`/`annotations` are the hand-entered
  * evidence base, `blueprints` the verified structure templates, `jobs` the
@@ -377,6 +392,8 @@ export const paperDomain = defineDomain({
     exports: domainTable<string, ExportBundle>(exportBundle),
     bank_items: domainTable<string, BankItem>(bankItem),
     bank_usage: domainTable<string, BankUsage>(bankUsage),
+    pipeline_stages: domainTable<string, PaperPipelineStage>(pipelineStage),
+    check_outcomes: domainTable<string, PaperCheckOutcome>(checkOutcome),
   },
 })
 

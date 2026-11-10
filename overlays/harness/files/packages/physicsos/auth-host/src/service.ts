@@ -8,9 +8,9 @@
 
 import crypto from 'node:crypto'
 import type {
-  ApiTokenRecord, AuditEvent, AuthDomain, DeviceRecord, DeviceRevocation, InviteRecord,
-  LearningCount, PendingRegistration, School, ResetRequest, SchoolRequestRecord, SessionRecord,
-  UserRecord,
+  AccountDeletionRecord, ApiTokenRecord, AuditEvent, AuthDomain, DeviceRecord, DeviceRevocation, InviteRecord,
+  LearningCount, LoginChallengeRecord, MobileGrantRecord, PendingRegistration, School, ResetRequest,
+  SchoolRequestRecord, SessionRecord, UserRecord,
 } from './domain'
 import {
   approveRequestWire, auditExportWire, createApiTokenWire, createInvitesWire,
@@ -23,6 +23,14 @@ import {
 import { hashPassword, verifyPassword } from './passwords'
 import { newSessionToken, readSessionCookieHeader, sessionTokenHash } from './cookies'
 import type { IdentityActor } from './identity'
+import type { AccountErasure, AccountErasureRequest, AccountOwnedResource } from './account-erasure.ts'
+import {
+  isMobileToken, mobileDeleteAccountWire, mobileLoginWire, mobileLogoutWire,
+  mobilePasswordWire, mobileProfileWire, mobileRefreshWire, mobileRegisterWire,
+  mobileTwoFactorWire, newMobileToken, toMobileUser,
+  type MobileAuthenticated, type MobileDeletionResult, type MobileDevice,
+  type MobileDeviceContext, type MobileLoginResult, type MobileUser,
+} from './mobile.ts'
 import {
   InMemoryLimiterBackend, type LimiterBackend, type LimiterName,
   type LimiterPolicy, type LimiterSnapshot,
@@ -49,7 +57,7 @@ export type AuthErrorCode =
      the account is not open yet. */
   | 'ACCOUNT_PENDING'
   | 'FORBIDDEN' | 'NOT_FOUND' | 'DEVICE_REVOKED'
-  | 'INVALID_RESET_TOKEN' | 'DEPENDENCY_UNAVAILABLE'
+  | 'INVALID_RESET_TOKEN' | 'INVALID_REFRESH_TOKEN' | 'DEPENDENCY_UNAVAILABLE'
   | 'REGISTRATION_CLOSED' | 'INVITE_REQUIRED' | 'INVALID_INVITE_CODE'
   | 'TWO_FACTOR_REQUIRED' | 'INVALID_TWO_FACTOR_CHALLENGE' | 'INVALID_TWO_FACTOR_CODE'
   | 'TWO_FACTOR_ALREADY_ENABLED' | 'TOKEN_SCOPE_REQUIRED'
@@ -144,6 +152,7 @@ export type ApiTokenScope = 'read' | 'write'
 export type AuthCredential =
   | { kind: 'session'; session: SessionRecord }
   | { kind: 'api-token'; token: ApiTokenRecord; scope: ApiTokenScope }
+  | { kind: 'mobile'; grant: MobileGrantRecord; scope: ApiTokenScope }
 
 /** One resolved request principal plus the credential authorizing it. */
 export interface ResolvedCredential {
@@ -257,6 +266,12 @@ export interface ApiTokenRow {
 export interface AuthServiceDeps {
   /** Stop this exact account's live carriers and owned agents after durable disable. */
   onUserDisabled?: (ownerKey: string) => void | Promise<void>
+  /** Resolve the composite provider at use time; plugin order never disables erasure silently. */
+  accountErasure?: () => AccountErasure | undefined
+  /** Moderation owns its intake/review locks while deleting private evidence. */
+  eraseModerationAccount?: (ownerKey: string) => Promise<void>
+  /** Drain account API requests already admitted before erasure was accepted. */
+  drainAccountRequests?: (ownerKey: string) => Promise<void>
   /** Atomic shared limiter. Defaults to {@link InMemoryLimiterBackend}. */
   limiter?: LimiterBackend
   /** Password-reset delivery. Defaults to the admin queue (no direct send). */
@@ -313,6 +328,18 @@ export interface AuthServiceConfig {
   totpChallengeTtlMs?: number
   /** Maximum live personal tokens per account. Default 50. */
   apiTokenLimit?: number
+  /** First-party mobile access lifetime, at most 15 minutes. Default 10 minutes. */
+  mobileAccessTtlMs?: number
+  /** Absolute mobile grant lifetime, at most 90 days. Default 30 days. */
+  mobileRefreshTtlMs?: number
+  /** Maximum simultaneous mobile device grants for one account. Default 20. */
+  mobileGrantLimit?: number
+  /** Refresh/logout attempts per IP and grant within the existing window. Default 120. */
+  mobileRefreshAttemptLimit?: number
+  /** Mobile profile/security mutations per account/IP in the existing window. Default 20. */
+  mobileAccountAttemptLimit?: number
+  /** Persistent erasure recovery interval. Default 30 seconds. */
+  accountErasureRetryMs?: number
   /** Exact IP literals of proxies allowed to supply forwarded client metadata. */
   trustedProxies?: string[]
   /** Maximum live buckets per limiter. Default 10000. */
@@ -341,6 +368,12 @@ export const DEFAULT_AUTH_CONFIG: Required<AuthServiceConfig> = {
   totpAttemptLimit: 5,
   totpChallengeTtlMs: 5 * 60 * 1000,
   apiTokenLimit: 50,
+  mobileAccessTtlMs: 10 * 60 * 1000,
+  mobileRefreshTtlMs: 30 * 24 * 60 * 60 * 1000,
+  mobileGrantLimit: 20,
+  mobileRefreshAttemptLimit: 120,
+  mobileAccountAttemptLimit: 20,
+  accountErasureRetryMs: 30_000,
   trustedProxies: [],
   attemptBucketLimit: 10_000,
   attemptWindowMs: 10 * 60 * 1000,
@@ -383,6 +416,22 @@ const localDate = (at: Date): string => {
 // Credential mutations share the domain's single-process snapshot. Keep the
 // reservation through persistence and compensation, across service instances.
 const credentialQueues = new WeakMap<AuthDomain, Promise<unknown>>()
+const erasureQueues = new WeakMap<AuthDomain, Map<string, Promise<MobileDeletionResult>>>()
+
+type LoginIssuer<T> = (
+  record: UserRecord, school: School, remember: boolean,
+  ip?: string, userAgent?: string, deviceId?: string,
+) => Promise<T>
+
+interface LoginAudience {
+  kind: 'web' | 'mobile'
+  device?: MobileDeviceContext
+}
+
+const validUntil = (value: string, now: number): boolean => {
+  const expires = Date.parse(value)
+  return Number.isFinite(expires) && expires > now
+}
 
 export class AuthService {
   private readonly limiter: LimiterBackend
@@ -399,6 +448,17 @@ export class AuthService {
     readonly config: AuthServiceConfig = DEFAULT_AUTH_CONFIG,
     private readonly deps: AuthServiceDeps = {},
   ) {
+    const bounded = (name: keyof AuthServiceConfig, value: number, maximum: number): void => {
+      if (!Number.isSafeInteger(value) || value < 1 || value > maximum) {
+        throw new Error(`auth-host ${name} must be an integer between 1 and ${String(maximum)}`)
+      }
+    }
+    bounded('mobileAccessTtlMs', config.mobileAccessTtlMs ?? DEFAULT_AUTH_CONFIG.mobileAccessTtlMs, 15 * 60_000)
+    bounded('mobileRefreshTtlMs', config.mobileRefreshTtlMs ?? DEFAULT_AUTH_CONFIG.mobileRefreshTtlMs, 90 * 24 * 60 * 60_000)
+    bounded('mobileGrantLimit', config.mobileGrantLimit ?? DEFAULT_AUTH_CONFIG.mobileGrantLimit, 100)
+    bounded('mobileRefreshAttemptLimit', config.mobileRefreshAttemptLimit ?? DEFAULT_AUTH_CONFIG.mobileRefreshAttemptLimit, 100_000)
+    bounded('mobileAccountAttemptLimit', config.mobileAccountAttemptLimit ?? DEFAULT_AUTH_CONFIG.mobileAccountAttemptLimit, 1_000)
+    bounded('accountErasureRetryMs', config.accountErasureRetryMs ?? DEFAULT_AUTH_CONFIG.accountErasureRetryMs, 3_600_000)
     this.notifier = deps.notifier
     const maxBuckets = config.attemptBucketLimit ?? DEFAULT_AUTH_CONFIG.attemptBucketLimit
     const policy = (name: LimiterName, limit: number): LimiterPolicy => ({
@@ -431,6 +491,8 @@ export class AuthService {
         'totp',
         config.totpAttemptLimit ?? DEFAULT_AUTH_CONFIG.totpAttemptLimit,
       ),
+      mobileRefresh: policy('mobileRefresh', config.mobileRefreshAttemptLimit ?? DEFAULT_AUTH_CONFIG.mobileRefreshAttemptLimit),
+      mobileAccount: policy('mobileAccount', config.mobileAccountAttemptLimit ?? DEFAULT_AUTH_CONFIG.mobileAccountAttemptLimit),
     }
     this.limiter = deps.limiter ?? new InMemoryLimiterBackend()
     this.resetDelivery = deps.resetDelivery ?? QUEUE_PASSWORD_RESET_DELIVERY
@@ -459,6 +521,55 @@ export class AuthService {
   private get resets() { return this.domain.table('reset_requests') }
   private get resetTokens() { return this.domain.table('password_reset_tokens') }
   private get apiResources() { return this.domain.table('api_resources') }
+  private get mobileGrants() { return this.domain.table('mobile_grants') }
+  private get mobileTokens() { return this.domain.table('mobile_token_index') }
+  private get accountDeletions() { return this.domain.table('account_deletions') }
+
+  /**
+   * Exact owned resources, available to internal erasure even after credential withdrawal.
+   * @param ownerKey - the persisted account key, never a request-supplied override.
+   * @returns only matching ownership rows, without an administrator bypass.
+   */
+  ownedResources(ownerKey: string): AccountOwnedResource[] {
+    return [...this.apiResources.entries()]
+      .filter(([key, row]) => row.ownerKey === ownerKey && key === `${row.kind}:${row.resourceId}`)
+      .map(([, row]) => ({ kind: row.kind, resourceId: row.resourceId }))
+  }
+
+  /**
+   * Enumerate resources only for one accepted, still-pending account erasure.
+   * @param request - durable job id and exact account incarnation.
+   * @returns trusted session/workspace ownership; attachment references remain owned by Harness.
+   */
+  accountErasureResources(request: Pick<AccountErasureRequest, 'requestId' | 'userKey' | 'userId'>): AccountOwnedResource[] {
+    const job = this.accountDeletions.get(request.userId)
+    const user = this.users.get(request.userKey)
+    if (job?.status !== 'pending' || job.id !== request.requestId
+      || job.subject?.userId !== request.userId || job.subject.userKey !== request.userKey
+      || (user !== undefined && (user.id !== request.userId || user.status !== 'disabled'))) {
+      throw new AuthError(403, 'FORBIDDEN', '没有该账号的待处理注销任务')
+    }
+    return this.ownedResources(request.userKey)
+  }
+
+  /**
+   * Check an accepted deletion fence independently of the mutable account status.
+   * @param userId - opaque account incarnation id.
+   * @returns whether this account must reject new work while erasure is pending.
+   */
+  accountDeletionPending(userId: string): boolean {
+    return this.accountDeletions.get(userId)?.status === 'pending'
+  }
+
+  private credentialVersionsMatch(
+    record: UserRecord, school: School,
+    credential: { credentialVersion?: number | undefined; schoolCredentialVersion?: number | undefined },
+  ): boolean {
+    return record.status === 'active' && school.status === 'active'
+      && !this.accountDeletionPending(record.id)
+      && (credential.credentialVersion ?? 0) === (record.credentialVersion ?? 0)
+      && (credential.schoolCredentialVersion ?? 0) === (school.credentialVersion ?? 0)
+  }
 
   /**
    * Whether an account owns one Harness session/workspace. Platform
@@ -543,7 +654,7 @@ export class AuthService {
   private loginCandidates(username: string, schoolId?: string): { record: UserRecord; school: School }[] {
     const out: { record: UserRecord; school: School }[] = []
     for (const [, record] of this.users.entries()) {
-      if (record.username !== username.toLowerCase() || record.status !== 'active') continue
+      if (record.username !== username.toLowerCase() || record.status !== 'active' || this.accountDeletionPending(record.id)) continue
       if (schoolId !== undefined && record.schoolId !== schoolId) continue
       const school = this.schools.get(record.schoolId)
       if (school === undefined || school.status !== 'active') continue
@@ -907,6 +1018,12 @@ export class AuthService {
     ip?: string,
     userAgent?: string,
   ): Promise<LoginResult | PendingRegistrationResult> {
+    return this.registerUsing(body, ip, userAgent, this.issueSession.bind(this))
+  }
+
+  private async registerUsing<T>(
+    body: unknown, ip: string | undefined, userAgent: string | undefined, issue: LoginIssuer<T>,
+  ): Promise<T | PendingRegistrationResult> {
     const input = registerWire.safeParse(body)
     if (!input.success) throw new AuthError(400, 'BAD_REQUEST', '请检查填写内容')
     const { username, displayName, password } = input.data
@@ -951,8 +1068,15 @@ export class AuthService {
       throw new AuthError(400, 'SCHOOL_NOT_FOUND', '未找到该学校，请核对学校名称')
     }
 
-    const resolvedSchool = school
+    const selectedSchool = school
     return this.credentialMutation(async () => {
+      const resolvedSchool = this.schools.get(selectedSchool.id)
+      if (resolvedSchool === undefined || resolvedSchool.status !== 'active') {
+        throw new AuthError(400, 'SCHOOL_NOT_FOUND', '学校不存在或未开放')
+      }
+      if (input.data.deviceId !== undefined && this.isDeviceRevoked(input.data.deviceId, resolvedSchool.id)) {
+        throw new AuthError(403, 'DEVICE_REVOKED', '这台设备已被注销,请联系学校管理员')
+      }
       const key = userKey(resolvedSchool.id, username)
       if (this.users.get(key) !== undefined) {
         throw new AuthError(409, 'USERNAME_TAKEN', '该账号已被注册')
@@ -986,7 +1110,7 @@ export class AuthService {
       if (input.data.deviceId !== undefined) {
         await this.touchDevice(record, input.data.deviceId)
       }
-      return this.issueSession(record, resolvedSchool, false, ip, userAgent, input.data.deviceId)
+      return issue(record, resolvedSchool, false, ip, userAgent, input.data.deviceId)
     })
   }
 
@@ -1008,6 +1132,13 @@ export class AuthService {
     ip?: string,
     userAgent?: string,
   ): Promise<LoginResult | TwoFactorChallenge> {
+    return this.loginUsing(body, ip, userAgent, { kind: 'web' }, this.issueSession.bind(this))
+  }
+
+  private async loginUsing<T>(
+    body: unknown, ip: string | undefined, userAgent: string | undefined,
+    audience: LoginAudience, issue: LoginIssuer<T>,
+  ): Promise<T | TwoFactorChallenge> {
     const input = loginWire.safeParse(body)
     if (!input.success) throw new AuthError(400, 'BAD_REQUEST', '请检查填写内容')
     const { username, password } = input.data
@@ -1057,30 +1188,27 @@ export class AuthService {
     if (match === undefined) {
       throw new AuthError(401, 'INVALID_CREDENTIALS', '账号或密码错误')
     }
-    const { record, school } = match
-    /* 设备闸门在签发会话之前:被注销的机器不该拿到一张新 cookie,否则「远程
-       注销」只能等下一条路由自己再判一次,漏一处就是一个缺口。 */
-    if (input.data.deviceId !== undefined) {
-      this.assertDeviceUsable(record, input.data.deviceId)
-    }
-    if (record.totp !== undefined) {
-      return this.issueLoginChallenge(
-        record,
-        school,
-        remember,
-        sourceIp,
-        userAgent,
-        input.data.deviceId,
+    return this.credentialMutation(async () => {
+      const record = this.users.get(userKey(match.school.id, match.record.username))
+      const school = this.schools.get(match.school.id)
+      if (record === undefined || school === undefined || record.id !== match.record.id
+        || record.passwordHash !== match.record.passwordHash
+        || !this.credentialVersionsMatch(record, school, {
+          credentialVersion: match.record.credentialVersion,
+          schoolCredentialVersion: match.school.credentialVersion,
+        })) {
+        throw new AuthError(401, 'INVALID_CREDENTIALS', '账号或密码不正确')
+      }
+      if (input.data.deviceId !== undefined) this.assertDeviceUsable(record, input.data.deviceId)
+      if (record.totp !== undefined) {
+        return this.issueLoginChallenge(
+          record, school, remember, sourceIp, userAgent, input.data.deviceId, audience,
+        )
+      }
+      return this.completeLogin(
+        record, school, remember, sourceIp, userAgent, input.data.deviceId, issue,
       )
-    }
-    return this.completeLogin(
-      record,
-      school,
-      remember,
-      sourceIp,
-      userAgent,
-      input.data.deviceId,
-    )
+    })
   }
 
   /**
@@ -1092,61 +1220,53 @@ export class AuthService {
     ip?: string,
     userAgent?: string,
   ): Promise<LoginResult> {
+    return this.loginTwoFactorUsing(body, ip, userAgent, 'web', () => this.issueSession.bind(this))
+  }
+
+  private async loginTwoFactorUsing<T>(
+    body: unknown, ip: string | undefined, userAgent: string | undefined,
+    audience: LoginAudience['kind'], issuerFor: (challenge: LoginChallengeRecord) => LoginIssuer<T>,
+  ): Promise<T> {
     const input = loginTwoFactorWire.safeParse(body)
     if (!input.success) throw new AuthError(400, 'BAD_REQUEST', '请检查验证码')
     const challengeHash = hashOpaqueCredential(input.data.challengeToken)
+    await this.allow('ip', `ip:${ip ?? 'unknown'}`)
     await this.allow('totp', `challenge:${challengeHash}`, '验证码尝试过于频繁，请稍后再试')
-    const challenge = this.loginChallenges.get(challengeHash)
-    if (challenge === undefined || challenge.usedAt !== undefined
-      || Date.parse(challenge.expiresAt) <= this.now().getTime()
-      || this.claimedLoginChallenges.has(challengeHash)) {
-      throw new AuthError(401, 'INVALID_TWO_FACTOR_CHALLENGE', '二次验证已失效，请重新登录')
-    }
-    await this.allow('totp', `acct:${challenge.userKey}`, '验证码尝试过于频繁，请稍后再试')
-
-    const record = this.users.get(challenge.userKey)
-    const school = this.schools.get(challenge.schoolId)
-    if (record === undefined || school === undefined || record.totp === undefined
-      || record.status !== 'active' || school.status !== 'active'
-      || record.id !== challenge.userId) {
-      throw new AuthError(401, 'INVALID_TWO_FACTOR_CHALLENGE', '二次验证已失效，请重新登录')
-    }
-
-    this.claimedLoginChallenges.add(challengeHash)
-    const totpValid = verifyTotpCode(record.totp.secret, input.data.code, this.now().getTime())
-    const recoveryUsed = totpValid
-      ? false
-      : await this.consumeRecoveryCode(record, input.data.code)
-    if (!totpValid && !recoveryUsed) {
-      this.claimedLoginChallenges.delete(challengeHash)
-      throw new AuthError(401, 'INVALID_TWO_FACTOR_CODE', '验证码不正确')
-    }
-
-    const usedAt = this.now().toISOString()
-    await this.loginChallenges.put(challengeHash, { ...challenge, usedAt })
-    this.claimedLoginChallenges.delete(challengeHash)
-    const resumedIp = ip ?? challenge.ip
-    const resumedUserAgent = userAgent ?? challenge.userAgent
-    if (challenge.deviceId !== undefined) this.assertDeviceUsable(record, challenge.deviceId)
-    if (recoveryUsed) {
-      await this.audit(
-        { userKey: challenge.userKey, schoolId: challenge.schoolId, username: challenge.username, role: record.role },
-        'totp.recovery_code_use',
-        challenge.userKey,
-        challenge.schoolId,
+    return this.credentialMutation(async () => {
+      const challenge = this.loginChallenges.get(challengeHash)
+      if (challenge === undefined || challenge.usedAt !== undefined
+        || !validUntil(challenge.expiresAt, this.now().getTime())
+        || (challenge.audience ?? 'web') !== audience
+        || (audience === 'mobile' && challenge.deviceId === undefined)) {
+        throw new AuthError(401, 'INVALID_TWO_FACTOR_CHALLENGE', '二次验证已失效，请重新登录')
+      }
+      await this.allow('totp', `acct:${challenge.userKey}`, '验证码尝试过于频繁，请稍后再试')
+      const record = this.users.get(challenge.userKey)
+      const school = this.schools.get(challenge.schoolId)
+      if (record === undefined || school === undefined || record.totp === undefined
+        || record.id !== challenge.userId || !this.credentialVersionsMatch(record, school, challenge)) {
+        throw new AuthError(401, 'INVALID_TWO_FACTOR_CHALLENGE', '二次验证已失效，请重新登录')
+      }
+      if (challenge.deviceId !== undefined) this.assertDeviceUsable(record, challenge.deviceId)
+      const totpValid = verifyTotpCode(record.totp.secret, input.data.code, this.now().getTime())
+      const recoveryUsed = totpValid ? false : await this.consumeRecoveryCode(record, input.data.code)
+      if (!totpValid && !recoveryUsed) {
+        throw new AuthError(401, 'INVALID_TWO_FACTOR_CODE', '验证码不正确')
+      }
+      await this.loginChallenges.put(challengeHash, { ...challenge, usedAt: this.now().toISOString() })
+      if (recoveryUsed) {
+        await this.audit(
+          { userKey: challenge.userKey, schoolId: challenge.schoolId, username: challenge.username, role: record.role },
+          'totp.recovery_code_use', challenge.userKey, challenge.schoolId,
+        )
+      }
+      return this.completeLogin(
+        record, school, challenge.remember, ip ?? challenge.ip,
+        userAgent ?? challenge.userAgent, challenge.deviceId, issuerFor(challenge),
       )
-    }
-    return this.completeLogin(
-      record,
-      school,
-      challenge.remember,
-      resumedIp,
-      resumedUserAgent,
-      challenge.deviceId,
-    )
+    })
   }
 
-  private readonly claimedLoginChallenges = new Set<string>()
   private readonly claimedRecoveryCodeHashes = new Set<string>()
 
   private async issueLoginChallenge(
@@ -1156,6 +1276,7 @@ export class AuthService {
     ip: string,
     userAgent?: string,
     deviceId?: string,
+    audience: LoginAudience = { kind: 'web' },
   ): Promise<TwoFactorChallenge> {
     const raw = newLoginChallengeToken()
     const id = hashOpaqueCredential(raw)
@@ -1170,6 +1291,11 @@ export class AuthService {
       schoolId: school.id,
       username: record.username,
       remember,
+      audience: audience.kind,
+      credentialVersion: record.credentialVersion ?? 0,
+      schoolCredentialVersion: school.credentialVersion ?? 0,
+      ...(audience.device?.deviceName !== undefined ? { deviceName: audience.device.deviceName } : {}),
+      ...(audience.device?.appVersion !== undefined ? { appVersion: audience.device.appVersion } : {}),
       ip,
       ...(userAgent !== undefined ? { userAgent: userAgent.slice(0, 256) } : {}),
       ...(deviceId !== undefined ? { deviceId } : {}),
@@ -1199,14 +1325,15 @@ export class AuthService {
     }
   }
 
-  private async completeLogin(
+  private async completeLogin<T>(
     record: UserRecord,
     school: School,
     remember: boolean,
-    ip?: string,
-    userAgent?: string,
-    deviceId?: string,
-  ): Promise<LoginResult> {
+    ip: string | undefined,
+    userAgent: string | undefined,
+    deviceId: string | undefined,
+    issue: LoginIssuer<T>,
+  ): Promise<T> {
     const sourceIp = ip ?? 'unknown'
     const firstDevice = deviceId !== undefined
       && this.devices.get(deviceKey(userKey(record.schoolId, record.username), deviceId)) === undefined
@@ -1215,14 +1342,7 @@ export class AuthService {
       && session.schoolId === record.schoolId
       && session.username === record.username
       && session.ip === sourceIp)
-    const result = await this.issueSession(
-      record,
-      school,
-      remember,
-      sourceIp,
-      userAgent,
-      deviceId,
-    )
+    const result = await issue(record, school, remember, sourceIp, userAgent, deviceId)
     const now = this.now().toISOString()
     await this.users.put(userKey(school.id, record.username), {
       ...record,
@@ -1372,7 +1492,8 @@ export class AuthService {
 
   private loadActorRecord(actor: AdminActor): UserRecord {
     const record = this.users.get(actor.userKey)
-    if (record === undefined || record.status !== 'active') {
+    if (record === undefined || record.status !== 'active' || this.accountDeletionPending(record.id)
+      || this.schools.get(record.schoolId)?.status !== 'active') {
       throw new AuthError(401, 'UNAUTHENTICATED', '账号不存在或已停用')
     }
     return record
@@ -1414,6 +1535,8 @@ export class AuthService {
       username: record.username,
       name: input.data.name,
       scope: input.data.scope,
+      credentialVersion: record.credentialVersion ?? 0,
+      schoolCredentialVersion: this.schools.get(record.schoolId)?.credentialVersion ?? 0,
       createdAt: now.toISOString(),
       ...(expiresAt !== undefined ? { expiresAt } : {}),
     }
@@ -1463,6 +1586,365 @@ export class AuthService {
     }
   }
 
+  /**
+   * Authenticate a native installation through the existing account/password workflow.
+   * @param body - the mobile login DTO, including a hashed installation id.
+   * @param ip - trusted request address for the shared limiter.
+   * @param userAgent - bounded browser-compatible audit metadata.
+   * @returns an authenticated device, a second-factor challenge, or a pending receipt.
+   */
+  async loginMobile(body: unknown, ip?: string, userAgent?: string): Promise<MobileLoginResult> {
+    const input = mobileLoginWire.safeParse(body)
+    if (!input.success) throw new AuthError(400, 'BAD_REQUEST', '请检查账号和设备信息')
+    try {
+      const result = await this.loginUsing(input.data, ip, userAgent,
+        { kind: 'mobile', device: input.data },
+        (record, school) => this.issueMobileGrant(record, school, input.data))
+      return 'twoFactorRequired' in result
+        ? { status: 'challenge', challengeToken: result.challengeToken, expiresAt: result.expiresAt }
+        : result
+    } catch (error) {
+      if (error instanceof AuthError && error.code === 'ACCOUNT_PENDING') {
+        return { status: 'pending', message: error.message }
+      }
+      throw error
+    }
+  }
+
+  /**
+   * Register through the existing school/invitation/admission policy without issuing a Cookie.
+   * @param body - the mobile registration DTO; email is required by the existing workflow.
+   * @param ip - trusted source address for the shared registration limiter.
+   * @param userAgent - request metadata for the common registration workflow.
+   * @returns a real mobile grant or the existing pending-school registration receipt.
+   */
+  async registerMobile(body: unknown, ip?: string, userAgent?: string): Promise<MobileLoginResult> {
+    const input = mobileRegisterWire.safeParse(body)
+    if (!input.success) throw new AuthError(400, 'BAD_REQUEST', '请检查注册和设备信息')
+    const result = await this.registerUsing(input.data, ip, userAgent,
+      (record, school) => this.issueMobileGrant(record, school, input.data))
+    if ('pending' in result) {
+      return {
+        status: 'pending', requestId: result.requestId, schoolName: result.schoolName,
+        username: result.username, email: result.email,
+      }
+    }
+    return result
+  }
+
+  /**
+   * Consume an audience-bound mobile challenge using the existing TOTP/recovery verifier.
+   * @param body - challengeToken and code; installation metadata comes from the challenge.
+   * @param ip - trusted address for the shared second-factor limiter.
+   * @param userAgent - current request metadata for the common login audit.
+   * @returns the first mobile credential pair for that login.
+   */
+  async loginMobileTwoFactor(body: unknown, ip?: string, userAgent?: string): Promise<MobileAuthenticated> {
+    const input = mobileTwoFactorWire.safeParse(body)
+    if (!input.success) throw new AuthError(400, 'BAD_REQUEST', '请检查验证码')
+    return this.loginTwoFactorUsing(input.data, ip, userAgent, 'mobile', challenge => (record, school) => {
+      if (challenge.deviceId === undefined) {
+        throw new AuthError(401, 'INVALID_TWO_FACTOR_CHALLENGE', '二次验证已失效，请重新登录')
+      }
+      return this.issueMobileGrant(record, school, {
+        deviceId: challenge.deviceId,
+        ...(challenge.deviceName !== undefined ? { deviceName: challenge.deviceName } : {}),
+        ...(challenge.appVersion !== undefined ? { appVersion: challenge.appVersion } : {}),
+      })
+    })
+  }
+
+  private async issueMobileGrant(record: UserRecord, school: School, device: MobileDeviceContext): Promise<MobileAuthenticated> {
+    this.assertDeviceUsable(record, device.deviceId)
+    if (!this.credentialVersionsMatch(record, school, {
+      credentialVersion: record.credentialVersion, schoolCredentialVersion: school.credentialVersion,
+    })) throw new AuthError(401, 'UNAUTHENTICATED', '账号不存在或已停用')
+    const now = this.now()
+    const ownerKey = userKey(record.schoolId, record.username)
+    const active = [...this.mobileGrants.entries()].map(([, row]) => row)
+      .filter(row => row.userId === record.id && row.userKey === ownerKey && row.revokedAt === undefined
+        && validUntil(row.refreshExpiresAt, now.getTime()))
+    if (active.filter(row => row.deviceId !== device.deviceId).length
+      >= (this.config.mobileGrantLimit ?? DEFAULT_AUTH_CONFIG.mobileGrantLimit)) {
+      throw new AuthError(429, 'RATE_LIMITED', '登录设备数量已达上限，请先撤销其他设备')
+    }
+    const access = newMobileToken('access')
+    const refresh = newMobileToken('refresh')
+    const refreshExpiresAt = new Date(now.getTime()
+      + (this.config.mobileRefreshTtlMs ?? DEFAULT_AUTH_CONFIG.mobileRefreshTtlMs)).toISOString()
+    const grant: MobileGrantRecord = {
+      id: `mg_${crypto.randomBytes(18).toString('base64url')}`,
+      userId: record.id, userKey: ownerKey, schoolId: school.id, username: record.username,
+      deviceId: device.deviceId, platform: 'android', deviceName: device.deviceName ?? 'Android',
+      ...(device.appVersion !== undefined ? { appVersion: device.appVersion } : {}),
+      scope: 'write', credentialVersion: record.credentialVersion ?? 0,
+      schoolCredentialVersion: school.credentialVersion ?? 0,
+      generation: 0, accessHash: access.hash, refreshHash: refresh.hash,
+      accessExpiresAt: new Date(Math.min(Date.parse(refreshExpiresAt), now.getTime()
+        + (this.config.mobileAccessTtlMs ?? DEFAULT_AUTH_CONFIG.mobileAccessTtlMs))).toISOString(),
+      refreshExpiresAt, createdAt: now.toISOString(), lastSeenAt: now.toISOString(),
+    }
+    await this.registerOwnDevice({ userKey: ownerKey, schoolId: school.id, username: record.username, role: record.role }, {
+      deviceId: device.deviceId, platform: 'android',
+      ...(device.appVersion !== undefined ? { appVersion: device.appVersion } : {}),
+    })
+    for (const previous of active) {
+      if (previous.deviceId === device.deviceId) await this.revokeMobileGrant(previous, 'replaced')
+    }
+    await this.stageMobileTokens(grant)
+    await this.mobileGrants.put(grant.id, grant)
+    return this.mobileAuthentication(grant, this.toPublic(record, school), access.raw, refresh.raw)
+  }
+
+  private async stageMobileTokens(grant: MobileGrantRecord): Promise<void> {
+    await this.mobileTokens.put(grant.accessHash, {
+      id: grant.accessHash, kind: 'access', grantId: grant.id,
+      generation: grant.generation, expiresAt: grant.accessExpiresAt,
+    })
+    await this.mobileTokens.put(grant.refreshHash, {
+      id: grant.refreshHash, kind: 'refresh', grantId: grant.id,
+      generation: grant.generation, expiresAt: grant.refreshExpiresAt,
+    })
+  }
+
+  private mobileAuthentication(grant: MobileGrantRecord, user: PublicUser, access: string, refresh: string): MobileAuthenticated {
+    return {
+      status: 'authenticated', user: toMobileUser(user),
+      tokens: { accessToken: access, expiresAt: grant.accessExpiresAt,
+        refreshToken: refresh, refreshExpiresAt: grant.refreshExpiresAt },
+    }
+  }
+
+  private mobilePrincipal(grant: MobileGrantRecord): { record: UserRecord; school: School } | null {
+    if (grant.revokedAt !== undefined || !validUntil(grant.refreshExpiresAt, this.now().getTime())) return null
+    const record = this.users.get(grant.userKey)
+    const school = this.schools.get(grant.schoolId)
+    if (record === undefined || school === undefined || record.id !== grant.userId
+      || record.schoolId !== grant.schoolId || record.username !== grant.username
+      || userKey(record.schoolId, record.username) !== grant.userKey
+      || !this.credentialVersionsMatch(record, school, grant)
+      || this.isDeviceRevoked(grant.deviceId, grant.schoolId)) return null
+    return { record, school }
+  }
+
+  /**
+   * Resolve a first-party access token; refresh credentials cannot enter this path.
+   * @param token - opaque access credential from Authorization.
+   * @returns the live account and grant, or null for every invalid state.
+   */
+  resolveMobileAccess(token: string): ResolvedCredential | null {
+    if (!isMobileToken(token, 'access')) return null
+    return this.resolveMobileAccessHash(hashOpaqueCredential(token))
+  }
+
+  private resolveMobileAccessHash(hash: string): ResolvedCredential | null {
+    const index = this.mobileTokens.get(hash)
+    if (index === undefined || index.kind !== 'access' || index.id !== hash
+      || !validUntil(index.expiresAt, this.now().getTime())) return null
+    const grant = this.mobileGrants.get(index.grantId)
+    if (grant === undefined || grant.accessHash !== hash || grant.generation !== index.generation
+      || !validUntil(grant.accessExpiresAt, this.now().getTime())) return null
+    const principal = this.mobilePrincipal(grant)
+    if (principal === null) return null
+    return {
+      user: this.toPublic(principal.record, principal.school),
+      actor: { userKey: grant.userKey, schoolId: grant.schoolId, username: grant.username, role: principal.record.role },
+      credential: { kind: 'mobile', grant, scope: grant.scope },
+    }
+  }
+
+  private requireMobile(resolved: ResolvedCredential | null, write = false): ResolvedCredential & {
+    credential: Extract<AuthCredential, { kind: 'mobile' }>
+  } {
+    if (resolved === null) throw new AuthError(401, 'UNAUTHENTICATED', '未登录或会话已失效')
+    if (resolved.credential.kind !== 'mobile') throw new AuthError(403, 'FORBIDDEN', '该操作需要移动端登录')
+    const current = this.resolveMobileAccessHash(resolved.credential.grant.accessHash)
+    if (current === null || current.credential.kind !== 'mobile'
+      || current.user.id !== resolved.user.id) throw new AuthError(401, 'UNAUTHENTICATED', '未登录或会话已失效')
+    if (write && current.credential.scope !== 'write') {
+      throw new AuthError(403, 'TOKEN_SCOPE_REQUIRED', '该令牌只有只读权限')
+    }
+    return { ...current, credential: current.credential }
+  }
+
+  /**
+   * Rotate a refresh exactly once; a consumed credential revokes its entire grant.
+   * @param body - the raw refresh credential, carried only in JSON.
+   * @param ip - trusted address for the shared refresh limiter.
+   * @returns a new pair only after the single authoritative grant write is durable.
+   */
+  async refreshMobile(body: unknown, ip?: string): Promise<MobileAuthenticated> {
+    const input = mobileRefreshWire.safeParse(body)
+    if (!input.success) throw new AuthError(400, 'BAD_REQUEST', '请检查刷新请求')
+    await this.allow('mobileRefresh', `ip:${ip ?? 'unknown'}`)
+    const invalid = (): AuthError => new AuthError(401, 'INVALID_REFRESH_TOKEN', '登录凭据已失效，请重新登录')
+    if (!isMobileToken(input.data.refreshToken, 'refresh')) throw invalid()
+    const hash = hashOpaqueCredential(input.data.refreshToken)
+    return this.credentialMutation(async () => {
+      const index = this.mobileTokens.get(hash)
+      if (index === undefined || index.kind !== 'refresh' || index.id !== hash
+        || !validUntil(index.expiresAt, this.now().getTime())) throw invalid()
+      const grant = this.mobileGrants.get(index.grantId)
+      if (grant === undefined) throw invalid()
+      await this.allow('mobileRefresh', `grant:${grant.id}`)
+      const principal = this.mobilePrincipal(grant)
+      if (principal === null) throw invalid()
+      if (grant.refreshHash !== hash || grant.generation !== index.generation) {
+        if (index.generation < grant.generation) await this.revokeMobileGrant(grant, 'replay')
+        throw invalid()
+      }
+      const access = newMobileToken('access')
+      const refresh = newMobileToken('refresh')
+      const now = this.now()
+      const next: MobileGrantRecord = {
+        ...grant, generation: grant.generation + 1, accessHash: access.hash, refreshHash: refresh.hash,
+        accessExpiresAt: new Date(Math.min(Date.parse(grant.refreshExpiresAt), now.getTime()
+          + (this.config.mobileAccessTtlMs ?? DEFAULT_AUTH_CONFIG.mobileAccessTtlMs))).toISOString(),
+        lastSeenAt: now.toISOString(),
+      }
+      await this.stageMobileTokens(next)
+      await this.mobileGrants.update(grant.id, current => {
+        if (current.refreshHash !== hash || current.generation !== grant.generation
+          || this.mobilePrincipal(current) === null) throw invalid()
+        return next
+      })
+      return this.mobileAuthentication(next, this.toPublic(principal.record, principal.school), access.raw, refresh.raw)
+    })
+  }
+
+  private async revokeMobileGrant(grant: MobileGrantRecord, reason: NonNullable<MobileGrantRecord['revokedReason']>): Promise<void> {
+    const current = this.mobileGrants.get(grant.id)
+    if (current === undefined || current.revokedAt !== undefined) return
+    await this.mobileGrants.put(current.id, { ...current, revokedAt: this.now().toISOString(), revokedReason: reason })
+    await this.audit({ userKey: current.userKey, schoolId: current.schoolId, username: current.username, role: 'STUDENT' },
+      `mobile.${reason === 'replay' ? 'refresh_replay' : 'revoke'}`, current.id, current.schoolId, { reason })
+  }
+
+  /**
+   * Revoke a device using live access or possession of a current/consumed refresh.
+   * @param resolved - optional mobile access principal; Cookies do not qualify.
+   * @param body - optional refreshToken; unknown refreshes are an idempotent no-op.
+   * @param ip - trusted address for the shared refresh/logout limiter.
+   */
+  async logoutMobile(resolved: ResolvedCredential | null, body: unknown, ip?: string): Promise<void> {
+    const input = mobileLogoutWire.safeParse(body)
+    if (!input.success) throw new AuthError(400, 'BAD_REQUEST', '请检查退出请求')
+    await this.allow('mobileRefresh', `ip:${ip ?? 'unknown'}`)
+    return this.credentialMutation(async () => {
+      let grant: MobileGrantRecord | undefined
+      if (input.data.refreshToken !== undefined) {
+        if (!isMobileToken(input.data.refreshToken, 'refresh')) return
+        const index = this.mobileTokens.get(hashOpaqueCredential(input.data.refreshToken))
+        if (index?.kind !== 'refresh') return
+        grant = this.mobileGrants.get(index.grantId)
+        if (grant === undefined || index.generation > grant.generation) return
+      } else {
+        grant = this.requireMobile(resolved, true).credential.grant
+      }
+      await this.revokeMobileGrant(grant, 'logout')
+    })
+  }
+
+  /**
+   * List only this account incarnation's devices without credential digests or IP metadata.
+   * @param resolved - a live mobile principal.
+   * @returns up to 100 unexpired current/revoked grants, newest first.
+   */
+  listMobileDevices(resolved: ResolvedCredential): { items: MobileDevice[] } {
+    const current = this.requireMobile(resolved)
+    return { items: [...this.mobileGrants.entries()].map(([, row]) => row)
+      .filter(row => row.userId === current.user.id && row.userKey === current.actor.userKey
+        && validUntil(row.refreshExpiresAt, this.now().getTime()))
+      .sort((a, b) => b.lastSeenAt.localeCompare(a.lastSeenAt) || a.id.localeCompare(b.id)).slice(0, 100)
+      .map(row => ({ id: row.id, platform: row.platform, deviceName: row.deviceName,
+        ...(row.appVersion !== undefined ? { appVersion: row.appVersion } : {}),
+        createdAt: row.createdAt, lastSeenAt: row.lastSeenAt, refreshExpiresAt: row.refreshExpiresAt,
+        current: row.id === current.credential.grant.id,
+        ...(row.revokedAt !== undefined ? { revokedAt: row.revokedAt } : {}),
+      })) }
+  }
+
+  /**
+   * Revoke one owned device grant; a foreign id is indistinguishable from absence.
+   * @param resolved - the current mobile principal.
+   * @param grantId - the public device-list id, not an installation identifier.
+   */
+  async revokeMobileDevice(resolved: ResolvedCredential, grantId: string): Promise<void> {
+    return this.credentialMutation(async () => {
+      const current = this.requireMobile(resolved, true)
+      await this.allow('mobileAccount', `acct:${current.actor.userKey}`)
+      const grant = this.mobileGrants.get(grantId)
+      if (grant === undefined || grant.userId !== current.user.id || grant.userKey !== current.actor.userKey) {
+        throw new AuthError(404, 'NOT_FOUND', '登录设备不存在')
+      }
+      await this.revokeMobileGrant(grant, 'device')
+    })
+  }
+
+  /**
+   * Update the caller's display name only, on the existing account row.
+   * @param resolved - a live mobile principal.
+   * @param body - the strict displayName patch.
+   * @returns the persisted mobile account DTO.
+   */
+  async updateMobileProfile(resolved: ResolvedCredential, body: unknown): Promise<MobileUser> {
+    const input = mobileProfileWire.safeParse(body)
+    if (!input.success) throw new AuthError(400, 'BAD_REQUEST', '请检查姓名')
+    return this.credentialMutation(async () => {
+      const current = this.requireMobile(resolved, true)
+      await this.allow('mobileAccount', `acct:${current.actor.userKey}`)
+      const record = this.loadActorRecord(current.actor)
+      await this.users.put(current.actor.userKey, {
+        ...record, displayName: input.data.displayName, updatedAt: this.now().toISOString(),
+      })
+      await this.audit(current.actor, 'account.profile', current.actor.userKey, current.actor.schoolId, { fields: ['displayName'] })
+      return { ...toMobileUser(current.user), displayName: input.data.displayName }
+    })
+  }
+
+  private async verifyAccountProof(record: UserRecord, password: string, code: string | undefined, ip: string | undefined): Promise<void> {
+    const key = userKey(record.schoolId, record.username)
+    await this.allow('ip', `ip:${ip ?? 'unknown'}`)
+    await this.allow('login', `acct:${record.username}`)
+    if (!verifyPassword(password, record.passwordHash)) {
+      throw new AuthError(401, 'INVALID_CREDENTIALS', '密码不正确')
+    }
+    if (record.totp !== undefined) {
+      if (code === undefined) throw new AuthError(403, 'TWO_FACTOR_REQUIRED', '请输入二次验证码')
+      await this.allow('totp', `acct:${key}`, '验证码尝试过于频繁，请稍后再试')
+      if (!verifyTotpCode(record.totp.secret, code, this.now().getTime())
+        && !(await this.consumeRecoveryCode(record, code))) {
+        throw new AuthError(401, 'INVALID_TWO_FACTOR_CODE', '验证码不正确')
+      }
+    }
+    await this.clearLimit('login', `acct:${record.username}`)
+  }
+
+  /**
+   * Change the existing password and invalidate all account credentials before returning.
+   * @param resolved - a live mobile principal.
+   * @param body - currentPassword, newPassword and optional second factor.
+   * @param ip - trusted source address for existing password/TOTP limiters.
+   */
+  async changeMobilePassword(resolved: ResolvedCredential, body: unknown, ip?: string): Promise<void> {
+    const input = mobilePasswordWire.safeParse(body)
+    if (!input.success) throw new AuthError(400, 'BAD_REQUEST', '请检查密码')
+    return this.credentialMutation(async () => {
+      const current = this.requireMobile(resolved, true)
+      await this.allow('mobileAccount', `acct:${current.actor.userKey}`)
+      const record = this.loadActorRecord(current.actor)
+      await this.verifyAccountProof(record, input.data.currentPassword, input.data.code, ip)
+      await this.users.put(current.actor.userKey, {
+        ...record, passwordHash: hashPassword(input.data.newPassword),
+        credentialVersion: (record.credentialVersion ?? 0) + 1, updatedAt: this.now().toISOString(),
+      })
+      await this.revokeUserSessions(record)
+      await this.revokeUserApiTokens(record)
+      await this.supersedeOpenResetRequests(current.actor.userKey)
+      await this.audit(current.actor, 'account.password', current.actor.userKey, current.actor.schoolId)
+    })
+  }
+
   /** Mint an opaque token and persist only its hash as a session row. */
   private async issueSession(
     record: UserRecord, school: School, remember: boolean,
@@ -1476,6 +1958,8 @@ export class AuthService {
       schoolId: school.id,
       username: record.username,
       remember,
+      credentialVersion: record.credentialVersion ?? 0,
+      schoolCredentialVersion: school.credentialVersion ?? 0,
       createdAt: new Date(now).toISOString(),
       expiresAt: new Date(now + (remember ? this.config.rememberTtlMs : this.config.sessionTtlMs)).toISOString(),
       ip: ip ?? 'unknown',
@@ -1514,13 +1998,13 @@ export class AuthService {
   resolveSession(token: string): ResolvedSession | null {
     const session = this.sessions.get(sessionTokenHash(token))
     if (session === undefined || session.revokedAt !== undefined) return null
-    if (Date.parse(session.expiresAt) <= this.now().getTime()) return null
+    if (!validUntil(session.expiresAt, this.now().getTime())) return null
 
     const school = this.schools.get(session.schoolId)
     if (school === undefined || school.status !== 'active') return null
 
     const user = this.users.get(userKey(session.schoolId, session.username))
-    if (user === undefined || user.id !== session.userId || user.status !== 'active') return null
+    if (user === undefined || user.id !== session.userId || !this.credentialVersionsMatch(user, school, session)) return null
     /* 远程注销在这里生效:会话记住了它来自哪台设备,而设备一旦被注销(平台级
        或本校),这条会话下一次解析就是 null —— 不用等 cookie 过期。 */
     if (session.deviceId !== undefined
@@ -1537,12 +2021,13 @@ export class AuthService {
   resolveApiToken(token: string): ResolvedCredential | null {
     const row = this.apiTokens.get(hashOpaqueCredential(token))
     if (row === undefined || row.revokedAt !== undefined) return null
-    if (row.expiresAt !== undefined && Date.parse(row.expiresAt) <= this.now().getTime()) return null
+    if (row.expiresAt !== undefined && !validUntil(row.expiresAt, this.now().getTime())) return null
     const school = this.schools.get(row.schoolId)
     const user = this.users.get(row.userKey)
     if (school === undefined || school.status !== 'active'
       || user === undefined || user.status !== 'active'
-      || user.id !== row.userId || userKey(user.schoolId, user.username) !== row.userKey) {
+      || user.id !== row.userId || userKey(user.schoolId, user.username) !== row.userKey
+      || user.schoolId !== row.schoolId || !this.credentialVersionsMatch(user, school, row)) {
       return null
     }
     return {
@@ -1568,7 +2053,8 @@ export class AuthService {
   ): ResolvedCredential | null {
     if (authorizationHeader !== undefined) {
       const token = readBearerToken(authorizationHeader)
-      return token === null ? null : this.resolveApiToken(token)
+      if (token === null || token.startsWith('pmr_')) return null
+      return token.startsWith('pma_') ? this.resolveMobileAccess(token) : this.resolveApiToken(token)
     }
     const sessionToken = readSessionCookieHeader(cookieHeader)
     if (sessionToken === null) return null
@@ -1787,8 +2273,8 @@ export class AuthService {
       }
       const record = this.users.get(token.userKey)
       const school = this.schools.get(token.schoolId)
-      if (record === undefined || school === undefined
-        || record.status !== 'active' || school.status !== 'active') {
+      if (record === undefined || school === undefined || record.id !== token.userId
+        || record.status !== 'active' || school.status !== 'active' || this.accountDeletionPending(record.id)) {
         throw new AuthError(400, 'INVALID_RESET_TOKEN', '重置链接无效或已过期')
       }
 
