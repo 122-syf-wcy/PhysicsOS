@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useState } from 'react'
 import { editWhiteboardDocument, moveWhiteboardHistory, type WhiteboardDocument, type WhiteboardScene } from '@physicsos/physics-whiteboard'
@@ -34,6 +34,35 @@ describe('native editable whiteboard', () => {
   it('renders a stationary mouse click as a visible ink dot while retaining its two samples', () => {
     const view = render(<svg><WhiteboardElements elements={[{ id: 'dot', type: 'freedraw', x: 1, y: 2, points: [[0, 0], [0, 0]], pressures: [0.5, 0], simulatePressure: true, strokeWidth: 4 }]} images={{}} /></svg>)
     expect(view.container.querySelector('circle')?.getAttribute('r')).toBe('2')
+  })
+
+  it('prevents native wheel defaults with one current handler across rerenders and removes it on unmount', () => {
+    let latest: WhiteboardScene = { elements: [], appState: {} }; const changes: number[] = []
+    function Fixture({ version }: { version: number }) {
+      const [scene, setScene] = useState(latest)
+      return <NativeEditor documentId="wheel" scene={scene} history={{ undo: [], redo: [] }} onUndo={() => undefined} onRedo={() => undefined}
+        onChange={next => { changes.push(version); latest = next; setScene(next) }} images={{}} t={key => whiteboardEn[key]} clearRequest={0} onSave={() => undefined} />
+    }
+    const view = render(<Fixture version={1} />)
+    const canvas = view.getByRole('application') as unknown as SVGSVGElement
+    vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({ x: 0, y: 0, left: 0, top: 0, right: 800, bottom: 600, width: 800, height: 600, toJSON: () => ({}) })
+    const wheel = (deltaX: number, deltaY: number, ctrlKey = false) => new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaX, deltaY, ctrlKey })
+    const first = wheel(10, 20); fireEvent(canvas, first)
+    expect(first.defaultPrevented).toBe(true)
+    expect(latest.appState).toMatchObject({ scrollX: -10, scrollY: -20, zoom: { value: 1 } })
+    view.rerender(<Fixture version={2} />)
+    const second = wheel(3, 5); const third = wheel(3, 5)
+    act(() => { canvas.dispatchEvent(second); canvas.dispatchEvent(third) })
+    expect(second.defaultPrevented && third.defaultPrevented).toBe(true)
+    expect(latest.appState).toMatchObject({ scrollX: -16, scrollY: -30 })
+    const magnify = wheel(0, -Math.log(2) / 0.002, true); fireEvent(canvas, magnify)
+    expect(magnify.defaultPrevented).toBe(true)
+    expect(latest.appState).toMatchObject({ scrollX: -216, scrollY: -180, zoom: { value: 2 } })
+    expect(changes).toEqual([1, 2, 2, 2])
+    view.unmount()
+    const detached = wheel(1, 1); fireEvent(canvas, detached)
+    expect(detached.defaultPrevented).toBe(false)
+    expect(changes).toEqual([1, 2, 2, 2])
   })
 
 })

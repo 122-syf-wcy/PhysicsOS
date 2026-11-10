@@ -21,6 +21,14 @@ export function NativeEditor({ scene, history, onUndo, onRedo, onChange, images,
   const [text, setText] = useState<{ id: string; x: number; y: number; value: string; before: WhiteboardScene } | undefined>()
   const [view, setView] = useState(() => ({ x: numeric(scene.appState, 'scrollX'), y: numeric(scene.appState, 'scrollY'), zoom: typeof scene.appState.zoom === 'object' && scene.appState.zoom !== null && !Array.isArray(scene.appState.zoom) ? numeric(scene.appState.zoom as JsonObject, 'value', 1) : 1 }))
   const viewRef = useRef(view); viewRef.current = view
+  const wheelHandler = useRef<(event: WheelEvent) => void>()
+  useEffect(() => {
+    const canvas = svg.current
+    if (!canvas) return
+    const onWheel = (event: WheelEvent) => wheelHandler.current?.(event)
+    canvas.addEventListener('wheel', onWheel, { passive: false })
+    return () => canvas.removeEventListener('wheel', onWheel)
+  }, [])
   const commit = (next: WhiteboardScene, before = current.current) => {
     if (JSON.stringify(before) === JSON.stringify(next)) return
     const change = diffScene(before, next)
@@ -96,6 +104,7 @@ export function NativeEditor({ scene, history, onUndo, onRedo, onChange, images,
     if (g.tool === 'pan') storeView(viewRef.current)
   }
   const storeView = (next: typeof view) => {
+    viewRef.current = next
     setView(next)
     const updated = { ...current.current, appState: { ...current.current.appState, scrollX: next.x, scrollY: next.y, zoom: { value: next.zoom } } }
     current.current = updated; onChange(updated)
@@ -105,6 +114,14 @@ export function NativeEditor({ scene, history, onUndo, onRedo, onChange, images,
     const nextZoom = Math.max(.1, Math.min(8, previous.zoom * factor))
     const x = (bounds?.width ?? 800) / 2; const y = (bounds?.height ?? 600) / 2
     storeView({ zoom: nextZoom, x: previous.x + x / nextZoom - x / previous.zoom, y: previous.y + y / nextZoom - y / previous.zoom })
+  }
+  wheelHandler.current = event => {
+    if (event.cancelable) event.preventDefault()
+    if (event.ctrlKey || event.metaKey) zoom(Math.exp(-event.deltaY * .002))
+    else {
+      const currentView = viewRef.current
+      storeView({ ...currentView, x: currentView.x - event.deltaX / currentView.zoom, y: currentView.y - event.deltaY / currentView.zoom })
+    }
   }
   function fit() {
     const box = sceneBounds(current.current); const rect = svg.current?.getBoundingClientRect()
@@ -130,7 +147,6 @@ export function NativeEditor({ scene, history, onUndo, onRedo, onChange, images,
       <svg ref={svg} className={css.canvas} data-whiteboard-canvas="true" role="application" aria-label={t('whiteboard.canvasLabel')} tabIndex={0}
         onPointerDown={down} onPointerMove={move} onPointerUp={event => up(event)} onPointerCancel={event => up(event, true)} onLostPointerCapture={event => up(event, true)}
         onDoubleClick={event => { const id = (event.target as Element).closest('[data-element-id]')?.getAttribute('data-element-id'); const element = current.current.elements.find(item => item.id === id); if (element?.type === 'text') editText(element) }}
-        onWheel={event => { event.preventDefault(); if (event.ctrlKey || event.metaKey) zoom(Math.exp(-event.deltaY * .002)); else storeView({ ...view, x: view.x - event.deltaX / view.zoom, y: view.y - event.deltaY / view.zoom }) }}
         onKeyDown={event => {
           if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') { event.preventDefault(); undo(event.shiftKey) }
           else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); onSave() }

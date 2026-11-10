@@ -21,6 +21,7 @@ import { OptionalLensBench } from '../experiments/OptionalLensBench.tsx'
 import { lensBenchSnapshot } from './lens-bench-view.ts'
 import rendererCss from './CanvasRendererFrame.module.css'
 import css from './CanvasWorkspace.module.css'
+import principlesCss from './CanvasPrinciples.module.css'
 
 const circuitEditRejected = (value: { readonly diagnostics: readonly { readonly code: string }[] }): boolean =>
   value.diagnostics.some(item => item.code === 'INVALID_DRAFT' || item.code === 'WORKBENCH_EDIT_REJECTED')
@@ -162,6 +163,7 @@ export function CanvasInstanceView(props: CanvasInstanceProps) {
   const displayKey = useId()
   const [dataTab, setDataTab] = useState<DataTab>('data')
   const [dataOpen, setDataOpen] = useState(false)
+  const [principlesOpen, setPrinciplesOpen] = useState(false)
   const [guide, setGuide] = useState(false)
   const [report, setReport] = useState(false)
   const [treeSelection, setTreeSelection] = useState('scene')
@@ -179,7 +181,7 @@ export function CanvasInstanceView(props: CanvasInstanceProps) {
     const target = event.target
     if (target instanceof Node && !event.currentTarget.contains(target)) return
     if (target instanceof HTMLElement && (target.isContentEditable || target.closest('input,textarea,select,[role="menu"]') !== null)) return
-    if (target instanceof HTMLElement && target.closest('button,a') !== null && (event.key === ' ' || event.key === 'Enter')) return
+    if (target instanceof HTMLElement && target.closest('button,a,summary') !== null && (event.key === ' ' || event.key === 'Enter')) return
     if (summary === undefined) return
     if (event.key === 'Escape' && props.ownsCanvasNativePreview(instanceKey, displayKey)) {
       event.preventDefault(); event.stopPropagation(); props.cancelCanvasRendererPreview(instanceKey, displayKey); return
@@ -273,6 +275,12 @@ export function CanvasInstanceView(props: CanvasInstanceProps) {
         labels={{ properties: t('canvas.parameters'), readings: t('lab.inspectorTab.readings'), checks: t('lab.inspectorTab.checks') }}
         onEdit={(id, value) => { act('editParameter', id, value) }} onChoice={(id, value) => { act('setChoice', id, value) }}
         onHighlight={id => { act('setHighlight', id === undefined ? [] : [id]) }} />
+    </details> : null}
+    {presentation === 'card' && snapshot.derivation.length > 0 ? <details className={principlesCss.panel}
+      onToggle={event => { setPrinciplesOpen(event.currentTarget.open) }}>
+      <summary>{t('canvas.principles')}</summary>
+      {principlesOpen ? <DataPanelBody tab="derivation" table={snapshot.table} charts={snapshot.charts} derivation={snapshot.derivation}
+        events={snapshot.events} clock={snapshot.clock} emptyLabel={t('canvas.noValue')} /> : null}
     </details> : null}
     {snapshot.error === undefined || constructing ? null : <div className={css.notice} role="alert">{snapshot.error.message}</div>}
     {summary.clock.total > 0 ? <div className={css.timeline}>
