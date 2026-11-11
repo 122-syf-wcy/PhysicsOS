@@ -294,6 +294,14 @@ export function validateBuildPlan(plan, sourceManifest) {
   return plan
 }
 
+export function packageBundleArguments(pkg) {
+  if (pkg.build === 'local') return ['--config', '/app/' + pkg.sourcePath + '/tsdown.config.ts']
+  if (typeof pkg.name !== 'string' || !pkg.name) throw new Error('Workspace bundle requires its declared package name')
+  // tsdown0.22 filters by exact package name or process-cwd-relative directory.
+  // An absolute sourcePath never matches any workspace configuration.
+  return ['--config', '/app/' + HARNESS + '/tsdown.config.ts', '--env.DSH_BUILD_FACE=' + pkg.mode, '--filter', pkg.name]
+}
+
 export function validateSeedReceipt(receipt, expected) {
   if (receipt?.schemaVersion !== 1 || receipt.origin !== 'audited-runtime-seed' || receipt.audited !== true || receipt.completeDevelopmentDependencies !== true || receipt.lockedDependenciesVerified !== true || receipt.sourceProjectionVerified !== true || receipt.nativeProbeVerified !== true) throw new Error('Runtime seed requires audited complete development hydration and projection evidence')
   if (receipt.dependencyFingerprint !== expected.dependencyFingerprint) throw new Error('Runtime seed dependency fingerprint differs')
@@ -457,8 +465,7 @@ export async function runScopedBuild({ builder, plan, sourceManifest, cacheRoot 
     if (pkg.mode === 'files') continue
     if (plan.resetProjects?.includes(pkg.sourcePath)) await command('docker', ['exec', '-u', '0', builder, 'rm', '-rf', '/app/' + pkg.sourcePath + '/lib'])
     await tool('/app/' + HARNESS, 'typescript', ['-b', pkg.path + '/tsconfig.json'])
-    if (pkg.build === 'local') await tool('/app/' + pkg.sourcePath, 'tsdown', ['--config', '/app/' + pkg.sourcePath + '/tsdown.config.ts'])
-    else await tool('/app/' + HARNESS, 'tsdown', ['--config', '/app/' + HARNESS + '/tsdown.config.ts', '--env.DSH_BUILD_FACE=' + pkg.mode, '--filter', '/app/' + pkg.sourcePath])
+    await tool('/app/' + (pkg.build === 'local' ? pkg.sourcePath : HARNESS), 'tsdown', packageBundleArguments(pkg))
   }
   if (plan.vite) await tool('/app/' + HARNESS + '/apps/web', 'vite', ['build'])
   await command('docker', ['exec', builder, 'node', '-e', `const f=require('fs');for(const p of process.argv.slice(1))if(!f.existsSync(p)||!f.statSync(p).size)throw Error('Required built artifact absent: '+p);`, ...plan.requiredArtifacts.map(name => '/app/' + name)])

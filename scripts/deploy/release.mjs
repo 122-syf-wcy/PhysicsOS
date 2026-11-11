@@ -66,6 +66,11 @@ export async function buildRelease(options, dependencies = {}) {
     await record(join(outputDir, 'build-evidence.json'), evidence)
     await record(join(stateRoot, 'compiled-source.json'), manifest)
     timings.push({ phase, seconds: (Date.now() - step) / 1000 })
+    if (options.discardSource === true) {
+      const owned = join(outputDir, 'projection', 'source')
+      if (resolve(source.root) !== owned || manifest.ownership !== 'physicsos-source-projection/1') throw new Error('Refusing to remove an unowned source projection')
+      await rm(owned, { recursive: true })
+    }
 
     options.signal?.throwIfAborted()
     phase = 'export'; event({ phase, state: 'start' }); step = Date.now()
@@ -75,11 +80,6 @@ export async function buildRelease(options, dependencies = {}) {
     const runtimeDir = join(outputDir, 'runtime')
     const exporter = lastJson(await run('python3', [join(HERE, 'release-runtime.py'), 'export', '--builder', builder, '--base-image', baseImage, '--revision', revision, '--source-manifest', source.manifestPath, '--plan-file', join(outputDir, 'build-plan.json'), '--output-dir', runtimeDir], { timeoutMs: 300_000 }))
     timings.push({ phase, seconds: (Date.now() - step) / 1000, bytes: exporter.bytesExported, changedFiles: exporter.changedFiles?.length })
-    if (options.discardSource === true) {
-      const owned = join(outputDir, 'projection', 'source')
-      if (resolve(source.root) !== owned || manifest.ownership !== 'physicsos-source-projection/1') throw new Error('Refusing to remove an unowned source projection')
-      await rm(owned, { recursive: true })
-    }
     if (exporter.noop) {
       const result = { noop: true, requestedRevision: revision, baseImage, sourceDigest: manifest.sourceDigest, runtimeRevision: exporter.runtimeRevision, outputDir, timings }
       await record(join(outputDir, 'release-build.json'), result)

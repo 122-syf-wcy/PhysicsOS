@@ -165,6 +165,15 @@ test('UI plugin edits rebuild both plugin halves without Vite, while static fron
   assert.equal(plan.vite, true)
 })
 
+test('workspace bundle selection uses the declared package name rather than an absolute filesystem path', async () => {
+  const api = await import(moduleUrl)
+  assert.equal(typeof api.packageBundleArguments, 'function')
+  const pkg = { name: '@deepseek-ai/dsh-web-app', path: 'packages/bundle/web-app', sourcePath: 'vendor/deepseek-harness/packages/bundle/web-app', mode: 'host', build: 'workspace' }
+  const args = api.packageBundleArguments(pkg)
+  assert.equal(args[args.indexOf('--filter') + 1], '@deepseek-ai/dsh-web-app')
+  assert.ok(args.includes('--env.DSH_BUILD_FACE=host'))
+})
+
 test('shared source changes rebuild declaration boundary and its inlining consumers, while new dependencies invalidate builder reuse', async () => {
   const api = await import(moduleUrl)
   assert.equal(typeof api.planBuild, 'function')
