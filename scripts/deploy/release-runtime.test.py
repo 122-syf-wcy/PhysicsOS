@@ -175,6 +175,14 @@ class RuntimeDeltaTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             runtime.validate_image_labels({'id': 'sha256:' + 'e' * 64, 'labels': {**labels, 'physicsos.source.digest': 'f' * 64}}, record)
 
+    def test_remote_docker_filesystem_budget_preserves_reserve_and_inode_checks(self):
+        self.assertTrue(callable(getattr(runtime, 'assert_disk_budget', None)))
+        runtime.assert_disk_budget({'freeBytes': 512 * 1024 * 1024, 'freeInodes': 8000}, 32 * 1024 * 1024)
+        with self.assertRaises(ValueError):
+            runtime.assert_disk_budget({'freeBytes': 300 * 1024 * 1024, 'freeInodes': 8000}, 32 * 1024 * 1024)
+        with self.assertRaises(ValueError):
+            runtime.assert_disk_budget({'freeBytes': 512 * 1024 * 1024, 'freeInodes': 3000}, 32 * 1024 * 1024)
+
     def test_signed_plugin_entry_and_existing_trust_root_are_checked_with_real_node_crypto(self):
         self.assertIsNotNone(shutil.which('node'), 'tooling image must expose its existing Node runtime')
         with tempfile.TemporaryDirectory() as temporary:

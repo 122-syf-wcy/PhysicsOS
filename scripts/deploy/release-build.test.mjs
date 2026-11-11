@@ -206,6 +206,14 @@ test('disk admission refuses impossible reservations before an output is created
   assert.deepEqual(await (await import('node:fs/promises')).readdir(base), [])
 })
 
+test('Docker filesystem admission retains byte reserve and inode guards for remote stats', async () => {
+  const api = await import(moduleUrl), MiB = 1024 * 1024
+  assert.equal(typeof api.assertDiskBudget, 'function')
+  assert.doesNotThrow(() => api.assertDiskBudget({ freeBytes: 512 * MiB, freeInodes: 8000 }, 128 * MiB))
+  assert.throws(() => api.assertDiskBudget({ freeBytes: 300 * MiB, freeInodes: 8000 }, 128 * MiB), /disk space/i)
+  assert.throws(() => api.assertDiskBudget({ freeBytes: 512 * MiB, freeInodes: 3000 }, 128 * MiB), /inodes/i)
+})
+
 test('source digest and dependency identity reject tampered metadata and distinguish native/ABI changes', async () => {
   const api = await import(moduleUrl)
   const source = manifest({ 'packages/a/package.json': file('{"name":"a"}'), 'packages/a/src/a.ts': file('source') })

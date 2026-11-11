@@ -324,10 +324,16 @@ def require_disk(path, payload, reserve=256 * 1024 * 1024):
         raise ValueError('Invalid disk budget')
     usage = shutil.disk_usage(path)
     stats = os.statvfs(path)
+    return assert_disk_budget({'freeBytes': usage.free, 'freeInodes': stats.f_favail}, payload, reserve)
+
+
+def assert_disk_budget(stats, payload, reserve=256 * 1024 * 1024):
+    if payload < 0 or reserve < 0:
+        raise ValueError('Invalid disk budget')
     required = payload * 4 + reserve
-    if usage.free < required or stats.f_favail < 4096:
+    if stats.get('freeBytes', -1) < required or stats.get('freeInodes', -1) < 4096:
         raise ValueError('Insufficient disk space/inodes before runtime export/build; no cleanup performed')
-    return {'freeBytes': usage.free, 'requiredBytes': required, 'freeInodes': stats.f_favail}
+    return {**stats, 'requiredBytes': required}
 
 
 def selections_for(plan):
@@ -541,7 +547,12 @@ def build_runtime(args):
     payload = record['bytesExported'] + len(record['deletedFiles']) * 4096 + 16 * 1024 * 1024
     require_disk(output, payload, args.reserve_bytes)
     docker_root = command(['docker', 'info', '--format', '{{.DockerRootDir}}'])
-    require_disk(docker_root, payload, args.reserve_bytes)
+    try:
+        require_disk(docker_root, payload, args.reserve_bytes)
+    except FileNotFoundError:
+        # Probe the real Docker backing filesystem without mounting its data.
+        stats = node_operation(record['baseImage'], "const s=require('fs').statfsSync('/');console.log(JSON.stringify({freeBytes:Number(s.bavail)*Number(s.bsize),freeInodes:Number(s.ffree)}));")
+        assert_disk_budget(stats, payload, args.reserve_bytes)
     base_tag = args.base_tag or 'physicsos:runtime-base-' + record['baseImage'][7:31]
     if not re.fullmatch(r'physicsos:[A-Za-z0-9][A-Za-z0-9_.-]*', base_tag):
         raise ValueError('Unsafe verified local base tag')

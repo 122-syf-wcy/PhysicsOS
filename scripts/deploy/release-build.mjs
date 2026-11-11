@@ -306,8 +306,12 @@ export function validateSeedReceipt(receipt, expected) {
 
 export async function requireDisk({ path, bytes, reserveBytes = 256 * 1024 * 1024, minimumInodes = 4096 }) {
   const info = await statfs(path), free = Number(info.bavail) * Number(info.bsize)
-  if (!Number.isSafeInteger(bytes) || bytes < 0 || free < bytes + reserveBytes || Number(info.ffree) < minimumInodes) throw new Error('Insufficient disk space/inodes before build; no cleanup performed')
-  return { freeBytes: free, requiredBytes: bytes + reserveBytes, freeInodes: Number(info.ffree) }
+  return assertDiskBudget({ freeBytes: free, freeInodes: Number(info.ffree) }, bytes, reserveBytes, minimumInodes)
+}
+
+export function assertDiskBudget(stats, bytes, reserveBytes = 256 * 1024 * 1024, minimumInodes = 4096) {
+  if (!Number.isSafeInteger(bytes) || bytes < 0 || !Number.isSafeInteger(stats.freeBytes) || stats.freeBytes < bytes + reserveBytes || !Number.isSafeInteger(stats.freeInodes) || stats.freeInodes < minimumInodes) throw new Error('Insufficient disk space/inodes before build; no cleanup performed')
+  return { ...stats, requiredBytes: bytes + reserveBytes }
 }
 
 const TOOL_SCRIPT = `const p=require('path'),f=require('fs'),{createRequire}=require('module'),{spawnSync}=require('child_process');const [cwd,name,...args]=process.argv.slice(1),req=createRequire(p.join(cwd,'package.json'));const manifest=req.resolve(name+'/package.json'),meta=JSON.parse(f.readFileSync(manifest)),wanted=name==='typescript'?'tsc':name,bin=typeof meta.bin==='string'?meta.bin:meta.bin[wanted];if(!bin)throw Error('Tool has no declared bin');const out=spawnSync(process.execPath,[p.resolve(p.dirname(manifest),bin),...args],{cwd,stdio:'inherit'});process.exit(out.status??1);`
@@ -376,7 +380,18 @@ export async function adoptBuilderSource({ builder, revision, submoduleRevision 
 async function diskAdmission(cacheRoot, bytes) {
   const dockerRoot = await command('docker', ['info', '--format', '{{.DockerRootDir}}'])
   await requireDisk({ path: cacheRoot, bytes })
-  if (dockerRoot !== cacheRoot) await requireDisk({ path: dockerRoot, bytes })
+  if (dockerRoot !== cacheRoot) {
+    try { await requireDisk({ path: dockerRoot, bytes }) }
+    catch (error) {
+      if (error.code !== 'ENOENT') throw error
+      // The operator intentionally exposes the Docker socket, not Docker data.
+      // A cold read-only image's overlay statfs reports the backing filesystem.
+      const image = await command('docker', ['inspect', 'physicsos-app-1', '--format', '{{.Image}}'])
+      if (!/^sha256:[0-9a-f]{64}$/.test(image)) throw new Error('Exact Docker filesystem probe image unavailable')
+      const stats = JSON.parse(await command('docker', ['run', '--rm', '--network', 'none', '--read-only', '--entrypoint', 'node', image, '-e', `const s=require('fs').statfsSync('/');console.log(JSON.stringify({freeBytes:Number(s.bavail)*Number(s.bsize),freeInodes:Number(s.ffree)}));`]))
+      assertDiskBudget(stats, bytes)
+    }
+  }
 }
 
 async function loadProjection(projection) {
