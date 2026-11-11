@@ -5,6 +5,7 @@ import tempfile
 import unittest
 import os
 import contextlib
+import shlex
 from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('candidate', Path(__file__).with_name('release-candidate.py'))
@@ -50,6 +51,29 @@ class CandidateSafety(unittest.TestCase):
     def test_production_pool_endpoint_is_redirected_to_private_pool(self):
         self.assertEqual(candidate.redirect_pool('http://127.0.0.1:38972/v1', 38972, 13982), 'http://127.0.0.1:13982/v1')
         self.assertEqual(candidate.redirect_pool('https://provider.example/v1', 38972, 13982), 'https://provider.example/v1')
+
+    def test_start_healthcheck_uses_private_candidate_port(self):
+        for port, url in [(13188, 'http://127.0.0.1:13188/readyz'), (14188, 'http://127.0.0.1:14188/readyz')]:
+            with self.subTest(port=port), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp) / 'validation'
+                config = self.config(root); config['httpPort'] = port
+                spec = {
+                    'metadata': {'container': 'physicsos-validation-validation', 'image': 'sha256:candidate'},
+                    'network': 'private-network', 'mounts': [], 'environment': {},
+                    'command': ['node', 'scripts/docker-entrypoint.mjs', 'node', 'vendor/deepseek-harness/apps/cli/lib/bin.js', '--port', str(port)],
+                }
+                running = {'State': {'Running': True}, 'Image': 'sha256:candidate'}
+                with patch.object(candidate, 'lifecycle', return_value=contextlib.nullcontext()), patch.object(candidate, 'prepare', return_value=({}, spec, [])), patch.object(candidate, 'metadata', side_effect=[None, running]), patch.object(candidate.subprocess, 'run') as run:
+                    candidate.start(config, 'candidate-image')
+                creates = [call.args[0] for call in run.call_args_list if call.args[0][:2] == ['docker', 'create']]
+                self.assertEqual(len(creates), 1)
+                args = creates[0]
+                self.assertIn('--health-cmd', args, 'Candidate must override the image healthcheck port')
+                health = shlex.split(args[args.index('--health-cmd') + 1])
+                self.assertEqual(health, ['node', 'scripts/healthcheck.mjs', url])
+                self.assertNotIn('http://127.0.0.1:3080/readyz', health)
+                self.assertEqual(args[args.index('--publish') + 1], f'127.0.0.1:{port}:{port}')
+                self.assertNotIn('--no-healthcheck', args)
 
     def test_production_schema_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:

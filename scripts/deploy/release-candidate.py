@@ -237,6 +237,7 @@ def start(config, image):
         paths, spec, _ = prepare(config, image)
         name, port = spec['metadata']['container'], config['httpPort']
         args = ['docker', 'create', '--name', name, '--log-driver', 'none', '--label', 'io.physicsos.task=' + config['task'], '--label', 'io.physicsos.role=validation', '--network', spec['network'], '--publish', f'127.0.0.1:{port}:{port}', '--memory', '1536m', '--cpus', '2']
+        args.extend(['--health-cmd', f'node scripts/healthcheck.mjs http://127.0.0.1:{port}/readyz'])
         for mount in spec['mounts']:
             args.extend(['--mount', 'type=bind,src=' + mount['Source'] + ',dst=' + mount['Destination'] + (',readonly' if mount['ReadOnly'] else '')])
         for key, value in spec['environment'].items(): args.extend(['--env', key + '=' + value])
