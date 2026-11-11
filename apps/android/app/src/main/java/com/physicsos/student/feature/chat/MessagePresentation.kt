@@ -3,29 +3,6 @@ package com.physicsos.student.feature.chat
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 
-internal data class MessagePreview(val text: String, val hasMathematics: Boolean, val abbreviated: Boolean)
-
-/** Native previews are plain text; the original Markdown is always kept for the single document renderer. */
-internal fun messagePreview(markdown: String): MessagePreview {
-    val maximum = 4_000
-    val sample = markdown.take(maximum)
-    val math = Regex("\\\\(?:frac|sqrt|begin|sum|int|mathrm|mathbf|left|right)\\b|\\$|\\\\[\\[\\](]" ).containsMatchIn(sample)
-    val withoutMath = sample
-        .replace(Regex("\\$\\$[\\s\\S]*?(?:\\$\\$|$)"), " ")
-        .replace(Regex("\\\\\\[[\\s\\S]*?(?:\\\\\\]|$)"), " ")
-        .replace(Regex("\\\\\\([\\s\\S]*?(?:\\\\\\)|$)"), " ")
-        .replace(Regex("\\$[^$\\n]*\\$"), " ")
-        .lineSequence().filterNot { Regex("\\\\[A-Za-z]+").containsMatchIn(it) }.joinToString("\n")
-    val plain = withoutMath
-        .replace(Regex("```[\\s\\S]*?(?:```|$)"), " ")
-        .replace(Regex("</?[A-Za-z][^>]*>"), "")
-        .replace(Regex("!?\\[([^]]*)]\\([^)]*\\)"), "$1")
-        .replace(Regex("(?m)^\\s{0,3}#{1,6}\\s+"), "")
-        .replace("**", "").replace("__", "").replace("`", "")
-        .replace(Regex("\\n{3,}"), "\n\n").trim()
-    return MessagePreview(plain, math, markdown.length > maximum)
-}
-
 internal data class SolveDocumentLabels(val knowns: String, val targets: String, val answers: String, val steps: String, val verification: String, val issues: String)
 
 internal fun solveDocument(row: ChatRow.Scene, labels: SolveDocumentLabels): String = buildString {

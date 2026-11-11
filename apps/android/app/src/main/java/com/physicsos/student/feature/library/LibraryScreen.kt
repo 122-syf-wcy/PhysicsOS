@@ -1,6 +1,11 @@
 package com.physicsos.student.feature.library
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.CardDefaults
+import androidx.compose.ui.draw.clip
+import com.physicsos.student.ui.components.BundledArtwork
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -114,6 +119,7 @@ internal fun LibraryContent(
                 Modifier.weight(1f).testTag("library-results"),
                 contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                if (state.guest) item("guest-local") { LearningNotice(stringResource(R.string.library_guest_local)) }
                 if (state.cached) item("offline") { LearningNotice(stringResource(R.string.learning_library_cached), onRefresh) }
                 if (state.assetProblem != null) item("asset-error") { LearningError(state.assetProblem, onRefresh) }
                 if (state.remoteProblem != null) item("remote-error") { LearningError(state.remoteProblem, onRefresh) }
@@ -140,17 +146,26 @@ internal fun LibraryContent(
 
 @Composable
 private fun LibraryEntryCard(entry: LibraryEntry, saved: Boolean, onSelect: (LibraryEntry) -> Unit, onSave: (LibraryEntry) -> Unit) {
-    Card(onClick = { onSelect(entry) }, modifier = Modifier.fillMaxWidth().testTag("library-entry-${entry.key}")) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(entry.title, style = MaterialTheme.typography.titleMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
-            if (entry.description.isNotBlank()) Text(entry.description, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3, overflow = TextOverflow.Ellipsis)
-            Text(
-                listOf(libraryKindLabel(entry.kind), stringResource(if (entry.origin == LibraryOrigin.VERIFIED) R.string.learning_library_verified else R.string.learning_library_bundled)).joinToString(" · "),
-                style = MaterialTheme.typography.labelMedium,
-            )
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(stringResource(if (entry.offline) R.string.learning_library_text_offline else R.string.learning_library_external), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-                TextButton(onClick = { onSave(entry) }, modifier = Modifier.testTag("library-save-${entry.key}")) { Text(stringResource(if (saved) R.string.learning_unsave else R.string.learning_save)) }
+    Card(
+        onClick = { onSelect(entry) },
+        modifier = Modifier.fillMaxWidth().testTag("library-entry-${entry.key}"),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Row(Modifier.padding(14.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            entry.templateId?.let { template ->
+                BundledArtwork(template, Modifier.size(68.dp).clip(MaterialTheme.shapes.small))
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    listOf(libraryKindLabel(entry.kind), if (entry.offline) stringResource(R.string.learning_library_text_offline) else stringResource(R.string.learning_library_external)).joinToString(" · "),
+                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(entry.title, style = MaterialTheme.typography.titleMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                if (entry.description.isNotBlank()) Text(entry.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = { onSave(entry) }, modifier = Modifier.testTag("library-save-${entry.key}")) { Text(stringResource(if (saved) R.string.learning_unsave else R.string.learning_save)) }
+                }
             }
         }
     }

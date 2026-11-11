@@ -14,6 +14,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
@@ -60,6 +62,14 @@ class AppGraph(context: Context) : Closeable {
     val api: MobileClient get() = apiImplementation
     val auth: AuthRepository get() = authImplementation
     val store: LocalStore get() = storeImplementation
+
+    // The launch animation is a per-process event, like the web boot screen: rotation and
+    // activity recreation keep it retired, a new process starts it again.
+    private val boot = MutableStateFlow(false)
+    val bootFinished: StateFlow<Boolean> get() = boot
+
+    fun finishBoot() { boot.value = true }
+
     val catalog: CatalogRepository by lazy { AssetCatalogRepository(this.context.assets) }
     val settings: SettingsRepository get() = settingsImplementation
     val sync: SyncCoordinator get() = syncImplementation

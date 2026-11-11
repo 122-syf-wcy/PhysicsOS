@@ -30,6 +30,7 @@ function Assert-Sources {
 
 function Build-Lab {
     Assert-Sources 'lab'
+    Invoke-Checked $Node @((Join-Path $PSScriptRoot 'prepare-shared.mjs'))
     Invoke-Checked $Node @((Join-Path $PSScriptRoot 'build-lab.mjs'))
 }
 

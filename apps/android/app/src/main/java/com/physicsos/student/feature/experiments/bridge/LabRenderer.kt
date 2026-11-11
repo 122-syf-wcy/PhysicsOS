@@ -34,6 +34,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.core.net.toUri
 import androidx.webkit.WebViewCompat
 import com.physicsos.student.R
 
@@ -93,7 +94,7 @@ internal fun LabRenderer(
                 tag = "lab_webview_upgrade",
                 onAction = {
                     val provider = runCatching { WebViewCompat.getCurrentWebViewPackage(context)?.packageName }.getOrNull()
-                    val intent = if (provider != null) Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$provider"))
+                    val intent = if (provider != null) Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:$provider".toUri())
                     else Intent(Settings.ACTION_SETTINGS)
                     runCatching { context.startActivity(intent) }
                 },

@@ -149,7 +149,7 @@ internal class ChatViewModel(
         }
         viewModelScope.launch {
             graph.auth.state.collect { auth ->
-                if (auth !is AuthState.SignedIn || auth.user.userKey != owner) {
+                if (auth !is AuthState.SignedIn || !files.isOwner()) {
                     stopConnection()
                     uploadJobs.values.forEach { it.cancel() }
                     importJob?.cancel()

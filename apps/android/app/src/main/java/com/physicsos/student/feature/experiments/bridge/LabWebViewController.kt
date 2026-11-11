@@ -16,6 +16,7 @@ import android.webkit.ClientCertRequest
 import android.webkit.CookieManager
 import android.webkit.GeolocationPermissions
 import android.webkit.HttpAuthHandler
+import android.webkit.JsResult
 import android.webkit.PermissionRequest
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.SslErrorHandler
@@ -27,6 +28,7 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
+import androidx.core.net.toUri
 import androidx.webkit.ServiceWorkerClientCompat
 import androidx.webkit.ServiceWorkerControllerCompat
 import androidx.webkit.WebMessageCompat
@@ -396,24 +398,32 @@ internal class LabWebViewController(
                     callback.invoke(origin, false, false)
                 }
                 override fun onCreateWindow(view: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: android.os.Message): Boolean = false
+                override fun onJsAlert(view: WebView, url: String, message: String, result: JsResult): Boolean =
+                    confirmInNative(session, message, result, confirmLabel = "确定")
+                override fun onJsConfirm(view: WebView, url: String, message: String, result: JsResult): Boolean =
+                    confirmInNative(session, message, result, confirmLabel = "继续")
+                override fun onJsBeforeUnload(view: WebView, url: String, message: String, result: JsResult): Boolean =
+                    confirmInNative(session, message, result, confirmLabel = "离开")
             }
             view.setDownloadListener { _, _, _, _, _ -> protocolIssue("USE_NATIVE_EXPORT") }
             blockServiceWorkers()
-            WebViewCompat.addWebMessageListener(view, LabBridgeProtocol.BRIDGE_NAME, setOf(LabUrlPolicy.ORIGIN)) { source, message, origin, isMainFrame, _ ->
-                if (source !== webView || gate !== session || session.destroyed ||
-                    !LabUrlPolicy.trustedSender(origin.toString(), isMainFrame)
-                ) return@addWebMessageListener
-                if (message.type != WebMessageCompat.TYPE_STRING || !message.ports.isNullOrEmpty()) {
-                    protocolIssue("UNSUPPORTED_MESSAGE_DATA")
-                    return@addWebMessageListener
+            if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+                WebViewCompat.addWebMessageListener(view, LabBridgeProtocol.BRIDGE_NAME, setOf(LabUrlPolicy.ORIGIN)) { source, message, origin, isMainFrame, _ ->
+                    if (source !== webView || gate !== session || session.destroyed ||
+                        !LabUrlPolicy.trustedSender(origin.toString(), isMainFrame)
+                    ) return@addWebMessageListener
+                    if (message.type != WebMessageCompat.TYPE_STRING || !message.ports.isNullOrEmpty()) {
+                        protocolIssue("UNSUPPORTED_MESSAGE_DATA")
+                        return@addWebMessageListener
+                    }
+                    val raw = message.data ?: return@addWebMessageListener
+                    if (raw.length > BridgeLimits.MESSAGE_BYTES || !withinRateLimit()) {
+                        protocolIssue("MESSAGE_LIMIT_EXCEEDED")
+                        return@addWebMessageListener
+                    }
+                    if (!incoming.trySend(session to raw).isSuccess) protocolIssue("MESSAGE_RATE_EXCEEDED")
                 }
-                val raw = message.data ?: return@addWebMessageListener
-                if (raw.length > BridgeLimits.MESSAGE_BYTES || !withinRateLimit()) {
-                    protocolIssue("MESSAGE_LIMIT_EXCEEDED")
-                    return@addWebMessageListener
-                }
-                if (!incoming.trySend(session to raw).isSuccess) protocolIssue("MESSAGE_RATE_EXCEEDED")
-            }
+            } else throw BridgeProtocolException("WEBVIEW_UPDATE_REQUIRED")
             appContext.registerComponentCallbacks(memoryCallbacks)
             callbacksRegistered = true
             container.addView(view, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
@@ -429,6 +439,31 @@ internal class LabWebViewController(
             disposeView("LOCAL_RENDERER_UNAVAILABLE", false)
             _state.value = LabRendererState(LabRendererPhase.FAILED, "LOCAL_RENDERER_UNAVAILABLE")
         }
+    }
+
+    /**
+     * Android WebView silently cancels JS dialogs by default, which would make an
+     * experiment's own confirmations unreachable. Only the local bridge page may
+     * raise them; every other origin is still denied.
+     */
+    private fun confirmInNative(session: LabSessionGate, message: String, result: JsResult, confirmLabel: String): Boolean {
+        val container = host?.get()
+        val context = contextWrapper?.baseContext
+        if (container == null || context == null || gate !== session || session.destroyed ||
+            message.length > 4_096
+        ) {
+            result.cancel()
+            return true
+        }
+        var answered = false
+        android.app.AlertDialog.Builder(context)
+            .setMessage(message.take(2_000))
+            .setCancelable(false)
+            .setPositiveButton(confirmLabel) { _, _ -> answered = true; result.confirm() }
+            .setNegativeButton(android.R.string.cancel) { _, _ -> answered = true; result.cancel() }
+            .setOnDismissListener { if (!answered) result.cancel() }
+            .show()
+        return true
     }
 
     private fun client(loader: WebViewAssetLoader, session: LabSessionGate) = object : WebViewClient() {
@@ -593,7 +628,9 @@ internal class LabWebViewController(
 
     private fun post(value: String) {
         val view = webView ?: return
-        WebViewCompat.postWebMessage(view, WebMessageCompat(value), Uri.parse(LabUrlPolicy.ORIGIN))
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.POST_WEB_MESSAGE)) {
+            WebViewCompat.postWebMessage(view, WebMessageCompat(value), LabUrlPolicy.ORIGIN.toUri())
+        } else throw BridgeProtocolException("WEBVIEW_UPDATE_REQUIRED")
     }
 
     private fun disposeView(reason: String, restoreOnResume: Boolean) {
@@ -613,10 +650,16 @@ internal class LabWebViewController(
         webView = null
         if (old != null) {
             (old.parent as? ViewGroup)?.removeView(old)
-            runCatching { WebViewCompat.removeWebMessageListener(old, LabBridgeProtocol.BRIDGE_NAME) }
+            runCatching {
+                if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+                    WebViewCompat.removeWebMessageListener(old, LabBridgeProtocol.BRIDGE_NAME)
+                }
+            }
             old.setDownloadListener(null)
             old.webChromeClient = null
-            old.webViewClient = WebViewClient()
+            old.webViewClient = object : WebViewClient() {
+                override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean = true
+            }
             runCatching { old.stopLoading() }
             old.removeAllViews()
             old.destroy()
@@ -653,17 +696,18 @@ internal class LabWebViewController(
 
     private fun openBrowser(context: Context, url: String) {
         if (!LabUrlPolicy.browserUrl(url)) return
-        try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addCategory(Intent.CATEGORY_BROWSABLE)) }
+        try { context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()).addCategory(Intent.CATEGORY_BROWSABLE)) }
         catch (_: Exception) { onIssue("BROWSER_UNAVAILABLE") }
     }
 
     private object HeavyLabRenderer {
-        private var owner: LabWebViewController? = null
+        private var owner: WeakReference<LabWebViewController>? = null
         fun acquire(next: LabWebViewController) {
-            if (owner !== next) owner?.yieldLease()
-            owner = next
+            val previous = owner?.get()
+            if (previous !== next) previous?.yieldLease()
+            owner = WeakReference(next)
         }
-        fun release(current: LabWebViewController) { if (owner === current) owner = null }
+        fun release(current: LabWebViewController) { if (owner?.get() === current) owner = null }
     }
 
     companion object {

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="boot_tagline">If physics is a beam of light, let it reach places without a laboratory.</string>
+    <string name="boot_preparing">Preparing your physics world… %1$d%%</string>
+    <string name="boot_ready" formatted="false">Ready 100%</string>
+</resources>

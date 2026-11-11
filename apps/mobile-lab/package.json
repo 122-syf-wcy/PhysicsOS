@@ -8,7 +8,7 @@
     "build": "node ../../scripts/android/build-lab.mjs",
     "test": "node ./scripts/test.mjs",
     "test:e2e": "node ./scripts/test.mjs --e2e",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p .cache/shared-tsconfig.json"
   },
   "dependencies": {
     "clsx": "2.1.1",

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="verification_status_passed">已通过引擎验证</string>
+    <string name="verification_status_warning">通过验证，但有需注意的条件</string>
+    <string name="verification_status_failed">未通过验证</string>
+    <string name="verification_status_unknown">当前版本无法识别，请查看完整报告</string>
+</resources>

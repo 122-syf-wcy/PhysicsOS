@@ -1,6 +1,8 @@
 package com.physicsos.student.feature.records
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material3.CardDefaults
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -167,7 +169,9 @@ internal fun RecordsContent(
                         if (state.loadingAttempts && state.attempts.isEmpty()) item("loading") { LearningLoading() }
                         if (!state.loadingAttempts && state.attempts.isEmpty() && state.attemptsProblem == null) item("empty") { LearningEmpty(stringResource(R.string.learning_records_empty), stringResource(R.string.learning_records_empty_description)) }
                         items(state.attempts, key = { it.id }) { row ->
-                            Card(onClick = { onSelectAttempt(row) }, modifier = Modifier.fillMaxWidth().testTag("records-attempt-${row.id}")) {
+                            Card(onClick = { onSelectAttempt(row) }, modifier = Modifier.fillMaxWidth().testTag("records-attempt-${row.id}"),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
                                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Text(row.title.ifBlank { stringResource(R.string.learning_record_untitled) }, style = MaterialTheme.typography.titleMedium)
                                     Text(displayDate(row.at), style = MaterialTheme.typography.bodySmall)
@@ -184,7 +188,9 @@ internal fun RecordsContent(
                         if (state.loadingScenes && state.scenes.isEmpty()) item("loading") { LearningLoading() }
                         if (!state.loadingScenes && state.scenes.isEmpty() && state.scenesProblem == null) item("empty") { LearningEmpty(stringResource(R.string.learning_scenes_empty), stringResource(R.string.learning_scenes_empty_description)) }
                         items(state.scenes, key = { it.id }) { scene ->
-                            Card(Modifier.fillMaxWidth().testTag("records-scene-${scene.id}")) {
+                            Card(Modifier.fillMaxWidth().testTag("records-scene-${scene.id}"),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
                                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                     Text(scene.title.ifBlank { stringResource(R.string.learning_scene_untitled) }, style = MaterialTheme.typography.titleMedium)
                                     if (scene.domain.isNotBlank()) Text(learningDomainLabel(scene.domain), style = MaterialTheme.typography.labelLarge)

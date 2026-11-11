@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_featured_experiment">DISCOVER · PHYSICS LAB</string>
+    <string name="home_experiment_invitation">Build, observe, and see the laws at work.</string>
+    <string name="home_solve_invitation">Bring a question. Find a clearer way through.</string>
+    <string name="home_library_invitation">Connect the things you learn.</string>
+    <string name="home_classes_invitation">Keep your classroom within reach.</string>
+</resources>

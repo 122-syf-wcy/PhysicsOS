@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_welcome_heading">把好奇，问明白。</string>
+    <string name="chat_prompt_explain">把一个物理概念讲清楚</string>
+    <string name="chat_prompt_explain_body">请用生活中的例子解释牛顿第二定律，并说明适用条件。</string>
+    <string name="chat_prompt_plan">一起设计一个小实验</string>
+    <string name="chat_prompt_plan_body">我想探究弹簧弹力与伸长量的关系，请帮助我设计实验并说明怎样记录数据。</string>
+    <string name="chat_prompt_check">帮我检查解题过程</string>
+    <string name="chat_prompt_check_body">我会提供题目和自己的解题过程，请先帮我找出可能的错误，再给我提示。</string>
+    <string name="chat_prompt_draft_only">点击只填入草稿，确认发送后才会请求解题。</string>
+    <string name="chat_composer_support">文字 · 图片 · PDF</string>
+    <string name="chat_verify_reminder">AI 也可能出错，请结合推导与实验核验。</string>
+    <string name="chat_rich_formula_fallback">部分公式暂无法在此排版，已保留原文，可打开完整内容查看。</string>
+    <string name="chat_attachment_download_preview">下载并预览</string>
+</resources>

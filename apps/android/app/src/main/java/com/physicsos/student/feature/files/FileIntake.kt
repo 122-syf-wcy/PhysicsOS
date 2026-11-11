@@ -14,6 +14,8 @@ import android.os.ParcelFileDescriptor
 import android.os.StatFs
 import android.provider.OpenableColumns
 import androidx.core.content.FileProvider
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.scale
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -148,7 +150,7 @@ internal class FileIntake(context: Context, private val owner: String) {
             val cropped = Bitmap.createBitmap(bitmap, left, top, width, height, transform, true)
             if (cropped !== bitmap) { bitmap.recycle(); bitmap = cropped }
             if (bitmap.hasAlpha()) {
-                val opaque = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
+                val opaque = createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
                 Canvas(opaque).apply { drawColor(Color.WHITE); drawBitmap(bitmap, 0f, 0f, null) }
                 bitmap.recycle(); bitmap = opaque
             }
@@ -164,7 +166,7 @@ internal class FileIntake(context: Context, private val owner: String) {
                 }
                 if (!fits) {
                     if (max(bitmap.width, bitmap.height) <= 640) throw FileOperationException(FileProblem.TOO_LARGE)
-                    val resized = Bitmap.createScaledBitmap(bitmap, max(1, bitmap.width * 3 / 4), max(1, bitmap.height * 3 / 4), true)
+                    val resized = bitmap.scale(max(1, bitmap.width * 3 / 4), max(1, bitmap.height * 3 / 4), true)
                     bitmap.recycle(); bitmap = resized
                 }
             }
@@ -259,7 +261,7 @@ internal suspend fun renderPdfFile(file: File, index: Int): Bitmap = withContext
                 renderer.openPage(index).use { page ->
                     currentCoroutineContext().ensureActive()
                     val scale = min(2.0, 2048.0 / max(page.width, page.height).coerceAtLeast(1))
-                    val bitmap = Bitmap.createBitmap(max(1, (page.width * scale).roundToInt()), max(1, (page.height * scale).roundToInt()), Bitmap.Config.ARGB_8888)
+                    val bitmap = createBitmap(max(1, (page.width * scale).roundToInt()), max(1, (page.height * scale).roundToInt()), Bitmap.Config.ARGB_8888)
                     try {
                         bitmap.eraseColor(Color.WHITE)
                         page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)

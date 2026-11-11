@@ -9,4 +9,7 @@
     <string name="navigation_sdks_title">第三方组件说明</string>
     <string name="navigation_reauthenticate">当前在线登录需要重新验证。本地已保存内容仍可查看。</string>
     <string name="navigation_sign_in">重新登录</string>
+    <string name="navigation_local_logout_only">已在此设备退出并清除本地账户数据；服务器会话撤销尚未确认。</string>
+    <string name="navigation_deletion_pending">服务器已受理注销，数据擦除仍在处理中。本设备已退出；尚未确认全部擦除完成。</string>
+    <string name="navigation_account_deleted">服务器已确认账户注销，本设备的账户数据已清除。</string>
 </resources>

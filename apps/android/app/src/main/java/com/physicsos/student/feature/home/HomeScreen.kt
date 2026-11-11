@@ -1,5 +1,18 @@
 package com.physicsos.student.feature.home
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.res.painterResource
+import com.physicsos.student.ui.components.BundledArtwork
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -23,6 +36,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -182,9 +196,6 @@ internal fun HomeContent(
     var actionsLaidOut by remember { mutableStateOf(false) }
     LaunchedEffect(actionsLaidOut) { if (actionsLaidOut) onContentReady() }
     Column(Modifier.fillMaxSize().testTag("home")) {
-        LearningHeader(stringResource(R.string.learning_home_title), action = {
-            TextButton(onClick = onOpenAccount, modifier = Modifier.testTag("home-account")) { Text(stringResource(R.string.learning_account_title)) }
-        })
         LazyColumn(
             Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -202,10 +213,33 @@ internal fun HomeContent(
                     },
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
-                    LearningActionCard(stringResource(R.string.learning_home_chat), stringResource(R.string.learning_home_chat_description), "home-chat") { onOpenChat(null, null) }
-                    LearningActionCard(stringResource(R.string.learning_home_experiments), stringResource(R.string.learning_home_experiments_description), "home-experiments", onOpenExperiments)
-                    LearningActionCard(stringResource(R.string.learning_library_title), stringResource(R.string.learning_home_library_description), "home-library", onOpenLibrary)
-                    LearningActionCard(stringResource(R.string.learning_classes_title), stringResource(R.string.learning_home_classes_description), "home-classes", onOpenClasses)
+                    Card(
+                        onClick = onOpenExperiments,
+                        modifier = Modifier.fillMaxWidth().testTag("home-experiments"),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    ) {
+                        Box {
+                            BundledArtwork("series-circuit", Modifier.fillMaxWidth().height(156.dp))
+                            Surface(Modifier.padding(12.dp), shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)) {
+                                Text(stringResource(R.string.home_featured_experiment), Modifier.padding(horizontal = 10.dp, vertical = 5.dp), style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(stringResource(R.string.learning_home_experiments), style = MaterialTheme.typography.titleMedium)
+                                Text(stringResource(R.string.home_experiment_invitation), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.primary) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowForward, null, Modifier.padding(10.dp).size(18.dp), tint = MaterialTheme.colorScheme.onPrimary)
+                            }
+                        }
+                    }
+                    LearningActionCard(stringResource(R.string.learning_home_chat), stringResource(R.string.home_solve_invitation), "home-chat") { onOpenChat(null, null) }
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        HomeQuickAction(stringResource(R.string.learning_library_title), stringResource(R.string.home_library_invitation), R.drawable.ic_nav_records, "home-library", Modifier.weight(1f), onOpenLibrary)
+                        HomeQuickAction(stringResource(R.string.learning_classes_title), stringResource(R.string.home_classes_invitation), R.drawable.ic_nav_experiments, "home-classes", Modifier.weight(1f), onOpenClasses)
+                    }
                 }
             }
             item("recent-title") {
@@ -221,11 +255,17 @@ internal fun HomeContent(
                 LearningEmpty(stringResource(R.string.learning_records_empty), stringResource(R.string.learning_records_empty_description))
             }
             items(state.attempts, key = { "attempt:${it.id}" }) { attempt ->
-                Card(onClick = { onOpenChat(attempt.sessionId, attempt.prompt.takeIf(String::isNotBlank)) }, modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(attempt.title.ifBlank { stringResource(R.string.learning_record_untitled) }, style = MaterialTheme.typography.titleMedium)
-                        if (attempt.at != null) Text(displayDate(attempt.at), style = MaterialTheme.typography.bodySmall)
-                        Text(stringResource(R.string.learning_continue), color = MaterialTheme.colorScheme.primary)
+                Card(onClick = { onOpenChat(attempt.sessionId, attempt.prompt.takeIf(String::isNotBlank)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
+                    Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Icon(painterResource(R.drawable.ic_nav_chat), null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(attempt.title.ifBlank { stringResource(R.string.learning_record_untitled) }, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            if (attempt.at != null) Text(displayDate(attempt.at), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Text(stringResource(R.string.learning_continue), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                     }
                 }
             }

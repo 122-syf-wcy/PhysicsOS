@@ -35,6 +35,7 @@ internal data class LabCheckpoint(val value: JsonObject) {
 internal enum class LabExportFormat(val wire: String, val mime: String, val extension: String) {
     JSON("json", "application/json", "json"),
     CSV("csv", "text/csv", "csv"),
+    OBSERVATIONS("observations", "text/csv", "csv"),
     MARKDOWN("markdown", "text/markdown", "md"),
     SVG("svg", "image/svg+xml", "svg"),
     PNG("png", "image/png", "png"),
@@ -86,11 +87,13 @@ internal data class LabLoad(
 
     fun payload(generation: String): JsonObject = buildJsonObject {
         put("generation", generation)
-        templateId?.let { put("templateId", it) }
-        if (checkpoint != null) put("checkpoint", checkpoint.value)
-        else {
-            scene?.let { put("scene", it) }
-            originScene?.let { put("originScene", it) }
+        when {
+            checkpoint != null -> put("checkpoint", checkpoint.value)
+            scene != null -> {
+                put("scene", scene)
+                originScene?.let { put("originScene", it) }
+            }
+            else -> put("templateId", requireNotNull(templateId))
         }
     }
 }

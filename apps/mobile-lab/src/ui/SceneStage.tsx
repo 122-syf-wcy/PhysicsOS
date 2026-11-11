@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { RENDERERS, type ComponentDragChannel, type ComponentControlChannel, type ComponentWiringChannel } from '@lab/physics/renderer-registry.tsx'
-import { Apparatus, Body, PendulumRig, SpringCoil } from '@lab/physics/primitives.tsx'
+import { Apparatus, ArrowMarkers, Body, PendulumRig, SpringCoil } from '@lab/physics/primitives.tsx'
 import type { WorkspaceFrame } from '@lab/physics/workspace-runtime.ts'
 import type { ScenePoint } from '@lab/physics/scene-visual-model.ts'
 import { svgPointFromClient } from '@lab/physics/svg-screen-point.ts'
@@ -41,7 +41,7 @@ export const SceneStage = memo(function SceneStage({ client, frame, summary, dar
     commitSlider: (id, value) => act('commitSliderPosition', id, value), cancelSlider: () => act('cancelSliderPosition'),
   } : undefined, [summary.capabilities.switch, summary.capabilities.slider, act])
   const wiring: ComponentWiringChannel | undefined = summary.buildMode !== 'construct' ? undefined : {
-    start: ref => act('tapTerminal', ref), complete: ref => act('completeWire', ref), cancel: () => act('cancelWire'), pending: summary.pendingWire,
+    start: ref => act(summary.pendingWire === undefined ? 'beginWire' : 'completeWire', ref), complete: ref => act('completeWire', ref), cancel: () => act('cancelWire'), pending: summary.pendingWire,
   }
   useEffect(() => {
     const node = host.current
@@ -107,12 +107,12 @@ export const SceneStage = memo(function SceneStage({ client, frame, summary, dar
   const major = Math.max(minor, frame.view.grid.major * projection.scale)
   const particleRadius = (index: number): number => (frame.view.particles[index]?.radius ?? 0) * projection.scale
   return <div className="stage-wrap">
-    <div className="stage-tools" aria-label="画布视图">
+    <details className="stage-tools"><summary aria-label="画布视图选项">视图 <span aria-hidden="true">⌄</span></summary><div className="stage-tool-options" aria-label="画布视图">
       <button type="button" onClick={() => { zoom(1.2); persistViewport() }} aria-label="放大">＋</button>
       <button type="button" onClick={() => { zoom(1 / 1.2); persistViewport() }} aria-label="缩小">−</button>
       <button type="button" onClick={() => { transform({ x: 0, y: 0, zoom: 1 }); persistViewport() }}>适合画布</button>
       <button type="button" aria-pressed={panTool} onClick={() => setPanTool(!panTool)}>平移</button>
-    </div>
+    </div></details>
     <div ref={host} className={`scene-host ${panTool ? 'pan-tool' : ''}`} data-testid="physics-scene" data-domain={frame.domain}
       onWheel={event => { if (event.ctrlKey || event.metaKey) { event.preventDefault(); const rect = event.currentTarget.getBoundingClientRect(); zoom(Math.exp(-event.deltaY * 0.002), event.clientX - rect.left, event.clientY - rect.top); persistViewport() } }}
       onPointerDown={event => {
@@ -147,6 +147,7 @@ export const SceneStage = memo(function SceneStage({ client, frame, summary, dar
       <div ref={layers} className="scene-layers">
         <svg ref={svg} width={size.width} height={size.height} viewBox={`0 0 ${size.width} ${size.height}`} role="img" aria-label={frame.ariaLabel} fill="none">
           <defs>
+            <ArrowMarkers uid={uid} />
             <pattern id={`${uid}-minor`} width={minor} height={minor} patternUnits="userSpaceOnUse"><path d={`M ${minor} 0 L 0 0 0 ${minor}`} stroke="var(--physics-grid-minor)" strokeWidth="0.5" /></pattern>
             <pattern id={`${uid}-major`} width={major} height={major} patternUnits="userSpaceOnUse"><path d={`M ${major} 0 L 0 0 0 ${major}`} stroke="var(--physics-grid-major)" strokeWidth="0.75" /></pattern>
           </defs>
@@ -161,7 +162,7 @@ export const SceneStage = memo(function SceneStage({ client, frame, summary, dar
           {frame.view.spring === undefined ? null : <SpringCoil spring={frame.view.spring} projection={projection} />}
           {frame.view.pendulum === undefined ? null : <PendulumRig pendulum={frame.view.pendulum} projection={projection} />}
           {frame.view.energyRamp === undefined ? frame.view.bodies.map(body => <g key={body.id} data-live-body={body.id}><Body body={body} projection={projection} /></g>) : null}
-          {frame.view.particles.map((particle, index) => <g key={particle.id} data-live-particle={particle.id}>
+          {(frame.domain === 'modern' ? [] : frame.view.particles).map((particle, index) => <g key={particle.id} data-live-particle={particle.id}>
             <circle cx={projection.px(particle.at)} cy={projection.py(particle.at)} r={particleRadius(index)} fill={particle.sign === 'negative' ? 'var(--physics-vector-force)' : 'var(--physics-keypoint-impact)'} />
             <text x={projection.px(particle.at) - particleRadius(index) - 6} y={projection.py(particle.at) - particleRadius(index) - 5} fontSize="13" fill="var(--physics-canvas-text)" textAnchor="end">{particle.symbol}</text>
           </g>)}
@@ -169,7 +170,7 @@ export const SceneStage = memo(function SceneStage({ client, frame, summary, dar
         <canvas ref={raster} aria-hidden="true" className="dynamic-layer" />
       </div>
     </div>
-    <div className="readout-strip" aria-label="当前实验读数">{frame.view.overlay.readout.map((row, index) => <span key={index}>{row}</span>)}</div>
+    <details className="readout-strip"><summary><span>实时读数</span><span className="muted">{frame.view.overlay.readout.length} 项 <span aria-hidden="true">⌄</span></span></summary><div aria-label="当前实验读数">{frame.view.overlay.readout.map((row, index) => <span key={index}>{row}</span>)}</div></details>
     {pinnedTime === undefined ? null : <section className="pinned-reading" aria-label="轨迹固定读数">
       <div>{readout.map(row => <span key={row.label}><strong>{row.value}</strong> {row.label}</span>)}</div>
       <button type="button" onClick={() => act('seek', pinnedTime)}>定位此时刻</button><button type="button" onClick={() => setPinnedTime(undefined)}>关闭读数</button>

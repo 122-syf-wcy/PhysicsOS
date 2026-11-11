@@ -2,7 +2,7 @@
 
 Kotlin + Jetpack Compose 原生主应用；物理引擎和本地实验渲染模块与 Web 共享。目标是完整学生端，不是整站套壳或精简演示。
 
-**当前为开发中交接快照，尚不能直接完成构建。**部分 Screen、字符串、实验打包器及服务端接线没有写完。先看[交接状态与已知缺口](../../docs/reports/2026-11-10-android-windows-handoff.md)，不要把“有 Gradle 工程”当作“完整应用已可运行”。
+**当前为开发中版本，尚未达到完整应用交付标准。**Windows 已补齐原生页面、文案与独立实验打包链，并通过本机 Debug/测试 APK 编译、JVM 单元测试和 lint；后端接线、新版设备验收和真机性能仍有未完成项。最新证据见[Windows 实现与验证记录](../../docs/reports/2026-11-11-android-windows-progress.md)，原始缺口见[交接快照](../../docs/reports/2026-11-10-android-windows-handoff.md)。不要把可构建 APK 当作完整交付。
 
 ## 工作分工
 
@@ -61,7 +61,7 @@ node scripts/android/doctor.mjs --sources-only
 powershell -NoProfile -File scripts/android/dev.ps1 -Mode Doctor
 ```
 
-第一条只检查当前源码入口、资源、脚本与 Wrapper，Mac 也能运行；第二条额外检查 Windows JDK/SDK/pnpm。**当前交接快照预期会报告源码缺口，退出码非零是诚实阻塞，不是让你绕过的检查。**
+第一条只检查当前源码入口、资源、脚本与 Wrapper，Mac 也能运行；第二条额外检查 Windows JDK/SDK/pnpm。**全范围检查仍会报告只读后端的移动聚合/账户擦除插件缺口，退出码非零是诚实阻塞，不应绕过。**可用 `--scope=app` 与 `--scope=lab` 分别验证安卓与本地实验源码，但这不代表后端已就绪。
 
 依赖准备：
 
@@ -97,7 +97,9 @@ powershell -NoProfile -File scripts/android/dev.ps1 -Mode Debug
 powershell -NoProfile -File scripts/android/dev.ps1 -Mode Verify
 ```
 
-Lab 使用 Node 打包全部本地实验/公式资源；Debug 和 Verify 会先检查源码并构建实验包，再调用 gradlew.bat。没有本地 bundle 时 Gradle 拒绝打包，不用线上网站代替。
+Lab 使用 Node 打包本地实验/公式资源；Debug 和 Verify 会先检查源码、准备固定版本的共享源码并构建实验包，再调用 gradlew.bat。没有本地 bundle 时 Gradle 拒绝打包，不用线上网站代替。
+
+独立实验模块的[共享源码清单](../mobile-lab/shared-source.json)记录实际核对的 Web 提交、共享包和 UI 树哈希。[准备脚本](../../scripts/android/prepare-shared.mjs)在被忽略的独立只读工作区中检出该提交，不覆盖当前分支的 Web/物理包，也不在启动 App 时下载执行代码。需要新版 Web 时先 fetch、核对差异，再更新清单并重新测试/打包；不是永远锁在最初交接快照。直接执行独立实验测试前先运行 `node scripts/android/prepare-shared.mjs`。APK 构建会拒绝来源提交不匹配或 `test:true` 的实验 bundle。
 
 需要单独观察 Gradle 错误时，可以从本工程执行 `./gradlew.bat :app:assembleDebug`。它仍要求实验包已生成，不代表可以跳过实验模块。
 
@@ -129,4 +131,4 @@ powershell -NoProfile -File scripts/android/dev.ps1 -Mode DeviceTests -Serial YO
 
 源码结构预检、Kotlin/资源编译、单元与设备测试、真实服务端端到端、真机性能是不同阶段。必须逐项给证据，不能用一种结果代替其他阶段。
 
-性能门槛与完整功能范围以[已批准架构](../../docs/superpowers/specs/2026-11-10-android-student-app-architecture.md)为准。当前阶段尚无编译和运行通过记录。
+性能门槛与完整功能范围以[已批准架构](../../docs/superpowers/specs/2026-11-10-android-student-app-architecture.md)为准。最新本机构建、测试、界面调整与未验证项见[Windows 实现与验证记录](../../docs/reports/2026-11-11-android-windows-progress.md)。

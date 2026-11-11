@@ -9,4 +9,7 @@
     <string name="navigation_sdks_title">Third-party components</string>
     <string name="navigation_reauthenticate">Your online session needs verification. Saved content remains available on this device.</string>
     <string name="navigation_sign_in">Sign in again</string>
+    <string name="navigation_local_logout_only">Signed out and cleared account data on this device. Server session revocation is not confirmed.</string>
+    <string name="navigation_deletion_pending">The server accepted account deletion, but erasure is still processing. This device is signed out; complete erasure is not yet confirmed.</string>
+    <string name="navigation_account_deleted">The server confirmed account deletion. Account data on this device was cleared.</string>
 </resources>

@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="library_guest_local">Bundled questions and knowledge are available without signing in. Guest bookmarks stay on this device and are not merged into an account automatically. External textbooks and cloud resources still need a connection and the appropriate access.</string>
+</resources>

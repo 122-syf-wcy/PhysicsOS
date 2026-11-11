@@ -49,6 +49,7 @@ internal class FileActionsController(
     private val scope: CoroutineScope,
 ) {
     private val context = context.applicationContext
+    private val accountInstance = (graph.auth.state.value as? AuthState.SignedIn)?.user?.userId
     val intake = FileIntake(this.context, owner)
     val transfers = FileTransfers(this.context, owner, graph.api, graph.store, ::requireOwner)
     private val mutableState = MutableStateFlow(FilesUiState())
@@ -72,15 +73,19 @@ internal class FileActionsController(
     }
 
     fun requireOwner() { if (!isOwner()) throw ApiException(401, "authentication_required", "") }
-    fun isOwner(): Boolean = (graph.auth.state.value as? AuthState.SignedIn)?.user?.userKey == owner
+    fun isOwner(): Boolean = (graph.auth.state.value as? AuthState.SignedIn)?.user?.let {
+        it.userKey == owner && it.userId == accountInstance
+    } == true
 
     fun download(reference: AttachmentReference, openAfter: Boolean = true) = task(reference.localId) {
         val record = transfers.download(reference) { done, total -> progress(reference.localId, done, total) }
+        notifyDownloadComplete(context, graph.settings, ::isOwner)
         if (openAfter) openRecord(record)
     }
 
     fun retry(record: DownloadRecord) = task(record.id) {
         val complete = transfers.retry(record.id) { done, total -> progress(record.id, done, total) }
+        notifyDownloadComplete(context, graph.settings, ::isOwner)
         openRecord(complete)
     }
 

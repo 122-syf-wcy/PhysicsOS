@@ -16,6 +16,9 @@ export function projectScene(view: SceneVisualModel, width: number, height: numb
 }
 /** Neither this split nor the drawing backend derives a physical state. */
 export function staticView(view: SceneVisualModel): SceneVisualModel {
+  // Photoelectric apparatus is a static dedicated renderer whose cathode is a
+  // particle datum; stripping that datum would erase the entire apparatus.
+  if (view.domain === 'modern') return view
   return { ...view,
     bodies: view.energyRamp === undefined ? [] : view.bodies, particles: [], trajectories: [], vectors: [],
     spring: undefined, pendulum: undefined, apparatus: undefined,

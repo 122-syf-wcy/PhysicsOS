@@ -3,6 +3,12 @@ package com.physicsos.student.feature.experiments
 import android.content.ClipData
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import com.physicsos.student.feature.experiments.bridge.BridgeLimits
+import com.physicsos.student.feature.experiments.bridge.BridgeProtocolException
+import java.io.ByteArrayOutputStream
+import java.nio.ByteBuffer
+import java.nio.charset.CodingErrorAction
 import androidx.core.content.FileProvider
 import com.physicsos.student.feature.experiments.bridge.LabFilePolicy
 import com.physicsos.student.feature.experiments.bridge.ValidatedLabFile
@@ -43,6 +49,28 @@ internal class ExperimentFiles(context: Context) {
             folder.delete()
             throw error
         }
+    }
+
+    suspend fun readArchive(uri: Uri): ExperimentArchive = withContext(Dispatchers.IO) {
+        // SAF grants a single content URI; never interpret a file, network URL or executable package.
+        if (uri.scheme != "content") throw BridgeProtocolException("INVALID_IMPORT_URI")
+        val bytes = appContext.contentResolver.openInputStream(uri)?.use { input ->
+            val output = ByteArrayOutputStream()
+            val buffer = ByteArray(16_384)
+            while (true) {
+                ensureActive()
+                val count = input.read(buffer)
+                if (count < 0) break
+                if (output.size() + count > BridgeLimits.FILE_BYTES) throw BridgeProtocolException("FILE_TOO_LARGE")
+                output.write(buffer, 0, count)
+            }
+            output.toByteArray()
+        } ?: throw IOException("Unable to read the selected archive")
+        val text = try {
+            Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString().removePrefix(0xFEFF.toChar().toString())
+        } catch (_: java.nio.charset.CharacterCodingException) { throw BridgeProtocolException("INVALID_UTF8") }
+        withContext(Dispatchers.Default) { parseExperimentArchive(text) }
     }
 
     private fun prune(ownerRoot: File, current: File) {

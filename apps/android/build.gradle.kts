@@ -13,15 +13,19 @@ plugins {
 
 subprojects {
     configurations.configureEach {
-        resolutionStrategy {
-            failOnDynamicVersions()
-            failOnChangingVersions()
+        resolutionStrategy.eachDependency {
+            val version = requested.version.orEmpty()
+            if (version.contains('+') || version.startsWith("latest.") ||
+                version.contains("SNAPSHOT", ignoreCase = true) || version.startsWith('[') || version.startsWith('(')
+            ) {
+                throw GradleException("Use a fixed dependency version: $requested")
+            }
         }
     }
     dependencyLocking {
         lockAllConfigurations()
-        // The server generates the initial locks with --write-locks. Checked-in
-        // locks then pin transitives as well as the catalog's direct versions.
+        // Generate locks locally with --write-locks. Gradle does not allow
+        // failOnDynamicVersions/failOnChangingVersions together with locking.
         lockMode.set(LockMode.DEFAULT)
     }
 }

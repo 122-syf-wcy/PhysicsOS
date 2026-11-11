@@ -15,4 +15,15 @@
         <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
         <item name="android:windowSplashScreenIconBackgroundColor">@color/physics_window_background</item>
     </style>
+
+    <!-- The system splash is only the white frame before Compose starts the photo boot
+         animation, so it uses the boot background and no icon. -->
+    <style name="Theme.PhysicsOS.Student.Boot" parent="Theme.PhysicsOS.Student">
+        <item name="android:windowBackground">@color/physics_boot_background</item>
+        <item name="android:windowSplashScreenBackground">@color/physics_boot_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_splash_blank</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/physics_boot_background</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
 </resources>

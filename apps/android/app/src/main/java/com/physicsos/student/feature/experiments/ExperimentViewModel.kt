@@ -11,6 +11,8 @@ import com.physicsos.student.core.ExperimentInfo
 import com.physicsos.student.core.OutboxItem
 import com.physicsos.student.core.OutboxState
 import com.physicsos.student.feature.experiments.bridge.BridgeProtocolException
+import com.physicsos.student.feature.experiments.bridge.BridgeLimits
+import com.physicsos.student.feature.experiments.bridge.StrictBridgeJson
 import com.physicsos.student.feature.experiments.bridge.LabCheckpoint
 import com.physicsos.student.feature.experiments.bridge.LabContent
 import com.physicsos.student.feature.experiments.bridge.LabExportFormat
@@ -34,6 +36,8 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 internal data class ExperimentState(
     val sceneId: String,
@@ -58,9 +62,9 @@ internal data class ExperimentState(
 
 internal sealed interface ExperimentEvent {
     data object Back : ExperimentEvent
-    data object SavedLocally : ExperimentEvent
-    data class Share(val owner: String, val file: SharedLabFile) : ExperimentEvent
-    data class Document(val owner: String, val title: String, val markdown: String) : ExperimentEvent
+    data class SavedLocally(val account: ExperimentAccount) : ExperimentEvent
+    data class Share(val account: ExperimentAccount, val file: SharedLabFile) : ExperimentEvent
+    data class Document(val account: ExperimentAccount, val title: String, val markdown: String) : ExperimentEvent
     data class Problem(val problem: ExperimentProblem) : ExperimentEvent
 }
 
@@ -72,7 +76,11 @@ internal class ExperimentViewModel(
     private val requestedSceneId: String?,
 ) : ViewModel() {
     private val appContext = context.applicationContext
-    private val repository = ExperimentRepository(graph)
+    private lateinit var repository: ExperimentRepository
+    private var account: ExperimentAccount? = null
+    private fun requireAccount(): ExperimentAccount = account?.takeIf {
+        !_state.value.accountChanged && graph.auth.state.value.experimentAccount() == it
+    } ?: throw ApiException(0, "account_changed", "Account changed.")
     private val files = ExperimentFiles(appContext)
     private val _state = MutableStateFlow(ExperimentState(sceneId = savedState["sceneId"] ?: requestedSceneId ?: UUID.randomUUID().toString()))
     val state = _state.asStateFlow()
@@ -94,6 +102,7 @@ internal class ExperimentViewModel(
         val title: String, val template: ExperimentInfo?,
     )
     private val autoSaves = Channel<PendingCheckpoint>(capacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    private val persistence = Mutex()
 
     init {
         savedState["sceneId"] = _state.value.sceneId
@@ -105,9 +114,8 @@ internal class ExperimentViewModel(
         initialize()
         viewModelScope.launch {
             graph.auth.state.collect { auth ->
-                val owner = auth.experimentOwner() ?: return@collect
-                val bound = _state.value.owner ?: return@collect
-                if (bound != owner) {
+                val bound = account ?: return@collect
+                if (bound != auth.experimentAccount()) {
                     initialization?.cancel()
                     observeJob?.cancel()
                     exportJob?.cancel()
@@ -126,13 +134,18 @@ internal class ExperimentViewModel(
             _state.update { it.copy(loading = true, problem = null) }
             try {
                 val auth = graph.auth.state.first { it !is AuthState.Restoring }
-                val owner = auth.experimentOwner() ?: throw ApiException(0, "account_restoring", "Account restoration is in progress.")
+                val bound = auth.experimentAccount() ?: throw ApiException(0, "account_restoring", "Account restoration is in progress.")
+                val owner = bound.owner
                 val previousOwner = savedState.get<String>("owner")
-                if (previousOwner != null && previousOwner != owner) {
+                val previousUserId = savedState.get<String>("userId")
+                if (previousOwner != null && (previousOwner != owner || previousUserId != bound.userId)) {
                     _state.update { it.copy(owner = previousOwner, accountChanged = true, loading = false) }
                     return@launch
                 }
+                account = bound
+                repository = ExperimentRepository(graph, bound)
                 savedState["owner"] = owner
+                savedState["userId"] = bound.userId
                 _state.update { it.copy(owner = owner) }
                 val id = _state.value.sceneId
                 val existing = repository.entry(owner, id)
@@ -148,7 +161,7 @@ internal class ExperimentViewModel(
                     val catalog = graph.catalog.experiments()
                     template = catalog.firstOrNull { it.id == load.entry?.templateId || it.id == templateId }
                 }
-                if (graph.auth.state.value.experimentOwner() != owner) throw ApiException(0, "account_changed", "Account changed.")
+                requireAccount()
                 latestCheckpoint = load.load.checkpoint
                 checkpointOrder = maxOf(checkpointOrder, load.entry?.updatedAt ?: 0)
                 _state.update { it.copy(
@@ -167,7 +180,7 @@ internal class ExperimentViewModel(
 
     fun save() {
         val current = _state.value
-        if (current.saving || current.leaving || current.accountChanged) return
+        if (current.loading || current.saving || current.exporting || current.resolving || current.leaving || current.accountChanged) return
         val owner = current.owner ?: return
         viewModelScope.launch {
             _state.update { it.copy(saving = true) }
@@ -175,8 +188,9 @@ internal class ExperimentViewModel(
                 val checkpoint = _renderer.value?.checkpoint() ?: throw BridgeProtocolException("CHECKPOINT_TIMEOUT")
                 persistRequired(owner, current.sceneId, checkpoint)
                 val saved = repository.save(owner, current.sceneId, checkpoint)
+                requireAccount()
                 _state.update { it.copy(entry = saved) }
-                eventChannel.send(ExperimentEvent.SavedLocally)
+                eventChannel.send(ExperimentEvent.SavedLocally(requireAccount()))
                 if (owner != GUEST_EXPERIMENT_OWNER) {
                     try { graph.sync.syncNow() }
                     catch (error: CancellationException) { throw error }
@@ -190,7 +204,7 @@ internal class ExperimentViewModel(
 
     fun export(format: LabExportFormat, readReport: Boolean = false) {
         val current = _state.value
-        if (current.exporting || current.leaving || current.accountChanged) return
+        if (current.loading || current.exporting || current.saving || current.resolving || current.leaving || current.accountChanged) return
         val owner = current.owner ?: return
         exportJob = viewModelScope.launch {
             _state.update { it.copy(exporting = true) }
@@ -198,11 +212,22 @@ internal class ExperimentViewModel(
                 val renderer = _renderer.value ?: throw BridgeProtocolException("RENDERER_NOT_READY")
                 val file = renderer.export(format)
                 if (readReport) {
+                    val markdown = withContext(Dispatchers.Default) {
+                        file.bytes.toString(Charsets.UTF_8).also {
+                            StrictBridgeJson.utf8Size(it, BridgeLimits.DOCUMENT_BYTES)
+                            if (it.length > 1_000_000) throw BridgeProtocolException("MESSAGE_TOO_LARGE")
+                        }
+                    }
                     val checkpoint = renderer.checkpoint() ?: throw BridgeProtocolException("CHECKPOINT_TIMEOUT")
                     persistRequired(owner, current.sceneId, checkpoint)
                     renderer.releaseAfterCheckpoint()
-                    eventChannel.send(ExperimentEvent.Document(owner, _state.value.title, file.bytes.toString(Charsets.UTF_8)))
-                } else eventChannel.send(ExperimentEvent.Share(owner, files.write(owner, file)))
+                    eventChannel.send(ExperimentEvent.Document(requireAccount(), _state.value.title.take(300), markdown))
+                } else {
+                    val identity = requireAccount()
+                    val shared = files.write(identity.toString(), file)
+                    requireAccount()
+                    eventChannel.send(ExperimentEvent.Share(identity, shared))
+                }
             } catch (error: CancellationException) { throw error }
             catch (error: Exception) { issue(error.experimentProblem()) }
             finally { _state.update { it.copy(exporting = false) } }
@@ -224,15 +249,16 @@ internal class ExperimentViewModel(
         val current = _state.value
         val owner = current.owner ?: return
         val operation = current.operation?.takeIf { it.state == OutboxState.CONFLICT } ?: return
-        if (current.resolving || current.accountChanged) return
+        if (current.resolving || current.saving || current.exporting || current.leaving || current.accountChanged) return
         viewModelScope.launch {
             _state.update { it.copy(resolving = true) }
             try {
                 val renderer = _renderer.value ?: throw BridgeProtocolException("RENDERER_NOT_READY")
-                val fresh = renderer.checkpoint() ?: latestCheckpoint ?: throw BridgeProtocolException("CHECKPOINT_TIMEOUT")
+                val fresh = renderer.checkpoint() ?: throw BridgeProtocolException("CHECKPOINT_TIMEOUT")
                 persistRequired(owner, current.sceneId, fresh)
                 renderer.pause()
-                val loaded = repository.useCloud(owner, current.sceneId, operation, backupTitle)
+                val loaded = persistence.withLock { repository.useCloud(owner, current.sceneId, operation, backupTitle) }
+                requireAccount()
                 latestCheckpoint = loaded.load.checkpoint
                 _state.update { it.copy(entry = loaded.entry, title = loaded.entry?.title.orEmpty(), operation = null, legacySceneOnly = loaded.legacySceneOnly) }
                 renderer.replaceExperiment(loaded.load)
@@ -246,24 +272,25 @@ internal class ExperimentViewModel(
     fun copyConflict(copyTitle: String) {
         val current = _state.value
         val owner = current.owner ?: return
-        if (current.resolving || current.accountChanged) return
+        if (current.resolving || current.saving || current.exporting || current.leaving || current.accountChanged) return
         viewModelScope.launch {
             _state.update { it.copy(resolving = true) }
             try {
                 val renderer = _renderer.value ?: throw BridgeProtocolException("RENDERER_NOT_READY")
-                val checkpoint = renderer.checkpoint() ?: latestCheckpoint ?: throw BridgeProtocolException("CHECKPOINT_TIMEOUT")
+                val checkpoint = renderer.checkpoint() ?: throw BridgeProtocolException("CHECKPOINT_TIMEOUT")
                 persistRequired(owner, current.sceneId, checkpoint)
                 val copyId = repository.copyLocal(owner, current.sceneId, owner, copyTitle)
                 val loaded = repository.load(owner, copyId)
                 val copyCheckpoint = loaded.load.checkpoint ?: throw BridgeProtocolException("CHECKPOINT_TIMEOUT")
                 val saved = repository.save(owner, copyId, copyCheckpoint)
+                requireAccount()
                 savedState["sceneId"] = copyId
                 savedState["checkpointWritten"] = true
                 _state.update { it.copy(sceneId = copyId, title = saved.title, entry = saved, operation = null) }
                 latestCheckpoint = copyCheckpoint
                 observe(owner, copyId)
                 renderer.replaceExperiment(loaded.load)
-                eventChannel.send(ExperimentEvent.SavedLocally)
+                eventChannel.send(ExperimentEvent.SavedLocally(requireAccount()))
                 graph.sync.syncNow()
             } catch (error: CancellationException) { throw error }
             catch (error: Exception) { issue(error.experimentProblem()) }
@@ -272,7 +299,7 @@ internal class ExperimentViewModel(
     }
 
     fun back() {
-        if (exitJob?.isActive == true) return
+        if (exitJob?.isActive == true || _state.value.saving || _state.value.resolving) return
         exportJob?.cancel()
         val current = _state.value
         exitJob = viewModelScope.launch {
@@ -308,7 +335,7 @@ internal class ExperimentViewModel(
 
     private fun incoming(message: LabIncoming) {
         val current = _state.value
-        if (current.accountChanged || graph.auth.state.value.experimentOwner() != current.owner) return
+        if (current.accountChanged || graph.auth.state.value.experimentAccount() != account) return
         when (message) {
             is LabIncoming.State -> _state.update { it.copy(
                 summary = message.summary,
@@ -320,7 +347,7 @@ internal class ExperimentViewModel(
                 latestCheckpoint = message.checkpoint
                 _state.update { it.copy(hasCheckpoint = true) }
                 val owner = current.owner ?: return
-                autoSaves.trySend(PendingCheckpoint(owner, current.sceneId, message.checkpoint, current.title, template))
+                if (!current.resolving) autoSaves.trySend(PendingCheckpoint(owner, current.sceneId, message.checkpoint, current.title, template))
             }
             is LabIncoming.Error -> issue(ExperimentProblem(message.code, message.message))
             is LabIncoming.Export, is LabIncoming.Ready -> Unit
@@ -329,9 +356,14 @@ internal class ExperimentViewModel(
 
     private suspend fun persist(snapshot: PendingCheckpoint, nonCancellable: Boolean) {
         try {
-            val result = if (nonCancellable) withContext(NonCancellable + Dispatchers.IO) {
-                repository.persistCheckpoint(snapshot.owner, snapshot.sceneId, snapshot.checkpoint, snapshot.title, snapshot.template)
-            } else repository.persistCheckpoint(snapshot.owner, snapshot.sceneId, snapshot.checkpoint, snapshot.title, snapshot.template)
+            val result = persistence.withLock {
+                if (_state.value.resolving || _state.value.sceneId != snapshot.sceneId || cleared) return
+                requireAccount()
+                if (nonCancellable) withContext(NonCancellable + Dispatchers.IO) {
+                    repository.persistCheckpoint(snapshot.owner, snapshot.sceneId, snapshot.checkpoint, snapshot.title, snapshot.template)
+                } else repository.persistCheckpoint(snapshot.owner, snapshot.sceneId, snapshot.checkpoint, snapshot.title, snapshot.template)
+            }
+            requireAccount()
             if (_state.value.sceneId == snapshot.sceneId && !_state.value.accountChanged && !cleared) {
                 savedState["checkpointWritten"] = true
                 _state.update { it.copy(persistedAt = result.updatedAt, checkpointProblem = null) }
@@ -345,7 +377,11 @@ internal class ExperimentViewModel(
     }
 
     private suspend fun persistRequired(owner: String, sceneId: String, checkpoint: LabCheckpoint) {
-        val result = repository.persistCheckpoint(owner, sceneId, checkpoint, _state.value.title, template)
+        val result = persistence.withLock {
+            requireAccount()
+            repository.persistCheckpoint(owner, sceneId, checkpoint, _state.value.title, template)
+        }
+        requireAccount()
         if (!_state.value.accountChanged) {
             savedState["checkpointWritten"] = true
             _state.update { it.copy(persistedAt = result.updatedAt, checkpointProblem = null, hasCheckpoint = true) }
@@ -358,6 +394,7 @@ internal class ExperimentViewModel(
             try {
                 combine(repository.observe(owner), graph.sync.observe(owner)) { entries, operations -> entries to operations }
                     .collect { (entries, operations) ->
+                        requireAccount()
                         val entry = entries.firstOrNull { it.sceneId == sceneId }
                         _state.update { it.copy(entry = entry, operation = operationFor(entry, operations)) }
                         if (owner != GUEST_EXPERIMENT_OWNER) repository.reconcile(owner, operations)

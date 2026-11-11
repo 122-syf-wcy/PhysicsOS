@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="document_title">Local math document</string>
+    <string name="document_back">Back</string>
+    <string name="document_font_smaller">Smaller text</string>
+    <string name="document_font_larger">Larger text</string>
+    <string name="document_font_percent">%1$d%% · Reset</string>
+    <string name="document_copy">Copy all</string>
+    <string name="document_copied">Copied the original Markdown. You can also long-press to select text in the document.</string>
+    <string name="document_copy_failed">Unable to copy to the system clipboard. Retry or long-press to select text.</string>
+    <string name="document_local_notice">Uses only the restricted in-app document renderer and local assets. Text size combines with system font settings. External links open only in the system browser, without native bridge access.</string>
+    <string name="document_account_changed">The account instance changed and this document renderer has stopped. Go back and reopen under the current account.</string>
+    <string name="document_size_error">The document exceeds the local rendering size limit. Nothing was truncated. Split or export it from its source to read it.</string>
+    <string name="document_invalid">The document could not be loaded safely. Only restricted Markdown or plain text is accepted, not arbitrary HTML pages or scripts.</string>
+    <string name="document_error_code">Error code: %1$s</string>
+    <string name="document_retry">Retry</string>
+</resources>

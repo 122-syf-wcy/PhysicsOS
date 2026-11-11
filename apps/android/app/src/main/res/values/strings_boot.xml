@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="boot_brand" translatable="false">PhysicsOS</string>
+    <string name="boot_tagline">如果物理是一束光，我想让它照到没有实验室的地方</string>
+    <string name="boot_preparing">正在准备物理世界… %1$d%%</string>
+    <!-- A literal percent, never passed through String.format; keep it off the format path. -->
+    <string name="boot_ready" formatted="false">准备就绪 100%</string>
+</resources>

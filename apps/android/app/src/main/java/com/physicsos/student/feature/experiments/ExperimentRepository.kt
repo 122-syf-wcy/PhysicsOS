@@ -3,6 +3,10 @@ package com.physicsos.student.feature.experiments
 import com.physicsos.student.core.ApiException
 import com.physicsos.student.core.AppGraph
 import com.physicsos.student.core.AuthState
+import com.physicsos.student.core.AuthRepository
+import com.physicsos.student.core.LocalStore
+import com.physicsos.student.core.MobileClient
+import com.physicsos.student.core.SyncCoordinator
 import com.physicsos.student.core.ExperimentInfo
 import com.physicsos.student.core.OutboxItem
 import com.physicsos.student.core.OutboxState
@@ -47,10 +51,13 @@ internal fun AuthState.experimentOwner(): String? = when (this) {
     is AuthState.SignedIn -> user.userKey
 }
 
-internal fun AuthState.experimentIdentity(): String? = when (this) {
+/** owner follows core's userKey partition; userId fences the immutable account instance. */
+internal data class ExperimentAccount(val owner: String, val userId: String?)
+
+internal fun AuthState.experimentAccount(): ExperimentAccount? = when (this) {
     AuthState.Restoring -> null
-    AuthState.SignedOut -> GUEST_EXPERIMENT_OWNER
-    is AuthState.SignedIn -> "${user.userKey}|${user.userId}"
+    AuthState.SignedOut -> ExperimentAccount(GUEST_EXPERIMENT_OWNER, null)
+    is AuthState.SignedIn -> ExperimentAccount(user.userKey, user.userId)
 }
 
 internal data class ExperimentEntry(
@@ -128,21 +135,31 @@ internal data class RemoteExperimentPage(val entries: List<ExperimentEntry>, val
 
 /** Full snapshots are fetched one at a time; observable lists contain only small indexes. */
 internal class ExperimentRepository(
-    private val graph: AppGraph,
-    private val boundIdentity: (() -> String?)? = null,
+    private val auth: AuthRepository,
+    private val store: LocalStore,
+    private val api: MobileClient,
+    private val sync: SyncCoordinator,
+    private val account: ExperimentAccount,
 ) {
-    fun observe(owner: String): Flow<List<ExperimentEntry>> = graph.store.observe(INDEX_KIND, owner).map { items ->
+    constructor(graph: AppGraph, account: ExperimentAccount) : this(graph.auth, graph.store, graph.api, graph.sync, account)
+
+    fun observe(owner: String): Flow<List<ExperimentEntry>> = store.observe(INDEX_KIND, owner).map { items ->
+        requireAccount()
         items.map { ExperimentEntry.parse(it.id, it.payload) }.sortedByDescending { it.updatedAt }
     }
 
-    suspend fun entry(owner: String, sceneId: String): ExperimentEntry? =
-        graph.store.get(INDEX_KIND, owner, checkedId(sceneId))?.let { ExperimentEntry.parse(it.id, it.payload) }
+    suspend fun entry(owner: String, sceneId: String): ExperimentEntry? {
+        requireAccount()
+        val stored = store.get(INDEX_KIND, owner, checkedId(sceneId))
+        requireAccount()
+        return stored?.let { ExperimentEntry.parse(it.id, it.payload) }
+    }
 
     suspend fun load(owner: String, sceneId: String): LoadedExperiment {
         checkedId(sceneId)
         requireOwner(owner)
         requireNotDeleted(owner, sceneId)
-        val local = graph.store.get(CHECKPOINT_KIND, owner, sceneId)
+        val local = store.get(CHECKPOINT_KIND, owner, sceneId)
         if (local != null) {
             val index = entry(owner, sceneId)
             val checkpoint = local.payload["checkpoint"]
@@ -184,7 +201,7 @@ internal class ExperimentRepository(
                 updatedAt = now, hasLocal = true, hasCheckpoint = true, digest = digest,
             )
             if (previous?.digest != digest || previous?.hasCheckpoint != true) {
-                graph.store.put(CHECKPOINT_KIND, owner, sceneId, buildJsonObject {
+                putOwned(CHECKPOINT_KIND, owner, sceneId, buildJsonObject {
                     put("version", 1); put("checkpoint", checkpoint.value)
                 }, now)
             }
@@ -201,13 +218,13 @@ internal class ExperimentRepository(
             requireOwner(owner)
             val current = entry(owner, sceneId) ?: throw ApiException(0, "local_scene_missing", "Save a checkpoint before syncing.")
             val digest = digest(checkpoint.value.toString().toByteArray(Charsets.UTF_8))
-            graph.store.put(SAVED_KIND, owner, sceneId, buildJsonObject {
+            putOwned(SAVED_KIND, owner, sceneId, buildJsonObject {
                 put("version", 1); put("checkpoint", checkpoint.value); put("digest", digest)
             })
             var saved = current.copy(saved = true, savedDigest = digest, saveRequested = owner != GUEST_EXPERIMENT_OWNER, queueError = null)
             putIndex(owner, saved)
             if (owner != GUEST_EXPERIMENT_OWNER) {
-                val operations = graph.sync.observe(owner).first()
+                val operations = sync.observe(owner).first()
                 val existing = operations.firstOrNull { it.idempotencyKey == saved.syncKey }
                 if (existing == null || existing.state == OutboxState.ACKNOWLEDGED) {
                     if (existing != null) saved = acknowledge(owner, saved, existing)
@@ -223,7 +240,7 @@ internal class ExperimentRepository(
         mutation.withLock {
             requireOwner(owner)
             val byKey = operations.associateBy { it.idempotencyKey }
-            val indexes = graph.store.observe(INDEX_KIND, owner).first()
+            val indexes = store.observe(INDEX_KIND, owner).first()
             for (stored in indexes) {
                 var index = ExperimentEntry.parse(stored.id, stored.payload)
                 val operation = byKey[index.syncKey] ?: continue
@@ -241,7 +258,7 @@ internal class ExperimentRepository(
         requireOwner(owner)
         if (owner == GUEST_EXPERIMENT_OWNER) return RemoteExperimentPage(emptyList(), null)
         val query = cursor?.let { "?cursor=${java.net.URLEncoder.encode(it, Charsets.UTF_8.name())}" }.orEmpty()
-        val response = graph.api.request("GET", "learning/scenes$query").objectValue()
+        val response = api.request("GET", "learning/scenes$query").objectValue()
         val items = response["items"] as? JsonArray ?: throw ApiException(0, "invalid_scene_response", "The scene list response is invalid.")
         val remote = items.map { remoteIndex(it.objectValue()) }
         withContext(Dispatchers.IO) {
@@ -260,20 +277,29 @@ internal class ExperimentRepository(
         return RemoteExperimentPage(remote, response.text("nextCursor"))
     }
 
-    suspend fun import(scene: JsonObject, owner: String): String = withContext(Dispatchers.IO) {
+    suspend fun import(scene: JsonObject, owner: String): String {
+        val archive = withContext(Dispatchers.Default) { parseExperimentArchive(scene.toString()) }
+        return importArchive(archive, owner)
+    }
+
+    suspend fun importArchive(archive: ExperimentArchive, owner: String): String = withContext(Dispatchers.IO) {
         requireOwner(owner)
-        val valid = withContext(Dispatchers.Default) {
-            LabBridgeProtocol.scene(StrictBridgeJson.parse(scene.toString(), SCENE_PAIR_BYTES))
-        }
         val id = UUID.randomUUID().toString()
-        val metadata = valid["metadata"] as? JsonObject
-        val title = metadata?.text("title") ?: valid.string("id", 128)
+        val checkpoint = archive.load.checkpoint
         mutation.withLock {
             requireOwner(owner)
-            graph.store.put(CHECKPOINT_KIND, owner, id, buildJsonObject { put("version", 1); put("scene", valid) })
+            putOwned(CHECKPOINT_KIND, owner, id, buildJsonObject {
+                put("version", 1)
+                if (checkpoint != null) put("checkpoint", checkpoint.value) else {
+                    put("scene", archive.scene)
+                    archive.load.originScene?.let { put("originScene", it) }
+                }
+            })
             putIndex(owner, ExperimentEntry(
-                sceneId = id, title = title.take(300), domain = sceneDomain(valid),
-                updatedAt = System.currentTimeMillis(), hasLocal = true,
+                sceneId = id, title = archive.title, domain = archive.domain,
+                templateId = checkpoint?.templateId, updatedAt = System.currentTimeMillis(),
+                hasLocal = true, hasCheckpoint = checkpoint != null,
+                digest = checkpoint?.value?.toString()?.toByteArray(Charsets.UTF_8)?.let(::digest),
             ))
         }
         id
@@ -285,11 +311,11 @@ internal class ExperimentRepository(
         if (fromOwner != targetOwner && fromOwner != GUEST_EXPERIMENT_OWNER) throw ApiException(0, "account_changed", "Account changed.")
         mutation.withLock {
             requireOwner(targetOwner)
-            val source = graph.store.get(CHECKPOINT_KIND, fromOwner, checkedId(sceneId))
+            val source = store.get(CHECKPOINT_KIND, fromOwner, checkedId(sceneId))
                 ?: throw ApiException(0, "local_scene_missing", "No local checkpoint is available.")
             val index = entry(fromOwner, sceneId) ?: throw ApiException(0, "local_scene_missing", "No local scene is available.")
             val id = UUID.randomUUID().toString()
-            graph.store.put(CHECKPOINT_KIND, targetOwner, id, source.payload)
+            putOwned(CHECKPOINT_KIND, targetOwner, id, source.payload)
             putIndex(targetOwner, index.copy(
                 sceneId = id, title = title.take(300), updatedAt = System.currentTimeMillis(), saved = false,
                 savedDigest = null, cloudRevision = 0, syncKey = null, pendingDigest = null,
@@ -301,24 +327,36 @@ internal class ExperimentRepository(
 
     suspend fun useCloud(owner: String, sceneId: String, operation: OutboxItem, backupTitle: String): LoadedExperiment {
         requireOwner(owner)
+        if (operation.owner != owner || operation.path != "learning/scenes/$sceneId" || operation.state != OutboxState.CONFLICT) {
+            throw ApiException(0, "invalid_conflict_operation", "The conflict operation does not match this scene.")
+        }
         // Fetch first. A failed download must leave both local content and the outbox untouched.
         val remote = fetchRemotePayload(owner, sceneId)
         copyLocal(owner, sceneId, owner, backupTitle)
         val loaded = installRemote(owner, remote, replaceLocal = true)
-        graph.sync.discard(operation.id)
+        requireOwner(owner)
+        sync.discard(operation.id)
+        requireOwner(owner)
         return loaded
     }
 
     suspend fun retry(owner: String, sceneId: String, operation: OutboxItem?) {
         requireOwner(owner)
-        if (operation != null && operation.state != OutboxState.ACKNOWLEDGED) graph.sync.retry(operation.id)
+        if (owner == GUEST_EXPERIMENT_OWNER) return
+        if (operation != null && (operation.owner != owner || operation.path != "learning/scenes/$sceneId")) {
+            throw ApiException(0, "invalid_sync_operation", "The operation does not match this scene.")
+        }
+        if (operation != null && operation.state != OutboxState.ACKNOWLEDGED) sync.retry(operation.id)
         else withContext(Dispatchers.IO) {
             mutation.withLock {
+                requireOwner(owner)
                 val index = entry(owner, sceneId) ?: return@withLock
                 enqueueSaved(owner, index.copy(saveRequested = true))
             }
         }
-        graph.sync.syncNow()
+        requireOwner(owner)
+        sync.syncNow()
+        requireOwner(owner)
     }
 
     suspend fun removeLocal(owner: String, sceneId: String) = withContext(Dispatchers.IO) {
@@ -326,21 +364,21 @@ internal class ExperimentRepository(
             requireOwner(owner)
             val id = checkedId(sceneId)
             val index = entry(owner, id)
-            val unresolved = graph.sync.observe(owner).first().any {
+            val unresolved = sync.observe(owner).first().any {
                 it.path == "learning/scenes/$id" && it.state != OutboxState.ACKNOWLEDGED
             }
             if (unresolved || (index != null && index.cloudRevision > 0 && !index.remoteDeleted)) {
                 throw ApiException(0, "scene_removal_requires_resolution", "Resolve cloud synchronization before removing this local scene.")
             }
-            graph.store.put(TOMBSTONE_KIND, owner, id, buildJsonObject { put("deletedAt", System.currentTimeMillis()) })
-            graph.store.delete(CHECKPOINT_KIND, owner, id)
-            graph.store.delete(SAVED_KIND, owner, id)
-            graph.store.delete(INDEX_KIND, owner, id)
+            putOwned(TOMBSTONE_KIND, owner, id, buildJsonObject { put("deletedAt", System.currentTimeMillis()) })
+            deleteOwned(CHECKPOINT_KIND, owner, id)
+            deleteOwned(SAVED_KIND, owner, id)
+            deleteOwned(INDEX_KIND, owner, id)
         }
     }
 
     private suspend fun requireNotDeleted(owner: String, sceneId: String) {
-        if (graph.store.get(TOMBSTONE_KIND, owner, sceneId) != null) {
+        if (store.get(TOMBSTONE_KIND, owner, sceneId) != null) {
             throw ApiException(0, "local_scene_removed", "This local scene was explicitly removed.")
         }
     }
@@ -350,7 +388,7 @@ internal class ExperimentRepository(
 
     private suspend fun fetchRemotePayload(owner: String, sceneId: String): JsonObject {
         requireOwner(owner)
-        val response = graph.api.request("GET", "learning/scenes/${checkedId(sceneId)}").objectValue()
+        val response = api.request("GET", "learning/scenes/${checkedId(sceneId)}").objectValue()
         requireOwner(owner)
         val item = response["item"]?.objectValue() ?: throw ApiException(0, "invalid_scene_response", "The scene response is invalid.")
         if (item.string("sceneId", 128) != sceneId) throw ApiException(0, "invalid_scene_response", "The scene identifier does not match.")
@@ -370,18 +408,18 @@ internal class ExperimentRepository(
             }
         }
         val index = remote.copy(
-            hasLocal = true, hasCheckpoint = checkpoint != null,
+            updatedAt = System.currentTimeMillis(), hasLocal = true, hasCheckpoint = checkpoint != null,
             templateId = checkpoint?.templateId,
             digest = checkpoint?.value?.toString()?.toByteArray(Charsets.UTF_8)?.let(::digest),
         )
         mutation.withLock {
             requireOwner(owner)
-            if (!replaceLocal && graph.store.get(CHECKPOINT_KIND, owner, remote.sceneId) != null) {
+            if (!replaceLocal && store.get(CHECKPOINT_KIND, owner, remote.sceneId) != null) {
                 throw ApiException(0, "local_scene_changed", "A local checkpoint arrived while the cloud scene was loading.")
             }
-            graph.store.put(CHECKPOINT_KIND, owner, remote.sceneId, raw)
+            putOwned(CHECKPOINT_KIND, owner, remote.sceneId, raw)
             putIndex(owner, index)
-            if (replaceLocal) graph.store.delete(SAVED_KIND, owner, remote.sceneId)
+            if (replaceLocal) deleteOwned(SAVED_KIND, owner, remote.sceneId)
         }
         LoadedExperiment(index, LabLoad(
             templateId = checkpoint?.templateId, scene = if (checkpoint == null) scene else null,
@@ -403,7 +441,7 @@ internal class ExperimentRepository(
     private suspend fun enqueueSaved(owner: String, index: ExperimentEntry): ExperimentEntry {
         requireOwner(owner)
         if (owner == GUEST_EXPERIMENT_OWNER || !index.saveRequested) return index
-        val saved = graph.store.get(SAVED_KIND, owner, index.sceneId)
+        val saved = store.get(SAVED_KIND, owner, index.sceneId)
             ?: throw ApiException(0, "saved_snapshot_missing", "The saved snapshot is unavailable.")
         val checkpoint = LabBridgeProtocol.checkpoint(saved.payload.getValue("checkpoint"))
         val key = UUID.randomUUID().toString()
@@ -413,7 +451,7 @@ internal class ExperimentRepository(
             // Persist intent before enqueue; an interrupted enqueue remains visibly local,
             // and can be retried without pretending a server receipt exists.
             putIndex(owner, pending)
-            graph.sync.enqueue("PUT", "learning/scenes/${checkedId(index.sceneId)}", body, key)
+            sync.enqueue("PUT", "learning/scenes/${checkedId(index.sceneId)}", body, key)
         } catch (error: Exception) {
             if (error is kotlinx.coroutines.CancellationException) throw error
             pending = pending.copy(queueError = (error as? ApiException)?.code ?: (error as? com.physicsos.student.feature.experiments.bridge.BridgeProtocolException)?.code ?: "sync_enqueue_failed")
@@ -423,14 +461,30 @@ internal class ExperimentRepository(
     }
 
     private suspend fun putIndex(owner: String, entry: ExperimentEntry) {
-        graph.store.put(INDEX_KIND, owner, checkedId(entry.sceneId), entry.payload(), entry.updatedAt)
+        requireOwner(owner)
+        putOwned(INDEX_KIND, owner, checkedId(entry.sceneId), entry.payload(), entry.updatedAt)
+        requireOwner(owner)
+    }
+
+    private suspend fun putOwned(kind: String, owner: String, id: String, payload: JsonObject, updatedAt: Long = System.currentTimeMillis()) {
+        requireOwner(owner)
+        store.put(kind, owner, id, payload, updatedAt)
+        requireOwner(owner)
+    }
+
+    private suspend fun deleteOwned(kind: String, owner: String, id: String) {
+        requireOwner(owner)
+        store.delete(kind, owner, id)
+        requireOwner(owner)
+    }
+
+    private fun requireAccount() {
+        if (auth.state.value.experimentAccount() != account) throw ApiException(0, "account_changed", "Account changed.")
     }
 
     private fun requireOwner(owner: String) {
-        val current = graph.auth.state.value
-        if (current.experimentOwner() != owner || (boundIdentity != null && current.experimentIdentity() != boundIdentity.invoke())) {
-            throw ApiException(0, "account_changed", "Account changed.")
-        }
+        requireAccount()
+        if (owner != account.owner) throw ApiException(0, "account_changed", "Account changed.")
     }
 
     companion object {
@@ -485,9 +539,16 @@ internal class ExperimentRepository(
 
 /** Native navigation imports real scene data without knowing storage keys or credentials. */
 suspend fun importScene(graph: AppGraph, scene: JsonObject): String {
-    val owner = graph.auth.state.first { it !is AuthState.Restoring }.experimentOwner()
+    val account = graph.auth.state.first { it !is AuthState.Restoring }.experimentAccount()
         ?: throw ApiException(0, "account_restoring", "Account restoration has not completed.")
-    return ExperimentRepository(graph).import(scene, owner)
+    return ExperimentRepository(graph, account).import(scene, account.owner)
+}
+
+/** Removes the actual local checkpoint through the same tombstone and pending-sync guards as the catalog. */
+suspend fun removeLocalExperiment(graph: AppGraph, sceneId: String) {
+    val account = graph.auth.state.first { it !is AuthState.Restoring }.experimentAccount()
+        ?: throw ApiException(0, "account_restoring", "Account restoration has not completed.")
+    ExperimentRepository(graph, account).removeLocal(account.owner, sceneId)
 }
 
 internal fun JsonObject.text(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull

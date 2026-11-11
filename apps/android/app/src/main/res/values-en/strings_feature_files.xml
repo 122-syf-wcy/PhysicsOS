@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Shared by the native file library and the conversation attachment controls. -->
+    <string name="files_access_denied">You do not have permission to access this attachment, or it is no longer available.</string>
+    <string name="files_actions">File actions</string>
+    <string name="files_animation_flattened">The animated image was converted to a single still frame.</string>
+    <string name="files_camera_denied">Camera permission was not granted. Enable it in system settings or choose an existing image.</string>
+    <string name="files_camera_unavailable">No camera app is available. Choose an existing image or document.</string>
+    <string name="files_cancel_download">Cancel download</string>
+    <string name="files_cancel_prepare">Cancel preparation</string>
+    <string name="files_cancel_upload">Cancel upload</string>
+    <string name="files_cancelled">The file operation was cancelled.</string>
+    <string name="files_choose_document">Choose document</string>
+    <string name="files_choose_image">Choose image</string>
+    <string name="files_crop">Crop and rotate</string>
+    <string name="files_crop_apply">Apply crop</string>
+    <string name="files_crop_horizontal">Left and right crop bounds</string>
+    <string name="files_crop_instructions">Drag a corner to resize the crop, or drag inside it to move the selection. You can also use the sliders. Rotation takes effect when you apply the crop.</string>
+    <string name="files_crop_reset">Reset crop and rotation</string>
+    <string name="files_crop_title">Crop question image</string>
+    <string name="files_crop_vertical">Top and bottom crop bounds</string>
+    <string name="files_download_complete">Download complete</string>
+    <string name="files_download_failed">Download failed</string>
+    <string name="files_download_paused">Download paused</string>
+    <string name="files_download_queued">Waiting to download</string>
+    <string name="files_downloading">Downloading…</string>
+    <string name="files_empty">No downloaded files yet. Tap an attachment in a conversation to download it, then view it offline here.</string>
+    <string name="files_empty_file">The file is empty. Choose a file with content.</string>
+    <string name="files_exported">The file was saved to your chosen location.</string>
+    <string name="files_go_page">Go</string>
+    <string name="files_image_prepared">Image orientation was corrected and it was converted to JPEG. EXIF and location metadata were removed.</string>
+    <string name="files_imported">The attachment is ready to preview or send with your message.</string>
+    <string name="files_integrity">The file size or checksum does not match. It cannot be opened safely. Download it again or select the original file.</string>
+    <string name="files_loading">Reading file…</string>
+    <string name="files_message_too_large">The combined image size exceeds the limit for one message. Remove some images or reduce their size and try again.</string>
+    <string name="files_mime_mismatch">The declared file type does not match its content. Choose the correct original file.</string>
+    <string name="files_missing">The local file is missing or was cleared. Download or select it again.</string>
+    <string name="files_network_error">No network connection is available. Check your connection and retry the file transfer.</string>
+    <string name="files_next_page">Next page</string>
+    <string name="files_no_space">There is not enough device storage to process this file. Free some space and try again.</string>
+    <string name="files_offline_description">Completed downloads can be viewed offline. Sharing or saving elsewhere creates independent copies. Removing a local file does not delete the server attachment.</string>
+    <string name="files_original_image">Original image for cropping</string>
+    <string name="files_page_number">Page</string>
+    <!-- Count labels avoid English singular/plural selection, since callers use R.string. -->
+    <string name="files_pdf_full_document">Complete PDF. Pages: %1$d. Previewing one page does not truncate the file.</string>
+    <string name="files_pdf_page">Page %1$d of %2$d</string>
+    <string name="files_pdf_unreadable">Unable to read this PDF or page. The file may be damaged, password-protected, or unsupported. Check the original file.</string>
+    <string name="files_preparing">Preparing attachment…</string>
+    <string name="files_preview">Preview</string>
+    <string name="files_previous_page">Previous page</string>
+    <string name="files_receipt_invalid">No valid upload receipt was received. The upload cannot be confirmed yet. Try again.</string>
+    <string name="files_remove_attachment">Remove attachment</string>
+    <string name="files_remove_local">Remove local file</string>
+    <string name="files_remove_local_body">Remove the downloaded file “%1$s” and its record from this device. The server attachment and copies already saved or shared elsewhere will not be deleted.</string>
+    <string name="files_remove_local_title">Remove local file?</string>
+    <string name="files_retry_download">Download again</string>
+    <string name="files_retry_restarts">Retrying downloads the file from the beginning, not from the previous position.</string>
+    <string name="files_retry_upload">Retry upload</string>
+    <string name="files_rotate_on_save">Rotate on save: %1$d°</string>
+    <string name="files_save_as">Save as…</string>
+    <string name="files_share">Share file</string>
+    <string name="files_share_unavailable">No app is available to choose, save, or share the file, or the system did not allow the action.</string>
+    <string name="files_take_photo">Photograph a question</string>
+    <string name="files_text_preview_limited">Only the first 64 KiB of text is previewed. The complete original file is kept; save or share it to read the rest.</string>
+    <string name="files_title">Downloaded files</string>
+    <string name="files_too_large">The file exceeds the size limit for this operation. Choose a smaller file or reduce the image size and try again.</string>
+    <string name="files_too_many">There are too many attachments or images for one message. Remove some and try again.</string>
+    <!-- Transfer amounts are localized sizeLabel() strings, not raw byte integers. -->
+    <string name="files_transfer_bytes">Transferred %1$s / %2$s</string>
+    <string name="files_transfer_failed">Unable to complete the file operation. Check your connection, the file, and device storage, then try again.</string>
+    <string name="files_unreadable">Unable to read or write this file. Check access permission, file integrity, and device storage.</string>
+    <string name="files_unsafe_path">The file address failed a safety check and access was blocked. Select the attachment again from within the app.</string>
+    <string name="files_unsupported_image">The image or PDF format could not be recognized. Choose a valid JPEG, PNG, WebP, GIF, or PDF file.</string>
+    <string name="files_upload">Upload file</string>
+    <string name="files_uploaded">File uploaded</string>
+    <string name="files_verbatim_no_preview">This file is kept unchanged and has no in-app preview. Save it elsewhere or share it with a trusted app to open it. Its content will not be executed here.</string>
+</resources>

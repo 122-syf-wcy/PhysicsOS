@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_welcome_heading">Make room for a good question.</string>
+    <string name="chat_prompt_explain">Make a physics concept click</string>
+    <string name="chat_prompt_explain_body">Explain Newton’s second law using an everyday example, including when it applies.</string>
+    <string name="chat_prompt_plan">Plan a small experiment together</string>
+    <string name="chat_prompt_plan_body">Help me design an experiment about spring force and extension, including how to record the data.</string>
+    <string name="chat_prompt_check">Review my reasoning</string>
+    <string name="chat_prompt_check_body">I will share a question and my working. Help me find possible errors and give hints before showing a solution.</string>
+    <string name="chat_prompt_draft_only">A suggestion fills your draft. Nothing is sent until you choose Send.</string>
+    <string name="chat_composer_support">Text · Images · PDF</string>
+    <string name="chat_verify_reminder">AI can make mistakes. Check the reasoning and experiment.</string>
+    <string name="chat_rich_formula_fallback">Some formulas could not be laid out here. Their original text is retained; open the full content to read them.</string>
+    <string name="chat_attachment_download_preview">Download and preview</string>
+</resources>

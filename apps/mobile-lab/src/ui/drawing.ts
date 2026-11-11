@@ -93,7 +93,7 @@ export class RetainedDrawing {
     ctx.setTransform(this.canvas.width / this.width, 0, 0, this.canvas.height / this.height, 0, 0)
     ctx.clearRect(0, 0, this.width, this.height)
     ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.font = '12px system-ui, sans-serif'
-    if (view.visible.trajectory === true) for (const path of view.trajectories) {
+    if (view.domain !== 'modern' && view.visible.trajectory === true) for (const path of view.trajectories) {
       this.path(path.points, path.kind === 'history' ? 'trajectory' : 'trajectory-predicted', path.kind === 'history' ? [] : [5, 4])
       if (path.kind === 'history' && path.points.length) this.dot(path.points.at(-1)!, 4, 'trajectory')
     }

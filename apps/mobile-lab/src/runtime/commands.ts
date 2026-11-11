@@ -49,6 +49,7 @@ export function parseAction(input: unknown): LabAction {
   if (!object(input) || typeof input.name !== 'string' || !Object.hasOwn(signatures, input.name)
     || !Array.isArray(input.args) || Object.keys(input).some(key => key !== 'name' && key !== 'args')) fail('INVALID_ACTION', '不支持的实验操作。')
   const signature: readonly string[] = signatures[input.name as ActionName]
-  if (input.args.length > signature.length || signature.some((kind, index) => !valid(input.args[index], kind))) fail('INVALID_ACTION', '实验操作参数无效。')
+  const args = input.args
+  if (args.length > signature.length || signature.some((kind, index) => !valid(args[index], kind))) fail('INVALID_ACTION', '实验操作参数无效。')
   return input as LabAction
 }

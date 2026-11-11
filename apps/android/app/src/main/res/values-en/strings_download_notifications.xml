@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="download_notification_channel">File downloads</string>
+    <string name="download_notification_complete">Download complete</string>
+    <string name="download_notification_description">Your file is saved and verified. Open the app to view it.</string>
+</resources>

@@ -6,7 +6,7 @@ export const MAX_FILE_BYTES = 8 * 1024 * 1024
 export const MAX_DEPTH = 64
 export const STATE_INTERVAL_MS = 250
 export const EXPORT_MIME = {
-  json: 'application/json', csv: 'text/csv', markdown: 'text/markdown',
+  json: 'application/json', csv: 'text/csv', observations: 'text/csv', markdown: 'text/markdown',
   svg: 'image/svg+xml', png: 'image/png',
 } as const
 export type ExportFormat = keyof typeof EXPORT_MIME
@@ -45,7 +45,7 @@ export class LabError extends Error {
 }
 export const object = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value)
-export const fail = (code: string, message: string): never => { throw new LabError(code, message) }
+export function fail(code: string, message: string): never { throw new LabError(code, message) }
 export const text = (value: unknown, max = 128, empty = false): value is string =>
   typeof value === 'string' && (empty || value.length > 0) && value.length <= max && !value.includes('\u0000')
 export const finite = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value)
@@ -100,10 +100,10 @@ export function parseNativeCommand(input: unknown): NativeCommand {
     case 'load':
       exactKeys(payload, ['generation', 'templateId', 'scene', 'originScene', 'checkpoint'])
       if (payload.templateId !== undefined && !text(payload.templateId)) fail('INVALID_TEMPLATE', '实验目录标识无效。')
-      if (payload.scene === undefined && payload.templateId === undefined && payload.checkpoint === undefined) fail('LOAD_REQUIRED', '请选择实验或提供完整场景。')
+      if ([payload.scene, payload.templateId, payload.checkpoint].filter(value => value !== undefined).length !== 1) fail('LOAD_REQUIRED', '必须且只能选择模板、场景或完整检查点之一。')
       if (payload.scene !== undefined) assertJson(payload.scene)
       if (payload.originScene !== undefined) {
-        if (payload.scene === undefined && payload.checkpoint === undefined) fail('LOAD_REQUIRED', '来源场景需要与当前场景一起加载。')
+        if (payload.scene === undefined) fail('LOAD_REQUIRED', '来源场景只可与当前场景一起加载；完整检查点已经包含来源。')
         assertJson(payload.originScene)
       }
       if (payload.checkpoint !== undefined) assertJson(payload.checkpoint)

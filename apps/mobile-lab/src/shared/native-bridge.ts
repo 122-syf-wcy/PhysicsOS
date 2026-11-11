@@ -17,6 +17,7 @@ export class NativeBridge {
   private disposed = false
   private readonly sink: NativeSink | undefined
   private readonly seen = new Set<string>()
+  private readonly retired = new Set<string>()
   constructor(private readonly options: NativeBridgeOptions) {
     if (window.top !== window) throw new Error('The native bridge is main-frame only.')
     const testOrigin = __LAB_TEST__ && ['127.0.0.1', 'localhost'].includes(location.hostname)
@@ -32,14 +33,25 @@ export class NativeBridge {
   nextId(): string { return `lab-${++this.serial}` }
   private readonly receive = (event: MessageEvent<unknown>): void => {
     const expected = __LAB_TEST__ ? location.origin : ASSET_ORIGIN
-    if (this.disposed || event.origin !== expected || (event.source !== null && event.source !== window)) return
+    // Android WebView.postWebMessage has a null source and an empty sender origin.
+    // This exception exists only in the already origin-checked local top frame with
+    // an injected native sink; native delivery still targets the exact asset origin.
+    const nativeDelivery = this.connected && event.origin === '' && event.source === null && location.origin === expected
+    if (this.disposed || (!nativeDelivery && event.origin !== expected) || (event.source !== null && event.source !== window)) return
     let command: NativeCommand
     try {
       command = parseNativeCommand(event.data)
       if (command.type !== 'load' && command.type !== 'document' && command.payload.generation !== this.generation) return
       if (command.type === 'load' || command.type === 'document') {
-        if (command.payload.generation !== this.generation) this.seen.clear()
-        this.generation = command.payload.generation
+        if (this.retired.has(command.payload.generation)) return
+        if (command.payload.generation !== this.generation) {
+          if (this.generation) this.retired.add(this.generation)
+          this.seen.clear()
+          if (this.stateTimer !== undefined) clearTimeout(this.stateTimer)
+          this.stateTimer = undefined
+          this.pendingState = undefined
+          this.generation = command.payload.generation
+        } else if (command.type === 'load') return // A load generation denotes exactly one owner.
       }
       const key = `${this.generation}:${command.type}:${command.id}`
       if (this.seen.has(key)) return
@@ -53,13 +65,14 @@ export class NativeBridge {
   }
   /** Standalone UI actions keep the native document generation; they never invent a new native load. */
   adoptGeneration(generation: string): void { if (!this.connected) this.generation = generation }
-  emit(type: string, payload: Record<string, unknown>, id = this.nextId()): void {
-    if (this.disposed || this.sink === undefined) return
+  emit(type: string, payload: Record<string, unknown>, id = this.nextId(), generation = this.generation): void {
+    if (this.disposed || this.sink === undefined || generation !== this.generation || (type !== 'ready' && !generation)) return
     const envelope: Envelope = { version: PROTOCOL_VERSION, id, type,
       payload: type === 'ready' ? payload : { ...payload, generation: this.generation } }
     this.sink(stringifyBounded(envelope, MAX_ENVELOPE_BYTES))
   }
-  state(payload: Record<string, unknown>): void {
+  state(payload: Record<string, unknown>, generation = this.generation): void {
+    if (!generation || generation !== this.generation) return
     this.pendingState = payload
     if (this.stateTimer !== undefined) return
     const send = (): void => {
@@ -74,9 +87,9 @@ export class NativeBridge {
     if (remaining <= 0) send()
     else this.stateTimer = setTimeout(send, remaining)
   }
-  export(file: ExportFile, requestId: string): void {
+  export(file: ExportFile, requestId: string, generation = this.generation): void {
     validateExport(file)
-    this.emit('export', { ...file }, requestId)
+    this.emit('export', { ...file }, requestId, generation)
   }
   error(error: unknown, id = this.nextId()): void { this.options.onError?.(error); this.emit('error', errorPayload(error), id) }
   dispose(): void {

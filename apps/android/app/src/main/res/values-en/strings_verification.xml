@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="verification_status_passed">Passed engine verification</string>
+    <string name="verification_status_warning">Passed with conditions that need attention</string>
+    <string name="verification_status_failed">Verification failed</string>
+    <string name="verification_status_unknown">Not recognized by this version; read the complete report</string>
+</resources>

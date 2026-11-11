@@ -26,6 +26,8 @@ import androidx.core.view.WindowCompat
 fun PhysicsTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = false,
+    /** Forces dark system-bar icons while an always-light surface (the boot splash) is up. */
+    lightSystemBars: Boolean? = null,
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
@@ -41,8 +43,8 @@ fun PhysicsTheme(
         SideEffect {
             context.activityOrNull()?.window?.let { window ->
                 WindowCompat.getInsetsController(window, view).apply {
-                    isAppearanceLightStatusBars = !darkTheme
-                    isAppearanceLightNavigationBars = !darkTheme
+                    isAppearanceLightStatusBars = lightSystemBars ?: !darkTheme
+                    isAppearanceLightNavigationBars = lightSystemBars ?: !darkTheme
                 }
             }
         }

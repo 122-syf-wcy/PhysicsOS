@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="download_notification_channel">文件下载</string>
+    <string name="download_notification_complete">下载已完成</string>
+    <string name="download_notification_description">文件已保存并通过完整性校验，可返回应用查看。</string>
+</resources>

@@ -1,9 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="physics_brand_green">#42734D</color>
-    <color name="physics_brand_lime">#D8EFAB</color>
     <color name="physics_window_background">#F8FAF6</color>
-    <color name="physics_window_foreground">#24392E</color>
     <color name="physics_launcher_background">#F8FAF6</color>
-    <color name="physics_transparent">#00000000</color>
+    <!-- The web boot screen is always white, in both appearances. -->
+    <color name="physics_boot_background">#FFFFFF</color>
 </resources>

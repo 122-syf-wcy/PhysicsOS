@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="library_guest_local">无需登录即可阅读内置题目与知识内容。访客收藏仅在本机，登录后不会自动并入账号；外部教材和云端资料仍需联网及相应授权。</string>
+</resources>

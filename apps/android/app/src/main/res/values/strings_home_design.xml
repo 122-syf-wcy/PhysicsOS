@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_featured_experiment">发现 · 物理实验室</string>
+    <string name="home_experiment_invitation">亲手搭建，让规律看得见。</string>
+    <string name="home_solve_invitation">拍下题目，一起理清思路。</string>
+    <string name="home_library_invitation">让知识慢慢连成线。</string>
+    <string name="home_classes_invitation">和课堂保持同步。</string>
+</resources>

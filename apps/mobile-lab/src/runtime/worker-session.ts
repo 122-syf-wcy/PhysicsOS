@@ -14,6 +14,7 @@ import { EXPORT_MIME, LabError, MAX_FILE_BYTES, assertJson, errorPayload, fail, 
 import { initialPresentation, readCheckpointEnvelope, validatePresentation, type LabCheckpoint, type PresentationState } from '../shared/checkpoint.ts'
 import { Metrics } from '../shared/metrics.ts'
 import { NON_FACT_ACTIONS, parseAction, type LabAction } from './commands.ts'
+import { observationCsv } from './observation-export.ts'
 import { MAX_PENDING_EVENTS, TransferPool, displayFrame, encodeData, framePatch, type Occurrence, type WorkerOutput, type WorkerRequest, type WorkerTag, type WireSummary } from './transport.ts'
 
 export interface SessionEnvironment {
@@ -283,6 +284,7 @@ export class WorkerSession {
       }
       case 'export': {
         const format = payload.format
+        if (format === 'observations') return observationCsv(frame.title, owner.getSnapshot().notebook)
         const name = safeFileName(frame.title, String(format))
         if (format === 'json') return { name, mime: EXPORT_MIME.json, encoding: 'utf8', content: stringifyBounded(this.checkpoint()) }
         if (format === 'markdown') return { name, mime: EXPORT_MIME.markdown, encoding: 'utf8', content: buildExperimentReport(frame, new Date(), owner.getSnapshot().notebook).markdown }
@@ -308,10 +310,10 @@ export class WorkerSession {
     if (this.closed) return
     try {
       if (!object(request) || request.version !== 1 || !text(request.id) || !isGeneration(request.generation)) fail('WORKER_PROTOCOL', 'Worker 消息协议无效。')
-      if (request.type === 'load') { this.load(request.payload, request.generation); this.reply(request, { loaded: true }); return }
+      if (request.type === 'load') { this.load(request.payload, request.generation); this.reply(request, { loaded: true, presentation: this.presentation }); return }
       if (request.generation !== this.generation) return
       if (request.type === 'ack') {
-        if (!object(request.payload) || request.payload.serial !== this.inFlight?.serial) return
+        if (this.inFlight === undefined || !object(request.payload) || request.payload.serial !== this.inFlight.serial) return
         const through = this.inFlight.lastEvent
         this.pendingEvents = this.pendingEvents.filter(event => event.seq > through)
         if (request.buffer !== undefined) this.buffers.recycle(request.buffer)

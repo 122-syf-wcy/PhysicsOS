@@ -5,11 +5,30 @@ import android.content.Intent
 import android.net.Uri
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
+import androidx.core.net.toUri
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.Surface
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import com.physicsos.student.ui.components.BootSplash
+import com.physicsos.student.ui.components.BrandMark
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -100,18 +119,36 @@ fun PhysicsApp(graph: AppGraph) {
     }
     val signedInUser = (authState as? AuthState.SignedIn)?.user
     val owner = signedInUser?.userKey ?: "guest"
-    PhysicsTheme(darkTheme = dark) {
-        // Re-registering the same username must not revive the previous account's navigation state.
-        key(signedInUser?.userId ?: "guest") { StudentNavigator(graph, authState, owner) }
+    val context = LocalContext.current
+    val snackbar = remember(graph) { SnackbarHostState() }
+    val authError by graph.auth.lastError.collectAsStateWithLifecycle()
+    val bootFinished by graph.bootFinished.collectAsStateWithLifecycle()
+    LaunchedEffect(authError?.code) {
+        val message = when (authError?.code) {
+            "logout_revocation_unconfirmed" -> R.string.navigation_local_logout_only
+            "account_deletion_pending" -> R.string.navigation_deletion_pending
+            "account_deleted" -> R.string.navigation_account_deleted
+            else -> null
+        }
+        if (message != null) snackbar.showSnackbar(context.getString(message))
+    }
+    PhysicsTheme(darkTheme = dark, lightSystemBars = if (bootFinished) null else true) {
+        Box(Modifier.fillMaxSize()) {
+            // Re-registering the same username must not revive the previous account's navigation state.
+            key(signedInUser?.userId ?: "guest") { StudentNavigator(graph, authState, owner, snackbar) }
+            if (!bootFinished) {
+                // Restoration is the app-side equivalent of the web boot module loading.
+                BootSplash(ready = authState !is AuthState.Restoring, onFinished = graph::finishBoot)
+            }
+        }
     }
 }
 
 @Composable
-private fun StudentNavigator(graph: AppGraph, authState: AuthState, owner: String) {
+private fun StudentNavigator(graph: AppGraph, authState: AuthState, owner: String, snackbar: SnackbarHostState) {
     val context = LocalContext.current
     val nav = rememberNavController()
     val scope = rememberCoroutineScope()
-    val snackbar = remember { SnackbarHostState() }
     val currentEntry by nav.currentBackStackEntryAsState()
     val currentRoute = currentEntry?.destination?.route?.substringBefore('?')
     val authError by graph.auth.lastError.collectAsStateWithLifecycle()
@@ -180,7 +217,7 @@ private fun StudentNavigator(graph: AppGraph, authState: AuthState, owner: Strin
             return
         }
         try {
-            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(parsed.toASCIIString())).apply {
+            context.startActivity(Intent(Intent.ACTION_VIEW, parsed.toASCIIString().toUri()).apply {
                 addCategory(Intent.CATEGORY_BROWSABLE)
             })
         } catch (_: ActivityNotFoundException) {
@@ -216,23 +253,53 @@ private fun StudentNavigator(graph: AppGraph, authState: AuthState, owner: Strin
             Scaffold(
                 modifier = Modifier.weight(1f).fillMaxSize(),
                 snackbarHost = { SnackbarHost(snackbar) },
+                topBar = {
+                    if (showNavigation && currentRoute != "chat") Row(
+                        Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 22.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        BrandMark()
+                        TextButton(onClick = { navigate(Destinations.ACCOUNT) }, modifier = Modifier.testTag("home-account")) {
+                            Text(stringResource(R.string.nav_account), style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
+                },
                 bottomBar = {
-                    if (!wide && showNavigation) {
-                        NavigationBar {
-                            primaryDestinations.forEach { destination ->
-                                NavigationBarItem(
-                                    selected = currentRoute == destination.route,
-                                    onClick = { navigate(destination.route) },
-                                    icon = { Icon(painterResource(destination.icon), contentDescription = null) },
-                                    label = { Text(stringResource(destination.label)) },
-                                    modifier = Modifier.testTag("nav_${destination.route}"),
-                                )
+                    if (!wide && showNavigation) Box(
+                        Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 18.dp, vertical = 10.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Surface(
+                            modifier = Modifier.widthIn(max = 480.dp).fillMaxWidth(),
+                            shape = RoundedCornerShape(30.dp),
+                            color = MaterialTheme.colorScheme.surface,
+                            shadowElevation = 10.dp,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+                        ) {
+                            NavigationBar(containerColor = Color.Transparent, tonalElevation = 0.dp, windowInsets = WindowInsets(0, 0, 0, 0)) {
+                                primaryDestinations.forEach { destination ->
+                                    NavigationBarItem(
+                                        selected = currentRoute == destination.route,
+                                        onClick = { navigate(destination.route) },
+                                        icon = { Icon(painterResource(destination.icon), contentDescription = null, modifier = Modifier.size(23.dp)) },
+                                        label = { Text(stringResource(destination.label), style = MaterialTheme.typography.labelMedium) },
+                                        colors = NavigationBarItemDefaults.colors(
+                                            selectedIconColor = MaterialTheme.colorScheme.primary,
+                                            selectedTextColor = MaterialTheme.colorScheme.primary,
+                                            indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        ),
+                                        modifier = Modifier.testTag("nav_${destination.route}"),
+                                    )
+                                }
                             }
                         }
                     }
                 },
             ) { padding ->
-                Column(Modifier.fillMaxSize().padding(padding)) {
+                Column(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
                     if (authState is AuthState.SignedIn &&
                         authError?.code == "reauthentication_required" && currentRoute != Destinations.AUTH
                     ) {

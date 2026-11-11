@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<lint>
+    <!-- The approved JDK 17 / API 36 / Kotlin 2.2 baseline is pinned deliberately.
+         Upgrade suggestions are not compatibility or vulnerability findings;
+         updating these versions requires a separately tested toolchain change. -->
+    <issue id="AndroidGradlePluginVersion">
+        <ignore path="../gradle/wrapper/gradle-wrapper.properties" />
+    </issue>
+    <issue id="GradleDependency,NewerVersionAvailable">
+        <ignore path="../gradle/libs.versions.toml" />
+    </issue>
+</lint>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="document_title">本地数学文档</string>
+    <string name="document_back">返回</string>
+    <string name="document_font_smaller">缩小字号</string>
+    <string name="document_font_larger">放大字号</string>
+    <string name="document_font_percent">%1$d%% · 重置</string>
+    <string name="document_copy">复制全文</string>
+    <string name="document_copied">已复制原始 Markdown 全文。也可在文档中长按选择文本。</string>
+    <string name="document_copy_failed">无法复制到系统剪贴板，请重试或长按选择文本。</string>
+    <string name="document_local_notice">仅使用应用内受限文档渲染器与本地资源。字号叠加系统字体设置；外链只在系统浏览器打开，不授予原生桥权限。</string>
+    <string name="document_account_changed">账号实例已改变，此文档渲染器已停止。请返回并在当前账号下重新打开。</string>
+    <string name="document_size_error">文档超过本地渲染体积上限，未截断内容。请从来源拆分或导出后阅读。</string>
+    <string name="document_invalid">文档无法安全加载。仅接受受限 Markdown 或纯文本，不加载任意 HTML 页面和脚本。</string>
+    <string name="document_error_code">错误码：%1$s</string>
+    <string name="document_retry">重试</string>
+</resources>

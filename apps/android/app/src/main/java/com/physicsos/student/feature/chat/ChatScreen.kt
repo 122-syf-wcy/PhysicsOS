@@ -11,6 +11,22 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.ui.res.painterResource
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.SolidColor
+import com.physicsos.student.ui.components.BrandMark
+import com.physicsos.student.ui.components.BundledArtwork
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,7 +49,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.core.net.toUri
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
@@ -116,8 +133,8 @@ import kotlinx.serialization.json.JsonObject
 @Composable
 fun ChatScreen(
     graph: AppGraph,
-    sessionId: String? = null,
-    initialText: String? = null,
+    sessionId: String?,
+    initialText: String?,
     onOpenExperiment: (templateId: String?, scene: JsonObject?) -> Unit,
     onOpenDocument: (title: String, markdown: String) -> Unit,
     onBack: () -> Unit,
@@ -177,16 +194,19 @@ private fun ChatContent(
     Scaffold(
         modifier = modifier.testTag("chat"),
         topBar = {
-            TopAppBar(title = {
-                Column {
-                    Text(state.title ?: stringResource(R.string.chat_title), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(stringResource(connectionString(state.connection)), style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+            TopAppBar(colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background), title = {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    BrandMark(wordmark = false)
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(state.title ?: stringResource(R.string.chat_title), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(stringResource(connectionString(state.connection)), style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+                    }
                 }
             }, navigationIcon = {
                 IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.chat_back)) }
             }, actions = {
-                IconButton(onClick = { directory = true }, modifier = Modifier.testTag("chat-sessions")) { Icon(Icons.Default.List, stringResource(R.string.chat_sessions)) }
+                IconButton(onClick = { directory = true }, modifier = Modifier.testTag("chat-sessions")) { Icon(Icons.AutoMirrored.Filled.List, stringResource(R.string.chat_sessions)) }
                 IconButton(onClick = { model.selectSession(null) }, enabled = !state.submitting, modifier = Modifier.testTag("chat-new")) { Icon(Icons.Default.Add, stringResource(R.string.chat_new)) }
                 Box {
                     IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, stringResource(R.string.chat_actions)) }
@@ -203,7 +223,6 @@ private fun ChatContent(
         },
         bottomBar = {
             Column(Modifier.imePadding()) {
-                HorizontalDivider()
                 if (state.archived) {
                     Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(stringResource(R.string.chat_archived_readonly), modifier = Modifier.weight(1f))
@@ -225,7 +244,7 @@ private fun ChatContent(
             }
         },
     ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding)) {
+        Column(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
             state.issue?.let { issue ->
                 Surface(color = MaterialTheme.colorScheme.errorContainer) {
                     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
@@ -307,7 +326,11 @@ private fun ConversationList(
     val copyLabel = stringResource(R.string.chat_copy_label)
     var copyFailed by remember { mutableStateOf(false) }
     val documentTitle = stringResource(R.string.chat_answer_document)
-    val atEnd by remember { derivedStateOf { (list.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) >= list.layoutInfo.totalItemsCount - 2 } }
+    val atEnd by remember { derivedStateOf {
+        val total = list.layoutInfo.totalItemsCount
+        val last = list.layoutInfo.visibleItemsInfo.lastOrNull()
+        total == 0 || last == null || last.index >= total - 2
+    } }
     LaunchedEffect(list) {
         snapshotFlow { list.isScrollInProgress to atEnd }.collect { (scrolling, end) -> if (scrolling) follow = end }
     }
@@ -319,17 +342,14 @@ private fun ConversationList(
         catch (_: RuntimeException) { copyFailed = true }
     }
     Box(modifier.fillMaxWidth()) {
-        LazyColumn(state = list, modifier = Modifier.fillMaxSize().testTag("chat-messages"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        LazyColumn(state = list, modifier = Modifier.fillMaxSize().testTag("chat-messages"), contentPadding = PaddingValues(top = 16.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
             if (state.hasMore) item(key = "older") {
                 TextButton(onClick = model::loadOlder, enabled = !state.loadingHistory && state.online, modifier = Modifier.fillMaxWidth().testTag("chat-load-older")) {
                     Text(stringResource(if (state.loadingHistory) R.string.chat_loading_history else R.string.chat_load_older))
                 }
             }
             if (state.rows.isEmpty() && state.pending.isEmpty()) item(key = "empty") {
-                Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(stringResource(if (state.connection == ChatConnection.RECOVERING) R.string.chat_restoring_title else R.string.chat_empty_title), style = MaterialTheme.typography.headlineSmall)
-                    Text(stringResource(if (state.connection == ChatConnection.RECOVERING) R.string.chat_restoring_body else R.string.chat_empty_body), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+                ChatWelcome(state.connection == ChatConnection.RECOVERING, onPrompt = model::updateText)
             }
             items(state.rows, key = { it.key }, contentType = { if (it is ChatRow.Scene) "scene" else (it as ChatRow.Message).role }) { row ->
                 when (row) {
@@ -341,9 +361,7 @@ private fun ConversationList(
                         attachmentActions = {
                             state.sessionId?.let { id ->
                                 val attachments = remember(id, row.content) { attachmentReferences(id, row.content) }
-                                attachments.forEach { attachment ->
-                                    AssistChip(onClick = { model.files.download(attachment) }, label = { Text(attachment.name, maxLines = 1, overflow = TextOverflow.Ellipsis) }, modifier = Modifier.testTag("chat-attachment-${attachment.attachmentId}"))
-                                }
+                                attachments.forEach { attachment -> ChatAttachmentCard(attachment, model.files) }
                             }
                         },
                     )
@@ -383,39 +401,57 @@ internal fun ChatMessageCard(
     onOpenReasoning: () -> Unit,
     attachmentActions: @Composable () -> Unit = {},
 ) {
-    val preview by produceState<MessagePreview?>(null, row.markdown) {
-        value = withContext(Dispatchers.Default) { messagePreview(row.markdown) }
-    }
     val isUser = row.role == MessageRole.USER
     val compact = row.role == MessageRole.TOOL || row.role == MessageRole.CONTEXT
     var expanded by rememberSaveable(row.key) { mutableStateOf(!compact) }
-    Card(
-        modifier = Modifier.fillMaxWidth().padding(start = if (isUser) 40.dp else 12.dp, end = if (isUser) 12.dp else 24.dp).testTag("chat-message-${row.key}"),
-        colors = CardDefaults.cardColors(containerColor = if (isUser) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow),
-    ) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(roleString(row.role)), style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
-                if (compact) TextButton(onClick = { expanded = !expanded }) { Text(stringResource(if (expanded) R.string.chat_collapse else R.string.chat_expand)) }
-                if (row.toolError) Text(stringResource(R.string.chat_tool_failed), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
-            }
-            if (expanded) {
-                preview?.text?.takeIf { it.isNotBlank() }?.let { text ->
-                    SelectionContainer { Text(text, style = MaterialTheme.typography.bodyLarge, maxLines = 24, overflow = TextOverflow.Ellipsis) }
-                }
-                if (preview?.hasMathematics == true) Text(stringResource(R.string.chat_mathematics_in_document), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (preview?.abbreviated == true) Text(stringResource(R.string.chat_preview_abbreviated), style = MaterialTheme.typography.labelSmall)
-                if (row.live && row.markdown.isBlank()) Text(stringResource(R.string.chat_processing), style = MaterialTheme.typography.bodyMedium)
-                attachmentActions()
-                if (row.interrupted) Text(stringResource(R.string.chat_interrupted_prefix), style = MaterialTheme.typography.bodySmall)
-                if (row.markdown.isNotBlank()) {
+    var actions by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).testTag("chat-message-${row.key}"),
+        horizontalAlignment = if (isUser) Alignment.End else Alignment.Start, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (!isUser) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (!compact) BrandMark(wordmark = false)
+            Text(if (row.role == MessageRole.ASSISTANT) "PhysicsOS" else stringResource(roleString(row.role)),
+                style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (row.live) Text(stringResource(R.string.chat_generating), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            if (row.toolError) Text(stringResource(R.string.chat_tool_failed), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+            if (compact) TextButton(onClick = { expanded = !expanded }) { Text(stringResource(if (expanded) R.string.chat_collapse else R.string.chat_expand)) }
+        }
+        if (expanded) {
+            if (isUser) Surface(shape = RoundedCornerShape(22.dp, 22.dp, 22.dp, 6.dp), color = MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier.widthIn(max = 560.dp).padding(start = 28.dp)) {
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 13.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (row.markdown.isNotBlank()) SelectionContainer { Text(row.markdown.take(24_000), style = MaterialTheme.typography.bodyLarge) }
+                    if (row.markdown.length > 24_000) Text(stringResource(R.string.chat_preview_abbreviated), style = MaterialTheme.typography.labelSmall)
+                    attachmentActions()
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        TextButton(onClick = onOpenDocument, modifier = Modifier.testTag("chat-document-${row.key}")) { Text(stringResource(R.string.chat_view_complete)) }
-                        TextButton(onClick = onCopy, modifier = Modifier.testTag("chat-copy-${row.key}")) { Text(stringResource(R.string.chat_copy)) }
-                        TextButton(onClick = onQuote, enabled = !row.live) { Text(stringResource(R.string.chat_quote)) }
+                        IconButton(onClick = onCopy, modifier = Modifier.testTag("chat-copy-${row.key}")) {
+                            Icon(painterResource(R.drawable.ic_chat_copy), stringResource(R.string.chat_copy), Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f))
+                        }
+                        IconButton(onClick = onQuote, enabled = !row.live) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowForward, stringResource(R.string.chat_quote), Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f))
+                        }
                     }
                 }
-                if (row.reasoning.isNotBlank()) TextButton(onClick = onOpenReasoning) { Text(stringResource(R.string.chat_view_reasoning)) }
+            } else {
+                if (row.markdown.isNotBlank()) NativeMessageBody(row.markdown, Modifier.fillMaxWidth())
+                else if (row.live) Text(stringResource(R.string.chat_processing), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                attachmentActions()
+            }
+            if (row.interrupted) Text(stringResource(R.string.chat_interrupted_prefix), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            if (row.reasoning.isNotBlank() && row.markdown.isBlank()) TextButton(onClick = onOpenReasoning) {
+                Text(stringResource(R.string.chat_view_reasoning), style = MaterialTheme.typography.labelMedium)
+            }
+            if (row.markdown.isNotBlank() && !isUser) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onOpenDocument, modifier = Modifier.testTag("chat-document-${row.key}")) { Text(stringResource(R.string.chat_view_complete), style = MaterialTheme.typography.labelMedium) }
+                IconButton(onClick = onCopy, modifier = Modifier.testTag("chat-copy-${row.key}")) {
+                    Icon(painterResource(R.drawable.ic_chat_copy), stringResource(R.string.chat_copy), Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Box {
+                    IconButton(onClick = { actions = true }) { Icon(Icons.Default.MoreVert, stringResource(R.string.chat_actions), Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    DropdownMenu(actions, { actions = false }) {
+                        DropdownMenuItem(text = { Text(stringResource(R.string.chat_quote)) }, onClick = { actions = false; onQuote() }, enabled = !row.live)
+                        if (row.reasoning.isNotBlank()) DropdownMenuItem(text = { Text(stringResource(R.string.chat_view_reasoning)) }, onClick = { actions = false; onOpenReasoning() })
+                    }
+                }
             }
         }
     }
@@ -428,12 +464,27 @@ private fun SceneCard(row: ChatRow.Scene, onOpenExperiment: (String?, JsonObject
         stringResource(R.string.chat_steps), stringResource(R.string.chat_verification), stringResource(R.string.chat_issues),
     )
     val document by produceState<String?>(null, row, labels) { value = withContext(Dispatchers.Default) { solveDocument(row, labels) } }
-    Card(Modifier.fillMaxWidth().padding(horizontal = 12.dp).testTag("chat-scene-${row.key}")) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(row.title, style = MaterialTheme.typography.titleMedium)
-            Text(stringResource(R.string.chat_scene_revision, row.revision), style = MaterialTheme.typography.labelSmall)
-            row.solve?.obj("verification")?.string("status")?.let { Text(stringResource(R.string.chat_verification_status, it), style = MaterialTheme.typography.bodySmall) }
-            Text(stringResource(R.string.chat_scene_full_state), style = MaterialTheme.typography.bodySmall)
+    Card(Modifier.fillMaxWidth().padding(horizontal = 20.dp).testTag("chat-scene-${row.key}"),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                BundledArtwork(row.experimentId ?: "lab", Modifier.size(66.dp).clip(MaterialTheme.shapes.small))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(row.title, style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.chat_scene_revision, row.revision), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            row.solve?.obj("verification")?.string("status")?.let { status ->
+                val label = stringResource(when (status) {
+                    "passed" -> R.string.verification_status_passed
+                    "passed_with_warnings" -> R.string.verification_status_warning
+                    "failed" -> R.string.verification_status_failed
+                    else -> R.string.verification_status_unknown
+                })
+                Text(stringResource(R.string.chat_verification_status, label), style = MaterialTheme.typography.bodySmall)
+            }
+            Text(stringResource(R.string.chat_scene_full_state), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { onOpenExperiment(row.experimentId, row.scene) }, modifier = Modifier.testTag("chat-open-experiment")) { Text(stringResource(R.string.chat_open_experiment)) }
                 if (row.solve != null) TextButton(onClick = { document?.let { onOpenDocument(row.title, it) } }, enabled = document != null) { Text(stringResource(R.string.chat_view_complete)) }
@@ -444,8 +495,10 @@ private fun SceneCard(row: ChatRow.Scene, onOpenExperiment: (String?, JsonObject
 
 @Composable
 private fun PendingPromptCard(ticket: PromptTicket, disabled: Boolean, onRetry: () -> Unit, onDiscard: () -> Unit, onOpen: () -> Unit) {
-    Card(Modifier.fillMaxWidth().padding(horizontal = 12.dp).testTag("chat-pending-${ticket.requestId}")) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Card(Modifier.fillMaxWidth().padding(horizontal = 20.dp).testTag("chat-pending-${ticket.requestId}"),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        border = BorderStroke(1.dp, if (ticket.status in setOf(PromptStatus.UNCERTAIN, PromptStatus.REJECTED)) MaterialTheme.colorScheme.error.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outlineVariant)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(stringResource(promptStatusString(ticket.status)), style = MaterialTheme.typography.titleSmall)
             Text(ticket.text, maxLines = 4, overflow = TextOverflow.Ellipsis)
             if (ticket.status == PromptStatus.UNCERTAIN) Text(stringResource(R.string.chat_unknown_admission), style = MaterialTheme.typography.bodySmall)
@@ -473,45 +526,60 @@ internal fun ChatComposer(
 ) {
     var attachments by remember { mutableStateOf(false) }
     var modeMenu by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        OutlinedTextField(
-            value = state.draft.text, onValueChange = onText,
-            placeholder = { Text(stringResource(R.string.chat_input_hint)) },
-            minLines = 1, maxLines = 6, enabled = !state.submitting,
-            isError = state.draft.text.length > ChatViewModel.MAX_TEXT_CHARS,
-            modifier = Modifier.fillMaxWidth().testTag("chat-input"),
-        )
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Box {
-                TextButton(onClick = { attachments = true }, enabled = !state.submitting && !state.importing, modifier = Modifier.testTag("chat-attach")) { Text(stringResource(R.string.chat_attach)) }
-                DropdownMenu(expanded = attachments, onDismissRequest = { attachments = false }) {
-                    DropdownMenuItem(text = { Text(stringResource(R.string.files_choose_image)) }, onClick = { attachments = false; onPhoto() })
-                    DropdownMenuItem(text = { Text(stringResource(R.string.files_take_photo)) }, onClick = { attachments = false; onCamera() })
-                    DropdownMenuItem(text = { Text(stringResource(R.string.files_choose_document)) }, onClick = { attachments = false; onFile() })
-                }
-            }
-            if (state.running) {
-                Box {
-                    TextButton(onClick = { modeMenu = true }, enabled = !state.submitting) { Text(stringResource(if (mode == "steer") R.string.chat_mode_steer else R.string.chat_mode_queue)) }
-                    DropdownMenu(expanded = modeMenu, onDismissRequest = { modeMenu = false }) {
-                        DropdownMenuItem(text = { Text(stringResource(R.string.chat_mode_queue)) }, onClick = { modeMenu = false; onMode("queue") })
-                        DropdownMenuItem(text = { Text(stringResource(R.string.chat_mode_steer)) }, onClick = { modeMenu = false; onMode("steer") })
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Surface(shape = RoundedCornerShape(26.dp), color = MaterialTheme.colorScheme.surfaceContainerLow,
+            border = BorderStroke(1.dp, if (state.draft.text.length > ChatViewModel.MAX_TEXT_CHARS) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outlineVariant),
+            shadowElevation = 2.dp) {
+            Column(Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
+                BasicTextField(
+                    value = state.draft.text, onValueChange = onText, maxLines = 6, minLines = 1,
+                    enabled = !state.submitting, textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = 10.dp, vertical = 10.dp).testTag("chat-input"),
+                    decorationBox = { field -> Box {
+                        if (state.draft.text.isEmpty()) Text(stringResource(R.string.chat_input_hint), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        field()
+                    } },
+                )
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Box {
+                        IconButton(onClick = { attachments = true }, enabled = !state.submitting && !state.importing, modifier = Modifier.testTag("chat-attach")) {
+                            Icon(Icons.Default.Add, stringResource(R.string.chat_attach), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        DropdownMenu(expanded = attachments, onDismissRequest = { attachments = false }) {
+                            DropdownMenuItem(text = { Text(stringResource(R.string.files_choose_image)) }, onClick = { attachments = false; onPhoto() })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.files_take_photo)) }, onClick = { attachments = false; onCamera() })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.files_choose_document)) }, onClick = { attachments = false; onFile() })
+                            HorizontalDivider()
+                            DropdownMenuItem(text = { Text(stringResource(R.string.chat_intake_limits, AttachmentPolicy.MAX_IMPORT_BYTES / (1024 * 1024), state.limits.maxImages, state.limits.maxMessageImageBytes / (1024 * 1024)), style = MaterialTheme.typography.bodySmall) }, onClick = {}, enabled = false)
+                        }
+                    }
+                    if (state.running) {
+                        Box {
+                            TextButton(onClick = { modeMenu = true }, enabled = !state.submitting) { Text(stringResource(if (mode == "steer") R.string.chat_mode_steer else R.string.chat_mode_queue), style = MaterialTheme.typography.labelMedium) }
+                            DropdownMenu(expanded = modeMenu, onDismissRequest = { modeMenu = false }) {
+                                DropdownMenuItem(text = { Text(stringResource(R.string.chat_mode_queue)) }, onClick = { modeMenu = false; onMode("queue") })
+                                DropdownMenuItem(text = { Text(stringResource(R.string.chat_mode_steer)) }, onClick = { modeMenu = false; onMode("steer") })
+                            }
+                        }
+                    } else Text(stringResource(R.string.chat_composer_support), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.weight(1f))
+                    if (state.running) IconButton(onClick = onCancel, enabled = !state.cancelRequested && state.online, modifier = Modifier.testTag("chat-stop")) {
+                        Icon(painterResource(R.drawable.ic_chat_stop), stringResource(R.string.chat_stop), Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    val canSend = state.online && !state.submitting && !state.importing && state.draft.text.length <= ChatViewModel.MAX_TEXT_CHARS &&
+                        (state.draft.text.isNotBlank() || state.draft.attachments.isNotEmpty()) && state.connection != ChatConnection.AUTH_REQUIRED
+                    Surface(shape = RoundedCornerShape(50), color = if (canSend) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh) {
+                        IconButton(onClick = onSend, enabled = canSend, modifier = Modifier.testTag("chat-send")) {
+                            if (state.submitting) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                            else Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.chat_send), Modifier.size(20.dp), tint = if (canSend) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 }
-                TextButton(onClick = onCancel, enabled = !state.cancelRequested && state.online, modifier = Modifier.testTag("chat-stop")) { Text(stringResource(R.string.chat_stop)) }
-            }
-            Spacer(Modifier.weight(1f))
-            IconButton(
-                onClick = onSend,
-                enabled = state.online && !state.submitting && !state.importing && state.draft.text.length <= ChatViewModel.MAX_TEXT_CHARS &&
-                    (state.draft.text.isNotBlank() || state.draft.attachments.isNotEmpty()) && state.connection != ChatConnection.AUTH_REQUIRED,
-                modifier = Modifier.testTag("chat-send"),
-            ) {
-                if (state.submitting) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
-                else Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.chat_send))
             }
         }
-        Text(stringResource(R.string.chat_intake_limits, AttachmentPolicy.MAX_IMPORT_BYTES / (1024 * 1024), state.limits.maxImages, state.limits.maxMessageImageBytes / (1024 * 1024)), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (state.draft.text.length > ChatViewModel.MAX_TEXT_CHARS) Text(stringResource(R.string.chat_input_too_long), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        Text(stringResource(R.string.chat_verify_reminder), modifier = Modifier.align(Alignment.CenterHorizontally), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -526,7 +594,9 @@ private fun DraftAttachments(state: ChatUiState, model: ChatViewModel, onCrop: (
     if (state.draft.attachments.isEmpty()) return
     LazyRow(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         items(state.draft.attachments, key = { it.id }) { attachment ->
-            Card(Modifier.width(220.dp).padding(start = 8.dp).testTag("draft-attachment-${attachment.id}")) {
+            Card(Modifier.width(220.dp).padding(start = 8.dp).testTag("draft-attachment-${attachment.id}"),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
                 Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (attachment.kind == AttachmentKind.IMAGE) AsyncImage(model.files.intake.file(attachment), attachment.name, modifier = Modifier.size(44.dp).clickable { scope.launch { try { model.files.preview(attachment) } catch (error: Exception) { model.files.report(error) } } })
@@ -565,7 +635,7 @@ private fun rememberAttachmentActions(model: ChatViewModel): AttachmentActions {
         val uri = cameraUri
         val token = captureToken
         cameraUri = null; captureToken = null
-        if (success && uri != null) model.importUri(Uri.parse(uri), token)
+        if (success && uri != null) model.importUri(uri.toUri(), token)
         else if (token != null) scope.launch { model.files.removeCapture(token) }
     }
     val launchCamera: () -> Unit = {
@@ -654,11 +724,17 @@ private fun SessionDirectory(
 @Composable
 private fun QueueStrip(state: ChatUiState, onEdit: (QueueEntry) -> Unit, onRemove: (QueueEntry) -> Unit, onSteer: (QueueEntry) -> Unit, onOpenDocument: (String, String) -> Unit) {
     val title = stringResource(R.string.chat_queue_title)
+    var expanded by rememberSaveable(state.sessionId) { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth()) {
-        Text(stringResource(R.string.chat_queue_count, state.queue.size), modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp), style = MaterialTheme.typography.labelLarge)
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        TextButton(onClick = { expanded = !expanded }, modifier = Modifier.padding(horizontal = 12.dp).testTag("chat-queue-toggle")) {
+            Text(stringResource(R.string.chat_queue_count, state.queue.size), style = MaterialTheme.typography.labelMedium)
+            Text(if (expanded) "  −" else "  +", style = MaterialTheme.typography.labelLarge)
+        }
+        if (expanded) LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(state.queue, key = { it.id }) { entry ->
-                Card(Modifier.width(300.dp).padding(start = 12.dp, bottom = 8.dp).testTag("chat-queue-${entry.id}")) {
+                Card(Modifier.width(300.dp).padding(start = 12.dp, bottom = 8.dp).testTag("chat-queue-${entry.id}"),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
                     Column(Modifier.padding(10.dp)) {
                         Text(entry.text, maxLines = 3, overflow = TextOverflow.Ellipsis)
                         Row {

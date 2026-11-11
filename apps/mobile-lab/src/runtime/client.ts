@@ -35,7 +35,7 @@ export interface ClientEnvironment {
   clearTimeout(id: ReturnType<typeof setTimeout>): void
 }
 const browserEnvironment = (): ClientEnvironment => ({
-  createWorker: () => new Worker(new URL('../worker.js', import.meta.url), { type: 'module', name: 'physicsos-lab' }),
+  createWorker: () => new Worker(new URL('./worker.js', location.href), { type: 'module', name: 'physicsos-lab' }),
   now: () => performance.now(), requestFrame: callback => requestAnimationFrame(callback), cancelFrame: id => cancelAnimationFrame(id),
   setTimeout: (callback, ms) => setTimeout(callback, ms), clearTimeout: id => clearTimeout(id),
 })
@@ -50,6 +50,7 @@ export class LabClient {
   private watchdog: ReturnType<typeof setTimeout> | undefined
   private summaryTimer: ReturnType<typeof setTimeout> | undefined
   private lastSummaryAt = -Infinity
+  private latestSummary: WireSummary | undefined
   private requestId = 0
   private lastFrameSerial = 0
   private lastEventSeq = 0
@@ -72,7 +73,10 @@ export class LabClient {
     }
     return this.worker
   }
-  private report(error: unknown): void { this.update({ loading: false, error: errorPayload(error) }) }
+  private report(error: unknown): void {
+    if (error instanceof LabError && (error.code === 'LOAD_REPLACED' || error.code === 'DISPOSED')) return
+    this.update({ loading: false, error: errorPayload(error) })
+  }
   clearError(): void { this.update({ error: undefined }) }
   private readonly onWorkerError = (event: ErrorEvent): void => {
     event.preventDefault?.()
@@ -96,10 +100,14 @@ export class LabClient {
     this.worker?.terminate()
     this.worker = undefined
   }
-  async load(payload: { templateId?: string; scene?: unknown; originScene?: unknown; checkpoint?: unknown }, generation = crypto.randomUUID()): Promise<void> {
+  async load(payload: { templateId?: string; scene?: unknown; originScene?: unknown; checkpoint?: unknown }, generation: string = crypto.randomUUID()): Promise<void> {
     if (this.disposed) throw new LabError('DISPOSED', '实验已关闭。')
     this.rejectPending(new LabError('LOAD_REPLACED', '实验已切换，旧操作不再执行。'))
     this.disconnect()
+    if (this.summaryTimer !== undefined) this.env.clearTimeout(this.summaryTimer)
+    this.summaryTimer = undefined
+    this.lastSummaryAt = -Infinity
+    this.latestSummary = undefined
     this.tag = { version: 1, generation, sceneId: '', revision: 0 }
     this.lastFrameSerial = 0
     this.lastEventSeq = 0
@@ -107,8 +115,13 @@ export class LabClient {
     this.readoutRequests.clear()
     this.frames.set(undefined)
     this.source.set({ generation, loading: true, dirty: false, active: this.getSnapshot().active, presentation: initialPresentation() })
-    try { await this.request('load', payload); this.update({ loading: false }); if (!this.getSnapshot().active) await this.setActive(false) }
-    catch (error) { this.report(error); throw error }
+    try {
+      const result = await this.request<{ presentation: PresentationState }>('load', payload)
+      if (generation !== this.tag.generation) throw new LabError('LOAD_REPLACED', '实验已切换，旧加载结果不再应用。')
+      this.update({ loading: false, presentation: result.presentation })
+      if (!this.getSnapshot().active) await this.setActive(false)
+    }
+    catch (error) { if (generation === this.tag.generation) this.report(error); throw error }
   }
   private request<T>(type: Pending['type'], payload: unknown, previewKey?: string): Promise<T> {
     if (this.disposed) return Promise.reject(new LabError('DISPOSED', '实验已关闭。'))
@@ -138,9 +151,10 @@ export class LabClient {
   }
   async action<K extends ActionName>(name: K, ...args: ActionArguments[K]): Promise<void> {
     const key = PREVIEW_ACTIONS.has(name) ? `${name}:${String(args[0])}` : undefined
+    const generation = this.tag.generation
     try {
       const result = await this.request<{ dirty: boolean }>('action', { name, args }, key)
-      this.update({ dirty: result.dirty, error: undefined })
+      if (generation === this.tag.generation) this.update({ dirty: result.dirty, error: undefined })
     } catch (error) { if (!(error instanceof LabError) || error.code !== 'LOAD_REPLACED') this.report(error); throw error }
   }
   query<T>(kind: string, payload: Record<string, unknown> = {}): Promise<T> { return this.request<T>('query', { kind, ...payload }) }
@@ -200,11 +214,12 @@ export class LabClient {
     this.metrics.duration('decode', this.env.now() - start)
     this.metrics.count('framesReceived')
     this.metrics.count('eventsReceived', events.length)
+    if (packet.summary !== undefined) this.latestSummary = packet.summary
     const publish = (): void => {
       this.summaryTimer = undefined
       this.lastSummaryAt = this.env.now()
       const current = this.frames.getSnapshot()
-      this.update({ frame: current, ...(packet.summary === undefined ? {} : { summary: packet.summary }), loading: false })
+      this.update({ frame: current, ...(this.latestSummary === undefined ? {} : { summary: this.latestSummary }), loading: false })
     }
     if (packet.summary !== undefined || this.env.now() - this.lastSummaryAt >= 250) {
       if (this.summaryTimer !== undefined) this.env.clearTimeout(this.summaryTimer)

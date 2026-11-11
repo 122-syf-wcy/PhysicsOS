@@ -1,4 +1,5 @@
 import java.net.URI
+import groovy.json.JsonSlurper
 import org.gradle.api.GradleException
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
@@ -29,15 +30,24 @@ val verifyBundledLab = tasks.register("verifyBundledLab") {
     group = "verification"
     description = "Require the independently built experiment and document bundle before packaging."
     inputs.dir(mobileLabOutput).optional()
+    inputs.file(rootProject.layout.projectDirectory.file("../mobile-lab/shared-source.json"))
     doLast {
-        for (relative in listOf("lab/index.html", "lab/document.html", "lab/catalog.json", "lab/library.json")) {
+        for (relative in listOf("lab/index.html", "lab/document.html", "lab/catalog.json", "lab/library.json", "lab/manifest.json")) {
             val asset = mobileLabOutput.file(relative).asFile
             if (!asset.isFile || asset.length() == 0L) {
                 throw GradleException(
-                    "Missing bundled learning asset: $relative. Build apps/mobile-lab in the server " +
-                        "Node container before the Android package. An online website is not a replacement.",
+                    "Missing bundled learning asset: $relative. Run node scripts/android/build-lab.mjs " +
+                        "on this workstation before the Android package. An online website is not a replacement.",
                 )
             }
+        }
+        val manifest = JsonSlurper().parse(mobileLabOutput.file("lab/manifest.json").asFile) as? Map<*, *>
+        if (manifest?.get("version") != 1 || manifest["test"] != false) {
+            throw GradleException("Refusing browser-test lab assets in an APK. Rebuild without --test.")
+        }
+        val expectedSource = JsonSlurper().parse(rootProject.layout.projectDirectory.file("../mobile-lab/shared-source.json").asFile) as Map<*, *>
+        if (manifest["sourceCommit"] != expectedSource["commit"] || manifest["packagesTree"] != expectedSource["packagesTree"] || manifest["uiTree"] != expectedSource["uiTree"]) {
+            throw GradleException("The bundled lab is not built from the reviewed Web snapshot. Prepare shared sources and rebuild the lab.")
         }
     }
 }
@@ -132,6 +142,10 @@ android {
             versionNameSuffix = "-debug"
             isDebuggable = true
         }
+        // Isolated debug field testing may point the app at a local HTTPS bridge on the
+        // workstation. On the debug variant with an explicit loopback origin, the local
+        // test CA is pinned through app/src/debug/res/xml/network_security_config.xml;
+        // release never reads these values and keeps the platform trust store only.
         getByName("release") {
             isDebuggable = false
             isJniDebuggable = false
@@ -246,6 +260,10 @@ dependencies {
     implementation(libs.okhttp.core)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
+    implementation(libs.markwon.core)
+    implementation(libs.markwon.inline.parser)
+    implementation(libs.markwon.latex)
+    implementation(libs.markwon.tables)
     implementation(libs.androidx.webkit)
     implementation(libs.androidx.work.runtime)
     implementation(libs.bundles.camera)

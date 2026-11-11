@@ -75,7 +75,10 @@ internal class DefaultAuthRepository(
                     mutableState.value = AuthState.SignedOut
                     return
                 }
-                if (saved.owner != saved.user.userKey || saved.owner == OwnerGate.GUEST_OWNER) {
+                if (saved.owner != saved.user.userKey || saved.owner == OwnerGate.GUEST_OWNER ||
+                    saved.user.userId.isBlank() || saved.user.userId.length > 512 ||
+                    saved.user.userId.any { it.isISOControl() }
+                ) {
                     throw ApiException(0, "secure_storage_invalid", "The saved identity is invalid. Sign in again.")
                 }
                 if (saved.refreshExpiresAt <= now()) {
@@ -360,8 +363,16 @@ internal class DefaultAuthRepository(
             method == "POST" && path == "auth/password" &&
                 (value["reauthenticate"] as? JsonPrimitive)?.booleanOrNull == true ->
                 invalidate(stamp, eraseLocal = false, error = ApiException(401, "reauthentication_required", "Your password changed. Sign in again."))
-            method == "DELETE" && path == "auth/account" && value.optionalString("status") in setOf("deleted", "deletion_pending") ->
-                invalidate(stamp, eraseLocal = true, error = null)
+            method == "DELETE" && path == "auth/account" -> {
+                val status = value.optionalString("status")
+                if (status !in setOf("deleted", "deletion_pending")) {
+                    protocolError("The server did not acknowledge account deletion.")
+                }
+                value.requireString("requestId", "Deletion response")
+                invalidate(stamp, eraseLocal = true, error = ApiException(0,
+                    if (status == "deletion_pending") "account_deletion_pending" else "account_deleted",
+                    if (status == "deletion_pending") "Account deletion was accepted and is still pending." else "The server confirmed account deletion."))
+            }
             method == "PATCH" && path == "auth/profile" -> updateUser(stamp, value)
             method == "DELETE" && path.startsWith("auth/devices/") &&
                 (value["reauthenticate"] as? JsonPrimitive)?.booleanOrNull == true -> invalidate(stamp, false, expired())
@@ -376,7 +387,9 @@ internal class DefaultAuthRepository(
 
     private suspend fun updateUser(stamp: AccountStamp, response: JsonObject) {
         val user = parseUser(response["user"] ?: protocolError("The account response has no user."))
-        if (user.userKey != stamp.owner) protocolError("The account response changed identity.")
+        if (user.userKey != stamp.owner || user.userId != stamp.userId) {
+            protocolError("The account response changed identity.")
+        }
         mutex.withLock {
             val current = requireSession(stamp)
             val grant = current.grant.copy(user = user)
@@ -458,7 +471,10 @@ internal class DefaultAuthRepository(
 
     private fun parseUser(value: JsonElement): MobileUser = try {
         wireJson.decodeFromJsonElement(MobileUser.serializer(), value).also {
-            if (it.userKey.isBlank() || it.userKey == OwnerGate.GUEST_OWNER || it.schoolId.isBlank() || it.username.isBlank() || it.role.isBlank()) {
+            if (it.userKey.isBlank() || it.userKey == OwnerGate.GUEST_OWNER || it.schoolId.isBlank() ||
+                it.username.isBlank() || it.role.isBlank() || it.userId.isBlank() ||
+                it.userId.length > 512 || it.userId.any { character -> character.isISOControl() }
+            ) {
                 protocolError("The server returned an invalid account identity.")
             }
         }
@@ -484,6 +500,14 @@ internal class DefaultAuthRepository(
             onAuthenticated(stamp.owner)
         } catch (error: ApiException) {
             mutex.withLock { if (transport.fence.isCurrent(stamp.epoch)) mutableError.value = error }
+        }
+    }
+
+    private suspend fun notifySignedOut(owner: String) {
+        try {
+            onSignedOut(owner)
+        } catch (error: ApiException) {
+            reportBackgroundError(error)
         }
     }
 
@@ -515,6 +539,7 @@ internal class DefaultAuthRepository(
         override fun toString(): String = "Session([redacted])"
     }
     private class Authentication(val user: MobileUser, val accessToken: String, val expiresAt: Long, val grant: PersistedGrant)
+    private class SessionEnd(val grant: PersistedGrant?, val epoch: Long)
 
     private companion object {
         const val MAX_EXPORT_BYTES = 128L * 1024 * 1024

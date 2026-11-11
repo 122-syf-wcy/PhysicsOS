@@ -7,7 +7,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.ui.res.painterResource
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -121,8 +126,17 @@ internal fun displayDate(value: String?): String = value?.let {
 
 internal fun userKey(graph: AppGraph): String? = (graph.auth.state.value as? AuthState.SignedIn)?.user?.userKey
 
+internal fun learningOwnerIdentity(state: AuthState, includeGuest: Boolean = false): Pair<String, String>? = when (state) {
+    is AuthState.SignedIn -> state.user.userKey to state.user.userId
+    AuthState.SignedOut -> if (includeGuest) "guest" to "guest" else null
+    AuthState.Restoring -> null
+}
+
+internal fun learningOwnerAllowed(state: AuthState, owner: String): Boolean =
+    if (owner == "guest") state is AuthState.SignedOut else (state as? AuthState.SignedIn)?.user?.userKey == owner
+
 internal fun requireOwner(graph: AppGraph, owner: String) {
-    if (userKey(graph) != owner) throw CancellationException("Account changed")
+    if (!learningOwnerAllowed(graph.auth.state.value, owner)) throw CancellationException("Account changed")
 }
 
 /** Every request, image task and draft write is cancelled when its account leaves. */
@@ -133,9 +147,9 @@ internal abstract class OwnedLearningViewModel(protected val graph: AppGraph) : 
 
     protected abstract fun clearAccount()
 
-    protected fun watchAccount(load: suspend CoroutineScope.(String) -> Unit) {
+    protected fun watchAccount(includeGuest: Boolean = false, load: suspend CoroutineScope.(String) -> Unit) {
         viewModelScope.launch {
-            graph.auth.state.map { (it as? AuthState.SignedIn)?.user?.let { user -> user.userKey to user.userId } }
+            graph.auth.state.map { learningOwnerIdentity(it, includeGuest) }
                 .distinctUntilChanged().collectLatest { identity ->
                     val next = identity?.first
                     accountScope = null
@@ -267,7 +281,17 @@ internal fun LearningHeader(title: String, onBack: (() -> Unit)? = null, action:
 }
 
 @Composable
-internal fun LearningNotice(message: String, onRetry: (() -> Unit)? = null, modifier: Modifier = Modifier) {
+internal fun LearningNotice(message: String, modifier: Modifier = Modifier) {
+    LearningNotice(message, onRetry = null, modifier = modifier)
+}
+
+@Composable
+internal fun LearningNotice(
+    message: String,
+    onRetry: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+    @StringRes actionLabel: Int = R.string.learning_retry,
+) {
     Surface(
         modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
         shape = MaterialTheme.shapes.medium,
@@ -276,7 +300,7 @@ internal fun LearningNotice(message: String, onRetry: (() -> Unit)? = null, modi
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(message, style = MaterialTheme.typography.bodyMedium)
             if (onRetry != null) TextButton(onClick = onRetry, modifier = Modifier.testTag("learning-retry")) {
-                Text(stringResource(R.string.learning_retry))
+                Text(stringResource(actionLabel))
             }
         }
     }
@@ -311,10 +335,15 @@ internal fun LearningEmpty(title: String, description: String) {
 
 @Composable
 internal fun LearningActionCard(title: String, description: String, tag: String, onClick: () -> Unit) {
-    Card(onClick = onClick, modifier = Modifier.fillMaxWidth().testTag(tag)) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(title, style = MaterialTheme.typography.titleLarge)
-            Text(description, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Card(onClick = onClick, modifier = Modifier.fillMaxWidth().testTag(tag),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            Icon(painterResource(R.drawable.ic_nav_chat), null, Modifier.size(25.dp), tint = MaterialTheme.colorScheme.primary)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
     }
 }

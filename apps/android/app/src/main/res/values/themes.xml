@@ -13,4 +13,12 @@
         <item name="android:windowNoTitle">true</item>
         <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
     </style>
+
+    <!-- The launch frame matches the web boot screen: always white, never the night surface,
+         so the photo splash can fade in without an appearance flash. -->
+    <style name="Theme.PhysicsOS.Student.Boot" parent="Theme.PhysicsOS.Student">
+        <item name="android:windowBackground">@color/physics_boot_background</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
 </resources>

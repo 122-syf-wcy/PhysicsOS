@@ -1,6 +1,9 @@
 package com.physicsos.student.feature.library
 
 import com.physicsos.student.core.AppGraph
+import com.physicsos.student.core.AuthState
+import com.physicsos.student.R
+import androidx.lifecycle.viewModelScope
 import com.physicsos.student.feature.home.LearningCache
 import com.physicsos.student.feature.home.LearningProblem
 import com.physicsos.student.feature.home.OwnedLearningViewModel
@@ -30,6 +33,7 @@ internal data class LibraryUiState(
     val remoteProblem: LearningProblem? = null,
     val actionProblem: LearningProblem? = null,
     val cached: Boolean = false,
+    val guest: Boolean = true,
     val nextPages: Map<LibraryKind, String> = emptyMap(),
     val selected: LibraryEntry? = null,
     val related: List<LibraryEntry> = emptyList(),
@@ -62,13 +66,16 @@ internal class LibraryViewModel(graph: AppGraph, private val initialKind: Librar
     private var localRows: List<LibraryEntry> = emptyList()
     private val remoteRows = mutableMapOf<LibraryKind, List<LibraryEntry>>()
     private var bookmarked: List<LibraryEntry> = emptyList()
+    private var assetJob: Job? = null
     private var filterJob: Job? = null
     private var refreshJob: Job? = null
     private var annotationJob: Job? = null
     private val detailStack = mutableListOf<LibraryEntry>()
 
     init {
-        watchAccount { current ->
+        loadAssets()
+        watchAccount(includeGuest = true) { current ->
+            mutable.update { it.copy(guest = current == "guest") }
             launch {
                 try {
                     graph.store.observe(BOOKMARK_KIND, current).collectLatest { saved ->
@@ -81,40 +88,46 @@ internal class LibraryViewModel(graph: AppGraph, private val initialKind: Librar
                     mutable.update { it.copy(actionProblem = error.learningProblem()) }
                 }
             }
-            refresh()
+            if (current != "guest") {
+                refreshJob?.cancel()
+                refreshJob = launchOwned { active -> refreshRemote(active) }
+            }
         }
     }
 
     override fun clearAccount() {
-        localRows = emptyList()
+        refreshJob?.cancel()
+        annotationJob?.cancel()
         remoteRows.clear()
         bookmarked = emptyList()
         detailStack.clear()
-        mutable.value = LibraryUiState(filter = LibraryFilter(kind = initialKind))
+        mutable.value = LibraryUiState(filter = LibraryFilter(kind = initialKind), loadingAssets = assetJob?.isActive == true,
+            guest = graph.auth.state.value !is AuthState.SignedIn)
+        computeVisible()
+    }
+
+    /** Public APK resources do not wait for login or an online refresh grant. */
+    private fun loadAssets() {
+        assetJob?.cancel()
+        assetJob = viewModelScope.launch {
+            mutable.update { it.copy(loadingAssets = true, assetProblem = null) }
+            try {
+                localRows = withContext(Dispatchers.IO) {
+                    LibraryDecoders.bundled(graph.catalog.library(), graph.catalog.experiments())
+                }
+                mutable.update { it.copy(loadingAssets = false) }
+                computeVisible()
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                mutable.update { it.copy(loadingAssets = false, assetProblem = error.learningProblem()) }
+            }
+        }
     }
 
     fun refresh() {
+        loadAssets()
         refreshJob?.cancel()
-        refreshJob = launchOwned { current ->
-            supervisorScope {
-                launch {
-                    mutable.update { it.copy(loadingAssets = true, assetProblem = null) }
-                    try {
-                        localRows = withContext(Dispatchers.IO) {
-                            val payload = graph.catalog.library()
-                            val experiments = graph.catalog.experiments()
-                            LibraryDecoders.bundled(payload, experiments)
-                        }
-                        mutable.update { it.copy(loadingAssets = false) }
-                        computeVisible()
-                    } catch (error: Exception) {
-                        if (error is CancellationException) throw error
-                        mutable.update { it.copy(loadingAssets = false, assetProblem = error.learningProblem()) }
-                    }
-                }
-                refreshRemote(current)
-            }
-        }
+        refreshJob = launchOwned { current -> if (current != "guest") refreshRemote(current) }
     }
 
     fun updateFilter(filter: LibraryFilter) {
@@ -127,6 +140,7 @@ internal class LibraryViewModel(graph: AppGraph, private val initialKind: Librar
             remoteRows.clear()
             mutable.update { it.copy(nextPages = emptyMap(), remoteProblem = null, cached = false, loadingRemote = emptySet()) }
             refreshJob = launchOwned { current ->
+                if (current == "guest") return@launchOwned
                 delay(250)
                 refreshRemote(current)
             }
@@ -182,14 +196,25 @@ internal class LibraryViewModel(graph: AppGraph, private val initialKind: Librar
         val rows = (localRows + remoteRows.values.flatten() + bookmarked).distinctBy { it.key }
         val filter = state.value.filter
         val saved = state.value.savedKeys
-        filterJob = launchOwned {
-            val visible = withContext(Dispatchers.Default) { LibraryDecoders.filter(rows, filter, saved) }
+        filterJob = viewModelScope.launch {
+            val visible = withContext(Dispatchers.Default) {
+                LibraryDecoders.filter(rows, filter, saved).sortedWith(compareBy(
+                    // Offline questions/knowledge first; online textbooks after.
+                    { !it.offline },
+                    { when (it.kind) { LibraryKind.QUESTIONS -> 0; LibraryKind.KNOWLEDGE -> 1; LibraryKind.EXPERIMENTS -> 2; else -> 3 } },
+                    { it.title },
+                ))
+            }
             val domains = withContext(Dispatchers.Default) { rows.mapNotNull { it.domain }.distinct().sorted() }
             mutable.update { it.copy(entries = visible, domains = domains) }
         }
     }
 
     fun save(entry: LibraryEntry) {
+        if (owner == null) {
+            mutable.update { it.copy(actionProblem = LearningProblem(R.string.learning_session_expired, false)) }
+            return
+        }
         launchOwned { current ->
             try {
                 withContext(Dispatchers.IO) {

@@ -61,9 +61,14 @@ fun ErrorState(
 }
 
 @Composable
+fun EmptyState(title: String, modifier: Modifier = Modifier) {
+    EmptyState(title, message = null, modifier = modifier)
+}
+
+@Composable
 fun EmptyState(
     title: String,
-    message: String? = null,
+    message: String?,
     modifier: Modifier = Modifier,
 ) {
     Column(

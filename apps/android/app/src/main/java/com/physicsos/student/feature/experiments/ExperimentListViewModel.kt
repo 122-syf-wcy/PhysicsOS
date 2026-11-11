@@ -1,5 +1,7 @@
 package com.physicsos.student.feature.experiments
 
+import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -22,7 +24,6 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
@@ -31,14 +32,14 @@ import kotlinx.coroutines.withContext
 
 internal data class ExperimentProblem(val code: String, val detail: String? = null)
 internal fun Throwable.experimentProblem(): ExperimentProblem = when (this) {
-    is ApiException -> ExperimentProblem(code, message?.take(500))
+    is ApiException -> ExperimentProblem(code)
     is BridgeProtocolException -> ExperimentProblem(code)
     else -> ExperimentProblem("local_operation_failed")
 }
 
 internal enum class ExperimentTab { CATALOG, SAVED, GUEST }
 internal data class ExperimentListState(
-    val owner: String? = null,
+    val account: ExperimentAccount? = null,
     val loading: Boolean = true,
     val catalog: List<ExperimentInfo> = emptyList(),
     val visibleCatalog: List<ExperimentInfo> = emptyList(),
@@ -55,15 +56,16 @@ internal data class ExperimentListState(
     val refreshing: Boolean = false,
     val nextCursor: String? = null,
     val importing: Boolean = false,
-)
+) {
+    val owner: String? get() = account?.owner
+}
 
 internal sealed interface ExperimentListEvent {
-    data class Open(val sceneId: String) : ExperimentListEvent
+    data class Open(val account: ExperimentAccount, val sceneId: String) : ExperimentListEvent
     data class Problem(val problem: ExperimentProblem) : ExperimentListEvent
 }
 
 internal class ExperimentListViewModel(private val graph: AppGraph, private val savedState: SavedStateHandle) : ViewModel() {
-    private val repository = ExperimentRepository(graph)
     private val _state = MutableStateFlow(ExperimentListState(
         query = savedState["query"] ?: "", domain = savedState["domain"], stage = savedState["stage"],
         tab = savedState.get<String>("tab")?.let { runCatching { ExperimentTab.valueOf(it) }.getOrNull() } ?: ExperimentTab.CATALOG,
@@ -73,36 +75,42 @@ internal class ExperimentListViewModel(private val graph: AppGraph, private val 
     val events = channel.receiveAsFlow()
     private var filterJob: Job? = null
     private var remoteJob: Job? = null
+    private var actionJob: Job? = null
     private var catalogJob: Job? = null
 
     init {
         loadCatalog()
         viewModelScope.launch {
-            graph.auth.state.map { it.experimentOwner() }.distinctUntilChanged().collectLatest { owner ->
+            graph.auth.state.map { it.experimentAccount() }.distinctUntilChanged().collectLatest { account ->
                 remoteJob?.cancel()
-                _state.update { it.copy(owner = owner, entries = emptyList(), operations = emptyList(), guests = emptyList(), nextCursor = null, cloudProblem = null, localProblem = null) }
-                if (owner == null) return@collectLatest
+                actionJob?.cancel()
+                _state.update { it.copy(account = account, entries = emptyList(), operations = emptyList(), guests = emptyList(),
+                    nextCursor = null, cloudProblem = null, localProblem = null, refreshing = false, importing = false,
+                    tab = if (account?.owner == GUEST_EXPERIMENT_OWNER && it.tab == ExperimentTab.GUEST) ExperimentTab.SAVED else it.tab) }
+                if (account == null) return@collectLatest
+                val repository = ExperimentRepository(graph, account)
                 coroutineScope {
                     launch {
-                        combine(repository.observe(owner), graph.sync.observe(owner)) { entries, operations -> entries to operations }
+                        combine(repository.observe(account.owner), graph.sync.observe(account.owner)) { entries, operations -> entries to operations }
                             .catch { error ->
                                 if (error is CancellationException) throw error
-                                _state.update { it.copy(localProblem = error.experimentProblem()) }
+                                if (isCurrent(account)) _state.update { it.copy(localProblem = error.experimentProblem()) }
                             }.collect { (entries, operations) ->
+                                if (!isCurrent(account)) return@collect
                                 _state.update { it.copy(entries = entries, operations = operations, localProblem = null) }
-                                if (owner != GUEST_EXPERIMENT_OWNER) {
-                                    try { repository.reconcile(owner, operations) }
+                                if (account.owner != GUEST_EXPERIMENT_OWNER) {
+                                    try { repository.reconcile(account.owner, operations) }
                                     catch (error: CancellationException) { throw error }
-                                    catch (error: Exception) { _state.update { it.copy(cloudProblem = error.experimentProblem()) } }
+                                    catch (error: Exception) { if (isCurrent(account)) _state.update { it.copy(cloudProblem = error.experimentProblem()) } }
                                 }
                             }
                     }
-                    if (owner != GUEST_EXPERIMENT_OWNER) {
+                    if (account.owner != GUEST_EXPERIMENT_OWNER) {
                         launch {
                             repository.observe(GUEST_EXPERIMENT_OWNER).catch { error ->
                                 if (error is CancellationException) throw error
-                                channel.send(ExperimentListEvent.Problem(error.experimentProblem()))
-                            }.collect { guests -> _state.update { it.copy(guests = guests.filter(ExperimentEntry::hasLocal)) } }
+                                if (isCurrent(account)) channel.send(ExperimentListEvent.Problem(error.experimentProblem()))
+                            }.collect { guests -> if (isCurrent(account)) _state.update { it.copy(guests = guests.filter(ExperimentEntry::hasLocal)) } }
                         }
                         refresh()
                     }
@@ -110,6 +118,8 @@ internal class ExperimentListViewModel(private val graph: AppGraph, private val 
             }
         }
     }
+
+    private fun isCurrent(account: ExperimentAccount) = graph.auth.state.value.experimentAccount() == account && _state.value.account == account
 
     fun loadCatalog() {
         if (catalogJob?.isActive == true) return
@@ -144,42 +154,58 @@ internal class ExperimentListViewModel(private val graph: AppGraph, private val 
         savedState["tab"] = value.name
         _state.update { it.copy(tab = value) }
     }
-    fun clearFilters() {
-        query("")
-        domain(null)
-        stage(null)
-    }
+    fun clearFilters() { query(""); domain(null); stage(null) }
 
     fun refresh(more: Boolean = false) {
-        val owner = _state.value.owner ?: return
-        if (owner == GUEST_EXPERIMENT_OWNER || remoteJob?.isActive == true) return
+        val account = _state.value.account ?: return
+        if (account.owner == GUEST_EXPERIMENT_OWNER || remoteJob?.isActive == true) return
         val cursor = if (more) _state.value.nextCursor ?: return else null
         remoteJob = viewModelScope.launch {
             _state.update { it.copy(refreshing = true, cloudProblem = null) }
             try {
-                val page = repository.refreshRemote(owner, cursor)
-                if (_state.value.owner == owner) _state.update { it.copy(nextCursor = page.nextCursor) }
+                val page = ExperimentRepository(graph, account).refreshRemote(account.owner, cursor)
+                if (!isCurrent(account)) return@launch
+                _state.update { it.copy(nextCursor = page.nextCursor) }
                 graph.sync.syncNow()
             } catch (error: CancellationException) { throw error }
-            catch (error: Exception) {
-                if (_state.value.owner == owner) _state.update { it.copy(cloudProblem = error.experimentProblem()) }
-            } finally {
-                if (_state.value.owner == owner) _state.update { it.copy(refreshing = false) }
-            }
+            catch (error: Exception) { if (isCurrent(account)) _state.update { it.copy(cloudProblem = error.experimentProblem()) } }
+            finally { if (isCurrent(account)) _state.update { it.copy(refreshing = false) } }
         }
     }
 
-    fun importGuest(entry: ExperimentEntry) {
-        val owner = _state.value.owner ?: return
-        if (owner == GUEST_EXPERIMENT_OWNER || _state.value.importing) return
-        viewModelScope.launch {
+    fun importGuest(entry: ExperimentEntry) = action { account, repository ->
+        if (account.owner == GUEST_EXPERIMENT_OWNER) return@action
+        val id = repository.copyLocal(GUEST_EXPERIMENT_OWNER, entry.sceneId, account.owner, entry.title)
+        if (isCurrent(account)) channel.send(ExperimentListEvent.Open(account, id))
+    }
+
+    fun importArchive(context: Context, uri: Uri, expectedAccount: ExperimentAccount) {
+        // The file picker may return after a sign-out or a same-name account replacement.
+        if (!isCurrent(expectedAccount)) return
+        val files = ExperimentFiles(context.applicationContext)
+        action { account, repository ->
+            val archive = files.readArchive(uri)
+            val id = repository.importArchive(archive, account.owner)
+            if (isCurrent(account)) channel.send(ExperimentListEvent.Open(account, id))
+        }
+    }
+
+    fun removeLocal(entry: ExperimentEntry) = action { account, repository -> repository.removeLocal(account.owner, entry.sceneId) }
+
+    fun retrySync(entry: ExperimentEntry) = action { account, repository ->
+        val operation = operationFor(entry, _state.value.operations)
+        if (operation?.state != OutboxState.CONFLICT) repository.retry(account.owner, entry.sceneId, operation)
+    }
+
+    private fun action(block: suspend (ExperimentAccount, ExperimentRepository) -> Unit) {
+        val account = _state.value.account ?: return
+        if (actionJob?.isActive == true || !isCurrent(account)) return
+        actionJob = viewModelScope.launch {
             _state.update { it.copy(importing = true) }
-            try {
-                val id = repository.copyLocal(GUEST_EXPERIMENT_OWNER, entry.sceneId, owner, entry.title)
-                channel.send(ExperimentListEvent.Open(id))
-            } catch (error: CancellationException) { throw error }
-            catch (error: Exception) { channel.send(ExperimentListEvent.Problem(error.experimentProblem())) }
-            finally { _state.update { it.copy(importing = false) } }
+            try { block(account, ExperimentRepository(graph, account)) }
+            catch (error: CancellationException) { throw error }
+            catch (error: Exception) { if (isCurrent(account)) channel.send(ExperimentListEvent.Problem(error.experimentProblem())) }
+            finally { if (isCurrent(account)) _state.update { it.copy(importing = false) } }
         }
     }
 
@@ -197,7 +223,7 @@ internal fun filterExperiments(catalog: List<ExperimentInfo>, query: String, dom
     val words = normalizedSearch(query).split(Regex("\\s+")).filter(String::isNotEmpty)
     return catalog.filter { item ->
         (domain == null || item.domain == domain) && (stage == null || item.stage == stage) &&
-            (words.isEmpty() || normalizedSearch(listOf(item.title, item.subtitle, item.domain, item.stage, item.tags.joinToString(" ")).joinToString(" ")).let { haystack -> words.all(haystack::contains) })
+            (words.isEmpty() || normalizedSearch(listOf(item.id, item.title, item.subtitle, item.domain, item.stage, item.tags.joinToString(" ")).joinToString(" ")).let { haystack -> words.all(haystack::contains) })
     }
 }
 
@@ -210,7 +236,7 @@ internal fun matchesEntry(entry: ExperimentEntry, query: String, domain: String?
 private fun normalizedSearch(value: String): String = Normalizer.normalize(value, Normalizer.Form.NFKC).lowercase(Locale.ROOT).trim()
 
 internal fun operationFor(entry: ExperimentEntry?, operations: List<OutboxItem>): OutboxItem? =
-    entry?.syncKey?.let { key -> operations.firstOrNull { it.idempotencyKey == key } }
+    entry?.syncKey?.let { key -> operations.firstOrNull { it.idempotencyKey == key && it.path == "learning/scenes/${entry.sceneId}" } }
 
 internal enum class SceneSyncLabel { LOCAL, QUEUED, RUNNING, RETRY, CONFIRMED, CONFLICT, FAILED, SIGN_IN, SAVED_WAITING }
 internal fun sceneSyncLabel(entry: ExperimentEntry?, operation: OutboxItem?): SceneSyncLabel {
@@ -224,6 +250,6 @@ internal fun sceneSyncLabel(entry: ExperimentEntry?, operation: OutboxItem?): Sc
         OutboxState.CONFLICT -> SceneSyncLabel.CONFLICT
         OutboxState.FAILED -> SceneSyncLabel.FAILED
         OutboxState.AUTH_REQUIRED -> SceneSyncLabel.SIGN_IN
-        null -> SceneSyncLabel.LOCAL
+        null -> if (entry != null && entry.cloudRevision > 0 && !entry.hasLocal) SceneSyncLabel.CONFIRMED else SceneSyncLabel.LOCAL
     }
 }

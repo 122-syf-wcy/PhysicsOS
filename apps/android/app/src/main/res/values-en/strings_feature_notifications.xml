@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notifications_title">Notification settings</string>
+    <string name="notifications_back">Back to account</string>
+    <string name="notifications_preference_title">App notification preference</string>
+    <string name="notifications_device_scope">Saved on this device and shared by all accounts using it.</string>
+    <string name="notifications_preference_label">I want to receive app notifications</string>
+    <string name="notifications_preference_explanation">This saves your preference only. It does not change Android permissions or notification switches, create push credentials, or revoke server device sessions when turned off.</string>
+    <string name="notifications_loading">Reading this device’s notification preference…</string>
+    <string name="notifications_read_failed">The device notification preference could not be read.</string>
+    <string name="notifications_save_failed">The notification preference could not be reliably read or saved. Check device storage and try again.</string>
+    <string name="notifications_retry">Try reading again</string>
+    <string name="notifications_permission_title">Android permission and system switches</string>
+    <string name="notifications_permission_not_required">This Android version needs no runtime notification permission. System notification settings still apply.</string>
+    <string name="notifications_permission_granted">Android 13+ notification permission: granted</string>
+    <string name="notifications_permission_not_granted">Android 13+ notification permission: not granted</string>
+    <string name="notifications_system_allowed">System app notification switch: allowed</string>
+    <string name="notifications_system_blocked">System app notification switch: blocked</string>
+    <string name="notifications_channels_blocked">Blocked notification channels: %1$d. Review them in system settings.</string>
+    <string name="notifications_permission_explanation">Your app preference does not replace system authorization. You can keep using the app after denying permission. If Android no longer shows the request, change it manually in system settings. Actual status is refreshed when you return here.</string>
+    <string name="notifications_request_permission">Request system notification permission</string>
+    <string name="notifications_open_system">Open system notification settings</string>
+    <string name="notifications_system_unavailable">System permissions or notification settings could not be opened. Find this app in Android settings to change them manually.</string>
+    <string name="notifications_push_title">Vendor remote push</string>
+    <string name="notifications_push_disabled">Not enabled: vendor push is not configured and verified in this version.</string>
+    <string name="notifications_push_dependency">A real vendor SDK, protected app configuration, device registration, and verified server delivery are required. This page never generates fake tokens or claims that permission alone enables push.</string>
+    <string name="notifications_manual_notices">You can still refresh and read server notices on the home page. Turning off this device’s preference does not delete in-app notices.</string>
+    <string name="notifications_no_delivery_promise">Saving a preference, allowing Android notifications, and completing remote push registration are separate states. Background or offline delivery cannot currently be promised.</string>
+</resources>

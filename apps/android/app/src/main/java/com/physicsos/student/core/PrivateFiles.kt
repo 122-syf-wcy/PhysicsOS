@@ -2,6 +2,12 @@ package com.physicsos.student.core
 
 import java.io.File
 import java.io.IOException
+import java.nio.file.FileVisitResult
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.SimpleFileVisitor
+import java.nio.file.attribute.BasicFileAttributes
+import java.security.MessageDigest
 
 internal class PrivateFiles(private val roots: List<File>) {
     fun destination(file: File): File {
@@ -33,6 +39,35 @@ internal class PrivateFiles(private val roots: List<File>) {
         }
     }
 
+    /** Only the account's hashed feature directories are removed; other accounts and guest files remain. */
+    fun deleteOwner(owner: String) {
+        OwnerGate.validateOwner(owner)
+        val key = MessageDigest.getInstance("SHA-256").digest(owner.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it.toInt() and 0xff) }
+        for (root in roots) for (relative in OWNER_DIRECTORIES) {
+            val directory = File(root.canonicalFile, "$relative/$key")
+            if (!directory.exists()) continue
+            val target = checked(directory)
+            if (target.toPath() != directory.toPath().toAbsolutePath().normalize()) throw invalidPath()
+            try {
+                // walkFileTree does not follow links, so a linked child cannot erase another partition.
+                Files.walkFileTree(target.toPath(), object : SimpleFileVisitor<Path>() {
+                    override fun visitFile(file: Path, attributes: BasicFileAttributes): FileVisitResult {
+                        Files.delete(file)
+                        return FileVisitResult.CONTINUE
+                    }
+                    override fun postVisitDirectory(directory: Path, error: IOException?): FileVisitResult {
+                        if (error != null) throw error
+                        Files.delete(directory)
+                        return FileVisitResult.CONTINUE
+                    }
+                })
+            } catch (_: IOException) {
+                throw ApiException(0, "storage_cleanup_failed", "App-private account files could not be removed.")
+            }
+        }
+    }
+
     fun cleanInterruptedParts(now: Long) {
         for (root in roots) {
             if (!root.isDirectory) continue
@@ -46,4 +81,8 @@ internal class PrivateFiles(private val roots: List<File>) {
     }
 
     private fun invalidPath() = ApiException(0, "untrusted_file_path", "Downloads must use an app-private file location.")
+
+    private companion object {
+        val OWNER_DIRECTORIES = listOf("chat-files", "chat-downloads", "captures", "account-exports", "shared/chat", "shared/experiments")
+    }
 }

@@ -5,18 +5,22 @@
     "moduleResolution": "Bundler",
     "jsx": "react-jsx",
     "strict": true,
+    "types": ["node", "react", "react-dom"],
     "noUncheckedIndexedAccess": true,
     "allowImportingTsExtensions": true,
     "skipLibCheck": true,
     "noEmit": true,
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
-    "baseUrl": ".",
     "paths": {
       "@lab/physics/*": ["../../overlays/harness/files/packages/client/ui-physicsos/src/client/physics/*"],
       "@lab/client/*": ["../../overlays/harness/files/packages/client/ui-physicsos/src/client/*"],
       "@physicsos/*": ["../../packages/*/src/index.ts"],
       "@physicsos/physics-workbench/*": ["../../packages/physics-workbench/src/*.ts"],
-      "@physicsos/question-core/*": ["../../packages/question-core/src/*.ts"]
+      "@physicsos/question-core/*": ["../../packages/question-core/src/*.ts"],
+      "@deepseek-ai/dsh-util-crypto": ["./src/shared/uuid.ts"],
+      "react": ["./node_modules/@types/react/index.d.ts"],
+      "react/*": ["./node_modules/@types/react/*"],
+      "react-dom/*": ["./node_modules/@types/react-dom/*"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "tests/**/*.ts"]

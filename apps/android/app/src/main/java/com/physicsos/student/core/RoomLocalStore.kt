@@ -84,10 +84,26 @@ internal class RoomLocalStore(
     override suspend fun clearCache(owner: String) = access(owner) { dao.deletePages(owner) }
     override suspend fun clearOwner(owner: String) = access(owner) { purgeOwner(owner) }
 
+    /** The gate remains closed until the userKey partition is bound to this immutable account. */
+    internal suspend fun activateOwner(user: MobileUser) = withContext(Dispatchers.IO) {
+        validateKey(user.userKey)
+        validateKey(user.userId)
+        require(user.userKey != OwnerGate.GUEST_OWNER)
+        val previous = dao.item(ACCOUNT_INSTANCE_KIND, user.userKey, ACCOUNT_INSTANCE_ID)
+            ?.let { decodeLocalObject(it.payload).optionalString("userId") }
+        if (previous != user.userId) {
+            // Untagged caches are not safe to adopt: the same username may have been re-registered.
+            purgeOwner(user.userKey)
+            dao.putItem(StoredEntity(user.userKey, ACCOUNT_INSTANCE_KIND, ACCOUNT_INSTANCE_ID,
+                buildJsonObject { put("userId", user.userId) }.toString(), System.currentTimeMillis()))
+        }
+    }
+
     /** Called with the owner gate closed during logout; guest data is never migrated. */
     internal suspend fun purgeOwner(owner: String) = withContext(Dispatchers.IO) {
         OwnerGate.validateOwner(owner)
         dao.downloads(owner).forEach { files.delete(it.localPath) }
+        files.deleteOwner(owner)
         database().transaction {
             dao.deleteOwnerItems(owner)
             dao.deletePages(owner)
@@ -238,6 +254,8 @@ internal class RoomLocalStore(
     }
 
     private companion object {
+        const val ACCOUNT_INSTANCE_KIND = "core.account-instance"
+        const val ACCOUNT_INSTANCE_ID = "identity"
         const val PAGE_BYTE_BUDGET = 32L * 1024 * 1024
         val SHA256 = Regex("[a-f0-9]{64}")
     }

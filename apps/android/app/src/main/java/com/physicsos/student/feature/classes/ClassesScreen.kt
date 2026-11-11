@@ -230,7 +230,10 @@ internal fun AssignmentContent(
                 }
             }
             if (state.actionProblem != null) item("action-error") { LearningError(state.actionProblem, if (state.draft.operationKey != null) onRetry else onSaveDraft) }
-            if (state.changedElsewhere) item("changed") { LearningNotice(stringResource(R.string.learning_assignment_changed_elsewhere), onCompare) }
+            if (state.changedElsewhere) item("changed") {
+                LearningNotice(stringResource(R.string.learning_assignment_changed_elsewhere), onCompare,
+                    actionLabel = R.string.learning_compare_versions)
+            }
             state.operation?.let { operation -> item("sync") { LearningSyncStatus(operation.state, onRetry, onCompare) } }
             if (state.draft.operationKey != null && state.operation == null) item("prepared") { LearningNotice(stringResource(R.string.learning_sync_prepared), onRetry) }
             item("submit") {
