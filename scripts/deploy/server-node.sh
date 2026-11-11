@@ -106,10 +106,12 @@ done
 if [[ $mode == --check ]]; then
   set -- -e 'const c=require("node:child_process"); console.log(JSON.stringify({node:process.version,docker:c.execFileSync("docker",["version","--format","{{.Server.Version}}"],{encoding:"utf8"}).trim(),compose:c.execFileSync("docker",["compose","version","--short"],{encoding:"utf8"}).trim(),git:c.execFileSync("git",["--version"],{encoding:"utf8"}).trim(),python:c.execFileSync("python3",["--version"],{encoding:"utf8"}).trim()}))'
 fi
-env_args=(--env "PHYSICSOS_DIR=$project_dir")
+# The tools image inherits runtime ENV from its production base. Clear it at
+# exec so Compose sees only explicitly selected operations configuration.
+env_args=(PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin "PHYSICSOS_DIR=$project_dir")
 for name in PHYSICSOS_BACKUP_KEY_FILE PHYSICSOS_BACKUP_OFFSITE_DIR PHYSICSOS_BACKUP_RETENTION_DAYS PHYSICSOS_FULL_BACKUP_DIR PHYSICSOS_BACKUP_DIR PHYSICSOS_POSTGRES_SERVICE PHYSICSOS_BACKUP_STAMP; do
-  [[ ! -v $name ]] || env_args+=(--env "$name=${!name}")
+  [[ ! -v $name ]] || env_args+=("$name=${!name}")
 done
 exec docker run --rm --read-only --tmpfs /tmp --network host --pid host \
   --stop-timeout 900 --user 0:0 --workdir "$project_dir" \
-  "${env_args[@]}" "${mounts[@]}" --entrypoint node "$tools_image" "$@"
+  "${mounts[@]}" --entrypoint /usr/bin/env "$tools_image" -i "${env_args[@]}" node "$@"

@@ -25,6 +25,8 @@ scripts/deploy/server-node.sh scripts/deploy/release.mjs publish --plan-file .ph
 
 构建器名称保存在私有 `.physicsos-release/builder.json`，已发布源码基线保存在 `.physicsos-release/published-source.json`。第一次注册这些记录必须来自经过验证的构建器和当前实际镜像源码版本。`build` 支持显式 `--builder`、`--baseline-manifest`、`--revision` 和 `--output-dir`；构建失败不会提升发布基线。
 
+运维入口使用独立环境，仅传入项目目录、工具 PATH 和明确设置的备份选项；应用镜像自带的运行时密钥路径不会覆盖服务器 `.env` 的 Compose 文件配置。候选容器的健康检查使用候选自身端口。
+
 ## 发布计划和恢复
 
 计划文件必须为私有普通文件，填写实际 image ID、预期旧 image ID、代码 revision、checkout revision、`sourceDigest`、`codeDigest`。登录验证通过既有 `usernameFile` / `passwordFile` 读取，期望角色与学校显式匹配；不要把密码或 Cookie 写入计划、终端、日志或仓库。
