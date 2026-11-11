@@ -1,0 +1,10 @@
+{
+  "status": "passed",
+  "milestones": [
+    "Real account login passed",
+    "Saved experiment restored in fresh browser",
+    "Real note edit and account save passed",
+    "Reload restored the saved note"
+  ],
+  "errors": []
+}

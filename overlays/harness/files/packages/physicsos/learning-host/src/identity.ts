@@ -23,6 +23,8 @@ export interface IdentityActor {
 
 export interface PhysicsosIdentity {
   actorOf(req: IncomingMessage): IdentityActor | null
+  usageSessionOwner?(sessionId: string): { readonly schoolId: string; readonly userKey: string } | undefined
+  usageOwnedSessions?(): readonly { readonly sessionId: string; readonly schoolId: string; readonly userKey: string }[]
   record(
     actor: IdentityActor,
     action: string,

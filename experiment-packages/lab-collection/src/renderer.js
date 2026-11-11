@@ -11,6 +11,8 @@ const drawDomain = { mechanics: drawMechanics, optics: drawOptics, wave: drawWav
 const cleanMath = value => String(value).replace(/\\(?:mathrm|text)\{([^}]+)\}/g, '$1').replace(/\\theta/g, 'θ').replace(/\\mu/g, 'μ').replace(/\\Delta/g, 'Δ').replace(/\\cdot/g, '·').replace(/\\(?:sin|cos)/g, x => x.slice(1)).replace(/[{}]/g, '').replace(/_/g, '')
 const comparisonColors = new Map([['comparison-30', '#477d9e'], ['comparison-45', '#b76a28'], ['comparison-60', '#8653a0']])
 const comparisonLabelColors = new Map([...comparisonColors].map(([id, color]) => [id.replace('comparison-', 'comparison-label-'), color]))
+const minimumZoom = 0.5, maximumZoom = 4
+const clampZoom = value => Math.max(minimumZoom, Math.min(maximumZoom, value))
 
 function common(snapshot, kit) {
   const view = snapshot.view, u = kit.unit
@@ -110,34 +112,110 @@ function initialize(kit) {
   const camera = new T.OrthographicCamera(-8, 8, 5, -5, 0.1, 200)
   const labels = document.getElementById('labels')
   const measure = document.createElement('canvas').getContext('2d')
-  state = { T, renderer, host, scene, world, camera, labels, measure, floor, envTarget, surface, yaw: -0.48, pitch: 0.23, full: false, kit: undefined, span: { x: 12, y: 8, z: 2 } }
+  state = { T, renderer, host, scene, world, camera, labels, measure, floor, envTarget, surface, yaw: -0.48, pitch: 0.23, full: false,
+    zoom: 1, pan: { x: 0, y: 0 }, moving: false, kit: undefined, span: { x: 12, y: 8, z: 2 } }
   const observer = new ResizeObserver(() => paint()); observer.observe(host); state.observer = observer
-  let drag
   const canvas = renderer.domElement
-  canvas.addEventListener('pointerdown', event => {
-    if (drag || event.button !== 0 || event.isPrimary === false) return
-    drag = { id: event.pointerId, x: event.clientX, y: event.clientY, yaw: state.yaw, pitch: state.pitch }
+  const pointers = new Map(), listeners = []
+  let gesture
+  const listen = (target, type, handler, options) => {
+    target.addEventListener(type, handler, options)
+    listeners.push(() => target.removeEventListener(type, handler, options))
+  }
+  const zoomIn = document.getElementById('zoom-in'), zoomOut = document.getElementById('zoom-out')
+  const moveView = document.getElementById('move-view'), zoomLevel = document.getElementById('zoom-level')
+  const updateControls = () => {
+    zoomIn.disabled = state.zoom >= maximumZoom; zoomOut.disabled = state.zoom <= minimumZoom
+    zoomLevel.value = `${Math.round(state.zoom * 100)}%`
+    moveView.setAttribute('aria-pressed', String(state.moving))
+    canvas.dataset.viewMode = state.moving ? 'move' : 'rotate'
+  }
+  // Pan is a camera-plane offset in normalized viewport coordinates, independent
+  // of the engine's observation window and the latest fitScene() world center.
+  const screenPoint = (x, y) => {
+    const rect = canvas.getBoundingClientRect()
+    return { x: (x - rect.left) / Math.max(1, rect.width) * 2 - 1, y: 1 - (y - rect.top) / Math.max(1, rect.height) * 2 }
+  }
+  const changeZoom = (value, anchor = { x: 0, y: 0 }) => {
+    const next = clampZoom(value), ratio = next / state.zoom
+    state.pan.x = anchor.x + (state.pan.x - anchor.x) * ratio
+    state.pan.y = anchor.y + (state.pan.y - anchor.y) * ratio
+    state.zoom = next; updateControls(); paint()
+  }
+  const rebaseGesture = () => {
+    const active = [...pointers.values()]
+    if (active.length >= 2) {
+      const [a, b] = active
+      gesture = { type: 'pinch', distance: Math.max(1, Math.hypot(b.x - a.x, b.y - a.y)),
+        anchor: screenPoint((a.x + b.x) / 2, (a.y + b.y) / 2), zoom: state.zoom, pan: { ...state.pan } }
+    } else if (active.length === 1) {
+      const pointer = active[0]
+      gesture = { type: state.moving || pointer.shift ? 'pan' : 'rotate', x: pointer.x, y: pointer.y,
+        yaw: state.yaw, pitch: state.pitch, pan: { ...state.pan } }
+    } else gesture = undefined
+  }
+  const cancelGesture = () => {
+    const captured = [...pointers.keys()]
+    pointers.clear(); gesture = undefined
+    for (const id of captured) if (canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id)
+  }
+  listen(canvas, 'pointerdown', event => {
+    if (event.button !== 0 || (event.pointerType !== 'touch' && pointers.size > 0)) return
+    event.preventDefault()
+    pointers.set(event.pointerId, { x: event.clientX, y: event.clientY, shift: event.shiftKey })
     canvas.setPointerCapture(event.pointerId)
+    rebaseGesture()
   })
-  canvas.addEventListener('pointermove', event => {
-    if (!drag || event.pointerId !== drag.id) return
-    // Orbit the camera opposite horizontal hand motion so the near side of the
-    // apparatus follows the pointer, as if the student were holding the object.
-    state.yaw = Math.max(-0.85, Math.min(0.85, drag.yaw - (event.clientX - drag.x) * 0.003))
-    state.pitch = Math.max(-0.2, Math.min(0.65, drag.pitch + (event.clientY - drag.y) * 0.003)); paint()
+  listen(canvas, 'pointermove', event => {
+    const pointer = pointers.get(event.pointerId)
+    if (!pointer || !gesture) return
+    pointer.x = event.clientX; pointer.y = event.clientY
+    if (gesture.type === 'pinch') {
+      const [a, b] = pointers.values(), anchor = screenPoint((a.x + b.x) / 2, (a.y + b.y) / 2)
+      state.zoom = clampZoom(gesture.zoom * Math.hypot(b.x - a.x, b.y - a.y) / gesture.distance)
+      const ratio = state.zoom / gesture.zoom
+      state.pan.x = anchor.x + (gesture.pan.x - gesture.anchor.x) * ratio
+      state.pan.y = anchor.y + (gesture.pan.y - gesture.anchor.y) * ratio
+      updateControls()
+    } else if (gesture.type === 'pan') {
+      state.pan.x = gesture.pan.x + (event.clientX - gesture.x) * 2 / Math.max(1, host.clientWidth)
+      state.pan.y = gesture.pan.y - (event.clientY - gesture.y) * 2 / Math.max(1, host.clientHeight)
+    } else {
+      // The near side follows the hand, as if holding the apparatus itself.
+      state.yaw = Math.max(-0.85, Math.min(0.85, gesture.yaw - (event.clientX - gesture.x) * 0.003))
+      state.pitch = Math.max(-0.2, Math.min(0.65, gesture.pitch + (event.clientY - gesture.y) * 0.003))
+    }
+    paint()
   })
-  const endDrag = event => {
-    if (!drag || event.pointerId !== drag.id) return
-    drag = undefined
+  const endPointer = event => {
+    if (!pointers.delete(event.pointerId)) return
+    rebaseGesture()
     if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId)
   }
-  canvas.addEventListener('pointerup', endDrag)
-  canvas.addEventListener('pointercancel', endDrag)
-  canvas.addEventListener('lostpointercapture', endDrag)
-  document.getElementById('reset-view').addEventListener('click', () => { state.yaw = -0.48; state.pitch = 0.23; state.full = false; fitScene(); paint() })
-  document.getElementById('front-view').addEventListener('click', () => { state.yaw = 0; state.pitch = 0; paint() })
-  document.getElementById('full-view').addEventListener('click', () => { state.full = !state.full; fitScene(); paint() })
-  canvas.addEventListener('webglcontextlost', event => { event.preventDefault(); document.dispatchEvent(new CustomEvent('lab-render-failed')) })
+  listen(canvas, 'pointerup', endPointer)
+  listen(canvas, 'pointercancel', endPointer)
+  listen(canvas, 'lostpointercapture', endPointer)
+  listen(window, 'blur', cancelGesture)
+  listen(canvas, 'wheel', event => {
+    event.preventDefault()
+    const delta = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? host.clientHeight : 1)
+    changeZoom(state.zoom * Math.exp(-Math.max(-600, Math.min(600, delta)) * 0.0015), screenPoint(event.clientX, event.clientY))
+    rebaseGesture()
+  }, { passive: false })
+  listen(zoomIn, 'click', () => { changeZoom(state.zoom * 1.25); rebaseGesture() })
+  listen(zoomOut, 'click', () => { changeZoom(state.zoom / 1.25); rebaseGesture() })
+  listen(moveView, 'click', () => { state.moving = !state.moving; rebaseGesture(); updateControls() })
+  listen(document.getElementById('reset-view'), 'click', () => {
+    cancelGesture(); state.yaw = -0.48; state.pitch = 0.23; state.full = false
+    state.zoom = 1; state.pan = { x: 0, y: 0 }; state.moving = false; updateControls(); fitScene(); paint()
+  })
+  listen(document.getElementById('front-view'), 'click', () => { cancelGesture(); state.yaw = 0; state.pitch = 0; paint() })
+  listen(document.getElementById('full-view'), 'click', () => {
+    cancelGesture(); state.full = !state.full; state.zoom = 1; state.pan = { x: 0, y: 0 }; updateControls(); fitScene(); paint()
+  })
+  listen(canvas, 'webglcontextlost', event => { event.preventDefault(); cancelGesture(); document.dispatchEvent(new CustomEvent('lab-render-failed')) })
+  state.disposeControls = () => { cancelGesture(); for (const remove of listeners) remove() }
+  updateControls()
 }
 
 function fitScene() {
@@ -193,7 +271,14 @@ function paint() {
   const distance = Math.max(40, Math.hypot(span.x, span.y, span.z) * 1.6)
   camera.near = distance / 1000; camera.far = distance * 3
   camera.position.set(Math.sin(state.yaw), Math.sin(state.pitch), Math.cos(state.yaw) * Math.cos(state.pitch)).normalize().multiplyScalar(distance)
-  camera.lookAt(0, 0, 0); fitCameraToBox(camera, span, width / height); world.updateMatrixWorld(true)
+  camera.lookAt(0, 0, 0); fitCameraToBox(camera, span, width / height)
+  // Apply user controls after base fitting; automatic bounds must never absorb
+  // the pan or erase the zoom when a new physical frame or resize arrives.
+  camera.zoom = state.zoom
+  const offsetX = state.pan.x * (camera.right - camera.left) / (2 * state.zoom)
+  const offsetY = state.pan.y * (camera.top - camera.bottom) / (2 * state.zoom)
+  camera.left -= offsetX; camera.right -= offsetX; camera.top -= offsetY; camera.bottom -= offsetY
+  camera.updateProjectionMatrix(); world.updateMatrixWorld(true)
   renderer.render(scene, camera)
   const projected = [], fragment = document.createDocumentFragment()
   for (const label of kit.labels) {
@@ -307,6 +392,7 @@ export function renderFrame(snapshot) {
 
 export function disposeRenderer() {
   if (!state) return
+  state.disposeControls()
   state.observer.disconnect(); if (state.kit) disposeGroup(state.kit.group)
   state.floor.geometry.dispose(); state.floor.material.dispose(); state.surface.dispose(); state.envTarget.dispose()
   state.renderer.dispose(); state.renderer.forceContextLoss(); state.renderer.domElement.remove(); state = undefined

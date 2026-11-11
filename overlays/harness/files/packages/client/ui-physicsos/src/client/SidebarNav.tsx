@@ -24,7 +24,7 @@ import {
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { isTeachingRole, type AuthState } from './auth-store.ts'
 import {
-  IconAnnouncement, IconContribution, IconLibrary, IconPhysicsLab, IconQuestionSheet, IconScene,
+  IconAnnouncement, IconContribution, IconLibrary, IconPhysicsLab, IconQuestionSheet,
 } from './icons/physics-icons.tsx'
 import type { PhysicsosKey } from './locales.ts'
 import type { SnapshotStore } from './runtime-compat.ts'
@@ -50,6 +50,23 @@ export type SidebarNavProps =
 
 /** Where the folded groups are remembered, per browser. */
 const COLLAPSED_STORAGE_KEY = 'physicsos.sidebar.collapsed-groups'
+
+const navigationIconClasses = {
+  projects: css.projectsIcon,
+  canvas: css.canvasIcon,
+  whiteboard: css.whiteboardIcon,
+}
+
+/** Generated alpha masks inherit the row's theme, hover, and active colors. */
+function NavigationIcon({ name, size }: { name: keyof typeof navigationIconClasses; size: number }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={clsx(css.generatedIcon, navigationIconClasses[name])}
+      style={{ width: size, height: size }}
+    />
+  )
+}
 
 function readCollapsed(): Record<string, boolean> {
   try {
@@ -131,7 +148,9 @@ export function SidebarNav({ wide, openSurface, usePhysicsSurface, useAuth, t }:
       {isOpen('explore') && (
         <>
           {item('lab', 'nav.lab', <IconPhysicsLab size={iconSize} />)}
-          {item('canvas', 'nav.canvas', <IconScene size={iconSize} />)}
+          {item('projects', 'nav.projects', <NavigationIcon name="projects" size={iconSize} />)}
+          {item('canvas', 'nav.canvas', <NavigationIcon name="canvas" size={iconSize} />)}
+          {item('whiteboard', 'whiteboard.title', <NavigationIcon name="whiteboard" size={iconSize} />)}
           {teaching && item('paper', 'nav.paper', <IconQuestionSheet size={iconSize} />)}
           {item('notice', 'nav.notice', <IconAnnouncement size={iconSize} />)}
           {item('library', 'nav.library', <IconLibrary size={iconSize} />)}

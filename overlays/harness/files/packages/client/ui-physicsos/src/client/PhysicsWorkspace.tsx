@@ -44,6 +44,7 @@ import { ExperimentReportPanel } from './ExperimentReportPanel.tsx'
 import { WorkspaceScenePanel } from './WorkspaceScenePanel.tsx'
 import { IconChatBubble, IconScene, IconVariable, IconVerified } from './icons/physics-icons.tsx'
 import { Mascot } from './Mascot.tsx'
+import { WorkbenchAction } from './WorkbenchAction.tsx'
 import { useEventEffects } from './physics/event-effects.ts'
 import { useFrameSource } from './physics/frame-source-react-compat.ts'
 import type { FrameSource } from './physics/frame-source.ts'
@@ -136,6 +137,8 @@ export interface PhysicsWorkspaceProps {
    * the shell also mounts standalone (tests, embeds) outside a surface.
    */
   readonly onReturnToChat?: () => void
+  /** Add the current scene to a workbench from the header without covering data. */
+  readonly onAddToCanvas?: () => void
   /**
    * Write an AI 助教 自测 answer into the learning record. Optional because the
    * shell is also mounted standalone (tests, embeds) without a record store.
@@ -177,6 +180,7 @@ export function PhysicsWorkspace({
   toolbarExtra,
   onSwitchExperiment,
   onReturnToChat,
+  onAddToCanvas,
   recordAttempt,
   buildMode,
   experimentMeta,
@@ -538,9 +542,12 @@ export function PhysicsWorkspace({
               </button>}
             <h1 className={codeCss.title}>{title}</h1>
           </div>
+          <div className={codeCss.labHeaderActions}>
+          {onAddToCanvas === undefined ? null : <WorkbenchAction label={t('canvas.addToCanvas')} onClick={onAddToCanvas} />}
           {onReturnToChat === undefined ? null : <button type="button" className={codeCss.open} onClick={onReturnToChat}>
             <IconChatBubble size={14} />{t('lab.backToChat')}
           </button>}
+          </div>
         </header>
         <QuestionCodeCanvas visualization={questionCodeVisualization} scene={questionCodeScene} session={session}
           hasVerifiedSolution={questionCodeHasVerifiedSolution === true}
@@ -656,6 +663,7 @@ export function PhysicsWorkspace({
           {/* Playback lives once, on the timeline under the bench; a second
               run/pause group up here only competed with it. */}
           {toolbarExtra}
+          {onAddToCanvas === undefined ? null : <WorkbenchAction label={t('canvas.addToCanvas')} onClick={onAddToCanvas} />}
           {experimentMeta === undefined ? null : (
             <button
               type="button"

@@ -1,0 +1,19 @@
+.root { position: absolute; inset: 0; z-index: 4; box-sizing: border-box; height: 100%; overflow: auto; padding: 28px; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-base); }
+.embedded { color: var(--dsw-alias-label-primary); }
+.header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+.header h1 { margin: 0; font-size: 24px; }
+.header p, .hint { color: var(--dsw-alias-label-secondary); font-size: 13px; }
+.header button { padding: 8px 16px; border: 1px solid var(--physics-glass-border-soft); border-radius: 10px; color: inherit; background: var(--physics-glass-fill); cursor: pointer; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.card { display: flex; flex-direction: column; gap: 14px; border: 1px solid var(--physics-glass-border-soft); border-radius: 16px; padding: 20px; background: var(--physics-glass-fill); }
+.card span { color: var(--dsw-alias-label-secondary); font-size: 13px; }
+.card strong { font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.buckets { display: flex; flex-wrap: wrap; gap: 22px; padding: 18px 0; }
+.buckets div { min-width: 100px; }
+.buckets dt { color: var(--dsw-alias-label-secondary); font-size: 12px; }
+.buckets dd { margin: 8px 0 0; font-variant-numeric: tabular-nums; }
+.error { color: var(--dsw-alias-status-danger); }
+.tableScroll { overflow-x: auto; }
+.tableScroll table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.tableScroll th, .tableScroll td { padding: 12px; border-bottom: 1px solid var(--physics-glass-border-soft); text-align: left; }
+@media (max-width: 600px) { .root { padding: 16px; } .header h1 { font-size: 20px; } .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .card { padding: 14px; } }

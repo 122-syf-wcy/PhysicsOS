@@ -331,6 +331,23 @@ describe('captured immutable graphs and document editing', () => {
 })
 
 describe('document cache recovery and local cross-tab conflicts', () => {
+  it('persists a chapter project association independently from experiment history', async () => {
+    const name = databaseName('physicsos-project-board')
+    const first = fixture({ persistence: createCanvasPersistence({ name, hash }) })
+    const canvas = await first.controller.create('动量实验笔记')
+    const assign = Reflect.get(first.controller, 'assignProject') as ((id: string, project?: string) => Promise<void>) | undefined
+    expect(typeof assign).toBe('function')
+    await assign!(canvas, 'chapter-momentum')
+    await first.controller.flush(canvas)
+    expect(first.controller.documentSource(canvas).getSnapshot().manifest?.metadata?.studyProjectId).toBe('chapter-momentum')
+    expect(first.controller.getSnapshot().documents.find(item => item.id === canvas)?.projectId).toBe('chapter-momentum')
+    await first.controller.dispose()
+    const second = fixture({ persistence: createCanvasPersistence({ name, hash }) })
+    await second.controller.open(canvas)
+    expect(second.controller.getSnapshot().documents.find(item => item.id === canvas)?.projectId).toBe('chapter-momentum')
+    await second.controller.assignProject(canvas)
+    expect(second.controller.documentSource(canvas).getSnapshot().manifest?.metadata?.studyProjectId).toBeUndefined()
+  })
   it('opens cached circuit owners before a pending online startup upload finishes', async test => {
     const host = await loadCanvasFixture({ test })
     const authenticated = await host.register(`startup_${randomUUID().slice(0, 8)}`)

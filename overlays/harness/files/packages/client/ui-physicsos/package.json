@@ -35,7 +35,10 @@
         "@deepseek-ai/dsh-client-ui-sidebar",
         "@deepseek-ai/dsh-client-ui-conversation"
       ],
-      "platform": "web"
+      "platform": "web",
+      "external": [
+        "@deepseek-ai/dsh-client-file-upload/client"
+      ]
     }
   },
   "scripts": {
@@ -78,7 +81,8 @@
     "katex": "^0.16.47",
     "pdfjs-dist": "6.2.108",
     "three": "0.180.0",
-    "@deepseek-ai/dsh-util-crypto": "workspace:^"
+    "@deepseek-ai/dsh-util-crypto": "workspace:^",
+    "@deepseek-ai/dsh-client-file-upload": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/dsh-client-locale": "workspace:^",
@@ -117,7 +121,8 @@
     "@xyflow/react": "12.12.1",
     "idb": "8.0.4",
     "fake-indexeddb": "6.2.7",
-    "@physicsos/physics-workbench": "link:../../../../../packages/physics-workbench"
+    "@physicsos/physics-workbench": "link:../../../../../packages/physics-workbench",
+    "@physicsos/physics-whiteboard": "link:../../../../../packages/physics-whiteboard"
   },
   "files": [
     "lib/index.js",

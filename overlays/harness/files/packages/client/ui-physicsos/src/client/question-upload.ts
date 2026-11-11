@@ -1,3 +1,4 @@
+import { normalizePhoto } from '@deepseek-ai/dsh-client-file-upload/client'
 import { loadPdfModule } from './optional-modules.ts'
 
 /**
@@ -85,6 +86,7 @@ const base64OfDataUrl = (dataUrl: string): string => dataUrl.slice(dataUrl.index
  * @returns the base64 payload and media type a prompt part carries.
  */
 export async function readQuestionImage(file: File): Promise<UploadedImage> {
+  file = await normalizePhoto(file)
   const mediaType = file.type as UploadedImage['mediaType']
   if (!IMAGE_MEDIA_TYPES.has(mediaType)) {
     throw new QuestionUploadError('UNSUPPORTED_TYPE',

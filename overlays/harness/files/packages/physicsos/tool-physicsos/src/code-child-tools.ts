@@ -7,6 +7,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import { canonicalJson } from '@physicsos/agent-tools'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { defineTool, type ToolExecution } from '@deepseek-ai/dsh-tools'
@@ -44,8 +45,13 @@ const SOURCE_LIMITS = { title: 120, summary: 1000, rendererJs: 96000, stylesheet
 
 /** Whether the parent's projection still names this job as the live generation for the scene. */
 const jobIsCurrent = (job: CodeChildJob): boolean => {
-  const current = job.parent.ctx.get('sessionProjections')?.stateOf(job.parent.session, 'physicsScenes')?.scenes[job.scene.sceneId]
-  return current?.visualization?.status === 'generating' && current.visualization.jobId === job.generationId
+  const state = job.parent.ctx.get('sessionProjections')?.stateOf(job.parent.session, 'physicsScenes')
+  const current = state?.scenes[job.scene.sceneId], marker = current?.visualization
+  return state?.latest === job.scene.sceneId && current?.revision === job.scene.revision
+    && canonicalJson(current.scene) === canonicalJson(job.scene.scene)
+    && marker?.status === 'generating' && marker.jobId === job.generationId
+    && marker.ownerSessionId === String(job.parent.id) && marker.sceneId === job.scene.sceneId
+    && marker.sceneRevision === job.scene.revision
 }
 
 /**

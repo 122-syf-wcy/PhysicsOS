@@ -560,7 +560,7 @@ describe('AdminWorkspace', () => {
   })
 
   it('offers the announcement editor only to SUPER_ADMIN', () => {
-    const noticeApi = {} as NoticeApi
+    const noticeApi = { listFeedback: async () => ({ items: [] }) } as unknown as NoticeApi
     const superAdmin = render(
       <AdminWorkspace
         api={adminApi()}
@@ -569,6 +569,7 @@ describe('AdminWorkspace', () => {
         t={t}
       />,
     )
+    fireEvent.click(superAdmin.getByRole('tab', { name: '反馈与公告' }))
     expect(superAdmin.getByRole('tab', { name: '公告' })).toBeTruthy()
     superAdmin.unmount()
 
@@ -580,6 +581,7 @@ describe('AdminWorkspace', () => {
         t={t}
       />,
     )
+    fireEvent.click(schoolAdmin.getByRole('tab', { name: '反馈与公告' }))
     expect(schoolAdmin.queryByRole('tab', { name: '公告' })).toBeNull()
   })
 })

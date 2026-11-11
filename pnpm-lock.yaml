@@ -461,6 +461,8 @@ importers:
 
   packages/image-generation: {}
 
+  packages/model-usage-outbox: {}
+
   packages/physics-composite-core:
     dependencies:
       '@physicsos/physics-core':
@@ -644,6 +646,12 @@ importers:
       '@physicsos/shared':
         specifier: file:../shared
         version: link:../shared
+
+  packages/physics-whiteboard:
+    dependencies:
+      '@physicsos/physics-workbench':
+        specifier: file:../physics-workbench
+        version: link:../physics-workbench
 
   packages/physics-workbench:
     dependencies:

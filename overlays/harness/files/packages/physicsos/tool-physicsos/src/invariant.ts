@@ -45,7 +45,8 @@ function validateSnapshot(value: unknown, fail: InvariantFailure): void {
     if (!['generating', 'ready', 'failed'].includes(String(code.status))) fail('physics/scene visualization carries an unknown status')
     if (code.sceneId !== sceneId || code.sceneRevision !== revision) fail('physics/scene visualization must identify this exact scene revision')
     if (typeof code.ownerSessionId !== 'string' || !code.ownerSessionId) fail('physics/scene visualization requires an owner session')
-    const common = ['status', 'ownerSessionId', 'sceneId', 'sceneRevision']
+    const common = ['status', 'ownerSessionId', 'sceneId', 'sceneRevision', 'requestSha256']
+    if (code.requestSha256 !== undefined && (typeof code.requestSha256 !== 'string' || !/^[a-f0-9]{64}$/.test(code.requestSha256))) fail('physics/scene visualization.requestSha256 must be a SHA256 digest')
     const fields = code.status === 'ready' ? [...common, 'artifactId', 'sceneSha256', 'experimentId', 'sha256', 'title', 'rendererKind', 'childSessionId', 'createdAt'] : code.status === 'generating' ? [...common, 'jobId', 'deadlineAt'] : [...common, 'jobId', 'code', 'message']
     if (Object.keys(code).some(key => !fields.includes(key))) fail('physics/scene visualization cannot contain source code or capability URLs')
     if (code.status === 'ready') {

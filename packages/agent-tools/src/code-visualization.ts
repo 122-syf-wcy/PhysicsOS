@@ -13,10 +13,12 @@ export interface CodeExperimentRef {
   readonly rendererKind?: 'independent'
   readonly childSessionId: string
   readonly createdAt: string
+  /** Parent request identity; absent on existing immutable artifact records. */
+  readonly requestSha256?: string
 }
 export type CodeVisualizationState = CodeExperimentRef
-  | { readonly status: 'generating'; readonly jobId: string; readonly ownerSessionId: string; readonly sceneId: string; readonly sceneRevision: number; readonly deadlineAt?: number }
-  | { readonly status: 'failed'; readonly jobId?: string; readonly ownerSessionId: string; readonly sceneId: string; readonly sceneRevision: number; readonly code: string; readonly message: string }
+  | { readonly status: 'generating'; readonly jobId: string; readonly ownerSessionId: string; readonly sceneId: string; readonly sceneRevision: number; readonly deadlineAt?: number; readonly requestSha256?: string }
+  | { readonly status: 'failed'; readonly jobId?: string; readonly ownerSessionId: string; readonly sceneId: string; readonly sceneRevision: number; readonly code: string; readonly message: string; readonly requestSha256?: string }
 
 export interface CodeVisualizationSource {
   readonly title: string

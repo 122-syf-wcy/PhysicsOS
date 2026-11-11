@@ -1,6 +1,8 @@
+import type { ModelUsageOutbox, UsageAttempt } from '@physicsos/model-usage-outbox'
 import { z } from 'zod'
 import { BlockAssembler, createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type LlmRuntime from '@deepseek-ai/dsh-llm'
+import type { TokenUsage } from '@deepseek-ai/dsh-llm'
 import type { ModerationInput, ModerationReview, ModerationReviewer } from './types.ts'
 
 declare module '@deepseek-ai/dsh-llm' {
@@ -58,9 +60,9 @@ export class ModerationModelError extends Error {
 /** Validate custom reviewer results as strictly as adapter results. */
 export function validateModerationReview(value: unknown, input: ModerationInput): ModerationReview {
   const parsed = moderationReviewSchema.safeParse(value)
-  if (!parsed.success || parsed.data.evidence.some(text => !input.text.includes(text) && !input.context.includes(text))) {
-    throw new ModerationModelError('REVIEW_INVALID_OUTPUT')
-  }
+  if (!parsed.success) throw new ModerationModelError('REVIEW_SCHEMA_INVALID')
+  if (parsed.data.evidence.some(text => !input.text.includes(text) && !input.context.includes(text)))
+    throw new ModerationModelError('REVIEW_EVIDENCE_INVALID')
   return parsed.data
 }
 
@@ -99,15 +101,26 @@ export async function reviewWithDeadline(
 /** Existing deployment route, identity-free JSON input and no tools. */
 export function createModerationReviewer(
   llm: Pick<LlmRuntime, 'stream'>, route: { provider: string; model: string },
+  options: { receiptOutbox?: Pick<ModelUsageOutbox, 'begin'>; onReceipt?(receipt: { provider: string; model: string; usage?: TokenUsage }): void | Promise<void> } = {},
 ): ModerationReviewer {
   const { provider, model } = route
   if (!provider.trim() || !model.trim()) throw new Error('moderation reviewer requires a provider and model')
-  return (input, signal) => reviewWithDeadline(async (data, innerSignal) => {
+  return async (input, signal) => {
+    let usage: TokenUsage | undefined
+    let dispatched = false
+    let attempt: UsageAttempt | undefined
+    try { return await reviewWithDeadline(async (data, innerSignal) => {
     const parsed = inputSchema.safeParse(data)
     if (!parsed.success) throw new ModerationModelError('REVIEW_INVALID_INPUT')
     const assembler = new BlockAssembler()
     let outputCharacters = 0
     let finishes = 0
+    innerSignal.throwIfAborted()
+    const admitted = await options.receiptOutbox?.begin({ provider, model }, innerSignal)
+    // This inner scope also survives a begin that settles after the outer deadline returned.
+    if (innerSignal.aborted) { await admitted?.abandon(); innerSignal.throwIfAborted() }
+    attempt = admitted
+    dispatched = true
     for await (const chunk of llm.stream({
       provider, model, reasoningEffort: ReasoningEffortId('off'), system: MODEL_POLICY, tools: [], maxTokens: 4_096, signal: innerSignal,
       messages: [createUserMessage({
@@ -115,6 +128,12 @@ export function createModerationReviewer(
       })],
     })) {
       innerSignal.throwIfAborted()
+      if (chunk.type === 'usage') {
+        const fields = ['inputTokens', 'outputTokens', 'totalTokens', 'cacheReadTokens', 'cacheWriteTokens', 'reasoningTokens'] as const
+        if (fields.every(field => chunk.usage[field] === undefined || Number.isSafeInteger(chunk.usage[field]) && chunk.usage[field]! >= 0)) {
+          usage = Object.fromEntries(fields.filter(field => chunk.usage[field] !== undefined).map(field => [field, chunk.usage[field]])) as unknown as TokenUsage
+        }
+      }
       if (chunk.type === 'tool-call-delta'
         || (chunk.type === 'block-start' && !['text', 'reasoning'].includes(chunk.blockType))
         || (chunk.type === 'block-end' && !['text', 'reasoning'].includes(chunk.block.type))) {
@@ -127,6 +146,8 @@ export function createModerationReviewer(
       if (outputCharacters > 8_000) throw new ModerationModelError('REVIEW_OUTPUT_LIMIT')
       if (chunk.type === 'finish') {
         finishes += 1
+        if (chunk.reason.kind !== 'stop' && outputCharacters === 0
+          && usage !== undefined && Object.values(usage).every(value => value === 0)) usage = undefined
         if (chunk.reason.kind !== 'stop' || finishes !== 1) throw new ModerationModelError('REVIEW_FAILED')
       }
       assembler.push(chunk)
@@ -140,7 +161,18 @@ export function createModerationReviewer(
     const text = blocks.filter(block => block.type === 'text').map(block => block.text).join('')
     if (!text.trim()) throw new ModerationModelError('REVIEW_EMPTY')
     let result: unknown
-    try { result = JSON.parse(text) } catch { throw new ModerationModelError('REVIEW_INVALID_OUTPUT') }
+    try { result = JSON.parse(text) } catch { throw new ModerationModelError('REVIEW_JSON_INVALID') }
     return validateModerationReview(result, parsed.data)
-  }, input, signal)
+    }, input, signal) }
+    finally {
+      // Only local outbox capture is awaited; downstream sink delivery has its own retry lifecycle.
+      if (dispatched) {
+        await attempt?.finish(usage)
+        if (options.onReceipt) {
+          try { await options.onReceipt({ provider, model, ...(usage === undefined ? {} : { usage: { ...usage } }) }) }
+          catch { console.warn('moderation: optional receipt observer failed; durable outbox is independent') }
+        }
+      }
+    }
+  }
 }

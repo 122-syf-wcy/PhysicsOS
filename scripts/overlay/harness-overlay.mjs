@@ -29,6 +29,7 @@ const OVERLAY_PATHS = [
      in upstream-changes.patch: a create-hunk cannot be re-applied once the file
      already exists in the vendored working tree. */
   'packages/client/connection/src/api-policy.ts',
+  'packages/client/file-upload/src/client/photo-input.ts',
   'packages/bundle/web-app/presets/physics-student.patch.yml',
   'tsconfig.physicsos.json',
   /* The branded document shell. Upstream ships its own index.html whose title is

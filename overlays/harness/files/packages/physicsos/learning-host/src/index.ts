@@ -25,6 +25,14 @@ import { CheckpointStore } from './checkpoint-store.ts'
 import { createMobileLearning, MOBILE_LEARNING_SERVICE } from './mobile.ts'
 
 export type { MobileLearningFacade, AccountErasureRequest } from './mobile.ts'
+import { openUsageDomain } from './usage-domain.ts'
+import { UsageService } from './usage-service.ts'
+import { UsageRuntime } from './usage-runtime.ts'
+import { usageRoutes } from './usage-routes.ts'
+import { openWhiteboardDomain } from './whiteboard-domain.ts'
+import { WhiteboardService } from './whiteboard-service.ts'
+import { createWhiteboardModel } from './whiteboard-model.ts'
+import { whiteboardRoutes, WHITEBOARD_PREFIX } from './whiteboard-routes.ts'
 
 export { CanvasService } from './canvas-service.ts'
 export { CanvasBlobStore } from './canvas-blob-store.ts'
@@ -62,6 +70,31 @@ export async function apply(ctx: Context, config: Config = {}): Promise<() => Pr
     await canvas.initialize()
     ctx.provide(MOBILE_LEARNING_SERVICE, createMobileLearning(service, canvas))
     const identity = () => identityOf(ctx)
+    const usageDomain = await openUsageDomain(ctx)
+    yield () => usageDomain.close()
+    const usage = new UsageService(usageDomain)
+    yield () => usage.dispose()
+    ctx.provide('physicsosUsage', usage)
+    const usageRuntime = await UsageRuntime.create(ctx, usage, {
+      ownerForSession: id => identity()?.usageSessionOwner?.(id),
+      ownedSessions: () => identity()?.usageOwnedSessions?.() ?? [],
+    }, { onError: () => { ctx.logger.warn('usage: one or more session histories are temporarily unavailable') } })
+    yield () => usageRuntime.dispose()
+    const usageHandler = usageRoutes({ service: usage, identity, flush: () => usageRuntime.flush() })
+    yield ctx.webServer.register({ kind: 'prefix', path: '/physicsos/usage', handler: usageHandler })
+    yield ctx.webServer.register({ kind: 'exact', path: '/physicsos/admin/usage', handler: usageHandler })
+    const whiteboardDomain = await openWhiteboardDomain(ctx)
+    yield () => whiteboardDomain.close()
+    const whiteboard = new WhiteboardService(whiteboardDomain, new CanvasBlobStore(resolved.root), {
+      model: createWhiteboardModel(ctx, {
+        provider: config.whiteboardProvider ?? 'physicsos-pool',
+        model: config.whiteboardModel ?? 'deepseek-v4.1-flash',
+      }),
+      recordUsage: input => usage.recordModelReceipt(input),
+    })
+    yield () => whiteboard.dispose()
+    await whiteboard.initialize()
+    yield ctx.webServer.register({ kind: 'prefix', path: WHITEBOARD_PREFIX, handler: whiteboardRoutes({ service: whiteboard, identity }) })
     const learningHandler = learningRoutes({ service, identity })
     const canvasHandler = canvasRoutes({ service: canvas, identity })
     yield ctx.webServer.register({

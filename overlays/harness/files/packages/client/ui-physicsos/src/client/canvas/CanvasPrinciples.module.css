@@ -1,0 +1,3 @@
+.panel { flex: 0 1 auto; min-height: 28px; max-height: 40%; min-width: 0; overflow: auto; border-top: 1px solid var(--dsw-alias-border-l2); }
+.panel > summary { cursor: pointer; padding: 6px 8px; color: var(--dsw-alias-label-secondary); font-size: 12px; }
+.panel > ol { padding: 8px; margin: 0; }

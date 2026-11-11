@@ -20,7 +20,8 @@ import { ChatStreamValidator } from './chat-stream.ts'
 
 const CHAT_PATH = '/v1/chat/completions'
 const MODELS_PATH = '/v1/models'
-const BODY_LIMIT = 2 * 1024 * 1024
+// Match the admitted image message plus base64 expansion and tool schemas.
+const BODY_LIMIT = 48 * 1024 * 1024
 const MODELS_CACHE_MS = 60_000
 
 /** Collaborators of the proxy listener. */

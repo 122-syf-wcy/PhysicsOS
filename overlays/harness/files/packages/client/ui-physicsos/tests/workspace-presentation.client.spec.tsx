@@ -35,7 +35,7 @@ const mountLab = (templateId: string) => {
       t={t}
       useSessions={neverHook}
       useWorkspaces={neverHook}
-      useAuth={neverHook}
+      useAuth={selector => selector({ status: 'guest' })}
     />
   )
   const view = render(element())
@@ -57,7 +57,7 @@ describe('return to chat', () => {
         openSurface={openSurface}
         useSessions={neverHook}
         useWorkspaces={neverHook}
-        useAuth={neverHook}
+        useAuth={selector => selector({ status: 'guest' })}
       />,
     )
     fireEvent.click(screen.getByRole('button', { name: '返回对话' }))
@@ -80,7 +80,7 @@ describe('return to chat', () => {
         openExperimentPicker={openExperimentPicker}
         useSessions={neverHook}
         useWorkspaces={neverHook}
-        useAuth={neverHook}
+        useAuth={selector => selector({ status: 'guest' })}
       />,
     )
     const crumb = screen.getByRole('button', { name: /^实验中心/ })

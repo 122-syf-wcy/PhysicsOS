@@ -88,6 +88,17 @@ function groupDocument(): CanvasDocumentState {
 afterEach(() => { cleanup(); observed.current = undefined; vi.restoreAllMocks() })
 
 describe('controlled experiment canvas workspace', () => {
+  it('starts in single-finger canvas movement on a touch tablet and keeps an explicit editing mode', () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: true, addEventListener() {}, removeEventListener() {} }))
+    onTestFinished(() => { vi.unstubAllGlobals() })
+    const fixture = rootFixture()
+    render(<CanvasWorkspace {...fixture.props} />)
+    expect(fixture.view.getSnapshot().tool).toBe('hand')
+    expect(currentFlow().panOnDrag).toBe(true)
+    expect(currentFlow().selectionOnDrag).toBe(false)
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }))
+    expect(fixture.view.getSnapshot().tool).toBe('select')
+  })
   it('opens the sole experiment from the toolbar so a narrow board remains editable', () => {
     const fixture = rootFixture()
     render(<CanvasWorkspace {...fixture.props} />)
@@ -117,8 +128,8 @@ describe('controlled experiment canvas workspace', () => {
       instances: manifest.instances.map(instance => ({ ...instance, buildMode: 'construct' as const })) } })
     render(<CanvasWorkspace {...fixture.props} />)
     const displayed = currentFlow().nodes?.find(node => node.type === 'experiment')
-    expect(displayed?.width).toBe(1080)
-    expect(displayed?.height).toBe(700)
+    expect(displayed?.width).toBe(480)
+    expect(displayed?.height).toBe(640)
     expect(manifest.nodes.find(node => node.kind === 'experiment')!.layout.width).toBe(360)
     expect(fixture.commands.updateLayout).not.toHaveBeenCalled()
   })

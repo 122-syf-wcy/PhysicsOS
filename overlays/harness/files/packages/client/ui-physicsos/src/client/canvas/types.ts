@@ -64,6 +64,7 @@ export interface CanvasDocumentSummary {
   readonly deleted: boolean
   readonly head?: CanvasHead
   readonly status: CanvasSaveStatus
+  readonly projectId?: string
 }
 export interface CanvasRosterState {
   readonly items: readonly CanvasHead[]
@@ -157,6 +158,7 @@ export interface CanvasControllerOptions extends CanvasEnvironment {
 }
 
 export interface CanvasController {
+  assignProject(canvasId: string, projectId?: string): Promise<void>
   readonly state: CanvasObservable<CanvasRosterState>
   getSnapshot(this: void): CanvasRosterState
   subscribe(this: void, listener: () => void): () => void

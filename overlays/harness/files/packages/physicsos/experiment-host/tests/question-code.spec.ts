@@ -81,6 +81,17 @@ const ownRectangles = `export function renderFrame(snapshot) {
   const ctx = canvas.getContext('2d'); ctx.fillRect(0, 0, canvas.width, canvas.height);
   for (const item of view.opticalObjects ?? []) ctx.fillRect(item.at.x, item.at.y, 2, item.height);
 }`
+/** A small shared dependency graph, without any private generated code. */
+function sharedDrawing(depth: number): string {
+  const helpers = Array.from({ length: depth }, (_, index) =>
+    `function coordinate${index}(view) { return coordinate${index + 1}(view) + 0 * coordinate${index + 1}(view); }`).join('\n')
+  return `export function renderFrame(snapshot) {
+    const view = snapshot.view, root = document.getElementById('canvas');
+    const canvas = document.createElement('canvas'); root.replaceChildren(canvas);
+    const ctx = canvas.getContext('2d'); ctx.beginPath();
+    ctx.arc(coordinate0(view), view.opticalObjects[0].at.y, 3, 0, Math.PI * 2); ctx.fill();
+  }\n${helpers}\nfunction coordinate${depth}(view) { return view.opticalObjects[0].at.x; }`
+}
 async function create(service: QuestionCodeArtifactService) {
   return service.create({
     ownerSessionId: 'parent-session',
@@ -135,6 +146,15 @@ afterEach(async () => {
   if (root) await rm(root, { recursive: true, force: true })
 })
 describe('private question code artifacts', () => {
+  it('validates a shared helper dependency graph without blocking artifact settlement', async () => {
+    const service = await setup(), started = Date.now()
+    const ref = await service.create({
+      ownerSessionId: 'parent-session', childSessionId: 'shared-helper-child', scene: scene(), experimentId: 'convex-lens',
+      source: { title: '共享绘图坐标', summary: '来自同一引擎快照的坐标依赖', rendererJs: sharedDrawing(9), stylesheet: '' },
+    })
+    expect(ref).toMatchObject({ status: 'ready', rendererKind: 'independent' })
+    expect(Date.now() - started).toBeLessThan(1_500)
+  }, 10_000)
   it('freezes exact question identity and creates no community release', async () => {
     const service = await setup(),
       before = loaded!.service.list(contributor, 'convex-lens')

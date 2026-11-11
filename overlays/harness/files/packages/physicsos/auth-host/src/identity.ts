@@ -51,6 +51,8 @@ export interface PhysicsosIdentity {
   actorOf(req: IncomingMessage): IdentityActor | null
   /** Exact persisted Harness session owner, with no administrator bypass. */
   sessionOwnerKey(sessionId: string): string | undefined
+  usageSessionOwner(sessionId: string): { readonly schoolId: string; readonly userKey: string } | undefined
+  usageOwnedSessions(): readonly { readonly sessionId: string; readonly schoolId: string; readonly userKey: string }[]
   /**
    * Append to the platform audit ledger. The school is taken from the actor
    * rather than the caller, so a host cannot file an action under a tenant it
@@ -76,5 +78,7 @@ export const createIdentityService = (service: AuthService): PhysicsosIdentity =
     return resolved.actor
   },
   sessionOwnerKey: sessionId => service.sessionOwnerKey(sessionId),
+  usageSessionOwner: sessionId => service.usageSessionOwner(sessionId),
+  usageOwnedSessions: () => service.usageOwnedSessions(),
   record: (actor, action, target, detail) => service.auditAs(actor, action, target, detail),
 })

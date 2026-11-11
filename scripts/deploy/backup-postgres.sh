@@ -3,6 +3,14 @@
 set -euo pipefail
 
 PROJECT_DIR=${PHYSICSOS_DIR:-/opt/physicsos}
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
+if [[ ${1:-} != --under-operation-lock ]]; then
+  export PHYSICSOS_DIR="$PROJECT_DIR"
+  exec "$SCRIPT_DIR/server-node.sh" "$SCRIPT_DIR/operation-run.mjs" \
+    --project-dir "$PROJECT_DIR" --operation postgres-backup -- \
+    /bin/bash "$SCRIPT_DIR/backup-postgres.sh" --under-operation-lock
+fi
+shift
 BACKUP_ROOT=${PHYSICSOS_BACKUP_DIR:-"$PROJECT_DIR/backups/postgres"}
 RETENTION_DAYS=${PHYSICSOS_BACKUP_RETENTION_DAYS:-14}
 POSTGRES_SERVICE=${PHYSICSOS_POSTGRES_SERVICE:-postgres}
@@ -15,6 +23,7 @@ log() { printf '[%s] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
 fail() { printf 'backup-postgres: %s\n' "$*" >&2; exit 1; }
 
 [[ "$RETENTION_DAYS" =~ ^[0-9]+$ ]] || fail 'PHYSICSOS_BACKUP_RETENTION_DAYS must be a non-negative integer'
+[[ "$STAMP" =~ ^[0-9]{8}T[0-9]{6}Z$ ]] || fail 'Invalid backup timestamp'
 [[ -f "$PROJECT_DIR/compose.yml" ]] || fail "compose.yml not found under $PROJECT_DIR"
 
 umask 077
@@ -41,7 +50,7 @@ log "dumping PostgreSQL to $DUMP_FILE"
 
 log 'validating archive table of contents with pg_restore --list'
 postgres_image="$("${compose[@]}" ps -q "$POSTGRES_SERVICE" |
-  xargs -r docker inspect --format '{{.Config.Image}}')"
+  xargs -r docker inspect --format '{{.Image}}')"
 [[ -n "$postgres_image" ]] || fail 'could not resolve the PostgreSQL image'
 docker run --rm --network none \
   -v "$BACKUP_DIR:/backup:ro" \

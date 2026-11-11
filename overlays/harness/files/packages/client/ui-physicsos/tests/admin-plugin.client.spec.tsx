@@ -136,25 +136,21 @@ describe('AdminPluginTab', () => {
   })
 })
 
-describe('plugin-center administrator wiring', () => {
-  it('offers the tab only to SUPER_ADMIN', async () => {
-    const { api } = stubApi([entry()])
+describe('removed plugin-center administrator wiring', () => {
+  it('does not offer public plugin management to either administrator role', () => {
     const view = render(
       <AdminWorkspace
         api={adminApi}
-        pluginApi={api}
         useAuth={authedAs('SUPER_ADMIN')}
         t={t}
       />,
     )
-    fireEvent.click(screen.getByRole('tab', { name: zh['admin.tab.plugins'] }))
-    expect(await screen.findByTestId('plugin-group-official')).toBeTruthy()
+    expect(screen.queryByRole('tab', { name: zh['admin.tab.plugins'] })).toBeNull()
 
     view.unmount()
     render(
       <AdminWorkspace
         api={adminApi}
-        pluginApi={api}
         useAuth={authedAs('SCHOOL_ADMIN')}
         t={t}
       />,

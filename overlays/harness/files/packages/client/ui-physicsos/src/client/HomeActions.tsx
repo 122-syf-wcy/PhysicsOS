@@ -4,7 +4,6 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SnapshotStore } from './runtime-compat.ts'
 import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
-import { GOLDEN_QUESTIONS } from '@physicsos/question-core'
 import { fillComposerDraft } from './fill-draft.ts'
 import { IconPhysicsLab, IconQuestionSheet } from './icons/physics-icons.tsx'
 import type { PhysicsSceneRef, RecentExperimentsState } from './surface-store.ts'
@@ -12,7 +11,8 @@ import { formatUpdatedAt, workspaceKnowledge } from './workspaceMeta.ts'
 import css from './HomeActions.module.css'
 
 export type HomeActionsInjected = {
-  openSurface: (surface: 'home' | 'lab' | 'record' | 'canvas', sceneRef?: PhysicsSceneRef) => void
+  openSurface: (surface: 'home' | 'lab' | 'record' | 'canvas' | 'projects', sceneRef?: PhysicsSceneRef) => void
+  startQuestion?: () => void
   openCanvasView: (canvasId?: string) => void
   newCanvas: (title: string) => Promise<string>
   requestSceneInCanvas: (sceneRef: PhysicsSceneRef) => void
@@ -26,7 +26,7 @@ export type HomeActionsProps =
   & PropsLocale<'physicsos'>
 
 /** Quick actions and the recent real-scene list under the hero composer. */
-export function HomeActions({ useRecentExperiments, openSurface, openCanvasView, newCanvas, requestSceneInCanvas, t }: HomeActionsProps) {
+export function HomeActions({ useRecentExperiments, openSurface, openCanvasView, requestSceneInCanvas, startQuestion, t }: HomeActionsProps) {
   const items = useRecentExperiments(s => s.items)
   return (
     <div className={css.root}>
@@ -47,8 +47,8 @@ export function HomeActions({ useRecentExperiments, openSurface, openCanvasView,
         <button
           type="button"
           className={css.portal}
-          aria-label={t('canvas.new')}
-          onClick={() => { void newCanvas(t('canvas.untitled')).catch(() => undefined) }}
+          aria-label={t('home.card.lab.title')}
+          onClick={() => { openSurface('lab') }}
         >
           <img
             className={css.portalImage}
@@ -59,11 +59,11 @@ export function HomeActions({ useRecentExperiments, openSurface, openCanvasView,
           <span className={css.portalBody}>
             <span className={css.portalTitle}>
               <span className={css.portalIcon}><IconPhysicsLab size={18} /></span>
-              {t('canvas.new')}
+              {t('home.card.lab.title')}
             </span>
-            <span className={css.portalDescription}>{t('canvas.subtitle')}</span>
+            <span className={css.portalDescription}>{t('home.lab.description')}</span>
             <span className={css.portalMeta}>
-              {t('canvas.emptyBoardHint')}
+              {t('home.card.lab.action')}
               <IconChevronRightOutlineMedium size={14} />
             </span>
           </span>
@@ -73,8 +73,8 @@ export function HomeActions({ useRecentExperiments, openSurface, openCanvasView,
         <button
           type="button"
           className={css.portal}
-          aria-label={t('action.upload')}
-          onClick={() => { openSurface('record') }}
+          aria-label={t('home.ask.title')}
+          onClick={() => { if (startQuestion !== undefined) startQuestion(); else openSurface('home') }}
         >
           <img
             className={css.portalImage}
@@ -85,11 +85,11 @@ export function HomeActions({ useRecentExperiments, openSurface, openCanvasView,
           <span className={css.portalBody}>
             <span className={css.portalTitle}>
               <span className={css.portalIcon}><IconQuestionSheet size={18} /></span>
-              {t('action.upload')}
+              {t('home.ask.title')}
             </span>
-            <span className={css.portalDescription}>{t('home.questions.description')}</span>
+            <span className={css.portalDescription}>{t('home.ask.description')}</span>
             <span className={css.portalMeta}>
-              {t('home.questions.meta').replace('{count}', String(GOLDEN_QUESTIONS.length))}
+              {t('home.ask.action')}
               <IconChevronRightOutlineMedium size={14} />
             </span>
           </span>
@@ -107,10 +107,10 @@ export function HomeActions({ useRecentExperiments, openSurface, openCanvasView,
         <button
           type="button"
           className={css.action}
-          onClick={() => { openSurface('lab') }}
+          onClick={() => { openSurface('projects') }}
         >
           <IconBrowseOutlineMedium size={16} />
-          <span>{t('action.templates')}</span>
+          <span>{t('nav.projects')}</span>
         </button>
       </div>
       <section className={css.recent} aria-label={t('recent.title')}>

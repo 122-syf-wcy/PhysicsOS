@@ -124,6 +124,13 @@ describe('real Loader composition - personal learning sync', () => {
       expect(registered.status).toBe(201)
       const firstCookie = cookieOf(registered)
 
+      const visit = await jsonCall('/physicsos/usage/events', 'POST', {
+        id: 'loader-real-visit', kind: 'visit', surface: 'whiteboard', action: 'view',
+      }, firstCookie)
+      expect(visit.status).toBe(200)
+      expect((await (await jsonCall('/physicsos/usage', 'GET', undefined, firstCookie)).json()).visits).toBe(1)
+      expect((await jsonCall('/physicsos/admin/usage', 'GET', undefined, firstCookie)).status).toBe(403)
+
       const savedAttempt = await jsonCall(
         '/physicsos/learning/attempts/attempt-1',
         'PUT',

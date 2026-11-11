@@ -459,7 +459,8 @@
 .labContent { display: flex; flex-direction: column; gap: 14px; width: 100%; max-width: 1280px; min-width: 0; margin: 0 auto; padding-bottom: 12px; }
 .labHeader { display: flex; align-items: center; gap: 20px; min-width: 0; padding: 3px 2px 8px; }
 .labHeader > .heading { flex: 1; min-width: 0; }
-.labHeader > .open { display: inline-flex; align-items: center; gap: 6px; }
+.labHeaderActions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.labHeaderActions > .open { display: inline-flex; align-items: center; gap: 6px; }
 .crumb {
   justify-self: start;
   display: inline-flex;
@@ -496,7 +497,7 @@
   .labCover[data-private-question-code-workspace] { padding: 12px; }
   .labContent { gap: 10px; }
   .labHeader { align-items: flex-start; gap: 10px; }
-  .labHeader > .open { min-height: 36px; padding: 7px 10px; }
+  .labHeaderActions > .open { min-height: 36px; padding: 7px 10px; }
   .labContent .codeStage { height: 380px; }
   .head { gap: 10px; align-items: flex-start; }
   .title { font-size: 18px; }

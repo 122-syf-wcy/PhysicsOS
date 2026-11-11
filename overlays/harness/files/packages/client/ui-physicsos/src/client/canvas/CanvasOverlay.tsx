@@ -124,7 +124,7 @@ export function CanvasOverlay(props: CanvasOverlayProps) {
     </Modal>
     <Modal open={active && view.libraryOpen && surface.canvasId !== undefined}
       title={t('canvas.selectExperiment')} closeLabel={t('canvas.close')}
-      className={css.libraryDialog!} contentClassName={css.libraryContent!}
+      className={css.libraryDialog!} contentClassName={`${css.libraryContent} ${css.pickerContent}`}
       onClose={() => { if (!libraryBusy) actions.setLibraryOpen(false) }}>
       {libraryError === undefined ? null : <p role="alert" className={css.notice}>{libraryError}</p>}
       <fieldset disabled={libraryBusy} aria-busy={libraryBusy}>

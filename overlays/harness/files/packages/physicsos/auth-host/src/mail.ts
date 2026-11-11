@@ -339,7 +339,7 @@ const escapeHtml = (value: string): string => value
  * @param notice - who to address and which school they joined.
  * @returns subject, plain-text fallback, and the HTML body.
  */
-const approvedMessage = (
+export const approvedMessage = (
   config: MailConfig,
   notice: ApprovedNotice,
 ): Pick<MailMessage, 'subject' | 'text' | 'html'> => {
@@ -347,6 +347,7 @@ const approvedMessage = (
   const school = escapeHtml(notice.schoolName)
   const username = escapeHtml(notice.username)
   const site = escapeHtml(config.siteUrl)
+  const groupQr = escapeHtml(new URL('/physicsos/community/qq-group-1129665992.jpg', config.siteUrl).toString())
   const passwordHint = '你在注册时设置的密码'
 
   const text = [
@@ -361,6 +362,9 @@ const approvedMessage = (
     '',
     '如果忘记了密码，可以在登录页点「忘记密码」提交重置申请，',
     '管理员处理后会与你联系。',
+    '',
+    '欢迎加入 PhysicsOS 公益QQ群：1129665992，与老师和同学一起交流物理学习。',
+    `群二维码：${new URL('/physicsos/community/qq-group-1129665992.jpg', config.siteUrl).toString()}`,
     '',
     '—— PhysicsOS',
   ].join('\n')
@@ -459,6 +463,14 @@ ${row('密码', passwordHint, true)}
               <p style="margin:14px 0 0 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;font-size:12px;line-height:20px;color:#8a8f98;">
                 按钮无法点击时，请打开 <a href="${site}" style="color:#2563eb;text-decoration:none;">${site}</a>
               </p>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:24px 32px 0 32px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:24px;color:#344054;">
+              <p style="margin:0 0 12px;">欢迎加入 PhysicsOS 公益QQ群：<strong>1129665992</strong>，与老师和同学一起交流物理学习。</p>
+              <img src="${groupQr}" width="240" alt="PhysicsOS 公益QQ群 1129665992 二维码" style="display:block;width:240px;max-width:100%;height:auto;border:0;">
+              <p style="margin:8px 0 0;font-size:12px;">如邮件未显示图片，可直接搜索群号 1129665992。</p>
             </td>
           </tr>
 

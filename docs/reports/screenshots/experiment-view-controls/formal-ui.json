@@ -1,0 +1,11 @@
+{
+  "passed": true,
+  "checks": [
+    "authenticated shell",
+    "workbench action is in header",
+    "three distinct loaded navigation icons",
+    "packaged renderer zoom, move and reset",
+    "390px header and camera controls remain reachable"
+  ],
+  "errors": []
+}

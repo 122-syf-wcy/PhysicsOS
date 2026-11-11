@@ -3,13 +3,15 @@ import { constants } from 'node:fs'
 import { link, mkdir, open, rename, rm, mkdtemp } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { createRequire } from 'node:module'
+import { Worker } from 'node:worker_threads'
 import { join, resolve } from 'node:path'
 import type { Domain } from '@deepseek-ai/dsh-storage-domain'
 import { validateScene, type PhysicsScene } from '@physicsos/physics-scene'
 import { pickEngine, domainOfEngine } from '@physicsos/physics-runtime'
 import { canonicalJson, type CodeExperimentRef, type CodeVisualizationSource } from '@physicsos/agent-tools'
 import { z } from 'zod'
-import { init, parse } from 'es-module-lexer'
+import type { parse as parseModule } from 'es-module-lexer'
 import { ExperimentError, type PhysicsosIdentity, type IdentityActor } from './identity.ts'
 import { ASSET_PREFIX, type Asset } from './service.ts'
 import { experimentProfile, manifestV3Schema, validatePackageMetadataV3 } from './contract-v3.ts'
@@ -37,10 +39,13 @@ export interface CreateQuestionCodeInput {
   childSessionId: string
   source: CodeVisualizationSource
   generationId?: string
+  requestSha256?: string
 }
+export interface RestoreQuestionCodeInput { ownerSessionId: string; generationId: string; scene: PhysicsScene; experimentId: string }
 export interface QuestionCodeArtifacts {
   /** `signal` lets a caller that gave up stop the create before it commits. */
   create(input: CreateQuestionCodeInput, signal?: AbortSignal): Promise<CodeExperimentRef>
+  restoreGeneration(input: RestoreQuestionCodeInput, signal?: AbortSignal): Promise<CodeExperimentRef | undefined>
   context(experimentId: string): Promise<QuestionCodeContext>
   describe(ownerSessionId: string, artifactId: string, expectedSha256: string): CodeExperimentRef
   generateAsset(input: QuestionAssetRequest): Promise<QuestionAssetDescriptor>
@@ -59,6 +64,8 @@ export interface QuestionCodeOptions {
   assetOrigin?: string
   previewTtlMs?: number
   imageAssets?: QuestionCodeAssets
+  drawingTimeoutMs?: number
+  drawingConcurrency?: number
 }
 const executeFile = promisify(execFile)
 const hash = (bytes: Buffer | string): string => createHash('sha256').update(bytes).digest('hex')
@@ -86,6 +93,7 @@ const inputSchema = z
     scene: z.unknown(),
     source: sourceSchema,
     generationId: z.string().min(1).max(200).optional(),
+    requestSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   })
   .strict()
 const missing = (): ExperimentError =>
@@ -99,6 +107,7 @@ type SourceValidationReason =
   | 'missing_native_drawing'
   | 'invalid_visibility_key'
   | 'syntax_error'
+  | 'analysis_limit'
 class DrawingValidationError extends Error {
   constructor(readonly reason: SourceValidationReason) {
     super('Independent drawing validation failed')
@@ -132,6 +141,11 @@ interface DrawingFunction {
 }
 interface DrawingCall { name: string; start: number; end: number; arguments: string[] }
 interface DrawingSvgExpression { expression: string; start: number; receiver: string }
+/** Self-contained trusted analysis. Authored JavaScript is parsed as data only. */
+function runIndependentDrawingValidation(source: string, parse: typeof parseModule): void {
+class DrawingValidationError extends Error {
+  constructor(readonly reason: SourceValidationReason) { super('Independent drawing validation failed') }
+}
 const drawingNames = (text: string): string[] => text.match(/[A-Za-z_$][\w$]*/g) ?? []
 /** Strings/comments are masked in place, preserving source spans for reachable inline SVG. */
 function drawingCode(source: string): string {
@@ -398,7 +412,20 @@ function validateIndependentDrawing(source: string): void {
       if (globalNames.has(name) && !new RegExp(`\\b(?:const|let|var)\\s+${name}\\b`).test(fn.code)) assignedGlobals.set(name, { fn, value })
     }
   }
+  let work = 0
+  const step = (): void => { if (++work > 100_000) throw new DrawingValidationError('analysis_limit') }
+  const contextKey = (expression: string, fn: DrawingFunction, seen: Set<string>): string =>
+    JSON.stringify([fn.name, expression, [...seen].sort()])
+  const nodes = new Map<string, string[]>(), classifications = new Map<string, number>()
   const nodeIdentities = (expression: string, fn: DrawingFunction, seen: Set<string> = new Set()): string[] => {
+    step()
+    const key = contextKey(expression, fn, seen), cached = nodes.get(key)
+    if (cached !== undefined) return cached
+    const result = resolveNodeIdentities(expression, fn, seen)
+    if (nodes.size < 4_096) nodes.set(key, result)
+    return result
+  }
+  const resolveNodeIdentities = (expression: string, fn: DrawingFunction, seen: Set<string>): string[] => {
     if (seen.size > 64) return []
     if (/^\s*document\s*\.\s*getElementById\s*\(\s*["']canvas["']\s*\)\s*$/.test(expression)) return ['stage']
     const name = expression.trim()
@@ -444,6 +471,16 @@ function validateIndependentDrawing(source: string): void {
     if (mounted.size === before) break
   }
   const classify = (expression: string, fn: DrawingFunction, seen: Set<string> = new Set()): number => {
+    step()
+    const key = contextKey(expression, fn, seen), cached = classifications.get(key)
+    if (cached !== undefined) return cached
+    const result = resolveClassification(expression, fn, seen)
+    // Include the full traversal context: neither zero nor positive evidence
+    // is borrowed from a different helper/parameter dependency path.
+    if (classifications.size < 4_096) classifications.set(key, result)
+    return result
+  }
+  const resolveClassification = (expression: string, fn: DrawingFunction, seen: Set<string>): number => {
     if (seen.size > 64) return 0
     // In a same-object guard, only the RHS is the value; the frame operand controls access to its view.
     const guardedView = drawingViewGuard(expression)
@@ -557,6 +594,23 @@ function validateIndependentDrawing(source: string): void {
     /\.setAttribute\s*\(/.test(active) && /\.(?:append|appendChild|replaceChildren)\s*\(/.test(code)
   if (!canvas && !svg) throw new DrawingValidationError('missing_native_drawing')
 }
+validateIndependentDrawing(source)
+}
+
+const drawingLexerPath = createRequire(import.meta.url).resolve('es-module-lexer')
+const drawingWorkerSource = `const { parentPort, workerData } = require('node:worker_threads');
+const __name = (value, name) => Object.defineProperty(value, 'name', { value: name, configurable: true });
+(async () => {
+  try {
+    const { init, parse } = require(workerData.lexerPath);
+    await init;
+    (${runIndependentDrawingValidation.toString()})(workerData.source, parse);
+    parentPort.postMessage({ ok: true });
+  } catch (error) {
+    parentPort.postMessage({ ok: false, reason: typeof error?.reason === 'string' ? error.reason : undefined });
+  }
+})();`
+
 const recordHash = (record: Omit<QuestionCodeRecord, 'sha256'> | QuestionCodeRecord): string => {
   const { sha256: _ignored, ...body } = record as QuestionCodeRecord
   return hash(canonicalQuestionJson(body))
@@ -574,6 +628,7 @@ const project = (row: QuestionCodeRecord): CodeExperimentRef => ({
   title: row.title,
   ...(row.rendererKind === undefined ? {} : { rendererKind: row.rendererKind }),
   createdAt: row.createdAt,
+  ...(row.requestSha256 === undefined ? {} : { requestSha256: row.requestSha256 }),
 })
 async function verifiedFile(
   path: string,
@@ -654,6 +709,9 @@ export class QuestionCodeArtifactService implements QuestionCodeArtifacts {
   /* Each syntax check forks a Node process: concurrent accounts overlap, but
      the forks stay bounded. */
   private readonly syntaxChecks = new Gate(2)
+  private readonly drawingChecks: Gate
+  private readonly drawingTimeoutMs: number
+  private readonly generationCreates = new Map<string, { digest: string; operation: Promise<CodeExperimentRef> }>()
   private readonly inflight = new Set<Promise<unknown>>()
   private initialized = false
   private secret: Buffer | undefined
@@ -665,6 +723,11 @@ export class QuestionCodeArtifactService implements QuestionCodeArtifacts {
     private readonly domain: Domain<typeof questionCodeDomain>,
     private readonly options: QuestionCodeOptions,
   ) {
+    const timeout = options.drawingTimeoutMs ?? 5_000, concurrency = options.drawingConcurrency ?? 2
+    if (!Number.isSafeInteger(timeout) || timeout < 1 || timeout > 60_000
+      || !Number.isSafeInteger(concurrency) || concurrency < 1 || concurrency > 16) throw new Error('Invalid drawing validation limits')
+    this.drawingTimeoutMs = timeout
+    this.drawingChecks = new Gate(concurrency)
     this.root = resolve(options.root)
     this.imageAssets = options.imageAssets ?? new QuestionCodeAssets()
     this.ttl = Math.min(15 * 60_000, Math.max(1, options.previewTtlMs ?? 10 * 60_000))
@@ -770,10 +833,42 @@ export class QuestionCodeArtifactService implements QuestionCodeArtifacts {
   assetManifest(input: QuestionAssetScope): QuestionAssetDescriptor[] { return this.imageAssets.manifest(this.assetBinding(input)) }
   assetFallback(input: QuestionAssetScope): QuestionAssetFallback | undefined { return this.imageAssets.nativeFallback(this.assetBinding(input)) }
   async create(input: CreateQuestionCodeInput, signal?: AbortSignal): Promise<CodeExperimentRef> {
+    const key = input.generationId === undefined ? undefined : this.generationArtifactId(input.ownerSessionId, input.generationId)
+    const { childSessionId: _child, ...request } = input
+    const digest = hash(canonicalQuestionJson(request)), active = key === undefined ? undefined : this.generationCreates.get(key)
+    if (active !== undefined) {
+      if (active.digest !== digest) throw new ExperimentError(409, 'GENERATION_RECEIPT_MISMATCH', '题目生成任务的提交内容已变化。')
+      return active.operation
+    }
     const operation = this.build(input, signal)
+    if (key !== undefined) this.generationCreates.set(key, { digest, operation })
     this.inflight.add(operation)
-    void operation.finally(() => { this.inflight.delete(operation) }).catch(() => {})
+    void operation.finally(() => { this.inflight.delete(operation); if (key !== undefined) this.generationCreates.delete(key) }).catch(() => {})
     return operation
+  }
+  private generationArtifactId(ownerSessionId: string, generationId: string): string {
+    return 'qcode_' + hash(canonicalQuestionJson([this.owner(ownerSessionId), ownerSessionId, generationId])).slice(0, 32)
+  }
+  /** A receipt is ready only while its account binding and every frozen file verify. */
+  async restoreGeneration(input: RestoreQuestionCodeInput, signal?: AbortSignal): Promise<CodeExperimentRef | undefined> {
+    this.requireReady()
+    signal?.throwIfAborted()
+    const ownerKey = this.owner(input.ownerSessionId)
+    if (ownerKey === undefined) throw missing()
+    const row = this.domain.table('artifacts').get(this.generationArtifactId(input.ownerSessionId, input.generationId))
+    if (row === undefined) return undefined
+    const checked = this.checked(row)
+    if (checked.ownerKey !== ownerKey || checked.ownerSessionId !== input.ownerSessionId || checked.generationId !== input.generationId
+      || checked.sceneId !== input.scene.id || checked.sceneRevision !== input.scene.revision
+      || checked.sceneSha256 !== questionSceneSha256(input.scene) || checked.experimentId !== input.experimentId
+      || checked.rendererKind !== 'independent') throw new ExperimentError(409, 'GENERATION_RECEIPT_MISMATCH', '题目生成任务的产物身份不一致。')
+    for (const file of checked.files) {
+      signal?.throwIfAborted()
+      await verifiedFile(join(this.root, 'blobs', file.sha256), file)
+    }
+    signal?.throwIfAborted()
+    if (this.owner(input.ownerSessionId) !== ownerKey) throw missing()
+    return project(checked)
   }
   /* Creates overlap freely: blob publication is the only shared file state and is
      atomic per digest, and rows land on the domain's write chain. A caller that
@@ -804,6 +899,22 @@ export class QuestionCodeArtifactService implements QuestionCodeArtifacts {
     if (!profile || !selected.entry || profile.domain !== domainOfEngine(selected.entry.engine))
       throw new ExperimentError(400, 'SCENE_PROFILE_MISMATCH', '实验风格与题目物理领域不一致。')
     const source = parsed.data.source
+    if (input.generationId !== undefined) {
+      const receipt = await this.restoreGeneration({ ownerSessionId: input.ownerSessionId, generationId: input.generationId, scene, experimentId: input.experimentId }, signal)
+      if (receipt !== undefined) {
+        const row = this.record(receipt.artifactId)
+        const read = async (name: string): Promise<string> => {
+          const file = row.files.find(entry => entry.name === name)
+          if (file === undefined) throw missing()
+          return (await verifiedFile(join(this.root, 'blobs', file.sha256), file)).toString('utf8')
+        }
+        if (source.title !== row.title || source.summary !== row.summary || input.requestSha256 !== row.requestSha256
+          || source.rendererJs !== await read('src/renderer.js') || source.stylesheet !== await read('public/assets/experiment.css')) {
+          throw new ExperimentError(409, 'GENERATION_RECEIPT_MISMATCH', '题目生成任务的提交内容已变化。')
+        }
+        return receipt
+      }
+    }
     if (Buffer.byteLength(canonicalQuestionJson(source), 'utf8') > 128 * 1024)
       throw new ExperimentError(413, 'SOURCE_TOO_LARGE', '生成代码不能超过 128 KiB。')
     const styleVersion = styleVersionOf(this.options.prompts?.current()),
@@ -852,9 +963,9 @@ document.addEventListener('physicsos-experiment-intent', event => {
       const manifest = manifestV3Schema.parse(JSON.parse(manifestBytes.toString('utf8')))
       if (validatePackageMetadataV3(files, manifest).length) throw new Error('metadata')
       await validatePackageResources(files, manifest)
-      await init
-      validateIndependentDrawing(source.rendererJs)
+      await this.checkDrawing(source.rendererJs, signal)
     } catch (error) {
+      if (error instanceof ExperimentError) throw error
       throw invalidSource(error instanceof DrawingValidationError ? error.reason : undefined)
     }
     files.set('question-scene.json', Buffer.from(canonicalQuestionJson(scene)))
@@ -871,10 +982,12 @@ document.addEventListener('physicsos-experiment-intent', event => {
       })
     }
     const row: QuestionCodeRecord = {
-      id: 'qcode_' + randomBytes(16).toString('hex'),
+      id: input.generationId === undefined ? 'qcode_' + randomBytes(16).toString('hex') : this.generationArtifactId(input.ownerSessionId, input.generationId),
       ownerSessionId: input.ownerSessionId,
       ownerKey,
       childSessionId: input.childSessionId,
+      ...(input.generationId === undefined ? {} : { generationId: input.generationId }),
+      ...(input.requestSha256 === undefined ? {} : { requestSha256: input.requestSha256 }),
       sceneId: scene.id,
       sceneRevision: scene.revision,
       sceneSha256: questionSceneSha256(scene),
@@ -921,6 +1034,56 @@ document.addEventListener('physicsos-experiment-intent', event => {
     } finally {
       await rm(checkDir, { recursive: true, force: true })
     }
+  }
+  /** A hard worker deadline keeps expensive source graphs off the host event loop. */
+  private async checkDrawing(source: string, signal: AbortSignal | undefined): Promise<void> {
+    const aborted = (): ExperimentError => new ExperimentError(499, 'GENERATION_ABORTED', '题目实验生成已取消。')
+    if (signal?.aborted) throw aborted()
+    const scheduled = this.drawingChecks.run(() => new Promise<void>((resolve, reject) => {
+      if (signal?.aborted) { reject(aborted()); return }
+      const worker = new Worker(drawingWorkerSource, {
+        eval: true, workerData: { source, lexerPath: drawingLexerPath },
+        resourceLimits: { maxOldGenerationSizeMb: 64 }, stdout: true, stderr: true,
+      })
+      worker.stdout?.resume(); worker.stderr?.resume()
+      let settled = false
+      const finish = (error?: Error): void => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        signal?.removeEventListener('abort', cancel)
+        // The gate retains the slot until the old worker has really exited.
+        void worker.terminate().then(() => { if (error !== undefined) reject(error); else resolve() }, () => {
+          reject(error ?? new ExperimentError(503, 'SOURCE_ANALYSIS_FAILED', '生成代码校验未完成，请重新生成。'))
+        })
+      }
+      const cancel = (): void => { finish(aborted()) }
+      const timer = setTimeout(() => { finish(new ExperimentError(503, 'SOURCE_ANALYSIS_TIMEOUT', '生成代码校验超时，请重新生成。')) }, this.drawingTimeoutMs)
+      const reasons = new Set<SourceValidationReason>(['missing_export', 'module_dependency', 'missing_native_entry', 'legacy_renderer',
+        'missing_engine_geometry', 'missing_native_drawing', 'invalid_visibility_key', 'syntax_error', 'analysis_limit'])
+      worker.on('message', (result: unknown) => {
+        if (result !== null && typeof result === 'object' && 'ok' in result && result.ok === true) { finish(); return }
+        const reason = result !== null && typeof result === 'object' && 'reason' in result ? result.reason : undefined
+        finish(typeof reason === 'string' && reasons.has(reason as SourceValidationReason)
+          ? new DrawingValidationError(reason as SourceValidationReason)
+          : new ExperimentError(503, 'SOURCE_ANALYSIS_FAILED', '生成代码校验未完成，请重新生成。'))
+      })
+      worker.on('error', () => { finish(new ExperimentError(503, 'SOURCE_ANALYSIS_FAILED', '生成代码校验未完成，请重新生成。')) })
+      worker.on('exit', () => { if (!settled) finish(new ExperimentError(503, 'SOURCE_ANALYSIS_FAILED', '生成代码校验未完成，请重新生成。')) })
+      signal?.addEventListener('abort', cancel, { once: true })
+      if (signal?.aborted) cancel()
+    }))
+    // Queued cancelled work never starts a worker when the gate later opens.
+    // The caller also settles immediately rather than waiting behind another check.
+    if (signal === undefined) return scheduled
+    let cancel!: () => void
+    const cancellation = new Promise<never>((_resolve, reject) => {
+      cancel = () => { reject(aborted()) }
+      signal.addEventListener('abort', cancel, { once: true })
+      if (signal.aborted) cancel()
+    })
+    try { await Promise.race([scheduled, cancellation]) }
+    finally { signal.removeEventListener('abort', cancel) }
   }
   private authorized(
     actor: IdentityActor,

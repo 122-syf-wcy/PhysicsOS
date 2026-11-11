@@ -18,6 +18,7 @@ const nodeLibrary: UserConfig = {
   fixedExtension: false,
   dts: false,
   clean: false,
+  deps: { alwaysBundle: [/^@physicsos\//] },
 }
 
 export default defineConfig(({ env }) => {

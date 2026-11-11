@@ -1,0 +1,6 @@
+{
+  "name": "@physicsos/model-usage-outbox", "version": "0.1.0", "private": true,
+  "description": "Caller-owned durable receipts for direct model usage",
+  "type": "module", "exports": { ".": "./src/index.ts" },
+  "scripts": { "test": "vitest run", "typecheck": "tsc --noEmit -p tsconfig.json", "build": "tsc --noEmit -p tsconfig.json" }
+}
