@@ -4,6 +4,8 @@ Kotlin + Jetpack Compose 原生主应用；物理引擎和本地实验渲染模�
 
 **当前为开发中版本，尚未达到完整应用交付标准。**Windows 已补齐原生页面、文案与独立实验打包链，并通过本机 Debug/测试 APK 编译、JVM 单元测试和 lint；后端接线、新版设备验收和真机性能仍有未完成项。最新证据见[Windows 实现与验证记录](../../docs/reports/2026-11-11-android-windows-progress.md)，原始缺口见[交接快照](../../docs/reports/2026-11-10-android-windows-handoff.md)。不要把可构建 APK 当作完整交付。
 
+2026-11-12 已将最新网页／服务端源码同步到 `codex/android-student-app`，并保存其余本地源码变体。Windows 拉取方式及核查范围见[全量源码交接](../../docs/reports/2026-11-12-windows-full-source-handoff.md)。
+
 ## 工作分工
 
 - Windows：本工程的原生开发、Gradle 构建、模拟器和安卓真机调试。

@@ -122,10 +122,9 @@ const modelPoolApi = {
 
 const expectSingleShell = (content: Element): void => {
   expect(document.querySelectorAll('[data-admin-page-header]')).toHaveLength(1)
-  expect(document.querySelectorAll('[role="tablist"]')).toHaveLength(1)
+  expect(document.querySelectorAll('[data-admin-page]')).toHaveLength(1)
   expect(document.querySelectorAll('[data-admin-page-content]')).toHaveLength(1)
   expect(content.querySelector('[data-admin-page-header]')).toBeNull()
-  expect(content.querySelector('[role="tablist"]')).toBeNull()
   expect(content.querySelector('[data-admin-page-content]')).toBeNull()
 
   const hasLegacyOuterWrapper = [...content.children].some(child =>
@@ -163,14 +162,14 @@ describe('administrator shell', () => {
     expect(tab.parentElement?.textContent).toContain('账号与学校')
   })
 
-  it('offers developer prompt management only to platform administrators', () => {
+  it('does not offer developer helper pages as primary navigation', () => {
     const first = render(
       <AdminWorkspace api={api} useAuth={authedAs('SCHOOL_ADMIN')} t={t} />,
     )
     expect(screen.queryByRole('tab', { name: '开发提示词' })).toBeNull()
     first.unmount()
     render(<AdminWorkspace api={api} useAuth={authedAs('SUPER_ADMIN')} t={t} />)
-    expect(screen.getByRole('tab', { name: '开发提示词' })).not.toBeNull()
+    expect(screen.queryByRole('tab', { name: '开发提示词' })).toBeNull()
   })
 
   it('offers experiment review only to platform administrators', () => {
@@ -211,7 +210,7 @@ describe('administrator shell', () => {
     expect(screen.queryByRole('navigation', { name: '贡献资源' })).toBeNull()
   })
 
-  it('keeps one page header, tablist, and content region across every visible tab', () => {
+  it('keeps one page shell while business pages use their own local section tabs', () => {
     render(
       <AdminWorkspace
         api={api}
@@ -229,17 +228,12 @@ describe('administrator shell', () => {
     for (const label of [
       '学校申请',
       '学校',
-      '看板',
+      '概览',
       '用户',
-      '密码重置',
-      '内容',
       '实验审核',
-      '反馈',
-      '公告',
+      '反馈与公告',
+      '官网管理',
       '模型通道',
-      '运维',
-      '设备',
-      '审计',
     ]) {
       fireEvent.click(screen.getByRole('tab', { name: label }))
       expect(document.querySelector('[data-admin-page-content]')).toBe(content)

@@ -124,7 +124,7 @@ RUN --mount=type=cache,target=/tsc-state,id=physicsos-harness-tsc-state \
     && node --input-type=module -e "import {open} from 'node:fs/promises'; import {tryLockExclusive} from './vendor/deepseek-harness/native/system/packages/entry/lib/flock.js'; const h = await open('/tmp/flock-verify','w'); await tryLockExclusive(h.fd); await h.close(); console.log('native flock addon verified in image')" \
     && pnpm run build:web \
     && cd vendor/deepseek-harness \
-    && { ls -d packages/*/*/lib vendor/*/lib apps/*/lib apps/*/*/lib native/*/packages/*/lib 2>/dev/null; \
+    && { ls -d lib/physicsos-types packages/*/*/lib vendor/*/lib apps/*/lib apps/*/*/lib native/*/packages/*/lib 2>/dev/null; \
          find . -name node_modules -prune -o -name '*.tsbuildinfo' -not -path '*/lib/*' -print; } \
         | tar -cf /tsc-state/state.tar.partial -T - \
     && mv /tsc-state/state.tar.partial /tsc-state/state.tar \

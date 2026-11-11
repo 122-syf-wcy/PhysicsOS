@@ -41,6 +41,8 @@ export interface CanvasLimits {
 export interface LearningHostConfig {
   readonly canvasDshHome?: string
   readonly canvasLimits?: Partial<CanvasLimits>
+  readonly whiteboardProvider?: string
+  readonly whiteboardModel?: string
 }
 
 /** Resolved values supplied to every Canvas operation. */
@@ -88,6 +90,8 @@ const limitSchema: z<Partial<CanvasLimits>> = z.object({
 export const learningHostConfig: z<LearningHostConfig> = z.object({
   canvasDshHome: z.string(),
   canvasLimits: limitSchema,
+  whiteboardProvider: z.string(),
+  whiteboardModel: z.string(),
 })
 
 const defaults: CanvasLimits = {

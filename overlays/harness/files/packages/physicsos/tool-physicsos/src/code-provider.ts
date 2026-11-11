@@ -7,6 +7,7 @@
  * @module @deepseek-ai/dsh-tool-physicsos/code-provider
  */
 import { randomUUID } from 'node:crypto'
+import { canonicalJson } from '@physicsos/agent-tools'
 import type { Context } from '@deepseek-ai/cordis'
 import type { SubagentProvider, ResolvedSubagentStartRequest, SubagentRun } from '@deepseek-ai/dsh-subagent'
 import { parentAgentOptionsForDelegation } from '@deepseek-ai/dsh-subagent'
@@ -140,6 +141,7 @@ export class PhysicsCodeProvider implements SubagentProvider {
     const current = state?.scenes[plan.scene.sceneId]
     const pending = current?.visualization
     if (state?.latest !== plan.scene.sceneId || current?.revision !== plan.scene.revision
+      || canonicalJson(current.scene) !== canonicalJson(plan.scene.scene)
       || pending?.status !== 'generating' || pending.jobId !== plan.generationId
       || pending.ownerSessionId !== plan.owner || pending.sceneId !== plan.scene.sceneId
       || pending.sceneRevision !== plan.scene.revision) {
@@ -173,6 +175,8 @@ export class PhysicsCodeProvider implements SubagentProvider {
     const staged = new WeakMap<object, { commit(): void; discard(): void }>()
     const marker = `PhysicsOS internal code run ${randomUUID()}`
     const persona = `${CODE_PERSONA}${plan?.nativeFallback ? '\n平台已确认本任务图片通道瞬态故障：本轮只写原生Canvas/SVG，不生成或引用图片；完整物理、资源和独立绘制校验仍执行。' : ''}\n${marker}`
+    const parentLimit = request.parent.session.requestHeader()?.config.maxTokens ?? request.parent.options.maxTokens ?? CHILD_MAX_TOKENS
+    const maxTokens = Math.min(CHILD_MAX_TOKENS, parentLimit, request.agentOptions?.maxTokens ?? CHILD_MAX_TOKENS)
     const flags = { isolated: false }
     // Creation is serial and awaited before inbox release. A unique scoped persona
     // marker identifies this exact start, even when the same parent starts concurrently.
@@ -185,6 +189,21 @@ export class PhysicsCodeProvider implements SubagentProvider {
       if (presets === undefined) throw new Error('Code child requires the agent preset registry')
       await presets.mount(agent.ctx, CODE_PRESET_ID)
       this.assertCurrent(request, plan)
+      // Preserve the actual provider receipt while making the canonical
+      // assembler discard unexecuted tool calls from an over-cap completion.
+      const releaseStream = this.ctx.on('llm/stream', (options, next) => {
+        const stream = next()
+        if (options.sessionId !== agent.id) return stream
+        return (async function* () {
+          let overCap = false
+          for await (const chunk of stream) {
+            if (chunk.type === 'usage' && chunk.usage.outputTokens > maxTokens) overCap = true
+            yield chunk.type === 'finish' && (chunk.reason.kind === 'stop' || chunk.reason.kind === 'tool-calls') && overCap
+              ? { type: 'finish' as const, reason: { kind: 'max-tokens' as const } } : chunk
+          }
+        })()
+      }, { global: true })
+      agent.ctx.effect(() => releaseStream, 'physics-code.output-cap')
       agent.ctx.on('tools/result', (exec, result) => {
         const write = staged.get(exec)
         staged.delete(exec)
@@ -210,8 +229,6 @@ export class PhysicsCodeProvider implements SubagentProvider {
       return undefined
     }, { global: true })
     try {
-      const parentLimit = request.parent.session.requestHeader()?.config.maxTokens ?? request.parent.options.maxTokens ?? CHILD_MAX_TOKENS
-      const maxTokens = Math.min(CHILD_MAX_TOKENS, parentLimit, request.agentOptions?.maxTokens ?? CHILD_MAX_TOKENS)
       const run = await startInProcessRun({
         ...request, persona, toolFilter: { allow: [] },
         ...(chunked ? { outputSchema: METADATA_SCHEMA } : {}),

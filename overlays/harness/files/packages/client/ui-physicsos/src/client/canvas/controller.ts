@@ -440,6 +440,7 @@ export function createCanvasController(options: CanvasControllerOptions): Canvas
     id: entry.id, title: entry.record.working.title, createdAt: entry.record.head?.createdAt ?? entry.record.working.createdAt,
     updatedAt: entry.record.working.updatedAt,
     deleted: entry.record.deleted, status: statusOf(entry), ...(entry.record.head === undefined ? {} : { head: entry.record.head }),
+    ...(typeof entry.record.working.metadata?.studyProjectId === 'string' ? { projectId: entry.record.working.metadata.studyProjectId } : {}),
   })
   const publishRoster = (): void => {
     if (paused || scope === undefined || scope.fingerprint !== fingerprintOf(options.getAccount())) {
@@ -1420,6 +1421,16 @@ export function createCanvasController(options: CanvasControllerOptions): Canvas
   }
 
   const controller: CanvasController = {
+    assignProject: async (canvas, projectId) => {
+      if (projectId !== undefined && (projectId.trim() === '' || projectId.length > 200 || /[\u0000-\u001f]/.test(projectId))) throw new Error('INVALID_PROJECT')
+      const entry = await openForEdit(canvas)
+      await mutate(entry, 'assign-project', manifest => {
+        const metadata = { ...manifest.metadata }
+        if (projectId === undefined) delete metadata.studyProjectId
+        else metadata.studyProjectId = projectId
+        return { ...manifest, metadata }
+      }, {}, false)
+    },
     state: roster, getSnapshot: roster.getSnapshot, subscribe: roster.subscribe,
     documentSource: canvas => entryOf(canvas, scope?.namespace ?? namespaceOf(options.getAccount())).source,
     instanceKey: (canvas, instanceId) => createStableCells(entryOf(canvas, scope?.namespace ?? namespaceOf(options.getAccount())), instanceId).key,

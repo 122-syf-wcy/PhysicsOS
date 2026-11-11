@@ -7,11 +7,13 @@
  * requests, school applications, and the append-only admin audit ledger.
  */
 
+import { isModelUsageOutboxRecord, type ModelUsageOutboxRecord } from '@physicsos/model-usage-outbox'
 import { z } from 'zod'
 import { defineDomain, domainTable } from '@deepseek-ai/dsh-storage-domain'
 import type { Domain } from '@deepseek-ai/dsh-storage-domain'
 import { moderationCaseSchema, moderationSettingsSchema } from './moderation/model.ts'
 import type { ModerationCaseRecord, ModerationSettings } from './moderation/types.ts'
+import { schoolNameWire } from './school-name.ts'
 
 const role = z.enum(['STUDENT', 'TEACHER', 'SCHOOL_ADMIN', 'SUPER_ADMIN'])
 
@@ -51,6 +53,13 @@ const school = z.object({
   mergedInto: z.string().min(1).optional(),
   /** When {@link mergedInto} was recorded. */
   mergedAt: z.string().optional(),
+  /** Display compatibility only; account/tenant ownership remains at its original key. */
+  canonicalName: z.string().min(1).max(64).optional(),
+  /** Duplicate roster entry hidden without migrating or combining its accounts. */
+  rosterAliasOf: z.string().min(1).optional(),
+  /** Explicitly retired empty tenant; retained so additive seeding cannot recreate it. */
+  archivedAt: z.string().optional(),
+  archiveReason: z.enum(['invalid-name', 'duplicate-name', 'unregistered-seed', 'test-fixture']).optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 })
@@ -487,7 +496,7 @@ export type ApiResourceOwner = z.infer<typeof apiResourceOwner>
  */
 export const registerWire = z.object({
   schoolId: z.string().min(1).optional(),
-  schoolName: z.string().min(1).max(64).optional(),
+  schoolName: schoolNameWire.optional(),
   username: z.string().regex(/^[a-zA-Z0-9_.-]{3,32}$/),
   displayName: z.string().min(1).max(32),
   password: z.string().min(8).max(128),
@@ -574,7 +583,7 @@ export const passwordResetWire = z.object({
 
 /** 申请开通 a school — anonymous-allowed, IP rate-limited upstream. */
 export const schoolRequestWire = z.object({
-  schoolName: z.string().min(2).max(64),
+  schoolName: schoolNameWire.pipe(z.string().min(2)),
   contact: z.string().min(2).max(128),
   /** Optional so a legacy caller still typechecks; the queue mails it when set. */
   email: emailWire.optional(),
@@ -615,7 +624,7 @@ export const rejectRequestWire = z.object({
 /** SUPER_ADMIN creates a tenant directly (bypassing the application queue). */
 export const createSchoolWire = z.object({
   id: schoolIdWire,
-  name: z.string().min(2).max(64),
+  name: schoolNameWire.pipe(z.string().min(2)),
   shortName: z.string().min(1).max(16).optional(),
 })
 
@@ -772,6 +781,7 @@ export const authDomain = defineDomain({
     api_resources: domainTable<string, ApiResourceOwner>(apiResourceOwner),
     moderation_cursors: domainTable<string, ModerationCursor>(moderationCursor),
     moderation_cases: domainTable<string, ModerationCaseRecord>(moderationCaseSchema),
+    usage_receipts: domainTable<string, ModelUsageOutboxRecord>(z.custom<ModelUsageOutboxRecord>(isModelUsageOutboxRecord)),
     moderation_settings: domainTable<string, ModerationSettings>(moderationSettingsSchema),
   },
 })

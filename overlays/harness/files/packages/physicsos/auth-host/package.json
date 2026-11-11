@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-auth-host",
-  "description": "PhysicsOS 账户体系 host plugin: school-tenant registration and login, argon2id passwords, opaque session cookies, rate limiting, and the /physicsos/auth REST surface over webServer routes and a storage-domain unit",
+  "description": "PhysicsOS \u8d26\u6237\u4f53\u7cfb host plugin: school-tenant registration and login, argon2id passwords, opaque session cookies, rate limiting, and the /physicsos/auth REST surface over webServer routes and a storage-domain unit",
   "version": "0.1.0-rc.5",
   "private": true,
   "repository": {
@@ -50,7 +50,8 @@
     "zod": "^4.4.3",
     "@deepseek-ai/dsh-session": "workspace:^",
     "@deepseek-ai/dsh-agent": "workspace:^",
-    "@deepseek-ai/dsh-session-query": "workspace:^"
+    "@deepseek-ai/dsh-session-query": "workspace:^",
+    "@physicsos/model-usage-outbox": "link:../../../../../packages/model-usage-outbox"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^",

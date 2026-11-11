@@ -13,6 +13,8 @@
 # legitimately named `lib` (packages/ui/src/lib/cn.ts), which broke the image build.
 **/packages/*/lib
 vendor/deepseek-harness/packages/*/*/lib
+# Generated declaration bridge outside the package directories.
+vendor/deepseek-harness/lib/physicsos-types
 **/vendor/*/lib
 **/apps/*/lib
 **/apps/*/*/lib
@@ -41,3 +43,7 @@ backups/
 .cursor
 .playwright-mcp
 tmp/
+.physicsos-release
+.physicsos-operation-lock
+.physicsos-backup-lock
+.physicsos-backup-work-*

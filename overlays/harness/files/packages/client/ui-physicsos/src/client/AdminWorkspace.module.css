@@ -28,6 +28,18 @@
   min-width: 0;
 }
 
+.sectionPanel { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.sectionTabs { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.sectionTab {
+  appearance: none; border: 1px solid var(--physics-glass-border-soft); border-radius: 8px;
+  padding: 7px 12px; background: var(--physics-glass-fill); color: var(--dsw-alias-label-secondary);
+  font: inherit; font-size: 13px; cursor: pointer;
+}
+.sectionTab:hover { background: var(--physics-glass-fill-strong); color: var(--dsw-alias-label-primary); }
+.sectionTabActive { background: var(--physics-glass-fill-strong); color: var(--dsw-alias-button-info-fill); }
+.sectionTab:focus-visible { outline: 2px solid var(--dsw-focus-ring-color); outline-offset: 2px; }
+.sectionContent { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
 /* Split layout: a fixed rail of grouped tabs beside the content. This replaces
    a flat strip that had to scroll horizontally once the console grew past ten
    tabs — the operator could not see which sections even existed. */

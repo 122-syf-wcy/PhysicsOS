@@ -1,5 +1,5 @@
 import { sceneRefOf } from './surface-store.ts'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { IconPlusOutlineMedium, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SessionId, SessionSummary, SnapshotStore } from './runtime-compat.ts'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -46,6 +46,17 @@ export function RecentSpaces({
   wide, useRecentExperiments, useSessions, useWorkspaces, openSurface,
   removeRecent, requestSceneInCanvas, openSession, archiveSession, t,
 }: RecentSpacesProps) {
+  const [folded, setFolded] = useState<Record<string, boolean>>(() => {
+    try { const value = JSON.parse(localStorage.getItem('physicsos.sidebar.recent-folds') ?? '{}'); return value !== null && typeof value === 'object' ? value : {} } catch { return {} }
+  })
+  const toggle = (id: string): void => { setFolded(previous => {
+    const next = { ...previous, [id]: previous[id] !== true }
+    try { localStorage.setItem('physicsos.sidebar.recent-folds', JSON.stringify(next)) } catch {}
+    return next
+  }) }
+  const heading = (id: string, label: string) => <h2 className={css.title}><button type="button" className={css.foldHeading}
+    aria-expanded={folded[id] !== true} aria-label={`${t(folded[id] === true ? 'recent.expand' : 'recent.fold')}${label}`} onClick={() => { toggle(id) }}>
+    <span>{label}</span><span aria-hidden="true">{folded[id] === true ? '›' : '⌄'}</span></button></h2>
   const items = useRecentExperiments(s => s.items)
   const sessions = useSessions(s => s)
   const archivedSessionIds = useWorkspaces(s => s.archivedSessionIds)
@@ -67,9 +78,9 @@ export function RecentSpaces({
   }, [sessions, archivedSessionIds])
   if (!wide) return <div className={css.rail} aria-hidden="true" />
   return (
-    <section className={css.root} aria-label={t('recent.title')} tabIndex={0}>
-      <h2 className={css.title}>{t('recent.title')}</h2>
-      {items.length === 0 ? (
+    <section className={css.root} aria-label={t('recent.title')} data-sidebar-content="recent-spaces" tabIndex={0}>
+      {heading('experiments', t('recent.title'))}
+      {folded.experiments === true ? null : items.length === 0 ? (
         <p className={css.empty}>{t('recent.sidebarEmpty')}</p>
       ) : (
         <ul className={css.list}>
@@ -109,8 +120,8 @@ export function RecentSpaces({
           ))}
         </ul>
       )}
-      <h2 className={css.title}>{t('recent.sessions')}</h2>
-      {history.length === 0 ? (
+      {heading('sessions', t('recent.sessions'))}
+      {folded.sessions === true ? null : history.length === 0 ? (
         <p className={css.empty}>{t('recent.sessionsEmpty')}</p>
       ) : (
         <ul className={css.list}>

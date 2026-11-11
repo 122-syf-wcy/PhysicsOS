@@ -14,7 +14,7 @@ export class WorkbenchDataError extends Error {
 export const pointer = (path: string, key: string | number): string =>
   `${path}/${String(key).replace(/~/g, '~0').replace(/\//g, '~1')}`
 
-export const fail = (path: string, code: string, message: string): never => {
+export function fail(path: string, code: string, message: string): never {
   throw new WorkbenchDataError([{ path, code, message }])
 }
 

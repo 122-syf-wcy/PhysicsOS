@@ -4,6 +4,13 @@ PhysicsOS 是**开源公益项目**，自有代码与文档按仓库根目录 `L
 
 ## 第三方组件
 
+### 实验自由画布
+
+- React Flow（`@xyflow/react@12.12.1`）：<https://github.com/xyflow/xyflow>，MIT License，Copyright (c) 2019-2025 webkid GmbH。用于工作台节点、平移缩放和布局交互；实验计算仍由 PhysicsOS 现有引擎负责。
+- idb（`idb@8.0.4`）：<https://github.com/jakearchibald/idb>，ISC License，Copyright (c) 2016 Jake Archibald。用于浏览器工作台、不可变结果和待同步操作的 IndexedDB 事务。
+
+上述依赖保留各自包内的许可证与版权声明；PhysicsOS 自有工作台代码继续按仓库根目录 `LICENSE` 授权。
+
 ### DeepSeek Harness
 
 - 上游仓库：<https://github.com/deepseek-ai/deepseek-harness>

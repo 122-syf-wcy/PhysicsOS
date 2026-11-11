@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 一键部署 PhysicsOS 服务端（Ubuntu/Debian，root）。
+# 首次安装 PhysicsOS 服务端（Ubuntu/Debian，root）。正式更新使用 release-switch。
 #
 #   curl -fsSL https://raw.githubusercontent.com/122-syf-wcy/PhysicsOS/main/scripts/deploy/deploy-server.sh | bash
 #
@@ -9,6 +9,11 @@ set -euo pipefail
 
 REPO=${PHYSICSOS_REPO:-https://github.com/122-syf-wcy/PhysicsOS.git}
 DIR=${PHYSICSOS_DIR:-/opt/physicsos}
+
+if command -v docker >/dev/null && docker inspect physicsos-app-1 >/dev/null 2>&1; then
+  printf '已有 PhysicsOS 部署。正式更新请使用 scripts/deploy/server-node.sh scripts/deploy/release-switch.mjs --plan-file <发布计划>。\n' >&2
+  exit 1
+fi
 
 say() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 
@@ -24,7 +29,7 @@ docker compose version >/dev/null 2>&1 || apt-get install -y -qq docker-compose-
 say "拉取代码到 $DIR"
 mkdir -p "$DIR" && cd "$DIR"
 if [ -d .git ]; then
-  git pull --ff-only || true
+  git pull --ff-only
 else
   # 目录可能已经存在（例如 secret 先放好了）：就地初始化，不要 `git clone .`
   # —— 后者要求目标目录为空，会把"预置 secret"这条路直接堵死。
@@ -75,8 +80,8 @@ say "运维加固与定时备份"
 say "完成"
 cat <<EOF
 访问地址： http://<本机公网IP>:3080
-管理员：   admin  /  $(cat .env.admin_password)
-           （租户 PHYSICSOS-OPEN，登录后请立即改密）
+管理员：   ${PHYSICSOS_ADMIN_USERNAME:-admin}（租户 PHYSICSOS-OPEN）
+密码文件： $DIR/.env.admin_password（不会写入部署日志）
 反代到 HTTPS 后，记得在 compose 环境里设置 PHYSICSOS_TRUSTED_PROXIES=<反代精确IP>
 日志：     cd $DIR && docker compose logs -f app
 停止：     cd $DIR && docker compose down

@@ -33,8 +33,12 @@ function NodeChrome(props: CanvasNodeProps & { readonly node: CanvasNode; readon
   const [name, setName] = useState(node.title ?? fallbackTitle(props, node.kind))
   const [pending, setPending] = useState(false)
   const [renameError, setRenameError] = useState<string | undefined>()
+  const [resizeOpen, setResizeOpen] = useState(false)
+  const [widthDraft, setWidthDraft] = useState('')
+  const [heightDraft, setHeightDraft] = useState('')
+  const [resizeError, setResizeError] = useState<string>()
   const resizeBase = useRef<CanvasLayout | undefined>()
-  const readOnly = document?.status === 'deleted' || document?.loading === true
+  const readOnly = document?.status === 'deleted' || document?.status === 'auth-required' || document?.loading === true
   const mounted = useRef(true)
   useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
   const run = async (operation: () => Promise<unknown>, success?: 'canvas.copied' | 'canvas.removed' | 'canvas.renamed'): Promise<void> => {
@@ -60,13 +64,26 @@ function NodeChrome(props: CanvasNodeProps & { readonly node: CanvasNode; readon
   }
   const locked = node.locked === true
   const currentLayout = preview[node.id] ?? node.layout
-  return <article className={`${css.nodeCard}${props.body === 'group' ? ` ${css.groupCard}` : ''}`}
+  const minWidth = constructing ? 480 : node.kind === 'group' ? 160 : 280
+  const minHeight = constructing ? 640 : node.kind === 'group' ? 72 : node.kind === 'experiment' ? 280 : 160
+  const startResize = (): void => { setWidthDraft(String(Math.round(currentLayout.width))); setHeightDraft(String(Math.round(currentLayout.height))); setResizeError(undefined); setResizeOpen(true) }
+  const saveSize = (): void => {
+    if (readOnly || locked || pending) return
+    const width = Number(widthDraft), height = Number(heightDraft)
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width < minWidth || height < minHeight || width > 6000 || height > 6000) { setResizeError(t('canvas.resizeInvalid')); return }
+    setPending(true)
+    void canvasCommands.updateLayout(data.canvasId, [{ id: node.id, layout: { ...currentLayout, width, height } }])
+      .then(() => { if (mounted.current) setResizeOpen(false) })
+      .catch(() => { if (mounted.current) setResizeError(t('canvas.error.generic')) })
+      .finally(() => { if (mounted.current) setPending(false) })
+  }
+  return <article className={`${css.nodeCard}${currentLayout.width < 760 ? ` ${css.compactCard}` : ''}${props.body === 'group' ? ` ${css.groupCard}` : ''}`}
     data-canvas-node-id={node.id} data-canvas-node-kind={node.kind} data-canvas-node-locked={locked ? 'true' : 'false'}>
     <Handle type="target" position={Position.Left} isConnectable={false} className={css.edgeHandle} />
     <Handle type="source" position={Position.Right} isConnectable={false} className={css.edgeHandle} />
     <NodeResizer nodeId={props.id} isVisible={props.selected && !locked && !readOnly}
-      minWidth={constructing ? 1080 : node.kind === 'group' ? 160 : 280} minHeight={constructing ? 700 : node.kind === 'group' ? 72 : 160}
-      handleClassName={css.resizeHandle!} lineClassName={css.resizeLine!}
+      minWidth={minWidth} minHeight={minHeight}
+      handleClassName={`${css.resizeHandle!} nopan nodrag`} lineClassName={css.resizeLine!}
       shouldResize={() => !locked && !readOnly}
       onResizeStart={() => { if (!locked && !readOnly) resizeBase.current = currentLayout }}
       onResize={(_event, size) => {
@@ -93,6 +110,7 @@ function NodeChrome(props: CanvasNodeProps & { readonly node: CanvasNode; readon
     <header className={`${css.nodeHeader} physicsos-canvas-node-header`}>
       <span className={css.nodeTitle}>{node.title ?? fallbackTitle(props, node.kind)}</span>
       <div className={`${css.nodeHeaderActions} nodrag nopan nowheel`}>
+        <Button size="sm" variant="toolbar" disabled={locked || readOnly} aria-label={t('canvas.resize')} onClick={startResize}>{t('canvas.resize')}</Button>
         {locked ? <Tooltip label={t('canvas.node.lockHint')} portal><span className={css.lockMark} aria-label={t('canvas.node.lock')}><IconPinFillRegular size={14} /></span></Tooltip> : null}
         {node.kind === 'experiment' ? <Tooltip label={t('canvas.focus')} portal>
           <Button size="sm" variant="toolbar" aria-label={t('canvas.focus')} onClick={() => { actions.focus(props.canvasInstanceKey(data.canvasId, node.instanceId)) }}><IconRightUpOutlineRegular size={14} /></Button>
@@ -126,6 +144,13 @@ function NodeChrome(props: CanvasNodeProps & { readonly node: CanvasNode; readon
       </div>
     </header>
     <div className={`${css.nodeBody}${props.body === 'experiment' ? ` ${css.experimentBody}` : ''}${props.body === 'group' ? ` ${css.groupBody}` : ''} nodrag nopan nowheel`}>{props.children}</div>
+    <Modal open={resizeOpen} title={t('canvas.resize')} closeLabel={t('canvas.close')} onClose={() => { if (!pending) setResizeOpen(false) }}
+      footer={<div className={css.actionRow}><Button variant="ghost" disabled={pending} onClick={() => { setResizeOpen(false) }}>{t('canvas.cancel')}</Button><Button variant="primary" disabled={pending || locked || readOnly} onClick={saveSize}>{t('canvas.confirm')}</Button></div>}>
+      <div className={css.actionRow}><Button onClick={() => { setWidthDraft(String(Math.max(minWidth, 760))); setHeightDraft(String(Math.max(minHeight, 640))) }}>{t('canvas.tabletSize')}</Button><Button onClick={() => { setWidthDraft('1080'); setHeightDraft('800') }}>{t('canvas.largeSize')}</Button></div>
+      <label>{t('canvas.width')}<Input type="number" min={minWidth} max={6000} aria-label={t('canvas.width')} value={widthDraft} onChange={e => { setWidthDraft(e.target.value) }} /></label>
+      <label>{t('canvas.height')}<Input type="number" min={minHeight} max={6000} aria-label={t('canvas.height')} value={heightDraft} onChange={e => { setHeightDraft(e.target.value) }} /></label>
+      {resizeError === undefined ? null : <p role="alert">{resizeError}</p>}
+    </Modal>
     <Modal open={renameOpen} title={t('canvas.node.rename')} closeLabel={t('canvas.close')}
       onClose={() => { if (!pending) setRenameOpen(false) }}
       footer={<div className={css.actionRow}>

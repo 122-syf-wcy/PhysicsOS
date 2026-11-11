@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-paper-host",
-  "description": "PhysicsOS 出卷专区 host plugin: real-exam intake, verified blueprints, spec-table confirmed AI drafting, checks plus independent solving, hash-bound review approval, and the pandoc/LibreOffice A4 export chain over webServer routes and a storage-domain unit",
+  "description": "PhysicsOS \u51fa\u5377\u4e13\u533a host plugin: real-exam intake, verified blueprints, spec-table confirmed AI drafting, checks plus independent solving, hash-bound review approval, and the pandoc/LibreOffice A4 export chain over webServer routes and a storage-domain unit",
   "version": "0.1.0-rc.5",
   "private": true,
   "repository": {
@@ -44,7 +44,8 @@
     "@physicsos/question-paper": "link:../../../../../packages/question-paper",
     "@physicsos/agent-tools": "link:../../../../../packages/agent-tools",
     "zod": "^4.4.3",
-    "@deepseek-ai/dsh-attachment": "workspace:^"
+    "@deepseek-ai/dsh-attachment": "workspace:^",
+    "@physicsos/model-usage-outbox": "link:../../../../../packages/model-usage-outbox"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^",

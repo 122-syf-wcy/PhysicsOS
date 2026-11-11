@@ -30,6 +30,8 @@
     "../../packages/physics-composite-core/src/**/*.ts",
     "../../packages/physics-core/src/**/*.ts",
     "../../packages/physics-workbench/src/**/*.ts",
+    "../../packages/physics-whiteboard/src/**/*.ts",
+    "../../packages/model-usage-outbox/src/**/*.ts",
     "../../packages/physics-electric-core/src/**/*.ts",
     "../../packages/physics-math/src/**/*.ts",
     "../../packages/physics-observation/src/**/*.ts",

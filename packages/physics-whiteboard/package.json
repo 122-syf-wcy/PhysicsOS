@@ -1,0 +1,10 @@
+{
+  "name": "@physicsos/physics-whiteboard",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pure JSON classroom whiteboard and source-image drawing contracts",
+  "type": "module",
+  "exports": { ".": "./src/index.ts", "./types": "./src/types.ts" },
+  "scripts": { "test": "vitest run", "typecheck": "tsc --noEmit -p tsconfig.json", "build": "tsc --noEmit -p tsconfig.json", "lint": "eslint ." },
+  "dependencies": { "@physicsos/physics-workbench": "file:../physics-workbench" }
+}

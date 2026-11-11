@@ -243,6 +243,66 @@ describe('moderation capture and persistence', () => {
 })
 
 describe('strict no-tools reviewer through real LLM runtime', () => {
+  it.each([true, false])('emits one safe reviewer receipt with reported usage=%s even when parsing fails', async reported => {
+    const receipts: unknown[] = []
+    const ctx = new Context(); cleanups.push(() => ctx.fiber.dispose())
+    await ctx.plugin(LlmRuntime)
+    ctx.llm.registerAdapter(['review-route'], new ScriptAdapter([
+      { type: 'text-delta', index: 0, text: 'PRIVATE_MODEL_OUTPUT' },
+      ...(reported ? [{ type: 'usage', usage: { inputTokens: 17, outputTokens: 4, totalTokens: 21 } } as StreamChunk] : []),
+      { type: 'finish', reason: { kind: 'stop' } },
+    ]))
+    const review = createModerationReviewer(ctx.llm, { provider: 'review-route', model: 'fixed-model' }, {
+      onReceipt: receipt => { receipts.push(receipt) },
+    })
+    await expect(review(input, new AbortController().signal)).rejects.toMatchObject({ code: 'REVIEW_JSON_INVALID' })
+    await vi.waitFor(() => expect(receipts).toHaveLength(1))
+    expect(receipts[0]).toEqual({ provider: 'review-route', model: 'fixed-model',
+      ...(reported ? { usage: { inputTokens: 17, outputTokens: 4, totalTokens: 21 } } : {}) })
+    expect(JSON.stringify(receipts)).not.toContain('PRIVATE_MODEL_OUTPUT')
+  })
+  it('keeps a successful classification when the optional receipt persistence fails', async () => {
+    const ctx = new Context(); cleanups.push(() => ctx.fiber.dispose())
+    await ctx.plugin(LlmRuntime)
+    ctx.llm.registerAdapter(['review-route'], new ScriptAdapter(script()))
+    const review = createModerationReviewer(ctx.llm, { provider: 'review-route', model: 'fixed-model' }, {
+      onReceipt: async () => { throw new Error('receipt storage unavailable') },
+    })
+    expect(await review(input, new AbortController().signal)).toEqual(allow)
+  })
+  it('reports missing telemetry when a transport failure only supplies the adapter zero-usage default', async () => {
+    const ctx = new Context(); cleanups.push(() => ctx.fiber.dispose())
+    await ctx.plugin(LlmRuntime)
+    ctx.llm.registerAdapter(['review-route'], new ScriptAdapter([
+      { type: 'usage', usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } },
+      { type: 'finish', reason: { kind: 'error', failure: { code: 'TRANSPORT', message: 'PRIVATE_PROVIDER_ERROR' } } },
+    ]))
+    const receipts: unknown[] = []
+    const review = createModerationReviewer(ctx.llm, { provider: 'review-route', model: 'fixed-model' }, {
+      onReceipt: receipt => { receipts.push(receipt) },
+    })
+    await expect(review(input, new AbortController().signal)).rejects.toMatchObject({ code: 'REVIEW_FAILED' })
+    await vi.waitFor(() => expect(receipts).toHaveLength(1))
+    expect(receipts[0]).toEqual({ provider: 'review-route', model: 'fixed-model' })
+    expect(JSON.stringify(receipts)).not.toContain('PRIVATE_PROVIDER_ERROR')
+  })
+  it.each([
+    { output: 'PRIVATE_MODEL_OUTPUT: malformed JSON', code: 'REVIEW_JSON_INVALID' },
+    { output: JSON.stringify({ ...allow, confidence: 'PRIVATE_MODEL_OUTPUT' }), code: 'REVIEW_SCHEMA_INVALID' },
+    { output: JSON.stringify({ ...allow, evidence: ['PRIVATE_MODEL_OUTPUT'] }), code: 'REVIEW_EVIDENCE_INVALID' },
+  ])('persists only the safe $code diagnostic for malformed reviewer output', async ({ output, code }) => {
+    const { review } = await classifier([
+      { type: 'text-delta', index: 0, text: output },
+      { type: 'finish', reason: { kind: 'stop' } },
+    ])
+    const { service } = await harness(review)
+    const id = await capture(service)
+    await service.processNext()
+    const row = service.detail(admin, id)
+    expect(row).toMatchObject({ status: 'error', error: code })
+    expect(row.review).toBeUndefined()
+    expect(JSON.stringify(row)).not.toContain('PRIVATE_MODEL_OUTPUT')
+  })
   it('completes using the advertised off capability when none is only a wire spelling', async () => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)

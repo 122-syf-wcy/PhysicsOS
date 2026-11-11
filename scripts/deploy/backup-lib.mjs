@@ -61,6 +61,7 @@ export const RESTORE_READINESS_SCRIPT = `
 export async function runCommand(command, args, options = {}) {
   const child = spawn(command, args, {
     cwd: options.cwd,
+    env: options.env,
     stdio: ['pipe', 'pipe', 'pipe'],
     signal: options.signal,
   })

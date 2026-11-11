@@ -56,6 +56,7 @@ export interface CodeGenerationDependencies {
     childSessionId: string
     source: CodeVisualizationSource
     generationId: string
+    requestSha256?: string
   }, signal?: AbortSignal): Promise<CodeExperimentRef>
   assetManifest?(generationId: string): unknown
   current(): PhysicsSceneSnapshot | undefined
@@ -73,11 +74,23 @@ interface ActiveCodeJob {
   sceneRevision: number
   sceneSha256: string
   signal: AbortSignal
+  requestSha256: string
 }
 /** Durable generating markers are not proof that their process-owned work still exists. */
 const activeCodeJobs = new Map<string, ActiveCodeJob>()
+const activeRequests = new Map<string, Promise<CodeVisualizationState>>()
 
-export function isQuestionCodeGenerationActive(ownerSessionId: string, snapshot: PhysicsSceneSnapshot): boolean {
+/** Turn changes do not change a question's physical facts or requested drawing. */
+export function questionCodeRequestSha256(input: Pick<CodeGenerationDependencies, 'ownerSessionId' | 'snapshot' | 'experimentId' | 'instructions'>): string {
+  return sceneHash({
+    ownerSessionId: input.ownerSessionId, sceneId: input.snapshot.sceneId, sceneRevision: input.snapshot.revision,
+    sceneSha256: sceneHash(input.snapshot.scene), engineId: input.snapshot.engineId,
+    title: input.snapshot.title, sourceQuestionId: input.snapshot.sourceQuestionId,
+    experimentId: input.experimentId, instructions: input.instructions ?? '',
+  })
+}
+
+export function isQuestionCodeGenerationActive(ownerSessionId: string, snapshot: PhysicsSceneSnapshot, requestSha256?: string): boolean {
   const marker = snapshot.visualization
   if (marker?.status !== 'generating' || marker.ownerSessionId !== ownerSessionId
     || marker.sceneId !== snapshot.sceneId || marker.sceneRevision !== snapshot.revision
@@ -86,6 +99,7 @@ export function isQuestionCodeGenerationActive(ownerSessionId: string, snapshot:
   return active !== undefined && !active.signal.aborted && active.ownerSessionId === ownerSessionId
     && active.sceneId === snapshot.sceneId && active.sceneRevision === snapshot.revision
     && active.sceneSha256 === sceneHash(snapshot.scene)
+    && (requestSha256 === undefined || active.requestSha256 === requestSha256)
 }
 
 /** Static quality boundary: metadata/CSS changes cannot turn a bare SDK reexport into question code. */
@@ -148,7 +162,8 @@ class GenerationClock {
     clearTimeout(this.timer)
     this.caller.removeEventListener('abort', this.onAbort)
     // The shared signal owns all retry checkpoints, including a final failed run.
-    // Disposal has already settled the children before this releases job resources.
+    // Retire the job even when a cancelled driver's cleanup is still draining;
+    // every child write and asset request remains fenced by this signal and marker.
     this.controller.abort()
   }
 }
@@ -160,13 +175,25 @@ class GenerationClock {
  * @param deps - the parent's capabilities and the frozen scene snapshot.
  * @returns the terminal state, which has also been published when still current.
  */
-export async function generateQuestionCode(deps: CodeGenerationDependencies): Promise<CodeVisualizationState> {
+export function generateQuestionCode(deps: CodeGenerationDependencies): Promise<CodeVisualizationState> {
+  const requestSha256 = questionCodeRequestSha256(deps)
+  const current = deps.current(), pending = activeRequests.get(requestSha256)
+  if (pending !== undefined && current !== undefined
+    && isQuestionCodeGenerationActive(deps.ownerSessionId, current, requestSha256)) return pending
+  const operation = runGeneration(deps, requestSha256)
+  activeRequests.set(requestSha256, operation)
+  const release = (): void => { if (activeRequests.get(requestSha256) === operation) activeRequests.delete(requestSha256) }
+  void operation.then(release, release)
+  return operation
+}
+
+async function runGeneration(deps: CodeGenerationDependencies, requestSha256: string): Promise<CodeVisualizationState> {
   const jobId = randomUUID()
   const original = deps.snapshot
   const expectedHash = sceneHash(original.scene)
   const clock = new GenerationClock(deps.signal, deps.timeoutMs ?? CODE_TIMEOUT_MS)
   const deadlineAt = Date.now() + (deps.timeoutMs ?? CODE_TIMEOUT_MS)
-  const identity = { ownerSessionId: deps.ownerSessionId, sceneId: original.sceneId, sceneRevision: original.revision }
+  const identity = { ownerSessionId: deps.ownerSessionId, sceneId: original.sceneId, sceneRevision: original.revision, requestSha256 }
   /* Own only the exact owner, scene facts/revision and job marker, even after a turn changes. */
   const ownedSnapshot = (): PhysicsSceneSnapshot | undefined => {
     const current = deps.current()
@@ -181,12 +208,15 @@ export async function generateQuestionCode(deps: CodeGenerationDependencies): Pr
   activeCodeJobs.set(jobId, { ...identity, sceneSha256: expectedHash, signal: clock.signal })
 
   try {
+    const initial = deps.current()
+    if (initial !== undefined && (deps.isCurrent?.() === false || initial.sceneId !== original.sceneId || initial.revision !== original.revision
+      || sceneHash(initial.scene) !== expectedHash)) throw generationError('STALE_GENERATION', 'Scene changed before generation admission')
     publish({ status: 'generating', jobId, deadlineAt, ...identity })
     const style = await clock.wait(deps.context(deps.experimentId))
     let repair: CodeRepair | undefined
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       if (!isCurrent()) throw generationError('STALE_GENERATION', 'Scene changed')
-      const outcome = await runAttempt(deps, clock, style, original, repair, jobId, isCurrent)
+      const outcome = await runAttempt(deps, clock, style, original, repair, jobId, requestSha256, isCurrent)
       if (outcome.kind === 'ready') return outcome.ref
       const last = attempt === MAX_ATTEMPTS - 1
       if (last || !outcome.retryable || clock.aborted || !isCurrent()) throw outcome.error
@@ -222,11 +252,12 @@ async function runAttempt(
   original: PhysicsSceneSnapshot,
   repair: CodeRepair | undefined,
   jobId: string,
+  requestSha256: string,
   isCurrent: () => boolean,
 ): Promise<AttemptOutcome> {
-  // Await start directly: its provider owns cancellation until publication;
-  // racing start would lose the holder and leak a late published child.
-  const run = await deps.start({
+  // The provider retains unpublished ownership; if it ignores cancellation
+  // and returns after the deadline, retain that promise and close its late holder.
+  const starting = deps.start({
     label: `题目实验代码 · ${original.title.slice(0, 100)}`,
     prompt: [{ type: 'text', text: questionCodePrompt(style, original, deps.instructions, repair, deps.assetManifest?.(jobId)) }],
     signal: clock.signal,
@@ -235,6 +266,12 @@ async function runAttempt(
     maxDepth: 1,
     agentOptions: { maxTokens: CHILD_MAX_TOKENS },
   })
+  let run: Awaited<ReturnType<CodeGenerationDependencies['start']>>
+  try { run = await clock.wait(starting) }
+  catch (error) {
+    if (clock.aborted) void starting.then(late => late.dispose(), () => {}).catch(() => {})
+    throw error
+  }
   let rejectedSource: CodeVisualizationSource | undefined
   let canContinueTokenLimit = false
   try {
@@ -254,12 +291,13 @@ async function runAttempt(
     if (clock.aborted) throw generationError('GENERATION_ABORTED', 'Generation aborted')
     const ref = await clock.wait(deps.create({
       ownerSessionId: deps.ownerSessionId, scene: original.scene, experimentId: style.experimentId,
-      childSessionId: String(run.id), source, generationId: jobId,
+      childSessionId: String(run.id), source, generationId: jobId, requestSha256,
     }, clock.signal))
     if (ref.rendererKind !== 'independent') throw generationError('INVALID_METADATA', 'Host did not validate an independent renderer')
     if (!isCurrent()) throw generationError('STALE_GENERATION', 'Scene changed')
-    deps.publish({ ...original, visualization: ref })
-    return { kind: 'ready', ref }
+    const requestedRef = { ...ref, requestSha256 }
+    deps.publish({ ...original, visualization: requestedRef })
+    return { kind: 'ready', ref: requestedRef }
   } catch (error) {
     const code: GenerationCode = codeOf(error)
     const retryable = isRetryable(code) || (code === 'MAX_TOKENS' && canContinueTokenLimit)
@@ -279,6 +317,13 @@ async function runAttempt(
       },
     }
   } finally {
-    await run.dispose()
+    // Cleanup still owns its eventual settlement, but cannot hold a failed
+    // durable marker past the job's deadline when a driver ignores cancellation.
+    const disposal = Promise.resolve().then(() => run.dispose())
+    try { await clock.wait(disposal) }
+    catch (error) {
+      if (!clock.aborted) throw error
+      void disposal.catch(() => {})
+    }
   }
 }

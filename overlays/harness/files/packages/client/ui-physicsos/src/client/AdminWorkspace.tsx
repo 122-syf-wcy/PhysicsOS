@@ -13,25 +13,22 @@ import type {
 import type { PaperApi } from './paper-api.ts'
 import type { NoticeApi } from './notice-api.ts'
 import { AdminContentTab } from './AdminContentTab.tsx'
-import { AdminDashboardTab } from './AdminDashboardTab.tsx'
-import { AdminDeviceTab } from './AdminDeviceTab.tsx'
+import { AdminAccountsTab } from './AdminAccountsTab.tsx'
+import { AdminOverviewTab } from './AdminOverviewTab.tsx'
+import { AdminSectionTabs } from './AdminSectionTabs.tsx'
 import { AdminExperimentTab } from './AdminExperimentTab.tsx'
 import { AdminModelPoolTab } from './AdminModelPoolTab.tsx'
-import { AdminOpsTab } from './AdminOpsTab.tsx'
 import { AdminNoticeTab } from './AdminNoticeTab.tsx'
 import { AdminWebsiteTab } from './AdminWebsiteTab.tsx'
 import { createWebsiteApi, type WebsiteApi } from './website-api.ts'
 import { AdminPlatformNoticeTab } from './AdminPlatformNoticeTab.tsx'
-import { AdminPluginTab } from './AdminPluginTab.tsx'
-import { AdminPromptTab } from './AdminPromptTab.tsx'
 import { AdminModerationTab } from './AdminModerationTab.tsx'
 import { createModerationApi, type ModerationApi } from './moderation-api.ts'
-import { createDeveloperPromptApi, type DeveloperPromptApi } from './developer-prompt-api.ts'
-import { PasswordResetQueue } from './AuthGate.tsx'
 import { isAdminRole, type AuthState } from './auth-store.ts'
 import type { PhysicsosKey } from './locales.ts'
 import type { ModelPoolApi } from './model-pool-api.ts'
-import { createPluginCenterApi, type PluginCenterApi } from './PluginCenterApi.ts'
+import type { UsageApi } from './usage-api.ts'
+import { UsageWorkspace } from './UsageWorkspace.tsx'
 import { GlassSelect } from './GlassSelect.tsx'
 import {
   AdminCard,
@@ -49,23 +46,15 @@ import css from './AdminWorkspace.module.css'
 export type AdminTabGroup = 'overview' | 'people' | 'content' | 'system'
 
 type Tab =
+  | 'overview'
   | 'requests'
   | 'schools'
-  | 'dashboard'
   | 'users'
-  | 'resets'
-  | 'content'
   | 'experimentReview'
-  | 'notice'
-  | 'platformNotice'
+  | 'feedback'
   | 'website'
-  | 'developerPrompts'
   | 'moderation'
   | 'modelPool'
-  | 'plugins'
-  | 'ops'
-  | 'devices'
-  | 'audit'
 
 export interface AdminWorkspaceProps {
   api: AdminApi
@@ -90,10 +79,8 @@ export interface AdminWorkspaceProps {
   noticeApi?: NoticeApi
   /** `/physicsos/model-pool` client — absent in stripped test compositions. */
   modelPoolApi?: ModelPoolApi
-  /** SUPER_ADMIN plugin catalog client; defaults to the same-origin route. */
-  pluginApi?: PluginCenterApi
-  /** Platform-wide developer instructions; the server requires SUPER_ADMIN. */
-  promptApi?: DeveloperPromptApi
+  /** Account and tenant scope are decided by the usage host, not this page. */
+  usageApi?: UsageApi
   /** Conversation evidence and human decisions; live SUPER_ADMIN Cookie only. */
   moderationApi?: ModerationApi
   /** Platform-wide official website configuration and private feedback inbox. */
@@ -108,21 +95,19 @@ const fmtTime = (iso: string): string => {
   return Number.isNaN(date.getTime()) ? iso : date.toLocaleString('zh-CN', { hour12: false })
 }
 
-const defaultPluginApi = createPluginCenterApi()
-const defaultPromptApi = createDeveloperPromptApi()
 const defaultModerationApi = createModerationApi()
 const defaultWebsiteApi = createWebsiteApi()
 
 export function AdminWorkspace({
-  api, paperApi, noticeApi, modelPoolApi,
-  pluginApi = defaultPluginApi, promptApi = defaultPromptApi,
+  api, paperApi, noticeApi, modelPoolApi, usageApi,
   moderationApi = defaultModerationApi, websiteApi = defaultWebsiteApi, useAuth, t,
 }: AdminWorkspaceProps) {
-  const role = useAuth(state => state.user?.role)
+  const principal = useAuth(state => state.user)
+  const role = principal?.role
   /* The judging account, attributed on every review — the same identity the
      server files the ledger row under. */
-  const username = useAuth(state => state.user?.username) ?? 'admin'
-  const [tab, setTab] = useState<Tab>('users')
+  const username = principal?.username ?? 'admin'
+  const [tab, setTab] = useState<Tab>('overview')
   const isSuper = role === 'SUPER_ADMIN'
 
   if (!isAdminRole(role)) {
@@ -133,38 +118,23 @@ export function AdminWorkspace({
      scrolls sideways, so an operator cannot see what exists without hunting;
      four labelled groups fit in one column and name the mental model. */
   const tabs: { id: Tab; label: string; group: AdminTabGroup }[] = [
+    { id: 'overview', label: t('admin.tab.overview'), group: 'overview' },
     ...(isSuper ? [
       { id: 'requests' as const, label: t('admin.tab.requests'), group: 'overview' as const },
       { id: 'schools' as const, label: t('admin.tab.schools'), group: 'overview' as const },
     ] : []),
-    { id: 'dashboard' as const, label: t('admin.tab.dashboard'), group: 'overview' as const },
     { id: 'users' as const, label: t('admin.tab.users'), group: 'people' as const },
-    /* 密码重置队列 is the admin side of the self-service flow: students file a
-       request from the login gate, an admin issues the one-time link here.
-       School admins see their own tenant; SUPER_ADMIN sees every school. */
-    { id: 'resets' as const, label: t('admin.tab.resets'), group: 'people' as const },
-    { id: 'devices' as const, label: t('admin.tab.devices'), group: 'people' as const },
     ...(isSuper ? [{ id: 'moderation' as const, label: t('admin.tab.moderation'), group: 'people' as const }] : []),
-    ...(paperApi === undefined ? [] : [{ id: 'content' as const, label: t('admin.tab.content'), group: 'content' as const }]),
-    ...(isSuper
+    ...(isSuper || paperApi !== undefined
       ? [{ id: 'experimentReview' as const, label: t('admin.tab.experimentReview'), group: 'content' as const }]
       : []),
-    ...(noticeApi === undefined ? [] : [{ id: 'notice' as const, label: t('admin.tab.notice'), group: 'content' as const }]),
-    ...(noticeApi === undefined || !isSuper
-      ? []
-      : [{ id: 'platformNotice' as const, label: t('admin.tab.platformNotice'), group: 'content' as const }]),
+    ...(noticeApi === undefined ? [] : [{ id: 'feedback' as const, label: t('admin.tab.feedback'), group: 'content' as const }]),
     ...(isSuper
       ? [{ id: 'website' as const, label: t('admin.tab.website'), group: 'content' as const }]
       : []),
     ...(modelPoolApi === undefined || !isSuper
       ? []
       : [{ id: 'modelPool' as const, label: t('admin.tab.modelPool'), group: 'system' as const }]),
-    ...(isSuper
-      ? [{ id: 'developerPrompts' as const, label: t('admin.tab.developerPrompts'), group: 'content' as const }]
-      : []),
-    ...(!isSuper ? [] : [{ id: 'plugins' as const, label: t('admin.tab.plugins'), group: 'system' as const }]),
-    { id: 'ops' as const, label: t('admin.tab.ops'), group: 'system' as const },
-    { id: 'audit' as const, label: t('admin.tab.audit'), group: 'system' as const },
   ]
   const fallback = tabs[0]
   if (fallback === undefined) throw new Error('AdminWorkspace: no tab is visible for this role')
@@ -186,6 +156,7 @@ export function AdminWorkspace({
   return (
     <div className={css.root} data-physicsos-surface="admin">
       <AdminPage
+        key={`${principal?.id}:${principal?.schoolId}:${role}`}
         title={t('admin.title')}
         tabs={tabs}
         activeTab={active}
@@ -194,32 +165,56 @@ export function AdminWorkspace({
       >
         {active === 'requests' && isSuper && <RequestsTab api={api} t={t} />}
         {active === 'schools' && isSuper && <SchoolsTab api={api} t={t} />}
-        {active === 'dashboard' && <AdminDashboardTab api={api} t={t} />}
-        {active === 'users' && <UsersTab api={api} t={t} isSuper={isSuper} />}
-        {active === 'resets' && <PasswordResetQueue api={api} t={t} />}
-        {active === 'content' && paperApi !== undefined && (
-          <AdminContentTab api={paperApi} reviewer={username} t={t} />
-        )}
-        {active === 'experimentReview' && isSuper && <AdminExperimentTab t={t} />}
-        {active === 'notice' && noticeApi !== undefined && (
-          <AdminNoticeTab api={noticeApi} t={t} />
-        )}
-        {active === 'platformNotice' && noticeApi !== undefined && isSuper && (
-          <AdminPlatformNoticeTab api={noticeApi} t={t} />
-        )}
+        {active === 'overview' && <AdminOverviewTab api={api} isSuper={isSuper} t={t}
+          summary={usageApi === undefined ? <AdminEmpty>{t('admin.overview.usageUnavailable')}</AdminEmpty>
+            : <UsageWorkspace api={usageApi} admin t={t} />}
+          audit={<AuditTab api={api} t={t} />} />}
+        {active === 'users' && <AdminAccountsTab api={api} t={t} isSuper={isSuper}
+          accounts={<UsersTab api={api} t={t} isSuper={isSuper} />} />}
+        {active === 'experimentReview' && <ReviewTab paperApi={paperApi} isSuper={isSuper} reviewer={username} t={t} />}
+        {active === 'feedback' && noticeApi !== undefined && <FeedbackTab api={noticeApi} isSuper={isSuper} t={t} />}
         {active === 'modelPool' && modelPoolApi !== undefined && isSuper && (
           <AdminModelPoolTab api={modelPoolApi} t={t} />
         )}
         {active === 'website' && isSuper && <AdminWebsiteTab api={websiteApi} t={t} />}
-        {active === 'plugins' && isSuper && <AdminPluginTab api={pluginApi} t={t} />}
-        {active === 'developerPrompts' && isSuper && <AdminPromptTab api={promptApi} />}
         {active === 'moderation' && isSuper && <AdminModerationTab api={moderationApi} />}
-        {active === 'ops' && <AdminOpsTab api={api} isSuper={isSuper} t={t} />}
-        {active === 'devices' && <AdminDeviceTab api={api} isSuper={isSuper} t={t} />}
-        {active === 'audit' && <AuditTab api={api} t={t} />}
       </AdminPage>
     </div>
   )
+}
+
+function ReviewTab({ paperApi, isSuper, reviewer, t }: {
+  readonly paperApi: PaperApi | undefined
+  readonly isSuper: boolean
+  readonly reviewer: string
+  readonly t: (key: PhysicsosKey) => string
+}) {
+  const [section, setSection] = useState<'experiments' | 'content'>(isSuper ? 'experiments' : 'content')
+  const items = [
+    ...(isSuper ? [{ id: 'experiments' as const, label: t('admin.review.experiments') }] : []),
+    ...(paperApi === undefined ? [] : [{ id: 'content' as const, label: t('admin.review.content') }]),
+  ]
+  const active = items.some(item => item.id === section) ? section : items[0]?.id
+  if (active === undefined) return null
+  return <AdminSectionTabs label={t('admin.review.tabs')} value={active} items={items} onChange={setSection}>
+    {active === 'experiments' && isSuper ? <AdminExperimentTab t={t} />
+      : paperApi === undefined ? null : <AdminContentTab api={paperApi} reviewer={reviewer} t={t} />}
+  </AdminSectionTabs>
+}
+
+function FeedbackTab({ api, isSuper, t }: {
+  readonly api: NoticeApi
+  readonly isSuper: boolean
+  readonly t: (key: PhysicsosKey) => string
+}) {
+  const [section, setSection] = useState<'feedback' | 'announcements'>('feedback')
+  const active = section === 'announcements' && !isSuper ? 'feedback' : section
+  return <AdminSectionTabs<'feedback' | 'announcements'> label={t('admin.feedback.tabs')} value={active} onChange={setSection} items={[
+    { id: 'feedback', label: t('admin.tab.notice') },
+    ...(isSuper ? [{ id: 'announcements' as const, label: t('admin.tab.platformNotice') }] : []),
+  ]}>
+    {active === 'feedback' ? <AdminNoticeTab api={api} t={t} /> : <AdminPlatformNoticeTab api={api} t={t} />}
+  </AdminSectionTabs>
 }
 
 /* ---- shared bits ---- */

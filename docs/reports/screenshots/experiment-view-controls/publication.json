@@ -1,0 +1,22 @@
+{
+  "published": true,
+  "targetCount": 1,
+  "experimentId": "average-speed",
+  "active": {
+    "id": "exp_585747005737d6b91d089c0beffd7aa6",
+    "version": "2.2.1",
+    "sha256": "3b80bb1f504dee867b6ac4fd528c92f34f919054734ddd0afc298b85292e6530",
+    "status": "approved",
+    "experimentId": "average-speed"
+  },
+  "previousActive": {
+    "id": "exp_70d65d85c979c0de8e5520d58e6b7444",
+    "version": "2.2.0",
+    "sha256": "20dc8731aa97d2cfa70ac8b7d4d1a0c697557bb030039876c38f52b3d454c104",
+    "status": "approved",
+    "experimentId": "average-speed"
+  },
+  "previousArchivePreserved": true,
+  "hostRecoveryDir": "/opt/physicsos/backups/releases/20261111T151531Z-view-controls-25092c6",
+  "completedAt": "2026-11-11T16:24:59.796072+00:00"
+}

@@ -274,17 +274,20 @@ describe('canvas entry object owner', () => {
 })
 
 describe('canvas normal-user entry controls', () => {
-  it('opens real workbench commands from Home and keeps recent source provenance', () => {
+  it('opens the current lab, project and workbench entries from Home and keeps recent source provenance', () => {
     const scene = createMagneticScene({ title: 'Recent real scene' })
     const recent = createSnapshotStore({ items: [{ sceneId: String(scene.id), scene, title: 'Recent real scene', domain: 'magnetic',
       kind: 'experiment' as const, updatedAt: new Date().toISOString(), originScene: scene, buildMode: true as const }] })
     const newCanvas = vi.fn(async () => 'canvas')
+    const openSurface = vi.fn()
     const openCanvasView = vi.fn()
     const requestSceneInCanvas = vi.fn()
-    render(<HomeActions t={t} openSurface={vi.fn()} openCanvasView={openCanvasView} newCanvas={newCanvas}
+    render(<HomeActions t={t} openSurface={openSurface} openCanvasView={openCanvasView} newCanvas={newCanvas}
       requestSceneInCanvas={requestSceneInCanvas} useRecentExperiments={selector => selector(recent.getSnapshot())} />)
-    fireEvent.click(screen.getByRole('button', { name: t('canvas.new') }))
-    expect(newCanvas).toHaveBeenCalledWith(t('canvas.untitled'))
+    fireEvent.click(screen.getByRole('button', { name: t('home.card.lab.title') }))
+    expect(openSurface).toHaveBeenCalledWith('lab')
+    fireEvent.click(screen.getByRole('button', { name: t('nav.projects') }))
+    expect(openSurface).toHaveBeenCalledWith('projects')
     fireEvent.click(screen.getByRole('button', { name: t('canvas.open') }))
     expect(openCanvasView).toHaveBeenCalledWith()
     fireEvent.click(screen.getByRole('button', { name: `${t('canvas.addToCanvas')} · Recent real scene` }))
@@ -306,6 +309,22 @@ describe('canvas normal-user entry controls', () => {
 })
 
 describe('canvas independent URL ownership', () => {
+  it('keeps classroom-board and experiment document routes independent while retaining the live experiment', () => {
+    const surface = createPhysicsSurfaceController()
+    const original = createMagneticScene()
+    surface.open('lab', { sceneId: String(original.id), scene: original })
+    window.history.replaceState(null, '', '#/whiteboards/board%3Aone')
+    const stopCanvas = startCanvasNavigation(surface, window)
+    const stopBoard = startCanvasNavigation(surface, window, 'whiteboard')
+    expect(surface.store.getSnapshot()).toMatchObject({ surface: 'whiteboard', whiteboardId: 'board:one', sceneRef: { scene: original } })
+    surface.openCanvas('experiment-two')
+    expect(window.location.hash).toBe('#/canvases/experiment-two')
+    surface.openWhiteboard('board-three')
+    expect(window.location.hash).toBe('#/whiteboards/board-three')
+    expect(surface.store.getSnapshot().sceneRef?.scene).toBe(original)
+    stopBoard(); stopCanvas()
+  })
+
   it('restores encoded workbench IDs and never creates a fallback document for malformed history', () => {
     const surface = createPhysicsSurfaceController()
     const original = createMagneticScene()

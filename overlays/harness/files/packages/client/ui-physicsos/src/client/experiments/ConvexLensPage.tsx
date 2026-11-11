@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { PhysicsWorkspaceProps } from '../PhysicsWorkspace.tsx'
 import { AgentDrawer } from '../AgentDrawer.tsx'
+import { WorkbenchAction } from '../WorkbenchAction.tsx'
 import { ExperimentGuidePanel } from '../ExperimentGuidePanel.tsx'
 import { ExperimentReportPanel } from '../ExperimentReportPanel.tsx'
 import { experimentMetaOf } from '../physics/experiment-summaries.ts'
@@ -41,6 +42,7 @@ export function ConvexLensPage({
   t,
   onSwitchExperiment,
   onReturnToChat,
+  onAddToCanvas,
   recordAttempt,
   experimentMeta,
 }: PhysicsWorkspaceProps) {
@@ -133,6 +135,7 @@ export function ConvexLensPage({
           <p className={css.subtitle}>移动物体与光屏，让成像的规律自己浮现。</p>
         </div>
         <div className={css.headerActions}>
+          {onAddToCanvas === undefined ? null : <WorkbenchAction label={t('canvas.addToCanvas')} onClick={onAddToCanvas} />}
           <button
             type="button"
             className={css.subtleButton}

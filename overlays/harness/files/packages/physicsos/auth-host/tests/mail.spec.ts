@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from 'vitest'
 import {
-  buildMessage, createAccountNotifier, readMailConfig,
+  approvedMessage, buildMessage, createAccountNotifier, readMailConfig,
   type MailConfig, type MailMessage,
 } from '../src/mail.ts'
 
@@ -33,6 +33,14 @@ const decodePart = (message: string, marker: string): string => {
 }
 
 describe('mail composer', () => {
+  it('welcomes approved accounts to the real PhysicsOS QQ group in both message bodies', () => {
+    const message = approvedMessage(config, { to: 'student@example.test', username: 'student', displayName: '<学生>', schoolName: "O'Neill School" })
+    expect(message.text).toContain('1129665992')
+    expect(message.html).toContain('1129665992')
+    expect(message.html).toContain('https://physics.dongsiwei.com/physicsos/community/qq-group-1129665992.jpg')
+    expect(message.html).toContain('&lt;学生&gt;')
+    expect(message.text).not.toContain('app-password')
+  })
   it('builds a single-part text message when no HTML is supplied', () => {
     const message: MailMessage = { to: 'a@b.com', subject: '测试', text: '正文' }
     const built = buildMessage(config, message)

@@ -1,0 +1,20 @@
+{
+  "deployed": true,
+  "image": "sha256:f0d88bdc9a7617beb9d9c0c1255e34b11486d140a76ef516e306b8679bbd55a1",
+  "revision": "c9ff4a108576b440aa84b798ed9ecaeb0bfbad98",
+  "recovery": "/opt/physicsos/backups/releases/20261110T124727.237057Z-student-feedback-20261110",
+  "files": {
+    "postgres.dump": {
+      "size": 902988,
+      "sha256": "bcc5ce6581e1d708d116759f5383164b7ba676e5bf761aee742a2900fcf0425f"
+    },
+    "app_data.tar.gz": {
+      "size": 227590902,
+      "sha256": "d9ff90af5326aa565bbfe36b42b0dbd18c703059554ef2dbcb8bb53e2d86724a"
+    },
+    "redis_data.tar.gz": {
+      "size": 23899,
+      "sha256": "9d871abad13e175ae2d4e428abee6a6e369373993ca33f3c0929813a41d175ee"
+    }
+  }
+}

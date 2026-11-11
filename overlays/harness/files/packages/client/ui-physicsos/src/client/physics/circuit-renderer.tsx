@@ -1054,6 +1054,7 @@ export function CircuitRenderer({
         const svgRotation = -component.rotation
         const vertical = isVertical(component.rotation)
         const selected = componentSelection?.selected === component.id
+        const showDetail = componentSelection === undefined || selected
         const highlighted = projection.highlighted(component.id) || selected
 
         /* A catalogued sprite takes over the symbol body; anything missing from
@@ -1088,13 +1089,13 @@ export function CircuitRenderer({
           ...(meterReading === undefined || sprite !== undefined
             ? []
             : [{ text: meterReading, className: css.circuitReading ?? '' }]),
-          ...(showCurrent && component.currentText !== undefined
+          ...(showDetail && showCurrent && component.currentText !== undefined
             ? [{ text: component.currentText, className: css.circuitCurrentText ?? '' }]
             : []),
-          ...(showVoltage && component.voltageText !== undefined
+          ...(showDetail && showVoltage && component.voltageText !== undefined
             ? [{ text: component.voltageText, className: css.circuitAnnotation ?? '' }]
             : []),
-          ...(showPower && component.powerText !== undefined
+          ...(showDetail && showPower && component.powerText !== undefined
             ? [{ text: component.powerText, className: css.circuitAnnotation ?? '' }]
             : []),
         ]
@@ -1347,7 +1348,7 @@ export function CircuitRenderer({
                   onSpriteError={onSpriteError}
                 />
               )}
-              {showCurrent && component.currentText !== undefined ? (
+              {showDetail && showCurrent && component.currentText !== undefined ? (
                 <CurrentArrow
                   component={component}
                   cx={cx}

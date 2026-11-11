@@ -644,26 +644,39 @@ function derivationOf(
   if (modelId === 'projectile_motion') {
     const m = model as Extract<MechanicsModel, { modelId: 'projectile_motion' }>
     const g = Math.abs(m.gravity.y)
+    if (g === 0) return []
+    const h = m.initialPosition.y - m.groundY
+    const vx = m.initialVelocity.x
+    const vy = m.initialVelocity.y
+    const horizontal = Math.abs(vy) < 1e-12
+    const parameters = `h = ${fmt(h)} m；h = y₀ − y地面 = ${fmt(m.initialPosition.y)} − ${fmt(m.groundY)} = ${fmt(h)} m；vₓ₀ = ${fmt(vx)} m/s；vᵧ₀ = ${fmt(vy)} m/s；g = ${fmt(g)} m/s²。`
     return [
       {
-        id: 'step-1',
-        title: '竖直方向：匀加速下落',
-        expression: 'h = \\tfrac{1}{2} g t^2',
-        detail: '竖直方向只受重力，初始竖直速度决定下落规律。',
-        result: { symbol: 't', value: fmt(m.flightTime), unit: 's' },
+        id: 'trajectory', title: '运动分解与位移',
+        expression: 'x = x_0 + v_{x0}t,\\quad y = y_0 + v_{y0}t - \\tfrac{1}{2}gt^2',
+        detail: `忽略空气阻力，取水平向右、竖直向上为正。水平方向不受力，竖直方向只受重力。x₀ = ${fmt(m.initialPosition.x)} m；y₀ = ${fmt(m.initialPosition.y)} m。${horizontal ? '平抛时 vᵧ₀ = 0。' : ''}`,
       },
       {
-        id: 'step-2',
-        title: '水平方向：匀速运动',
-        expression: 'R = v_x \\, t',
-        detail: '水平方向不受力，速度守恒。',
+        id: 'velocity', title: '速度随时间变化',
+        expression: 'v_x = v_{x0},\\quad v_y = v_{y0} - gt',
+        detail: `vₓ = ${fmt(vx)} m/s；vᵧ = ${fmt(vy)} − ${fmt(g)}t m/s。`,
+      },
+      {
+        id: 'flight', title: '落地时间',
+        expression: horizontal ? 'T = \\sqrt{2h/g}' : 'T = \\frac{v_{y0} + \\sqrt{v_{y0}^2 + 2gh}}{g}',
+        detail: `${parameters}落地时 y = y地面。代入：T ${horizontal ? `= √(2 × ${fmt(h)} / ${fmt(g)})` : `= (${fmt(vy)} + √(${fmt(vy)}² + 2 × ${fmt(g)} × ${fmt(h)})) / ${fmt(g)}`} ≈ ${fmt(m.flightTime)} s。`,
+        result: { symbol: 'T', value: fmt(m.flightTime), unit: 's' },
+      },
+      {
+        id: 'range', title: '水平射程',
+        expression: horizontal ? 'R = v_{x0}T = v_{x0}\\sqrt{2h/g}' : 'R = v_{x0}T',
+        detail: `R = x落地 − x₀；代入：${fmt(vx)} × ${fmt(m.flightTime)} ≈ ${fmt(m.range)} m。`,
         result: { symbol: 'R', value: fmt(m.range), unit: 'm' },
       },
       {
-        id: 'step-3',
-        title: '最大高度',
-        expression: 'H = \\tfrac{v_{y0}^2}{2 g}',
-        detail: `g = ${fmt(g)} m/s²`,
+        id: 'height', title: '距地面的最大高度',
+        expression: vy > 0 ? 'H = h + \\tfrac{v_{y0}^2}{2g}' : 'H = h',
+        detail: vy > 0 ? `最高点 vᵧ = 0；H = ${fmt(h)} + ${fmt(vy)}² / (2 × ${fmt(g)}) ≈ ${fmt(m.maxHeight)} m。` : '初始竖直速度向下或为零，最高位置就是发射位置。',
         result: { symbol: 'H', value: fmt(m.maxHeight), unit: 'm' },
       },
     ]

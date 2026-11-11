@@ -10,7 +10,7 @@ import { readFile } from 'node:fs/promises'
 import { extname, join, normalize } from 'node:path'
 import type { ImageMediaType } from '@deepseek-ai/dsh-attachment'
 import { PaperError, type PaperService } from './service.ts'
-import { auditWrites, guard, type PhysicsosIdentity } from './identity.ts'
+import { auditWrites, guard, type IdentityActor, type PhysicsosIdentity } from './identity.ts'
 import { canManagePaperRecord, canReadPaperRecord, schoolScopeOf } from './scope.ts'
 import type { ExportFileSet } from './export.ts'
 import {
@@ -134,6 +134,8 @@ const checkCsrf = (req: IncomingMessage): void => {
 
 /** Route deps the handlers close over. */
 export interface RouteDeps {
+  /** Captures only the authenticated server actor, including detached model jobs. */
+  readonly withUsageOwner?: <T>(actor: IdentityActor, operation: () => Promise<T>) => Promise<T>
   readonly service: PaperService
   /** Production always wires the durable relay; older isolated route fixtures may provide drivers alone. */
   readonly pipeline?: Pick<PaperPipeline, 'enqueueDraft' | 'enqueueCheck' | 'enqueueMutation'>
@@ -234,6 +236,7 @@ export function paperRoutes(deps: RouteDeps): (req: IncomingMessage, res: Server
          replaces is thirty routes each remembering, and the thirty-first. */
       const identity = identityOf()
       const { actor, writes } = guard(identity, req, method)
+      const runRequest = async (): Promise<void> => {
       const jobForActor = (id: string) => {
         const job = service.getJob(id)
         if (!canManagePaperRecord(actor, job)) throw new PaperError(404, 'NOT_FOUND', 'not found')
@@ -681,6 +684,8 @@ export function paperRoutes(deps: RouteDeps): (req: IncomingMessage, res: Server
       }
 
       send(res, 404, { error: { code: 'NO_ROUTE', message: `${method} ${path}` } })
+      }
+      await (deps.withUsageOwner ? deps.withUsageOwner(actor, runRequest) : runRequest())
     } catch (error) {
       sendError(res, error)
     }

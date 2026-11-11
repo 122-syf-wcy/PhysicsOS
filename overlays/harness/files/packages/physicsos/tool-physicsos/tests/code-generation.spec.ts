@@ -1,4 +1,5 @@
 import { mkdtemp, rm } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import JsonlSessionPersistence from '../../../session/session-persistence-jsonl/src/index.ts'
@@ -14,7 +15,7 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import SubagentRuntime, { snapshotSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
 import type { Agent, AgentOptions } from '@deepseek-ai/dsh-agent'
 import type { GenerateOptions, LlmModelReasoningInfo } from '@deepseek-ai/dsh-llm'
-import { createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, ReasoningEffortId, ToolCallId } from '@deepseek-ai/dsh-llm'
 import { MockAdapter, toolCallResponse, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import * as physicsTools from '../src/index.ts'
 import { PhysicsCodeProvider, CODE_PROVIDER_NAME } from '../src/code-provider.ts'
@@ -49,6 +50,191 @@ function dependencies() {
   return { deps, original, states, dispose, create, start, setLatest: (value: PhysicsSceneSnapshot) => { latest = value } }
 }
 describe('parent question code generation', () => {
+  it.each(['revision', 'another question', 'owner', 'scene facts'].flatMap(change => [
+    { change, hasReceipt: false }, { change, hasReceipt: true },
+  ]))('preserves changed $change while a lost-response receipt lookup is delayed (ready=$hasReceipt)', async ({ change, hasReceipt }) => {
+    const ctx = new Context(); contexts.push(ctx)
+    await mountAgentLoopTestDependencies(ctx)
+    const h = dependencies(), session = ctx.sessions.create(SessionId('parent'))
+    let owner = 'school:student'
+    const frozenReceipt = await h.create(); h.create.mockClear()
+    const receipt = Promise.withResolvers<typeof frozenReceipt | undefined>()
+    const restoreGeneration = vi.fn(() => receipt.promise), start = vi.fn(h.start)
+    ctx.provide('physicsosIdentity', { sessionOwnerKey: () => owner } as never)
+    ctx.provide('questionCodeArtifacts', { context: h.deps.context, create: h.deps.create, restoreGeneration } as never)
+    ctx.provide('subagents', { start } as never)
+    await ctx.plugin(physicsTools, { sceneScope: 'session', maxScenes: 64 })
+    session.append('turn/start', { turn: 1 })
+    session.append('physics/scene', { ...h.original, turn: 1, visualization: { status: 'generating', jobId: 'delayed-receipt',
+      ownerSessionId: 'parent', sceneId: h.original.sceneId, sceneRevision: h.original.revision } })
+    const agent = { id: session.id, session } as unknown as Agent
+    const work = ctx.tools.execute({ agent, signal: new AbortController().signal, callId: ToolCallId('delayed-receipt'),
+      name: 'physics_generate_experiment', arguments: { sceneId: h.original.sceneId } })
+    await vi.waitFor(() => expect(restoreGeneration).toHaveBeenCalledTimes(1))
+    if (change === 'owner') owner = 'another:student'
+    else {
+      const sceneId = change === 'another question' ? 'new-question' : h.original.sceneId
+      const revision = change === 'revision' ? h.original.revision + 1 : h.original.revision
+      session.append('physics/scene', { ...h.original, sceneId, revision,
+        scene: { ...(h.original.scene as object), id: sceneId, revision,
+          ...(change === 'scene facts' ? { metadata: { corrected: true } } : {}) } })
+    }
+    const before = ctx.sessionProjections.stateOf(session, 'physicsScenes')
+    const events = session.snapshotEvents().filter(event => event.type === 'physics/scene').length
+    receipt.resolve(hasReceipt ? frozenReceipt : undefined)
+    const result = await work
+    expect(result).toMatchObject({ isError: true, error: { info: { code: 'STALE_GENERATION' } } })
+    expect(start).not.toHaveBeenCalled()
+    expect(h.create).not.toHaveBeenCalled()
+    expect(ctx.sessionProjections.stateOf(session, 'physicsScenes')).toEqual(before)
+    expect(session.snapshotEvents().filter(event => event.type === 'physics/scene')).toHaveLength(events)
+  })
+  it('restores a verified generation receipt after the parent ready append was lost without starting another child', async () => {
+    const ctx = new Context(); contexts.push(ctx)
+    await mountAgentLoopTestDependencies(ctx)
+    const h = dependencies(), session = ctx.sessions.create(SessionId('parent'))
+    const receipt = { ...await h.create(), artifactId: 'qcode_11111111111111111111111111111111', childSessionId: 'persisted-child',
+      sceneSha256: createHash('sha256').update('{"id":"question-scene","metadata":{},"particles":[{"charge":{"unit":"C","value":3}}],"revision":2,"schemaVersion":"physics-scene/1.0"}').digest('hex') }
+    h.create.mockClear()
+    const restoreGeneration = vi.fn(async () => receipt), start = vi.fn(async () => ({ id: 'unnecessary-child', result: Promise.resolve({ stopReason: 'completed', structured: source, output: [] }), dispose: h.dispose }))
+    ctx.provide('physicsosIdentity', { sessionOwnerKey: () => 'school:student' } as never)
+    ctx.provide('questionCodeArtifacts', { context: h.deps.context, create: h.deps.create, restoreGeneration } as never)
+    ctx.provide('subagents', { start } as never)
+    await ctx.plugin(physicsTools, { sceneScope: 'session', maxScenes: 64 })
+    session.append('turn/start', { turn: 1 })
+    session.append('physics/scene', { ...h.original, turn: 1, visualization: { status: 'generating', jobId: 'lost-parent-append',
+      deadlineAt: Date.now() + 600_000, ownerSessionId: 'parent', sceneId: h.original.sceneId, sceneRevision: 2 } })
+    const agent = { id: session.id, session } as unknown as Agent
+    const result = await ctx.tools.execute({ agent, signal: new AbortController().signal, callId: ToolCallId('restore-receipt'),
+      name: 'physics_generate_experiment', arguments: { sceneId: h.original.sceneId } })
+    expect(result.value).toMatchObject({ status: 'ready', artifactId: 'qcode_11111111111111111111111111111111' })
+    expect(start).not.toHaveBeenCalled()
+    expect(h.create).not.toHaveBeenCalled()
+    expect(restoreGeneration).toHaveBeenCalledWith(expect.objectContaining({ ownerSessionId: 'parent', generationId: 'lost-parent-append',
+      scene: h.original.scene, experimentId: 'magnetic-circular' }), expect.any(AbortSignal))
+    expect(ctx.sessionProjections.stateOf(session, 'physicsScenes')?.scenes[h.original.sceneId]?.visualization).toMatchObject({ status: 'ready', artifactId: 'qcode_11111111111111111111111111111111' })
+  })
+  it('keeps an unchanged question generation current when a later parent turn starts', async () => {
+    const ctx = new Context(); contexts.push(ctx)
+    await mountAgentLoopTestDependencies(ctx)
+    const h = dependencies(), session = ctx.sessions.create(SessionId('parent'))
+    const finished = Promise.withResolvers<{ stopReason: string; structured: typeof source; output: [] }>()
+    ctx.provide('physicsosIdentity', { sessionOwnerKey: () => 'school:student' } as never)
+    ctx.provide('questionCodeArtifacts', { context: h.deps.context, create: h.deps.create } as never)
+    ctx.provide('subagents', { start: async () => ({ id: 'ongoing-request-child', result: finished.promise, dispose: h.dispose }) } as never)
+    await ctx.plugin(physicsTools, { sceneScope: 'session', maxScenes: 64 })
+    session.append('turn/start', { turn: 1 })
+    session.append('physics/scene', { ...h.original, turn: 1 })
+    const agent = { id: session.id, session } as unknown as Agent
+    const work = ctx.tools.execute({ agent, signal: new AbortController().signal,
+      callId: ToolCallId('ongoing-request'), name: 'physics_generate_experiment', arguments: { sceneId: h.original.sceneId } })
+    try {
+      await vi.waitFor(() => expect(ctx.sessionProjections.stateOf(session, 'physicsScenes')?.scenes[h.original.sceneId]?.visualization?.status).toBe('generating'))
+      session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+      session.append('turn/start', { turn: 2 })
+      finished.resolve({ stopReason: 'completed', structured: source, output: [] })
+      expect((await work).value).toMatchObject({ status: 'ready' })
+      expect(h.create).toHaveBeenCalledTimes(1)
+    } finally {
+      finished.resolve({ stopReason: 'completed', structured: source, output: [] })
+      await work
+    }
+  })
+  it('reuses the same ready visual request after a parent turn changes', async () => {
+    const ctx = new Context(); contexts.push(ctx)
+    await mountAgentLoopTestDependencies(ctx)
+    const h = dependencies(), session = ctx.sessions.create(SessionId('parent'))
+    ctx.provide('physicsosIdentity', { sessionOwnerKey: () => 'school:student' } as never)
+    ctx.provide('questionCodeArtifacts', { context: h.deps.context, create: h.deps.create } as never)
+    ctx.provide('subagents', { start: async () => ({ id: 'same-request-child', result: Promise.resolve({ stopReason: 'completed', structured: source, output: [] }), dispose: h.dispose }) } as never)
+    await ctx.plugin(physicsTools, { sceneScope: 'session', maxScenes: 64 })
+    session.append('turn/start', { turn: 1 })
+    session.append('physics/scene', { ...h.original, turn: 1 })
+    const agent = { id: session.id, session } as unknown as Agent
+    const call = () => ctx.tools.execute({ agent, signal: new AbortController().signal,
+      callId: ToolCallId('same-request'), name: 'physics_generate_experiment', arguments: { sceneId: h.original.sceneId } })
+    expect((await call()).value).toMatchObject({ status: 'ready' })
+    session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+    session.append('turn/start', { turn: 2 })
+    expect((await call()).value).toMatchObject({ status: 'ready' })
+    expect(h.create).toHaveBeenCalledTimes(1)
+    expect(session.snapshotEvents().filter(event => event.type === 'physics/scene')).toHaveLength(3)
+  })
+  it('restarts an orphaned same-turn marker through the real tool registry', async () => {
+    const ctx = new Context(); contexts.push(ctx)
+    await mountAgentLoopTestDependencies(ctx)
+    const h = dependencies(), session = ctx.sessions.create(SessionId('parent'))
+    ctx.provide('physicsosIdentity', { sessionOwnerKey: () => 'school:student' } as never)
+    ctx.provide('questionCodeArtifacts', { context: h.deps.context, create: h.deps.create } as never)
+    ctx.provide('subagents', { start: async () => ({ id: 'replacement-child', result: Promise.resolve({ stopReason: 'completed', structured: source, output: [] }), dispose: h.dispose }) } as never)
+    await ctx.plugin(physicsTools, { sceneScope: 'session', maxScenes: 64 })
+    session.append('turn/start', { turn: 1 })
+    session.append('physics/scene', { ...h.original, turn: 1, visualization: {
+      status: 'generating', ownerSessionId: 'parent', sceneId: h.original.sceneId, sceneRevision: h.original.revision,
+      jobId: 'orphaned-process-marker', deadlineAt: Date.now() + 600_000,
+    } })
+    const agent = { id: session.id, session } as unknown as Agent
+    const result = await ctx.tools.execute({ agent, signal: new AbortController().signal,
+      callId: ToolCallId('orphan-recovery'), name: 'physics_generate_experiment', arguments: { sceneId: h.original.sceneId } })
+    expect(result.isError).toBe(false)
+    expect(result.value).toMatchObject({ status: 'ready' })
+    expect(ctx.sessionProjections.stateOf(session, 'physicsScenes')?.scenes[h.original.sceneId]?.visualization?.status).toBe('ready')
+    expect(h.create).toHaveBeenCalledTimes(1)
+  })
+  it('shares one live job for concurrent requests with the same account, scene facts and visual request', async () => {
+    const h = dependencies()
+    const result = Promise.withResolvers<{ stopReason: string; structured: typeof source; output: [] }>()
+    h.start.mockImplementation(async () => ({ id: 'one-child', result: result.promise, dispose: h.dispose }))
+    const first = generateQuestionCode(h.deps)
+    const second = generateQuestionCode({ ...h.deps, snapshot: structuredClone(h.original) })
+    await Promise.resolve()
+    result.resolve({ stopReason: 'completed', structured: source, output: [] })
+    const states = await Promise.all([first, second])
+    expect(states.map(state => state.status)).toEqual(['ready', 'ready'])
+    expect(h.states.map(state => state.visualization?.status)).toEqual(['generating', 'ready'])
+    expect(h.start).toHaveBeenCalledTimes(1)
+    expect(h.create).toHaveBeenCalledTimes(1)
+  })
+  it('settles a timed-out owned marker while child disposal is still waiting', async () => {
+    vi.useFakeTimers()
+    const h = dependencies(), cleanup = Promise.withResolvers<void>()
+    h.deps.timeoutMs = 20
+    h.start.mockImplementation(async () => ({ id: 'hanging-child', result: new Promise(() => {}), dispose: async () => { await cleanup.promise } }))
+    const work = generateQuestionCode(h.deps)
+    let settled = false
+    void work.then(() => { settled = true })
+    try {
+      await vi.advanceTimersByTimeAsync(21)
+      expect(h.deps.current()?.visualization).toMatchObject({ status: 'failed', code: 'GENERATION_TIMEOUT' })
+      expect(settled).toBe(true)
+    } finally {
+      cleanup.resolve()
+      await work
+      vi.useRealTimers()
+    }
+  })
+  it('settles the deadline before a slow start returns and disposes its late published child', async () => {
+    vi.useFakeTimers()
+    const h = dependencies(), starting = Promise.withResolvers<Awaited<ReturnType<typeof h.start>>>()
+    h.deps.timeoutMs = 20
+    h.start.mockImplementation(async () => starting.promise)
+    const work = generateQuestionCode(h.deps)
+    let settled = false
+    void work.then(() => { settled = true })
+    try {
+      await vi.advanceTimersByTimeAsync(21)
+      expect(h.deps.current()?.visualization).toMatchObject({ status: 'failed', code: 'GENERATION_TIMEOUT' })
+      expect(settled).toBe(true)
+    } finally {
+      starting.resolve({ id: 'late-published-child', result: Promise.resolve({ stopReason: 'completed', structured: source, output: [] }), dispose: h.dispose })
+      await work
+      await vi.advanceTimersByTimeAsync(0)
+      vi.useRealTimers()
+    }
+    expect(h.dispose).toHaveBeenCalledTimes(1)
+    expect(h.create).not.toHaveBeenCalled()
+    expect(h.states.map(state => state.visualization?.status)).toEqual(['generating', 'failed'])
+  })
   it('continues reasoning-only token exhaustion after an owned image without restarting the job', async () => {
     const h = dependencies()
     const asset = { path: './assets/generated/owned.png', kind: 'environment' }
@@ -520,6 +706,44 @@ async function presentationHost(adapter: MockAdapter, options: AgentOptions = { 
   return { ctx, parent: handle.agent }
 }
 describe('the real code child provider', () => {
+  it('refuses to execute completed tool arguments when actual provider output exceeds the child request cap', async () => {
+    const chunks = toolCallResponse('over-cap-completion', 'structured_output', source).map(chunk =>
+      chunk.type === 'usage' ? { ...chunk, usage: { inputTokens: 10, outputTokens: 8193, totalTokens: 8203 } } : chunk)
+    const adapter = new MockAdapter([chunks])
+    const { ctx, parent } = await presentationHost(adapter)
+    const run = await new PhysicsCodeProvider(ctx).start({
+      parent, signal: new AbortController().signal, prompt: [{ type: 'text', text: '仅绘制题目快照。' }],
+      outputSchema: { type: 'object', properties: Object.fromEntries(Object.keys(source).map(key => [key, { type: 'string' }])), required: Object.keys(source) },
+      maxDepth: 1, descriptor: snapshotSubagentDescriptor({ mode: 'one-shot', provider: CODE_PROVIDER_NAME }),
+    })
+    try {
+      const result = await run.result
+      expect(result.stopReason).toBe('max-tokens')
+      expect(result.structured).toBeUndefined()
+      const child = run.localAgent!
+      expect(child.session.snapshotEvents().filter(event => event.type === 'tool/call')).toHaveLength(0)
+      expect(child.session.snapshotEvents().filter(event => event.type === 'assistant/message').at(-1)).toMatchObject({
+        data: { usage: { outputTokens: 8193, totalTokens: 8203 } },
+      })
+    } finally { await run.dispose() }
+  })
+  it('recovers a same-turn persisted generating marker without a live process job', async () => {
+    const adapter = new MockAdapter([
+      toolCallResponse('recover-missing-job', 'physics_generate_experiment', { sceneId: 'question-scene' }),
+      toolCallResponse('recovered-code', 'structured_output', source),
+      textResponse('恢复已完成。'),
+    ])
+    const { ctx, parent } = await presentationHost(adapter)
+    const original = { ...snapshot(), turn: 1 }
+    parent.session.append('physics/scene', { ...original, visualization: {
+      status: 'generating', jobId: 'process-was-lost', deadlineAt: Date.now() + 600_000,
+      ownerSessionId: 'parent', sceneId: original.sceneId, sceneRevision: original.revision,
+    } })
+    parent.followup(createUserMessage({ content: [{ type: 'text', text: '恢复本题实验。' }], source: { kind: 'user' } }))
+    await parent.whenIdle()
+    expect(ctx.sessionProjections.stateOf(parent.session, 'physicsScenes')?.scenes[original.sceneId]?.visualization?.status).toBe('ready')
+    expect(parent.session.snapshotEvents().filter(event => event.type === 'subagent/catalog')).toHaveLength(1)
+  })
   it.each(['another scene', 'a replacement job'] as const)('rejects a metadata-delayed start after %s becomes current without spending its write budget', async (replacement) => {
     const adapter = new MockAdapter([
       toolCallResponse('current-js', 'physics_write_experiment_code', { file: 'rendererJs', mode: 'replace', content: source.rendererJs }),
@@ -761,7 +985,7 @@ describe('the real code child provider', () => {
     expect(ctx.agents.get(run.id as never)).toBeUndefined()
     expect(ctx.tools.schemas(parent).map(t => t.name)).toContain('ask_user_question')
   })
-  it('cancels a real hanging child and reaches quiescence before returning failure', async () => {
+  it('settles a real child timeout at its deadline and reaches owned cleanup quiescence', async () => {
     const ctx = new Context(); contexts.push(ctx)
     await ctx.plugin(Loader); ctx.loader.builtins.include = Include
     await mountAgentLoopTestDependencies(ctx)
@@ -784,6 +1008,8 @@ describe('the real code child provider', () => {
     expect(result.status === 'failed' && result.code).toBe('GENERATION_TIMEOUT')
     expect(childId).toBeDefined()
     expect(adapter.requests.at(-1)?.tools?.map(t => t.name)).toEqual(['structured_output'])
+    expect(adapter.requests.at(-1)?.signal?.aborted).toBe(true)
+    await vi.waitFor(() => expect(ctx.agents.get(childId as never) === undefined).toBe(true), { timeout: 1_000 })
     expect(ctx.agents.get(childId as never)).toBeUndefined()
     expect(h.create).not.toHaveBeenCalled()
   })
@@ -846,7 +1072,7 @@ describe('the real code child provider', () => {
     expect(adapter.requests[1]?.tools?.map(t => t.name)).toEqual(['structured_output'])
   })
 
-  it('publishes cold regeneration statuses on the real second parent turn without rewriting first-turn facts', async () => {
+  it('publishes a distinct cold visual request on the real second parent turn without rewriting first-turn facts', async () => {
     const root = await mkdtemp(join(tmpdir(), 'physics-code-cold-turn-'))
     persistenceRoots.push(root)
     const inputs: Parameters<CodeGenerationDependencies['create']>[0][] = []
@@ -898,7 +1124,7 @@ describe('the real code child provider', () => {
     await first.fiber.dispose()
 
     const nextAdapter = new MockAdapter([
-      toolCallResponse('regenerate-second', 'physics_generate_experiment', { sceneId: original.sceneId }),
+      toolCallResponse('regenerate-second', 'physics_generate_experiment', { sceneId: original.sceneId, instructions: '重新生成本题代码实验，突出坐标与轨迹。' }),
       toolCallResponse('code-second', 'structured_output', { ...source, title: '冷重生成' }), textResponse('代码已重新生成。'),
     ])
     const next = await boot(nextAdapter)

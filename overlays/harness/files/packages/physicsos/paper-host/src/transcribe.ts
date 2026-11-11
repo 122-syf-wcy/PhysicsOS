@@ -11,6 +11,7 @@
  * job, and a hallucinated answer baked into the stem would poison the bank.
  */
 
+import { paperUsageOf } from './model-usage.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import { BlockAssembler, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ImageMediaType } from '@deepseek-ai/dsh-attachment'
@@ -50,6 +51,7 @@ export async function transcribeQuestionImages(
   route: PaperModelRoute,
   images: readonly TranscribeImage[],
 ): Promise<string> {
+  const execute = async (): Promise<string> => {
   if (images.length === 0) throw new Error('transcribe needs at least one image')
   const limits = ctx.attachments.imageLimits
   if (images.length > limits.maxImagesPerMessage) {
@@ -73,6 +75,9 @@ export async function transcribeQuestionImages(
   }
 
   const assembler = new BlockAssembler()
+  route.receipts?.signal.throwIfAborted()
+  const receipt = await route.receipts?.begin(route, route.receipts.signal)
+  if (route.receipts?.signal.aborted) { await receipt?.abandon(); route.receipts.signal.throwIfAborted() }
   const controller = new AbortController()
   const timeout = setTimeout(() => { controller.abort() }, TRANSCRIBE_TIMEOUT_MS)
   try {
@@ -83,12 +88,13 @@ export async function transcribeQuestionImages(
       messages: [createUserMessage({ content, source: { kind: 'user' } })],
       maxTokens: 16000,
       temperature: 0.1,
-      signal: controller.signal,
+      signal: route.receipts ? AbortSignal.any([controller.signal, route.receipts.signal]) : controller.signal,
     })) {
       assembler.push(chunk)
     }
   } finally {
     clearTimeout(timeout)
+    await receipt?.finish(paperUsageOf(assembler))
   }
   const finish = assembler.finish
   if (finish.kind === 'error') {
@@ -102,4 +108,6 @@ export async function transcribeQuestionImages(
     .trim()
   if (text.length === 0) throw new Error('题图转录返回了空文本')
   return text
+  }
+  return route.receipts ? route.receipts.run(execute) : execute()
 }
