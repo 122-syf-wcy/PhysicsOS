@@ -12,6 +12,7 @@ const NEW = `sha256:${'2'.repeat(64)}`
 const REVISION = '3'.repeat(40)
 const DIGEST = '4'.repeat(64)
 const CODE_DIGEST = '6'.repeat(64)
+const CONTAINERS = { app: 'a'.repeat(64), postgres: 'b'.repeat(64), redis: 'c'.repeat(64), foreign: 'd'.repeat(64), replacement: 'e'.repeat(64) }
 const bytes = value => Buffer.from(typeof value === 'string' ? value : JSON.stringify(value))
 const releaseModule = () => import('./release-switch.mjs').catch(() => ({}))
 
@@ -60,12 +61,17 @@ async function fixture(t) {
     }
     if (args.includes('config')) return bytes(config)
     if (args.includes('ps') && args.includes('--services')) return bytes(['app', 'postgres', 'redis'].filter(name => state[name]).join('\n'))
-    if (args.includes('ps') && args.includes('--quiet')) return bytes(`container-${args.at(-1)}`)
-    if (args[0] === 'ps') return bytes([...['app', 'postgres', 'redis'].filter(name => state[name]).map(name => `container-${name}`), ...(!state.app && state.mode === 'late-writer' ? ['container-foreign'] : [])].join('\n'))
+    if (args.includes('ps') && args.includes('--quiet')) return bytes(CONTAINERS[args.at(-1)])
+    if (args[0] === 'ps') {
+      const names = [...['app', 'postgres', 'redis'].filter(name => state[name]), ...(state.mode === 'early-writer' || (!state.app && state.mode === 'late-writer') ? ['foreign'] : [])]
+      // Docker ps -q truncates IDs, while inspect and Compose expose full IDs.
+      return bytes(names.map(name => args.includes('--no-trunc') ? CONTAINERS[name] : CONTAINERS[name].slice(0, 12)).join('\n'))
+    }
     if (args[0] === 'inspect') {
-      const name = args[1].replace('container-', '')
-      if (name === 'foreign') return bytes([{ Id: 'container-foreign', Mounts: [{ Type: 'bind', Source: '/volumes/app', RW: true }] }])
-      return bytes([{ Id: name === 'app' && state.replaced ? 'container-replacement' : `container-${name}`, Image: name === 'app' ? state.image : `sha256:${name}`, State: { Running: state[name], Health: { Status: 'healthy' } }, NetworkSettings: name === 'app' ? { Networks: { private: { IPAddress: '172.20.0.5' } } } : {}, Config: { Labels: {} }, Mounts: [{ Type: 'volume', Name: `physicsos_${name}_data`, Source: `/volumes/${name}`, Destination: name === 'app' ? '/var/lib/physicsos' : name === 'redis' ? '/data' : '/var/lib/postgresql/data', RW: true }] }])
+      const name = Object.keys(CONTAINERS).find(name => CONTAINERS[name].startsWith(args[1]))
+      if (!name) throw new Error('Unhandled fixture container ID')
+      if (name === 'foreign') return bytes([{ Id: CONTAINERS.foreign, Mounts: [{ Type: 'bind', Source: '/volumes/app', RW: true }] }])
+      return bytes([{ Id: name === 'app' && state.replaced ? CONTAINERS.replacement : CONTAINERS[name], Image: name === 'app' ? state.image : `sha256:${name}`, State: { Running: state[name], Health: { Status: 'healthy' } }, NetworkSettings: name === 'app' ? { Networks: { private: { IPAddress: '172.20.0.5' } } } : {}, Config: { Labels: {} }, Mounts: [{ Type: 'volume', Name: `physicsos_${name}_data`, Source: `/volumes/${name}`, Destination: name === 'app' ? '/var/lib/physicsos' : name === 'redis' ? '/data' : '/var/lib/postgresql/data', RW: true }] }])
     }
     if (args[0] === 'image' && args[1] === 'inspect') return bytes([{ Id: args[2], Config: { Labels: { 'org.opencontainers.image.revision': REVISION, 'physicsos.source.digest': DIGEST, 'physicsos.code.digest': CODE_DIGEST } }, RepoDigests: [] }])
     if (args.includes('exec') && args.some(arg => arg.includes('pg_locks'))) {
@@ -139,6 +145,23 @@ async function fixture(t) {
   const hook = { id: 'configuration', script: hookFile, sha256: createHash('sha256').update('// reviewed fixture\n').digest('hex'), preflight: ['node', hookFile, 'preflight', '{snapshot}'], apply: ['node', hookFile, 'apply', '{snapshot}'], rollback: ['node', hookFile, 'rollback', '{snapshot}'] }
   return { root, prior, state, plan, hook, releaseSwitch, dependencies: { docker, run, capture } }
 }
+
+test('release excludes its own app and Redis when Docker inspect returns canonical container IDs', async t => {
+  const f = await fixture(t)
+  const result = await f.releaseSwitch(f.plan, f.dependencies)
+  assert.equal(result.deployed, true)
+  assert.equal(f.state.image, NEW)
+  assert.equal(f.state.events.filter(event => event === 'capture').length, 1)
+})
+
+test('a foreign container sharing the app data path is rejected before stopping production', async t => {
+  const f = await fixture(t)
+  f.state.mode = 'early-writer'
+  await assert.rejects(f.releaseSwitch(f.plan, f.dependencies), error => error.phase === 'preflight-identity')
+  assert.equal(f.state.events.includes('stop'), false)
+  assert.equal(f.state.app, true)
+  assert.equal(f.state.redis, true)
+})
 
 test('hook preflight refusal leaves the live deployment untouched', async t => {
   const f = await fixture(t)

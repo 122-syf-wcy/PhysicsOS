@@ -137,7 +137,7 @@ async function guardIdentity(plan, source, docker, run) {
 
 async function guardDataWriters(source, docker) {
   const mounts = ['app', 'redis'].map(service => source.containers[service].Mounts.find(mount => mount.Name === source.volumes[service]))
-  for (const id of textOf(await docker(['ps', '-q'])).split(/\s+/).filter(Boolean)) {
+  for (const id of textOf(await docker(['ps', '--no-trunc', '-q'])).split(/\s+/).filter(Boolean)) {
     if ([source.containers.app.Id, source.containers.redis.Id].includes(id)) continue
     const container = jsonOf(await docker(['inspect', id]))[0]
     if (container.Mounts?.some(mount => mount.RW && mounts.some(original => {
