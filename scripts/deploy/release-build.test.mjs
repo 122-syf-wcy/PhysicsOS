@@ -32,6 +32,48 @@ test('frozen Git projection publishes across the tmpfs boundary and omits root p
   assert.equal(Object.keys(projection.files).some(name => name.startsWith('docs/') || name.startsWith('UI/') || name.startsWith('apps/desktop/')), false)
 })
 
+test('streamed source projection fits its final tree without retaining a second full tar copy', async t => {
+  if (!process.env.PHYSICSOS_TEST_LOWSPACE_ROOT) return t.skip('requires isolated 3 MiB tmpfs budget')
+  const api = await import(moduleUrl), base = await mkdtemp(join(tmpdir(), 'physicsos-stream-source-')), output = await mkdtemp(join(process.env.PHYSICSOS_TEST_LOWSPACE_ROOT, 'projection-'))
+  t.after(() => Promise.all([rm(base, { recursive: true, force: true }), rm(output, { recursive: true, force: true })]))
+  const git = (cwd, ...args) => { const value = spawnSync('git', ['-C', cwd, ...args], { encoding: 'utf8' }); assert.equal(value.status, 0, value.stderr); return value.stdout.trim() }
+  const vendor = join(base, 'vendor'), root = join(base, 'root')
+  await mkdir(vendor); await mkdir(root); git(vendor, 'init', '-q')
+  await writeFile(join(vendor, 'package.json'), '{"name":"fixture"}'); git(vendor, 'add', '.'); git(vendor, '-c', 'user.name=fixture', '-c', 'user.email=fixture@invalid', 'commit', '-qm', 'fixture')
+  git(root, 'init', '-q'); git(root, '-c', 'protocol.file.allow=always', 'submodule', 'add', vendor, 'vendor/deepseek-harness')
+  await mkdir(join(root, 'packages/fixture/src'), { recursive: true }); await writeFile(join(root, 'packages/fixture/src/large.bin'), Buffer.alloc(2 * 1024 * 1024, 97))
+  await mkdir(join(root, 'overlays/harness/files/fixture'), { recursive: true }); await writeFile(join(root, 'overlays/harness/files/fixture/source.ts'), 'export {}')
+  git(root, 'add', '.'); git(root, '-c', 'user.name=fixture', '-c', 'user.email=fixture@invalid', 'commit', '-qm', 'fixture')
+  const projection = await api.createSourceProjection({ root, revision: git(root, 'rev-parse', 'HEAD'), outputDir: join(output, 'source-projection') })
+  assert.equal(projection.entries['packages/fixture/src/large.bin'].bytes, 2 * 1024 * 1024)
+})
+
+test('GNU tar closing on archive padding is accepted only when both archive processes succeeded', async () => {
+  const api = await import(moduleUrl)
+  assert.equal(typeof api.archiveTransportSucceeded, 'function')
+  assert.equal(api.archiveTransportSucceeded(0, 0, { code: 'ERR_STREAM_PREMATURE_CLOSE' }), true)
+  assert.equal(api.archiveTransportSucceeded(0, 2, { code: 'ERR_STREAM_PREMATURE_CLOSE' }), false)
+  assert.equal(api.archiveTransportSucceeded(128, 0, { code: 'EPIPE' }), false)
+  assert.equal(api.archiveTransportSucceeded(0, 0, { code: 'EIO' }), false)
+})
+
+test('effective vendor patch applies when projection staging is nested inside a different Git working tree', async t => {
+  const api = await import(moduleUrl), base = await mkdtemp(join(tmpdir(), 'physicsos-patch-repo-'))
+  t.after(() => rm(base, { recursive: true, force: true }))
+  const git = (cwd, ...args) => { const value = spawnSync('git', ['-C', cwd, ...args], { encoding: 'utf8' }); assert.equal(value.status, 0, value.stderr); return value.stdout.trim() }
+  const vendor = join(base, 'vendor'), root = join(base, 'root')
+  await mkdir(vendor); await mkdir(root); git(vendor, 'init', '-q')
+  const before = '{"name":"fixture","value":"before"}', after = '{"name":"fixture","value":"after"}'
+  await writeFile(join(vendor, 'package.json'), before); git(vendor, 'add', '.'); git(vendor, '-c', 'user.name=fixture', '-c', 'user.email=fixture@invalid', 'commit', '-qm', 'fixture')
+  await writeFile(join(vendor, 'package.json'), after); const patch = git(vendor, 'diff') + '\n'; git(vendor, 'checkout', '--', 'package.json')
+  git(root, 'init', '-q'); git(root, '-c', 'protocol.file.allow=always', 'submodule', 'add', vendor, 'vendor/deepseek-harness')
+  await mkdir(join(root, 'overlays/harness/files/fixture'), { recursive: true }); await writeFile(join(root, 'overlays/harness/files/fixture/source.ts'), 'export {}')
+  await writeFile(join(root, 'overlays/harness/upstream-changes.patch'), patch)
+  git(root, 'add', '.'); git(root, '-c', 'user.name=fixture', '-c', 'user.email=fixture@invalid', 'commit', '-qm', 'fixture')
+  const projection = await api.createSourceProjection({ root, revision: git(root, 'rev-parse', 'HEAD'), outputDir: join(root, '.projection/result') })
+  assert.equal(await readFile(join(projection.root, 'vendor/deepseek-harness/package.json'), 'utf8'), after)
+})
+
 test('source filtering keeps source lib directories and tests while excluding generated declarations and secrets', async () => {
   const api = await import(moduleUrl)
   assert.equal(typeof api.isSourcePath, 'function')
@@ -63,6 +105,14 @@ test('content deltas skip unchanged files and delete only paths owned by the pri
   assert.deepEqual(api.computeSourceDelta(before, after).changed, ['packages/a/tests/new.spec.ts'])
   assert.deepEqual(api.computeSourceDelta(before, after).deleted, ['packages/a/src/deleted.ts'])
   assert.throws(() => api.computeSourceDelta(manifest({ '.env.admin_password': file('private') }), after), /unsafe|source/i)
+})
+
+test('source delta ignores group-write permission differences while preserving executable changes', async () => {
+  const api = await import(moduleUrl)
+  const before = manifest({ 'scripts/a.mjs': { ...file('same'), mode: 0o644 } })
+  const after = manifest({ 'scripts/a.mjs': { ...file('same'), mode: 0o664 } })
+  assert.deepEqual(api.computeSourceDelta(before, after).changed, [])
+  assert.deepEqual(api.computeSourceDelta(before, manifest({ 'scripts/a.mjs': { ...file('same'), mode: 0o775 } })).changed, ['scripts/a.mjs'])
 })
 
 test('applying a delta validates staged bytes and commits its marker only after the full projection matches', async t => {

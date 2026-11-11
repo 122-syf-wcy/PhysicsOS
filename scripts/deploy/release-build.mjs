@@ -41,6 +41,12 @@ const entry = (manifest, name) => {
   return typeof value === 'string' ? { sha256: value } : value
 }
 
+export const canonicalSourceMode = (mode, type = 'file') => type === 'symlink' ? 0o777 : (mode & 0o111) !== 0 ? 0o755 : 0o644
+const semanticEntry = (manifest, name) => {
+  const item = entry(manifest, name), type = item.type ?? 'file'
+  return { sha256: item.sha256, bytes: item.bytes, type, mode: canonicalSourceMode(item.mode ?? 0o644, type), ...(type === 'symlink' ? { link: item.link } : {}) }
+}
+
 export function validateSourceManifest(manifest) {
   if (manifest?.schemaVersion !== 1 || manifest.ownership !== OWNERSHIP || !HEX40.test(manifest.revision) || !HEX40.test(manifest.submoduleRevision) || !manifest.files || Array.isArray(manifest.files)) throw new Error('Invalid frozen source manifest')
   for (const name of Object.keys(manifest.files)) {
@@ -59,7 +65,7 @@ export function validateSourceManifest(manifest) {
 export function computeSourceDelta(previous, next) {
   validateSourceManifest(next)
   if (previous) validateSourceManifest(previous)
-  const changed = Object.keys(next.files).filter(name => !previous?.files[name] || JSON.stringify(entry(previous, name)) !== JSON.stringify(entry(next, name))).sort()
+  const changed = Object.keys(next.files).filter(name => !previous?.files[name] || JSON.stringify(semanticEntry(previous, name)) !== JSON.stringify(semanticEntry(next, name))).sort()
   const deleted = Object.keys(previous?.files ?? {}).filter(name => !next.files[name]).sort()
   return { schemaVersion: 1, ownership: OWNERSHIP, revision: next.revision, sourceDigest: next.sourceDigest, previousSourceDigest: previous?.sourceDigest ?? null, changed, deleted, bytes: changed.reduce((total, name) => total + (entry(next, name).bytes ?? 0), 0) }
 }
@@ -116,7 +122,7 @@ export async function applySourceDelta({ root, stage, previous, next, marker }) 
     const current = await lstat(target).catch(error => error.code === 'ENOENT' ? null : Promise.reject(error))
     if (current?.isSymbolicLink() || (current && value.type === 'symlink')) await rm(target)
     if (value.type === 'symlink') await symlink(value.link, target)
-    else { await copyFile(join(stage, name), target); await chmod(target, value.mode ?? 0o644) }
+    else { await copyFile(join(stage, name), target); await chmod(target, canonicalSourceMode(value.mode ?? 0o644)) }
   }
   for (const name of delta.deleted) await rm(join(root, name), { force: true })
   await verifySourceProjection(root, next, { exact: true })
@@ -126,19 +132,45 @@ export async function applySourceDelta({ root, stage, previous, next, marker }) 
 
 async function command(program, args, options = {}) {
   const child = spawn(program, args, { cwd: options.cwd, stdio: ['pipe', 'pipe', 'pipe'] })
-  const chunks = []; let size = 0
-  child.stderr.on('data', bytes => { if (options.log) process.stderr.write(bytes) })
+  const chunks = [], stderr = []; let size = 0, stderrSize = 0
+  child.stderr.on('data', bytes => { if (options.log) process.stderr.write(bytes); if (options.errorStderr && stderrSize < 65536) { stderr.push(bytes.subarray(0, 65536 - stderrSize)); stderrSize += bytes.length } })
   const output = options.stdoutFile ? pipeline(child.stdout, createWriteStream(options.stdoutFile, { flags: 'wx', mode: 0o600 })) : (async () => { for await (const bytes of child.stdout) { if (options.log) process.stderr.write(bytes); size += bytes.length; if (size > 64 * 1024 * 1024) throw new Error('Command metadata too large'); chunks.push(bytes) } })()
   const input = options.stdinFile ? pipeline(createReadStream(options.stdinFile), child.stdin) : new Promise((done, reject) => { child.stdin.on('error', reject); child.stdin.end(options.input, done) })
-  const exit = new Promise((done, reject) => { child.once('error', () => reject(new Error(program + ' unavailable'))); child.once('close', code => code === 0 ? done() : reject(new Error(program + ' failed (' + code + ')'))) })
+  const exit = new Promise((done, reject) => { child.once('error', () => reject(new Error(program + ' unavailable'))); child.once('close', code => code === 0 ? done() : reject(new Error(program + ' failed (' + code + ')' + (options.errorStderr ? ': ' + Buffer.concat(stderr).toString('utf8').trim() : '')))) })
   try { await Promise.all([input, output, exit]); return Buffer.concat(chunks).toString('utf8').trim() }
   catch (error) { child.kill('SIGKILL'); throw error }
 }
 
-async function archiveGit(root, revision, target, scratch, filterRoot = false) {
-  const archive = join(scratch, 'source-' + randomBytes(4).toString('hex') + '.tar')
-  await command('git', ['-C', root, 'archive', '--format=tar', '--output=' + archive, revision, ...(filterRoot ? ['--', '.', ':(exclude)docs', ':(exclude)UI', ':(exclude)apps/desktop'] : [])])
-  await mkdir(target, { recursive: true }); await command('tar', ['-xf', archive, '-C', target]); await rm(archive)
+export function archiveTransportSucceeded(gitCode, tarCode, pipeError) {
+  // GNU tar can stop reading after the end-of-archive marker before padding
+  // drains. That is safe only when both native processes report success.
+  return gitCode === 0 && tarCode === 0 && (!pipeError || ['ERR_STREAM_PREMATURE_CLOSE', 'EPIPE'].includes(pipeError.code))
+}
+
+async function archiveGit(root, revision, target, scratch, filterRoot = false, diagnostic) {
+  await mkdir(target, { recursive: true })
+  const filesystem = await statfs(scratch)
+  const trace = { revision, root, target, streaming: true, freeBytes: Number(filesystem.bavail) * Number(filesystem.bsize), freeInodes: Number(filesystem.ffree) }
+  if (diagnostic) await diagnostic({ ...trace, phase: 'before-extract' })
+  const producer = spawn('git', ['-C', root, 'archive', '--format=tar', revision, ...(filterRoot ? ['--', '.', ':(exclude)docs', ':(exclude)UI', ':(exclude)apps/desktop'] : [])], { stdio: ['ignore', 'pipe', 'pipe'] })
+  const consumer = spawn('tar', ['-xf', '-', '-C', target], { stdio: ['pipe', 'ignore', 'pipe'] })
+  const errors = { git: [], tar: [] }; let archiveBytes = 0
+  producer.stdout.on('data', chunk => { archiveBytes += chunk.length })
+  for (const [name, child] of [['git', producer], ['tar', consumer]]) child.stderr.on('data', chunk => { if (errors[name].join('').length < 65536) errors[name].push(chunk.toString('utf8')) })
+  const exit = child => new Promise(done => { child.once('error', error => done({ code: -1, error: error.message })); child.once('close', code => done({ code })) })
+  const completed = await Promise.allSettled([exit(producer), exit(consumer), pipeline(producer.stdout, consumer.stdin)])
+  const git = completed[0].value, tar = completed[1].value
+  const pipeFailure = completed[2].status === 'rejected' ? completed[2].reason : null
+  if (!archiveTransportSucceeded(git?.code, tar?.code, pipeFailure)) {
+    producer.kill('SIGKILL'); consumer.kill('SIGKILL')
+    const program = tar?.code !== 0 ? 'tar' : 'git', raw = errors[program].join('').slice(0, 65536)
+    const pipeError = completed[2].status === 'rejected' ? { code: completed[2].reason?.code, message: completed[2].reason?.message } : null
+    const reason = new Error(program + ' failed (' + (program === 'tar' ? tar?.code : git?.code) + '): ' + raw.split('\n').slice(0, 8).join('\n') + (pipeError ? ' ' + JSON.stringify(pipeError) : ''))
+    if (diagnostic) await diagnostic({ ...trace, archiveBytes, phase: 'extract-failed', error: reason.message, stderr: raw })
+    throw reason
+  }
+  const after = await statfs(scratch)
+  if (diagnostic) await diagnostic({ ...trace, archiveBytes, freeBytesAfter: Number(after.bavail) * Number(after.bsize), phase: 'extracted' })
 }
 
 async function inventory(root, { prune = true, ownedOnly = false } = {}) {
@@ -153,7 +185,9 @@ async function inventory(root, { prune = true, ownedOnly = false } = {}) {
         const info = await lstat(absolute), link = child.isSymbolicLink() ? await readlink(absolute) : undefined
         if (link !== undefined && (isAbsolute(link) || posix.normalize(posix.join(posix.dirname(name), link)).startsWith('../'))) { if (prune) await rm(absolute); continue }
         const bytes = link === undefined ? await readFile(absolute) : Buffer.from(link)
-        entries[name] = { sha256: digest(bytes), bytes: bytes.length, mode: info.mode & 0o777, type: link === undefined ? 'file' : 'symlink', ...(link === undefined ? {} : { link }) }
+        const type = link === undefined ? 'file' : 'symlink', mode = canonicalSourceMode(info.mode, type)
+        if (prune && type === 'file' && (info.mode & 0o777) !== mode) await chmod(absolute, mode)
+        entries[name] = { sha256: digest(bytes), bytes: bytes.length, mode, type, ...(link === undefined ? {} : { link }) }
       } else throw new Error('Unsupported source entry')
     }
   }
@@ -165,7 +199,7 @@ export function dependencyFiles(files) {
 }
 export function dependencyFingerprint(manifest) { return digest(canonical(Object.fromEntries(dependencyFiles(manifest.files).map(name => [name, entry(manifest, name).sha256])))) }
 
-export async function createSourceProjection({ root, revision, outputDir }) {
+export async function createSourceProjection({ root, revision, outputDir, diagnosticsFile }) {
   root = resolve(root); outputDir = resolve(outputDir)
   if (!HEX40.test(revision)) throw new Error('A full committed source revision is required')
   await command('git', ['-C', root, 'cat-file', '-e', revision + '^{commit}'])
@@ -177,12 +211,19 @@ export async function createSourceProjection({ root, revision, outputDir }) {
   // The operator container uses tmpfs /tmp and a bind-mounted output tree.
   // Stage beside the destination so publication is an atomic same-filesystem rename.
   const temporary = await mkdtemp(join(dirname(outputDir), '.physicsos-source-'))
+  const events = []
+  const diagnostic = diagnosticsFile ? async event => { events.push(event); const summary = { ...event }; delete summary.stderr; process.stderr.write(JSON.stringify(summary) + '\n'); await atomicJson(diagnosticsFile, { revision, events }).catch(() => {}) } : undefined
   try {
     const tree = join(temporary, 'tree')
-    await archiveGit(root, revision, tree, temporary, true)
-    await archiveGit(join(root, HARNESS), submoduleRevision, join(tree, HARNESS), temporary)
+    await archiveGit(root, revision, tree, temporary, true, diagnostic)
+    await archiveGit(join(root, HARNESS), submoduleRevision, join(tree, HARNESS), temporary, false, diagnostic)
     const patch = join(tree, 'overlays/harness/upstream-changes.patch')
     if ((await readFile(patch, 'utf8').catch(error => error.code === 'ENOENT' ? '' : Promise.reject(error))).trim()) {
+      // Without a local repository, git apply discovers the outer deployment
+      // checkout and silently skips patch paths outside its subdirectory.
+      // An isolated, disposable repository makes application independent of
+      // whether staging happens on the project filesystem or a tmpfs mount.
+      await command('git', ['init', '-q', '--template='], { cwd: join(tree, HARNESS) })
       await command('git', ['apply', '--check', patch], { cwd: join(tree, HARNESS) })
       await command('git', ['apply', '--whitespace=nowarn', patch], { cwd: join(tree, HARNESS) })
     }
@@ -194,7 +235,7 @@ export async function createSourceProjection({ root, revision, outputDir }) {
     try { await lstat(outputDir); throw new Error('Projection output must not already exist') } catch (error) { if (error.code !== 'ENOENT') throw error }
     await mkdir(outputDir, { mode: 0o700 }); await rename(tree, join(outputDir, 'source')); await atomicJson(join(outputDir, 'source-manifest.json'), manifest)
     return { ...manifest, root: join(outputDir, 'source'), manifestPath: join(outputDir, 'source-manifest.json') }
-  } finally { await rm(temporary, { recursive: true, force: true }) }
+  } finally { await rm(temporary, { recursive: true, force: true }); if (diagnosticsFile && events.length) await atomicJson(diagnosticsFile, { revision, events }).catch(() => {}) }
 }
 
 export async function indexPackages(root, manifest) {
@@ -467,7 +508,7 @@ function argumentsOf(argv) {
 async function main() {
   const args = argumentsOf(process.argv.slice(2)), json = async path => JSON.parse(await readFile(path, 'utf8'))
   let result
-  if (args.action === 'project') result = await createSourceProjection({ root: args.root ?? process.cwd(), revision: args.revision, outputDir: args.output })
+  if (args.action === 'project') result = await createSourceProjection({ root: args.root ?? process.cwd(), revision: args.revision, outputDir: args.output, diagnosticsFile: args.diagnosticsFile })
   else if (args.action === 'delta') result = computeSourceDelta(args.previous ? await json(args.previous) : null, await json(args.manifest))
   else if (args.action === 'plan') { const manifest = await json(args.manifest), delta = computeSourceDelta(args.previous ? await json(args.previous) : null, manifest); result = planBuild({ packages: await indexPackages(args.root, manifest), ...delta, revision: manifest.revision, sourceDigest: manifest.sourceDigest }) }
   else if (args.action === 'apply') result = await applySourceDelta({ ...args, previous: await json(args.previous), next: await json(args.manifest) })
