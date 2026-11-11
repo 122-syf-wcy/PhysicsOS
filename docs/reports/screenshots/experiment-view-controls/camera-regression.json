@@ -1,0 +1,45 @@
+{
+  "passed": true,
+  "checks": [
+    {
+      "name": "wheel changes rendered world scale and engine frames preserve it",
+      "passed": true
+    },
+    {
+      "name": "off-center wheel keeps its world anchor fixed and zoom stops at both limits",
+      "passed": true
+    },
+    {
+      "name": "Shift drag translates without rotation or changing world scale",
+      "passed": true
+    },
+    {
+      "name": "zoom buttons work from the keyboard and restore the original scale",
+      "passed": true
+    },
+    {
+      "name": "move mode translates and reset restores the apparatus view",
+      "passed": true
+    },
+    {
+      "name": "front view retains zoom and pan while full view restores the whole apparatus",
+      "passed": true
+    },
+    {
+      "name": "ordinary drag still rotates and the secondary mouse button does not",
+      "passed": true
+    },
+    {
+      "name": "two fingers pinch and translate, then one finger resumes rotation without a jump",
+      "passed": true
+    },
+    {
+      "name": "lost capture, cancellation and window blur end the current gesture",
+      "passed": true
+    },
+    {
+      "name": "resize keeps zoom, pan, and orientation and mobile controls fit",
+      "passed": true
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "path": "/var/lib/nginx/body",
+  "beforeUid": 65534,
+  "beforeGid": 0,
+  "beforeMode": "0o700",
+  "reason": "Nginx www-data workers cannot create buffered upload body files in nobody-owned 0700 directory",
+  "time": "2026-11-11T16:24:57.206819+00:00",
+  "afterUid": 33,
+  "afterGid": 33,
+  "afterMode": "0o700"
+}

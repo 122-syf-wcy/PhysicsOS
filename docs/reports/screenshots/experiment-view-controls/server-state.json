@@ -1,0 +1,82 @@
+{
+  "host": {
+    "oldImage": "sha256:c1d4f0c91ae804fb50e5e50e5db857097e8ae5dd7a3f2b64977f1c1c331ad94d",
+    "newImage": "sha256:d852666de91ee6e7a0953e92c57f5ae546d55c433cffca428c57214d6c4ac392",
+    "revision": "25092c6660c6e127df1fe8931689322dcf8db18d",
+    "checkoutRevision": "25092c6660c6e127df1fe8931689322dcf8db18d",
+    "sourceDigest": "fdee926be8401a389ef31895e47f8a3b40ac3bbba0200e2e00da2b7814a56677",
+    "codeDigest": "4fbf96e8e14c52850b94f0e7494b073ab4713ba972246e0fee2f3475eab00e29",
+    "completedAt": "2026-11-11T16:21:36.862Z",
+    "checks": {
+      "readyJson": true,
+      "root": true,
+      "login": true,
+      "accountScope": true,
+      "protectedRead": true
+    }
+  },
+  "recoveryDir": "/opt/physicsos/backups/releases/20261111T151531Z-view-controls-25092c6",
+  "build": {
+    "verified": true,
+    "checkedFiles": 2716,
+    "signedPluginEntries": 12,
+    "bytesExported": 8129637,
+    "changedFiles": 27,
+    "deletedFiles": 24,
+    "timings": [
+      {
+        "phase": "source",
+        "seconds": 21.611
+      },
+      {
+        "phase": "sync",
+        "seconds": 71.105,
+        "files": 41,
+        "bytes": 465594,
+        "deleted": 0
+      },
+      {
+        "phase": "compile",
+        "seconds": 254.641
+      },
+      {
+        "phase": "export",
+        "seconds": 16.806,
+        "bytes": 8129637,
+        "changedFiles": 27
+      }
+    ],
+    "resumed": {
+      "phase": "image",
+      "command": "python3 scripts/deploy/release-runtime.py build --output-dir /opt/physicsos/.physicsos-release/builds/view-controls-25092c6/runtime --image-tag physicsos:release-25092c6660c6e127",
+      "elapsedSeconds": 50.3,
+      "priorFailureFile": "/opt/physicsos/.physicsos-release/builds/view-controls-25092c6/failure.json",
+      "priorFailureDetail": "Wrapper returned sanitized python3 operation failed (1); exact initial stderr was not retained",
+      "recordedAt": "2026-11-11T15:13:31.820140+00:00"
+    }
+  },
+  "experimentPublication": {
+    "published": true,
+    "targetCount": 1,
+    "experimentId": "average-speed",
+    "active": {
+      "id": "exp_585747005737d6b91d089c0beffd7aa6",
+      "version": "2.2.1",
+      "sha256": "3b80bb1f504dee867b6ac4fd528c92f34f919054734ddd0afc298b85292e6530",
+      "status": "approved",
+      "experimentId": "average-speed"
+    },
+    "previousActive": {
+      "id": "exp_70d65d85c979c0de8e5520d58e6b7444",
+      "version": "2.2.0",
+      "sha256": "20dc8731aa97d2cfa70ac8b7d4d1a0c697557bb030039876c38f52b3d454c104",
+      "status": "approved",
+      "experimentId": "average-speed"
+    },
+    "previousArchivePreserved": true,
+    "hostRecoveryDir": "/opt/physicsos/backups/releases/20261111T151531Z-view-controls-25092c6",
+    "completedAt": "2026-11-11T16:24:59.796072+00:00"
+  },
+  "publicationCount": 1,
+  "all76Published": false
+}
