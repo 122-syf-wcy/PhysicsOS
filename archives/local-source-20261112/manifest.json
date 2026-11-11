@@ -1,0 +1,177 @@
+{
+  "archive_date": "2026-11-12",
+  "purpose": "Preserve unique local source variants for Windows Android development handoff; not active build sources.",
+  "files": [
+    {
+      "archive_path": "experiment-contribution/apps/desktop/sidecar/bridge.live.test.mjs",
+      "source_worktree": "/Users/dongsiwei/.codex/worktrees/experiment-contribution/PhysicsOS",
+      "source_path": "apps/desktop/sidecar/bridge.live.test.mjs",
+      "source_branch": "codex/experiment-contribution",
+      "source_head": "ab231a0d77c09d757d5979e08a74dcac1571a2e5",
+      "bytes": 6832,
+      "sha256": "2c12800d42818fca539a807f9e39d3d1a168e79f3a4c65c361bcb7895fe9ae04",
+      "git_blob_sha1": "b6824ce595a797cee2f140826b1ae3ba31fcaa4b",
+      "secret_scan": "passed; only reviewed test-password fixtures in the two acceptance/live test files",
+      "archive_reason": "test patch"
+    },
+    {
+      "archive_path": "experiment-contribution/tests/acceptance/chat-code-experiment.mjs",
+      "source_worktree": "/Users/dongsiwei/.codex/worktrees/experiment-contribution/PhysicsOS",
+      "source_path": "tests/acceptance/chat-code-experiment.mjs",
+      "source_branch": "codex/experiment-contribution",
+      "source_head": "ab231a0d77c09d757d5979e08a74dcac1571a2e5",
+      "bytes": 73360,
+      "sha256": "a5bf711b5d89899659bd6485a522f59630286916b8e248f0caffb5d3144a4d5c",
+      "git_blob_sha1": "ee04a05a43fa92e8b4404977f0dead47c9412bee",
+      "secret_scan": "passed; only reviewed test-password fixtures in the two acceptance/live test files",
+      "archive_reason": "test patch"
+    },
+    {
+      "archive_path": "experiment-contribution/docs/reports/2026-11-05-question-domain-visuals.md",
+      "source_worktree": "/Users/dongsiwei/.codex/worktrees/experiment-contribution/PhysicsOS",
+      "source_path": "docs/reports/2026-11-05-question-domain-visuals.md",
+      "source_branch": "codex/experiment-contribution",
+      "source_head": "ab231a0d77c09d757d5979e08a74dcac1571a2e5",
+      "bytes": 3579,
+      "sha256": "d20f66127a18319ca7b5655e02a374cc1c8204b00bf67e4c3b203d05576ea0b2",
+      "git_blob_sha1": "73d9514d92333e897ea19c134f5bd18439dd04c0",
+      "secret_scan": "passed",
+      "archive_reason": "untracked historical report"
+    },
+    {
+      "archive_path": "experiment-contribution/tests/acceptance/chat-code-optics-checks.mjs",
+      "source_worktree": "/Users/dongsiwei/.codex/worktrees/experiment-contribution/PhysicsOS",
+      "source_path": "tests/acceptance/chat-code-optics-checks.mjs",
+      "source_branch": "codex/experiment-contribution",
+      "source_head": "ab231a0d77c09d757d5979e08a74dcac1571a2e5",
+      "bytes": 4097,
+      "sha256": "d9853c25d6c5adb7da6b47c1d79ec4948d2740d65cd5d35cc8c962baeece4eef",
+      "git_blob_sha1": "84afe56734c1db44bcf996a5b5898d62a2c0718c",
+      "secret_scan": "passed",
+      "archive_reason": "test patch"
+    },
+    {
+      "archive_path": "experiment-pages-3d/demos/experiment-directions/README.md",
+      "source_worktree": "/Users/dongsiwei/.codex/worktrees/experiment-pages-3d/PhysicsOS",
+      "source_path": "demos/experiment-directions/README.md",
+      "source_branch": "codex/experiment-pages-3d",
+      "source_head": "05f229e785a92624c05c11ae78ab04b04accdb6b",
+      "bytes": 1186,
+      "sha256": "8b7a48d11c17ecab8118919cbe7e770de30a5243a0a6cc74497fc669e269a757",
+      "git_blob_sha1": "a07a6eb4ab00e7c8bdfea6889aef2eb6e71990b7",
+      "secret_scan": "passed",
+      "archive_reason": "old variant"
+    },
+    {
+      "archive_path": "experiment-pages-3d/demos/experiment-directions/server.mjs",
+      "source_worktree": "/Users/dongsiwei/.codex/worktrees/experiment-pages-3d/PhysicsOS",
+      "source_path": "demos/experiment-directions/server.mjs",
+      "source_branch": "codex/experiment-pages-3d",
+      "source_head": "05f229e785a92624c05c11ae78ab04b04accdb6b",
+      "bytes": 1077,
+      "sha256": "23ee4f62d8c7b5b2ea783a11678f1909624f02e22d3717bcee43575226b6fcf1",
+      "git_blob_sha1": "7f819c18cff7fc5d69659d2f050935b78256f4d1",
+      "secret_scan": "passed",
+      "archive_reason": "old variant"
+    },
+    {
+      "archive_path": "main-harness/tmp/probe/sm-test.ts",
+      "source_worktree": "/Users/dongsiwei/Desktop/PhysicsOS/vendor/deepseek-harness",
+      "source_path": "tmp/probe/sm-test.ts",
+      "source_branch": "",
+      "source_head": "477b4f420553e8a52c2fbccc464d7561b239c443",
+      "bytes": 948,
+      "sha256": "45cc1f24491639c0fccf89245561083cf851dfebe7708e6863037f436a4717bf",
+      "git_blob_sha1": "3d939abc6e8dd907a968c116cac279f0c9dc040b",
+      "secret_scan": "passed",
+      "archive_reason": "untracked development probe"
+    },
+    {
+      "archive_path": "conversation-moderation/vendor/deepseek-harness/packages/bundle/web-app/cordis.patch.yml",
+      "source_worktree": "/Users/dongsiwei/.codex/worktrees/conversation-moderation/PhysicsOS/vendor/deepseek-harness",
+      "source_path": "packages/bundle/web-app/cordis.patch.yml",
+      "source_branch": "",
+      "source_head": "477b4f420553e8a52c2fbccc464d7561b239c443",
+      "source_parent_branch": "codex/conversation-moderation",
+      "source_parent_head": "5ef868dd4bb8e1d2f92c690abe97cf7ef515e67a",
+      "bytes": 25927,
+      "sha256": "8534a57f11fe256fc88ed433c1a8b5e7a9e19184d1808d2361b70210a6b26251",
+      "git_blob_sha1": "b34184e1c1f04d527605a8056e5456722c417471",
+      "archive_reason": "old configuration variant",
+      "secret_scan": "passed"
+    },
+    {
+      "archive_path": "experiment-contribution/vendor/deepseek-harness/packages/client/ui-physicsos/tests/admin-shell.client.spec.tsx",
+      "source_worktree": "/Users/dongsiwei/.codex/worktrees/experiment-contribution/PhysicsOS/vendor/deepseek-harness",
+      "source_path": "packages/client/ui-physicsos/tests/admin-shell.client.spec.tsx",
+      "source_branch": "",
+      "source_head": "477b4f420553e8a52c2fbccc464d7561b239c443",
+      "source_parent_branch": "codex/experiment-contribution",
+      "source_parent_head": "ab231a0d77c09d757d5979e08a74dcac1571a2e5",
+      "bytes": 7894,
+      "sha256": "37d27f2b4cfa082a57dbb97efda75db308c2e7ad736d8dc12135e926d6257218",
+      "git_blob_sha1": "dc4e044b0df4861dfc22ed9f6f88fa8b0dabb917",
+      "archive_reason": "test patch: reviewQueue mock replaced with catalog",
+      "secret_scan": "passed"
+    },
+    {
+      "archive_path": "experiment-contribution/vendor/deepseek-harness/packages/physicsos/experiment-host/src/package-resources.ts",
+      "source_worktree": "/Users/dongsiwei/.codex/worktrees/experiment-contribution/PhysicsOS/vendor/deepseek-harness",
+      "source_path": "packages/physicsos/experiment-host/src/package-resources.ts",
+      "source_branch": "",
+      "source_head": "477b4f420553e8a52c2fbccc464d7561b239c443",
+      "source_parent_branch": "codex/experiment-contribution",
+      "source_parent_head": "ab231a0d77c09d757d5979e08a74dcac1571a2e5",
+      "bytes": 6952,
+      "sha256": "b386f4ad24d4f3439480c4bd2bb8a12da2215bfe33cb8e50c910dfe724767f61",
+      "git_blob_sha1": "2859c621f4627b79d2d7175b6a805bed29e00d24",
+      "archive_reason": "old source variant: inline limits before shared package-limits module",
+      "secret_scan": "passed"
+    },
+    {
+      "archive_path": "experiment-contribution/vendor/deepseek-harness/packages/physicsos/experiment-host/tests/question-code-assets.spec.ts",
+      "source_worktree": "/Users/dongsiwei/.codex/worktrees/experiment-contribution/PhysicsOS/vendor/deepseek-harness",
+      "source_path": "packages/physicsos/experiment-host/tests/question-code-assets.spec.ts",
+      "source_branch": "",
+      "source_head": "477b4f420553e8a52c2fbccc464d7561b239c443",
+      "source_parent_branch": "codex/experiment-contribution",
+      "source_parent_head": "ab231a0d77c09d757d5979e08a74dcac1571a2e5",
+      "bytes": 11239,
+      "sha256": "b4793a5d532aae988ebaf010b432038ea1c3c26381580227f70cc6b68a09d33d",
+      "git_blob_sha1": "1f326aec8b5c5e8db32c30cc7704a6ce3a2a4d9c",
+      "archive_reason": "untracked integration test variant: private runtime question image provenance, ownership and restart coverage",
+      "secret_scan": "passed after review: fixed test-key fixture and negative-control credential-URL fixture; no real credentials"
+    },
+    {
+      "archive_path": "experiment-pages-3d/vendor/deepseek-harness/packages/client/ui-physicsos/src/client/LabWorkspace.tsx",
+      "source_worktree": "/Users/dongsiwei/.codex/worktrees/experiment-pages-3d/PhysicsOS/vendor/deepseek-harness",
+      "source_path": "packages/client/ui-physicsos/src/client/LabWorkspace.tsx",
+      "source_branch": "",
+      "source_head": "477b4f420553e8a52c2fbccc464d7561b239c443",
+      "source_parent_branch": "codex/experiment-pages-3d",
+      "source_parent_head": "05f229e785a92624c05c11ae78ab04b04accdb6b",
+      "bytes": 12851,
+      "sha256": "aacebf0c4c2cd89dad32a9a65ae6a8df88a38319e71c23fddb477fe51c0343e1",
+      "git_blob_sha1": "62e0e0940b8a39db2a3e3d0558c9f78bb7475323",
+      "archive_reason": "old source variant: direct optional routeNotice prop",
+      "secret_scan": "passed"
+    }
+  ],
+  "excluded_reproducible_artifacts": [
+    {
+      "worktree": "conversation-moderation",
+      "path": "vendor/deepseek-harness/pnpm-lock.yaml",
+      "reason": "regenerable dependency lock variant"
+    },
+    {
+      "worktree": "experiment-pages-3d",
+      "path": "vendor/deepseek-harness/pnpm-lock.yaml",
+      "reason": "regenerable dependency lock variant"
+    },
+    {
+      "worktree": "experiment-contribution",
+      "path": "vendor/deepseek-harness/packages/physicsos/experiment-host/src/universal-template-data.json",
+      "reason": "generated template bundle; canonical generator and source are already saved"
+    }
+  ]
+}

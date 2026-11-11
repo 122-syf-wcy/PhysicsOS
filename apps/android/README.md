@@ -4,6 +4,8 @@ Kotlin + Jetpack Compose 原生主应用；物理引擎和本地实验渲染模�
 
 **当前为开发中交接快照，尚不能直接完成构建。**部分 Screen、字符串、实验打包器及服务端接线没有写完。先看[交接状态与已知缺口](../../docs/reports/2026-11-10-android-windows-handoff.md)，不要把“有 Gradle 工程”当作“完整应用已可运行”。
 
+2026-11-12 已将最新网页／服务端源码同步到 `codex/android-student-app`，并保存其余本地源码变体。Windows 拉取方式及核查范围见[全量源码交接](../../docs/reports/2026-11-12-windows-full-source-handoff.md)。
+
 ## 工作分工
 
 - Windows：本工程的原生开发、Gradle 构建、模拟器和安卓真机调试。
