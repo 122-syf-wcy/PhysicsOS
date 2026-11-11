@@ -49,8 +49,8 @@ function paintLabels(labels, width = 390, height = 220) {
   })
   setState({
     renderer: { getContext: () => ({ isContextLost: () => false }), getPixelRatio: () => 1, domElement: { width, height, dataset: {} }, render() {}, info: { render: { calls: 0, triangles: 0 } } },
-    camera: { position: chain(), lookAt() {} }, scene: {}, world: { updateMatrixWorld() {} },
-    host: { clientWidth: width, clientHeight: height }, span: { x: 4, y: 4, z: 1 }, yaw: 0, pitch: 0,
+    camera: { position: chain(), lookAt() {}, updateProjectionMatrix() {}, left: -1, right: 1, top: 1, bottom: -1 }, scene: {}, world: { updateMatrixWorld() {} },
+    host: { clientWidth: width, clientHeight: height }, span: { x: 4, y: 4, z: 1 }, yaw: 0, pitch: 0, zoom: 1, pan: { x: 0, y: 0 },
     measure: { measureText: text => ({ width: text.length * 7 }) }, labels: layer,
     kit: { group: { matrixWorld: {} }, labels: labels.map(label => ({
       size: 11, color: '#111', priority: 3, ...label,

@@ -8,7 +8,6 @@
  */
 
 import { useEffect, useMemo } from 'react'
-import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { AddCanvasExperiment } from './canvas/types.ts'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SnapshotStore } from './runtime-compat.ts'
@@ -284,27 +283,25 @@ export function PhysicsSurface({
   const questionCodeScene = surfaceState.sceneRef?.originScene ?? scene
   const Workspace = questionCodeVisualization === undefined && domain === 'optics' && bench?.elements.length === 1 && element?.type === 'thin_lens' && element.focalLength.value > 0
     ? ConvexLensPage : PhysicsWorkspace
+  const addToCanvas = requestSceneInCanvas === undefined || surfaceState.sceneRef === undefined ? undefined : () => {
+    const current = runtime.getScene?.() ?? surfaceState.sceneRef!.scene
+    const ref: PhysicsSceneRef = { ...surfaceState.sceneRef!, scene: current,
+      ...(surfaceState.buildMode === true ? { buildMode: true } : {}) }
+    if (requestCanvasSource !== undefined && templateId !== undefined && questionCodeVisualization === undefined) {
+      requestCanvasSource({ scene: current, ...(ref.originScene === undefined ? {} : { originScene: ref.originScene }), templateId,
+        title: current.metadata.title ?? ref.sceneId, source: ref.canvasSource ?? { kind: 'template', id: templateId, title: current.metadata.title ?? ref.sceneId },
+        ...(ref.canvasTemplateRelease === undefined ? {} : { templateRelease: ref.canvasTemplateRelease }),
+        ...(current.metadata.experimentRelease === undefined ? {} : { rendererRelease: current.metadata.experimentRelease }),
+        buildMode: surfaceState.buildMode === true ? 'construct' : 'inspect' })
+    } else requestSceneInCanvas(ref)
+  }
   return (<>
-    {requestSceneInCanvas === undefined || surfaceState.sceneRef === undefined ? null : <div className={pageCss.routeNotice}>
-      {surfaceState.routeNotice ? <span role="status">{surfaceState.routeNotice}</span> : null}
-      <Button variant="outline" onClick={() => {
-        const current = runtime.getScene?.() ?? surfaceState.sceneRef!.scene
-        const ref: PhysicsSceneRef = { ...surfaceState.sceneRef!, scene: current,
-          ...(surfaceState.buildMode === true ? { buildMode: true } : {}) }
-        if (requestCanvasSource !== undefined && templateId !== undefined && questionCodeVisualization === undefined) {
-          requestCanvasSource({ scene: current, ...(ref.originScene === undefined ? {} : { originScene: ref.originScene }), templateId,
-            title: current.metadata.title ?? ref.sceneId, source: ref.canvasSource ?? { kind: 'template', id: templateId, title: current.metadata.title ?? ref.sceneId },
-            ...(ref.canvasTemplateRelease === undefined ? {} : { templateRelease: ref.canvasTemplateRelease }),
-            ...(current.metadata.experimentRelease === undefined ? {} : { rendererRelease: current.metadata.experimentRelease }),
-            buildMode: surfaceState.buildMode === true ? 'construct' : 'inspect' })
-        } else requestSceneInCanvas(ref)
-      }}>{t('canvas.addToCanvas')}</Button>
-    </div>}
-    {surfaceState.routeNotice && (requestSceneInCanvas === undefined || surfaceState.sceneRef === undefined) ?
+    {surfaceState.routeNotice ?
       <div role="status" className={pageCss.routeNotice}>{surfaceState.routeNotice}</div> : null}
     <Workspace
       key={runtimeKey}
       runtime={runtime}
+      {...(addToCanvas === undefined ? {} : { onAddToCanvas: addToCanvas })}
       {...(questionCodeOwner === undefined ? {} : { questionCodeOwner })}
       {...(questionCodeVisualization === undefined || questionCodeScene === undefined
         ? {} : { questionCodeVisualization, questionCodeScene, questionCodeHasVerifiedSolution: surfaceState.sceneRef?.hasVerifiedSolution === true })}

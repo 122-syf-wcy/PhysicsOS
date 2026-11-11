@@ -27,7 +27,14 @@ export function snapshotOf(runtime, id) {
 }
 `)
 const build = await Rolldown.rolldown({ input: entry, platform: 'node', plugins: [{ name: 'lab-runtime-dependencies', resolveId(id) {
-  if (id.startsWith('@physicsos/')) return join(root, 'packages', id.slice(11), 'src/index.ts')
+  if (id.startsWith('@physicsos/')) {
+    const [name, ...subpath] = id.slice(11).split('/')
+    const directory = join(root, 'packages', name)
+    if (subpath.length === 0) return join(directory, 'src/index.ts')
+    // Resolve package self-references through the source package's exports,
+    // including subpaths, instead of treating them as nested package folders.
+    return createRequire(join(directory, 'package.json')).resolve(id)
+  }
   if (!id.startsWith('.') && !id.startsWith('/') && !id.startsWith('\0') && !id.startsWith('node:')) { try { return require.resolve(id) } catch { return null } }
   return null
 } }], onwarn(warning) { throw new Error(warning.message) } })
