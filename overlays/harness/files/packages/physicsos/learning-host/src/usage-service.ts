@@ -1,7 +1,6 @@
 /** Durable server-owned visits and numerical model settlement accounting. */
 import { createHash } from 'node:crypto'
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { checkErasureRequest, checkPersonalFence, type PersonalErasureRequest, type PersonalOwner } from './personal-fence.ts'
 import { z } from 'zod'
 import { lastAssistantStreamChunk } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
@@ -161,9 +160,8 @@ export class UsageService {
     )
     return result
   }
-  private account<T>(owner: PersonalOwner | undefined, operation: () => Promise<T>): Promise<T> {
+  private account<T>(owner: UsageOwner | undefined, operation: () => Promise<T>): Promise<T> {
     return this.request(() => this.queue(owner === undefined ? 'system' : key(owner.schoolId, owner.userKey), () => {
-      if (owner !== undefined) checkPersonalFence(owner, this.domain.table('erased_accounts').get(owner.userKey))
       return operation()
     }))
   }
@@ -454,7 +452,6 @@ export class UsageService {
   bindChild(child: UsageChildRecord): Promise<void> {
     return this.request(() =>
       this.queue('relations', async () => {
-        checkPersonalFence(child, this.domain.table('erased_accounts').get(child.userKey))
         const childKey = key(child.sessionId),
           previous = this.children.get(childKey)
         if (previous !== undefined) {
@@ -482,35 +479,7 @@ export class UsageService {
     })
   }
 
-  /** Install a persistent fence and settle already-admitted account/relationship updates. */
-  async prepareAccountErasure(request: PersonalErasureRequest): Promise<void> {
-    await this.request(() => this.queue(key(request.schoolId, request.userKey), async () => {
-      const table = this.domain.table('erased_accounts')
-      const previous = table.get(request.userKey)
-      checkErasureRequest(request, previous)
-      if (previous?.complete && previous.requestId === request.requestId) return
-      await table.put(request.userKey, { ...request, complete: false })
-    }))
-    await this.queue('relations', async () => {})
-  }
 
-  /** Remove only this account's persisted usage, leaving system/unrelated accounting untouched. */
-  async eraseAccount(request: PersonalErasureRequest): Promise<void> {
-    await this.prepareAccountErasure(request)
-    await this.request(() => this.queue(key(request.schoolId, request.userKey), async () => {
-      const table = this.domain.table('erased_accounts')
-      const fence = table.get(request.userKey)
-      checkErasureRequest(request, fence)
-      if (fence?.complete && fence.requestId === request.requestId) return
-      for (const [id, row] of this.events.entries()) if (own(request, row)) await this.events.delete(id)
-      for (const [id, row] of this.receipts.entries()) if (own(request, row)) await this.receipts.delete(id)
-      for (const [id, row] of this.sessions.entries()) if (own(request, row)) await this.sessions.delete(id)
-      await this.queue('relations', async () => {
-        for (const [id, row] of this.children.entries()) if (own(request, row)) await this.children.delete(id)
-      })
-      await table.put(request.userKey, { ...request, complete: true })
-    }))
-  }
 
   /** Stop admission before unit closure. @returns Completion after every admitted queue settles. */
   dispose(): Promise<void> {

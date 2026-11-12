@@ -94,13 +94,10 @@ const deletedScene = z.object({
   sceneId: identifier,
   deletedAt: timestamp,
 })
-const erasureFence = z.object({ userKey: z.string(), schoolId: z.string(), userId: z.string(), requestId: z.string(), complete: z.boolean() })
-
 export type PersonalAttemptRecord = z.infer<typeof personalAttempt>
 export type SavedSceneRecord = z.infer<typeof savedScene>
 export type DeletedSceneRecord = z.infer<typeof deletedScene>
 export type StoredSceneRecord = SavedSceneRecord | DeletedSceneRecord
-export type LearningErasure = z.infer<typeof erasureFence>
 
 export const attemptKey = (userKeyValue: string, id: string): string => `${userKeyValue}|${id}`
 export const savedSceneKey = (userKeyValue: string, sceneId: string): string =>
@@ -112,7 +109,6 @@ export const learningDomain = defineDomain({
   tables: {
     attempts: domainTable<string, PersonalAttemptRecord>(personalAttempt),
     saved_scenes: domainTable<string, StoredSceneRecord>(z.union([savedScene, deletedScene])),
-    erased_accounts: domainTable<string, LearningErasure>(erasureFence),
   },
 })
 

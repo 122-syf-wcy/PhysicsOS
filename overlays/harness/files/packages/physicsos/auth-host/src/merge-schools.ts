@@ -246,6 +246,9 @@ const mergeTableAdapters = (stores: SchoolMergeStores): MergeTableAdapter[] => {
   const devices = asMergeTable(auth.table('devices'))
   const revocations = asMergeTable(auth.table('device_revocations'))
   const apiResources = asMergeTable(auth.table('api_resources'))
+  const mobileGrants = asMergeTable(auth.table('mobile_grants'))
+  const accountDeletions = asMergeTable(auth.table('account_deletions'))
+  const usageReceipts = asMergeTable(auth.table('usage_receipts'))
   const moderationCases = asMergeTable(auth.table('moderation_cases'))
   const moderationCursors = asMergeTable(auth.table('moderation_cursors'))
   const schoolRequests = asMergeTable(auth.table('school_requests'))
@@ -379,6 +382,58 @@ const mergeTableAdapters = (stores: SchoolMergeStores): MergeTableAdapter[] => {
             target,
             'auth.totp_recovery_codes',
           ),
+        },
+      }
+    }),
+    contextual('auth.mobile_grants', mobileGrants, (key, row, source, target) => {
+      if (row.schoolId !== source && !containsSourceToken(row, source)) return undefined
+      assertSchoolId(row, source, 'auth.mobile_grants')
+      return {
+        key,
+        record: {
+          ...row,
+          schoolId: target,
+          userKey: rewriteUserKeyField(row, 'userKey', source, target, 'auth.mobile_grants'),
+        },
+      }
+    }),
+    contextual('auth.account_deletions', accountDeletions, (key, row, source, target) => {
+      const subject = isRecord(row['subject']) ? row['subject'] : undefined
+      if (subject?.schoolId !== source && !containsSourceToken(row, source)) return undefined
+      if (subject !== undefined) assertSchoolId(subject, source, 'auth.account_deletions')
+      return {
+        key,
+        record: {
+          ...row,
+          ...(subject === undefined ? {} : {
+            subject: {
+              ...subject,
+              schoolId: target,
+              userKey: rewriteUserKeyField(subject, 'userKey', source, target, 'auth.account_deletions'),
+            },
+          }),
+        },
+      }
+    }),
+    contextual('auth.usage_receipts', usageReceipts, (key, row, source, target) => {
+      const receipt = isRecord(row['receipt']) ? row['receipt'] : undefined
+      const owner = receipt !== undefined && isRecord(receipt['owner']) ? receipt['owner'] : undefined
+      if (owner?.schoolId !== source && !containsSourceToken(row, source)) return undefined
+      if (owner !== undefined) assertSchoolId(owner, source, 'auth.usage_receipts')
+      return {
+        key,
+        record: {
+          ...row,
+          ...(receipt === undefined || owner === undefined ? {} : {
+            receipt: {
+              ...receipt,
+              owner: {
+                ...owner,
+                schoolId: target,
+                userKey: rewriteUserKeyField(owner, 'userKey', source, target, 'auth.usage_receipts'),
+              },
+            },
+          }),
         },
       }
     }),

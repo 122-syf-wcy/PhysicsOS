@@ -5,13 +5,6 @@ import { LearningService, sceneSummary, type SceneMutation } from './service.ts'
 import type { CanvasService } from './canvas-service.ts'
 
 export const MOBILE_LEARNING_SERVICE = 'physicsosMobileLearning'
-export interface AccountErasureRequest {
-  readonly requestId: string
-  readonly userId: string
-  readonly userKey: string
-  readonly schoolId: string
-  readonly username: string
-}
 const student = (actor: IdentityActor): void => {
   if (actor.role !== 'STUDENT') throw new LearningError(403, 'STUDENT_REQUIRED', '移动学习入口仅供学生本人使用')
   if (actor.userId === undefined || actor.userId.length === 0) throw new LearningError(401, 'UNAUTHENTICATED', '缺少有效账户实例')
@@ -38,7 +31,7 @@ const attemptView = (row: ReturnType<LearningService['allAttempts']>[number]) =>
 }
 
 /** Construction accepts already-open services; it never creates a storage domain. */
-export function createMobileLearning(service: LearningService, canvas: Pick<CanvasService, 'exportMetadata' | 'exportObjectIndex' | 'exportObject' | 'eraseAccount'>) {
+export function createMobileLearning(service: LearningService, canvas: Pick<CanvasService, 'exportMetadata' | 'exportObjectIndex' | 'exportObject'>) {
   return {
     listAttempts(actor: IdentityActor) { student(actor); return service.allAttempts(actor).map(attemptView) },
     async saveAttempt(actor: IdentityActor, id: string, body: unknown) {
@@ -63,11 +56,6 @@ export function createMobileLearning(service: LearningService, canvas: Pick<Canv
     async exportCanvasMetadata(actor: IdentityActor) { student(actor); return canvas.exportMetadata(actor) },
     async exportCanvasObjectIndex(actor: IdentityActor) { student(actor); return canvas.exportObjectIndex(actor) },
     async exportCanvasObject(actor: IdentityActor, id: string) { student(actor); return canvas.exportObject(actor, id) },
-    async eraseAccount(request: AccountErasureRequest) {
-      const actor: IdentityActor = { userKey: request.userKey, userId: request.userId, schoolId: request.schoolId, username: request.username, role: 'STUDENT' }
-      await service.eraseAccount(actor, request)
-      await canvas.eraseAccount(actor, request)
-    },
   }
 }
 export type MobileLearningFacade = ReturnType<typeof createMobileLearning>

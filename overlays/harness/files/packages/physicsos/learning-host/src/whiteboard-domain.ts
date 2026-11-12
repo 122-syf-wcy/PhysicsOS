@@ -2,7 +2,6 @@ import { z } from 'zod'
 import { defineDomain, domainTable, type Domain } from '@deepseek-ai/dsh-storage-domain'
 import { parseSourceImage, type JsonObject, type SourceImage } from '@physicsos/physics-whiteboard'
 import { usageTokenSchema } from './usage-domain.ts'
-import { personalErasureFence, type PersonalErasureFence } from './personal-fence.ts'
 const id = z.string().min(1).max(160)
 const reference = z.strictObject({ digest: z.string().regex(/^[a-f0-9]{64}$/), bytes: z.number().int().positive() })
 const head = z.strictObject({ id, title: z.string().min(1).max(200), revision: z.number().int().positive(), updatedAt: z.string().datetime(), document: reference })
@@ -20,7 +19,6 @@ export type WhiteboardStoredImage = { boardId: string; source: SourceImage; atta
 /** One atomic account row keeps CAS heads, receipts and job status consistent across restarts. */
 export const whiteboardDomain = defineDomain({ name: 'physicsos_whiteboard', version: 1, tables: {
   accounts: domainTable<string, WhiteboardAccount>(account),
-  erased_accounts: domainTable<string, PersonalErasureFence>(personalErasureFence),
 } })
 export type WhiteboardDomain = Domain<typeof whiteboardDomain>
 export const openWhiteboardDomain = (ctx: { storageDomain: { open(spec: typeof whiteboardDomain): Promise<WhiteboardDomain> } }): Promise<WhiteboardDomain> => ctx.storageDomain.open(whiteboardDomain)

@@ -8,7 +8,6 @@ import { LearningError, type IdentityActor } from './identity.ts'
 import type { WhiteboardGeneration, WhiteboardModelRequest, WhiteboardRecord, WhiteboardServiceOptions } from './whiteboard-types.ts'
 import { loadWhiteboardDocument, storeWhiteboardDocument } from './whiteboard-document-store.ts'
 import type { UsageOwner } from './usage-types.ts'
-import { checkErasureRequest, checkPersonalFence, type PersonalErasureRequest, type PersonalOwner } from './personal-fence.ts'
 const id = z.string().min(1).max(120).regex(/^[A-Za-z0-9._:-]+$/)
 const revision = z.number().int().positive()
 const createInput = z.strictObject({ title: z.string().trim().min(1).max(200), operationId: id })
@@ -17,7 +16,7 @@ const uploadInput = z.strictObject({ mimeType: z.enum(['image/png', 'image/jpeg'
 const generateInput = z.strictObject({ imageId: id, expectedRevision: revision, operationId: id })
 const cancelInput = z.strictObject({ operationId: id })
 const active = (job: WhiteboardJob) => ['queued', 'reading', 'drawing', 'validating'].includes(job.status)
-const ownerOf = (owner: PersonalOwner): PersonalOwner => ({ schoolId: owner.schoolId, userKey: owner.userKey, ...(owner.userId === undefined ? {} : { userId: owner.userId }) })
+const ownerOf = (owner: UsageOwner): UsageOwner => ({ schoolId: owner.schoolId, userKey: owner.userKey })
 const hash = (value: unknown): string => createHash('sha256').update(JSON.stringify(value)).digest('hex')
 const bad = (): never => { throw new LearningError(400, 'WHITEBOARD_BAD_REQUEST', '画板请求数据无效。') }
 const missing = (): never => { throw new LearningError(404, 'WHITEBOARD_NOT_FOUND', '画板或原图不存在。') }
@@ -44,21 +43,15 @@ export class WhiteboardService {
     for (const size of [this.maxDocumentBytes, this.maxImageBytes, this.maxAccountBytes]) if (!Number.isSafeInteger(size) || size < 1) throw new Error('Invalid whiteboard byte limit')
   }
   private get accounts() { return this.domain.table('accounts') }
-  private get erasures() { return this.domain.table('erased_accounts') }
-  private account(owner: PersonalOwner): WhiteboardAccount {
+  private account(owner: UsageOwner): WhiteboardAccount {
     const stored = this.accounts.get(canvasScopeKey(owner.schoolId, owner.userKey))
-    if (stored && (stored.schoolId !== owner.schoolId || stored.userKey !== owner.userKey ||
-      stored.userId !== undefined && owner.userId !== undefined && stored.userId !== owner.userId)) return missing()
-    return stored ? { ...structuredClone(stored), ...(owner.userId === undefined ? {} : { userId: owner.userId }) }
-      : { ...ownerOf(owner), boards: {}, images: {}, jobs: {}, receipts: {}, allocations: {} }
+    if (stored && (stored.schoolId !== owner.schoolId || stored.userKey !== owner.userKey)) return missing()
+    return stored ? structuredClone(stored) : { ...ownerOf(owner), boards: {}, images: {}, jobs: {}, receipts: {}, allocations: {} }
   }
-  private queue<T>(owner: PersonalOwner, operation: (account: WhiteboardAccount) => Promise<T>, erasing = false): Promise<T> {
+  private queue<T>(owner: UsageOwner, operation: (account: WhiteboardAccount) => Promise<T>): Promise<T> {
     if (this.closing) return Promise.reject(new LearningError(503, 'WHITEBOARD_CLOSED', '画板服务正在重新连接，请稍后重试。'))
     const key = canvasScopeKey(owner.schoolId, owner.userKey)
-    const result = (this.queues.get(key) ?? Promise.resolve()).then(() => {
-      if (!erasing) checkPersonalFence(owner, this.erasures.get(owner.userKey))
-      return operation(this.account(owner))
-    })
+    const result = (this.queues.get(key) ?? Promise.resolve()).then(() => operation(this.account(owner)))
     const settled = result.then(() => {}, () => {})
     this.queues.set(key, settled)
     void settled.then(() => { if (this.queues.get(key) === settled) this.queues.delete(key) })
@@ -139,9 +132,6 @@ export class WhiteboardService {
   async initialize(): Promise<void> {
     await this.blobs.initialize()
     for (const [, stored] of this.accounts.entries()) {
-      // Auth resumes accepted deletions; never restart drawing jobs for a fenced account.
-      const fence = this.erasures.get(stored.userKey)
-      if (fence && (!fence.complete || stored.userId === undefined || stored.userId === fence.userId)) continue
       await this.queue(stored, async account => {
         let changed = false
         for (const job of Object.values(account.jobs)) {
@@ -270,8 +260,7 @@ export class WhiteboardService {
 await this.options.recordUsage({ id: `whiteboard:${job.id}:${job.attempt}`, source: 'diagram', owner: ownerOf(owner), provider: job.provider, model: job.model, ...(job.usage ? { usage: { inputTokens: job.usage.inputTokens, outputTokens: job.usage.outputTokens, ...(job.usage.totalTokens === undefined ? {} : { totalTokens: job.usage.totalTokens }), ...(job.usage.cacheReadTokens === undefined ? {} : { cacheReadTokens: job.usage.cacheReadTokens }), ...(job.usage.cacheWriteTokens === undefined ? {} : { cacheWriteTokens: job.usage.cacheWriteTokens }), ...(job.usage.reasoningTokens === undefined ? {} : { reasoningTokens: job.usage.reasoningTokens }) } satisfies TokenUsage } : {}) })
     await this.queue(owner, async account => { const current = account.jobs[jobId]; if (current) { current.usageRecorded = true; await this.put(account) } })
   }
-  private kick(owner: PersonalOwner, jobId: string): void {
-    try { checkPersonalFence(owner, this.erasures.get(owner.userKey)) } catch { return }
+  private kick(owner: UsageOwner, jobId: string): void {
     const key = canvasScopeKey(owner.schoolId, owner.userKey, jobId)
     const job = this.account(owner).jobs[jobId]
     if (this.closing || this.jobs.has(key) || !job || !active(job)) return
@@ -379,34 +368,7 @@ await this.options.recordUsage({ id: `whiteboard:${job.id}:${job.attempt}`, sour
     })
   }
 
-  /** Fence and settle drawing before the shared Canvas blob root can be erased. */
-  async prepareAccountErasure(request: PersonalErasureRequest): Promise<void> {
-    const running: Promise<void>[] = []
-    await this.queue(request, async account => {
-      const previous = this.erasures.get(request.userKey)
-      checkErasureRequest(request, previous)
-      if (previous?.complete && previous.requestId === request.requestId) return
-      await this.erasures.put(request.userKey, { ...request, complete: false })
-      for (const job of Object.values(account.jobs)) {
-        const entry = this.jobs.get(canvasScopeKey(request.schoolId, request.userKey, job.id))
-        if (entry) { entry.controller.abort(); running.push(entry.promise) }
-      }
-    }, true)
-    await Promise.all(running)
-  }
 
-  /** Called after all services using the shared account blob root have fenced their writers. */
-  async eraseAccount(request: PersonalErasureRequest): Promise<void> {
-    await this.prepareAccountErasure(request)
-    await this.queue(request, async () => {
-      const fence = this.erasures.get(request.userKey)
-      checkErasureRequest(request, fence)
-      if (fence?.complete && fence.requestId === request.requestId) return
-      await this.blobs.eraseAccount(request)
-      await this.accounts.delete(canvasScopeKey(request.schoolId, request.userKey))
-      await this.erasures.put(request.userKey, { ...request, complete: true })
-    }, true)
-  }
 
   async dispose(): Promise<void> {
     this.closing = true

@@ -24,7 +24,7 @@ import { dirname, join } from 'node:path'
 import { CheckpointStore } from './checkpoint-store.ts'
 import { createMobileLearning, MOBILE_LEARNING_SERVICE } from './mobile.ts'
 
-export type { MobileLearningFacade, AccountErasureRequest } from './mobile.ts'
+export type { MobileLearningFacade } from './mobile.ts'
 import { openUsageDomain } from './usage-domain.ts'
 import { UsageService } from './usage-service.ts'
 import { UsageRuntime } from './usage-runtime.ts'

@@ -133,8 +133,6 @@ export const canvasDomain = defineDomain({
     reservations: domainTable<string, CanvasReservation>(reservation),
     receipts: domainTable<string, CanvasMutationReceipt>(receiptRecord),
     verifications: domainTable<string, CanvasVerificationRecord>(verificationRecord),
-    erased_accounts: domainTable<string, { userKey: string; schoolId: string; userId: string; requestId: string; complete: boolean }>(
-      z.strictObject({ ...owner, userId: z.string(), requestId: z.string(), complete: z.boolean() })),
   },
 })
 

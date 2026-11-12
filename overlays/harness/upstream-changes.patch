@@ -12852,7 +12852,7 @@ index c98289bc3e8..6bed8537de3 100644
  - id: tools
    config:
      # TEMPORARY workaround: DSH_TOOLS_MODE (native|ptc|both) opts a whole dsh
-@@ -47,6 +83,97 @@
+@@ -47,6 +83,108 @@
      - id: subagent-model-selection-settings
        name: '@deepseek-ai/dsh-tool-subagent/model-selection-settings'
 
@@ -12931,6 +12931,17 @@ index c98289bc3e8..6bed8537de3 100644
 +
 +    - id: learning-host
 +      name: '@deepseek-ai/dsh-learning-host'
++
++    - id: class-host
++      name: '@deepseek-ai/dsh-class-host'
++
++    - id: mobile-host
++      name: '@deepseek-ai/dsh-mobile-host'
++
++    # First-party Android sync/export surface. Requires no core erasure hooks;
++    # account deletion stays an independent, separately enabled extension.
++    - id: account-sync-host
++      name: '@deepseek-ai/dsh-account-sync-host'
 +
 +    - id: ops-host
 +      name: '@deepseek-ai/dsh-ops-host'
@@ -13029,12 +13040,15 @@ index fb56be42314..379c2375c77 100644
      "@deepseek-ai/dsh-client-ui-plugin-manager": "workspace:*",
      "@deepseek-ai/dsh-client-ui-reference": "workspace:*",
      "@deepseek-ai/dsh-client-ui-renderer": "workspace:*",
-@@ -132,9 +128,16 @@
+@@ -132,9 +128,19 @@
      "@deepseek-ai/dsh-host-open-in-app": "workspace:*",
      "@deepseek-ai/dsh-host-plugin-inventory": "workspace:*",
      "@deepseek-ai/dsh-host-webserver": "workspace:*",
 +    "@deepseek-ai/dsh-health-host": "workspace:*",
 +    "@deepseek-ai/dsh-learning-host": "workspace:*",
++    "@deepseek-ai/dsh-class-host": "workspace:*",
++    "@deepseek-ai/dsh-mobile-host": "workspace:*",
++    "@deepseek-ai/dsh-account-sync-host": "workspace:*",
      "@deepseek-ai/dsh-launch-environment": "workspace:*",
      "@deepseek-ai/dsh-message-feedback": "workspace:*",
 +    "@deepseek-ai/dsh-model-pool-host": "workspace:*",
@@ -16748,13 +16762,22 @@ index 36dc0506d3f..eab1961766a 100644
        '@deepseek-ai/dsh-host-directory-picker-auto':
          specifier: workspace:*
          version: link:../../host/directory-picker-auto
-@@ -2596,18 +2631,36 @@ importers:
+@@ -2596,18 +2631,45 @@ importers:
        '@deepseek-ai/dsh-launch-environment':
          specifier: workspace:*
          version: link:../../util/launch-environment
 +      '@deepseek-ai/dsh-learning-host':
 +        specifier: workspace:*
 +        version: link:../../physicsos/learning-host
++      '@deepseek-ai/dsh-class-host':
++        specifier: workspace:*
++        version: link:../../physicsos/class-host
++      '@deepseek-ai/dsh-mobile-host':
++        specifier: workspace:*
++        version: link:../../physicsos/mobile-host
++      '@deepseek-ai/dsh-account-sync-host':
++        specifier: workspace:*
++        version: link:../../physicsos/account-sync-host
        '@deepseek-ai/dsh-message-feedback':
          specifier: workspace:*
          version: link:../../feedback/message-feedback
@@ -17079,7 +17102,7 @@ index 36dc0506d3f..eab1961766a 100644
        '@modelcontextprotocol/server':
          specifier: 2.0.0
          version: 2.0.0
-@@ -9831,34 +10065,542 @@ importers:
+@@ -9831,34 +10065,582 @@ importers:
        zod:
          specifier: ^4.4.3
          version: 4.4.3
@@ -17203,6 +17226,46 @@ index 36dc0506d3f..eab1961766a 100644
 +      '@deepseek-ai/dsh-storage-json':
 +        specifier: workspace:^
 +        version: link:../../storage/storage-json
++
++  packages/physicsos/mobile-host:
++    dependencies:
++      '@deepseek-ai/dsh-host-webserver':
++        specifier: workspace:^
++        version: link:../../host/webserver
++      '@deepseek-ai/dsh-storage':
++        specifier: workspace:^
++        version: link:../../storage/storage
++      '@deepseek-ai/dsh-storage-domain':
++        specifier: workspace:^
++        version: link:../../storage/storage-domain
++      zod:
++        specifier: ^4.4.3
++        version: 4.4.3
++    devDependencies:
++      '@deepseek-ai/cordis':
++        specifier: workspace:^
++        version: link:../../../../../vendor/cordis
++      '@deepseek-ai/cordis-plugin-include':
++        specifier: workspace:^
++        version: link:../../../../../vendor/include
++      '@deepseek-ai/cordis-plugin-loader':
++        specifier: workspace:^
++        version: link:../../../../../vendor/loader
++      '@deepseek-ai/dsh-invariants':
++        specifier: workspace:^
++        version: link:../../runtime-diagnostics/invariants
++      '@deepseek-ai/dsh-storage-json':
++        specifier: workspace:^
++        version: link:../../storage/storage-json
++
++  packages/physicsos/account-sync-host:
++    devDependencies:
++      '@deepseek-ai/cordis':
++        specifier: workspace:^
++        version: link:../../../../../vendor/cordis
++      '@deepseek-ai/dsh-invariants':
++        specifier: workspace:^
++        version: link:../../runtime-diagnostics/invariants
 +
 +  packages/physicsos/experiment-host:
 +    dependencies:
@@ -20065,7 +20128,7 @@ index bbdbf3cac51..08b18e108d9 100644
      { "path": "./packages/experimental/speech-to-text" },
      { "path": "./packages/experimental/speech-to-text-sensevoice" },
      { "path": "./packages/experimental/api-speech-to-text" },
-@@ -303,6 +304,20 @@
+@@ -303,6 +304,22 @@
      { "path": "./packages/storage/storage-json" },
      { "path": "./packages/storage/storage-sqlite" },
      { "path": "./packages/storage/storage-domain" },
@@ -20079,6 +20142,8 @@ index bbdbf3cac51..08b18e108d9 100644
 +    { "path": "./packages/physicsos/health-host" },
 +    { "path": "./packages/physicsos/learning-host" },
 +    { "path": "./packages/physicsos/class-host" },
++    { "path": "./packages/physicsos/mobile-host" },
++    { "path": "./packages/physicsos/account-sync-host" },
 +    { "path": "./packages/physicsos/shared-state-host" },
 +    { "path": "./packages/physicsos/ops-host" },
 +    { "path": "./packages/physicsos/plugin-center" },

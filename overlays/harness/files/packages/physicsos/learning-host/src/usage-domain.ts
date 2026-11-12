@@ -2,7 +2,6 @@
 import { z } from 'zod'
 import { defineDomain, domainTable, type Domain } from '@deepseek-ai/dsh-storage-domain'
 import { USAGE_ACTIONS, USAGE_SURFACES } from './usage-types.ts'
-import { personalErasureFence, type PersonalErasureFence } from './personal-fence.ts'
 
 const id = z.string().min(1).max(200)
 const owner = { schoolId: z.string().min(1).max(64), userKey: z.string().min(1).max(160) }
@@ -79,7 +78,6 @@ export const usageDomain = defineDomain({
     receipts: domainTable<string, UsageReceiptRecord>(receipt),
     sessions: domainTable<string, UsageSessionRecord>(session),
     children: domainTable<string, UsageChildRecord>(child),
-    erased_accounts: domainTable<string, PersonalErasureFence>(personalErasureFence),
   },
 })
 export type UsageDomain = Domain<typeof usageDomain>

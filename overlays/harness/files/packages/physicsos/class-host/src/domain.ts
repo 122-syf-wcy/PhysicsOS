@@ -92,8 +92,6 @@ export const classDomain = defineDomain({
     memberships: domainTable<string, MembershipRecord>(membership),
     assignments: domainTable<string, AssignmentRecord>(assignment),
     submissions: domainTable<string, SubmissionRecord>(submission),
-    erased_accounts: domainTable<string, { userKey: string; schoolId: string; userId: string; requestId: string; complete: boolean }>(
-      z.object({ userKey: z.string(), schoolId: z.string(), userId: z.string(), requestId: z.string(), complete: z.boolean() })),
   },
 })
 

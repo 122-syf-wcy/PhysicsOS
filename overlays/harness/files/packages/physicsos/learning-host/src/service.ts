@@ -4,7 +4,6 @@ import { LearningError, type IdentityActor } from './identity.ts'
 import {
   attemptKey, attemptWire, savedSceneKey, sceneEntryWire,
   type LearningDomain, type PersonalAttemptRecord, type SavedSceneRecord, type StoredSceneRecord,
-  type LearningErasure,
 } from './domain.ts'
 import { CheckpointStore, MOBILE_CHECKPOINT_BYTES, validateMobileCheckpoint } from './checkpoint-store.ts'
 import { parsePhysicsScene } from '@physicsos/physics-scene'
@@ -88,7 +87,7 @@ const assertId = (id: string): string => {
   return id
 }
 const canonical = (value: unknown): string => JSON.stringify(value, (_key, item: unknown) => {
-  if (item !== null && typeof item === 'object' && !Array.isArray(item)) return Object.fromEntries(Object.entries(item).sort(([a], [b]) => compare(a, b)))
+  if (item !== null && typeof item === 'object' && !Array.isArray(item)) return Object.fromEntries(Object.entries(item).sort(([a], [b]) => compareText(a, b)))
   return item
 })
 const digest = (value: unknown): string => createHash('sha256').update(canonical(value)).digest('hex')
@@ -112,12 +111,6 @@ export class LearningService {
     this.queues.set(key, settled)
     void settled.then(() => { if (this.queues.get(key) === settled) this.queues.delete(key) })
     return result
-  }
-  private assertActive(actor: IdentityActor): void {
-    const fence = this.domain.table('erased_accounts').get(actor.userKey)
-    if (fence !== undefined && fence.schoolId === actor.schoolId && (!fence.complete || actor.userId === undefined || actor.userId === fence.userId)) {
-      throw new LearningError(410, 'ACCOUNT_ERASED', '账户数据已删除或正在删除')
-    }
   }
   private currentScene(actor: IdentityActor, id: string): StoredSceneRecord | undefined {
     const current = this.scenes.get(savedSceneKey(actor.userKey, assertId(id)))
@@ -146,7 +139,6 @@ export class LearningService {
 
   saveAttempt(actor: IdentityActor, pathId: string, body: unknown): Promise<PersonalAttemptRecord> {
     return this.serial(actor, async () => {
-      this.assertActive(actor)
       const id = assertId(pathId)
       const parsed = attemptWire.safeParse(body)
       if (!parsed.success || parsed.data.id !== id) throw new LearningError(400, 'BAD_REQUEST', '自测记录格式无效')
@@ -164,7 +156,6 @@ export class LearningService {
     })
   }
   allAttempts(actor: IdentityActor): PersonalAttemptRecord[] {
-    this.assertActive(actor)
     return [...this.attempts.entries()].map(([, row]) => row).filter(row => own(actor, row))
   }
   listAttempts(actor: IdentityActor, query: ListQuery = {}): Page<PersonalAttemptRecord> {
@@ -183,7 +174,6 @@ export class LearningService {
   }
   private saveSceneInternal(actor: IdentityActor, pathId: string, body: unknown, mutation?: SceneMutation): Promise<SceneMutationResult> {
     return this.serial(actor, async () => {
-      this.assertActive(actor)
       const id = assertId(pathId)
       if (Buffer.byteLength(JSON.stringify(body)) > MOBILE_SCENE_REQUEST_BYTES) throw new LearningError(413, 'PAYLOAD_TOO_LARGE', '完整场景请求最多 12 MiB')
       const parsed = sceneEntryWire.safeParse(body)
@@ -224,7 +214,6 @@ export class LearningService {
     })
   }
   allScenes(actor: IdentityActor): StoredSceneRecord[] {
-    this.assertActive(actor)
     return [...this.scenes.entries()].map(([, row]) => row).filter(row => own(actor, row))
   }
   listScenes(actor: IdentityActor, query: ListQuery = {}): Page<SavedSceneRecord> {
@@ -233,7 +222,6 @@ export class LearningService {
   }
   async openScene(actor: IdentityActor, id: string) {
     return this.serial(actor, async () => {
-      this.assertActive(actor)
       const row = this.currentScene(actor, id)
       if (row === undefined) throw new LearningError(404, 'NOT_FOUND', '场景不存在')
       if ('deletedAt' in row) throw new LearningError(410, 'SCENE_DELETED', '场景已删除', { currentRevision: sceneRevision(row), current: sceneSummary(row) })
@@ -251,7 +239,6 @@ export class LearningService {
   /** Export one owned live scene or tombstone; concurrent changes refuse rather than mixing revisions. */
   exportScene(actor: IdentityActor, id: string, revision: number): Promise<Record<string, unknown>> {
     return this.serial(actor, async () => {
-      this.assertActive(actor)
       const row = this.currentScene(actor, id)
       if (row === undefined || sceneRevision(row) !== revision) throw new LearningError(409, 'EXPORT_CHANGED', '场景已变化，请重新导出')
       return 'deletedAt' in row ? sceneSummary(row) : this.sceneContent(actor, row)
@@ -264,7 +251,6 @@ export class LearningService {
   }
   private deleteSceneInternal(actor: IdentityActor, pathId: string, mutation?: SceneMutation): Promise<SceneMutationResult> {
     return this.serial(actor, async () => {
-      this.assertActive(actor)
       const id = assertId(pathId)
       const current = this.currentScene(actor, id)
       const hash = digest({ operation: 'delete', id, baseRevision: mutation?.baseRevision })
@@ -291,19 +277,5 @@ export class LearningService {
   }
 
   /** Auth's disabled incarnation is fenced before any bytes are removed; retries keep the same request id. */
-  eraseAccount(actor: IdentityActor, request: Omit<LearningErasure, 'complete'>): Promise<void> {
-    return this.serial(actor, async () => {
-      if (request.userKey !== actor.userKey || request.schoolId !== actor.schoolId) throw new LearningError(403, 'FORBIDDEN', '清理账户不匹配')
-      const fences = this.domain.table('erased_accounts')
-      const prior = fences.get(actor.userKey)
-      if (prior?.requestId === request.requestId && prior.complete) return
-      if (prior !== undefined && !prior.complete && prior.requestId !== request.requestId) throw new LearningError(409, 'ERASURE_CONFLICT', '其他账户清理仍在进行')
-      await fences.put(actor.userKey, { ...request, complete: false })
-      await this.checkpoints?.erase(actor)
-      for (const [key, row] of this.attempts.entries()) if (own(actor, row)) await this.attempts.delete(key)
-      for (const [key, row] of this.scenes.entries()) if (own(actor, row)) await this.scenes.delete(key)
-      await fences.put(actor.userKey, { ...request, complete: true })
-    })
-  }
   async dispose(): Promise<void> { await Promise.all([...this.queues.values()]) }
 }

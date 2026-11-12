@@ -43,9 +43,6 @@ export function createMobileClasses(service: ClassService) {
     },
     exportMemberships(actor: IdentityActor) { student(actor); return service.exportMemberships(actor) },
     exportSubmissions(actor: IdentityActor) { student(actor); return service.exportSubmissions(actor).map(submissionView) },
-    async eraseAccount(request: { requestId: string; userId: string; userKey: string; schoolId: string; username: string }) {
-      await service.eraseAccount({ ...request, role: 'STUDENT' }, request)
-    },
   }
 }
 export type MobileClassFacade = ReturnType<typeof createMobileClasses>

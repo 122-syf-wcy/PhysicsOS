@@ -141,10 +141,6 @@ export class ClassService {
     void settled.then(() => { if (this.queues.get(key) === settled) this.queues.delete(key) })
     return result
   }
-  private assertActive(actor: IdentityActor): void {
-    const fence = this.domain.table('erased_accounts').get(actor.userKey)
-    if (fence !== undefined && fence.schoolId === actor.schoolId && (!fence.complete || actor.userId === undefined || actor.userId === fence.userId)) throw new ClassError(410, 'ACCOUNT_ERASED', '账户已删除或正在删除')
-  }
 
   private get classes() {
     return this.domain.table('classes')
@@ -160,7 +156,6 @@ export class ClassService {
   }
 
   private classFor(actor: IdentityActor, classId: string): ClassRecord {
-    this.assertActive(actor)
     const classroom = this.classes.get(classId)
     if (classroom === undefined) throw new ClassError(404, 'NOT_FOUND', '班级不存在')
     if (classroom.schoolId !== actor.schoolId) {
@@ -358,7 +353,6 @@ export class ClassService {
 
   studentClasses(actor: IdentityActor): ClassRecord[] {
     if (actor.role !== 'STUDENT') throw new ClassError(403, 'STUDENT_REQUIRED', '仅学生可读取本人班级')
-    this.assertActive(actor)
     return this.listClasses(actor, Number.MAX_SAFE_INTEGER).filter(row => this.isMember(actor, row.id))
   }
 
@@ -571,34 +565,17 @@ export class ClassService {
   }
 
   exportMemberships(actor: IdentityActor): MembershipRecord[] {
-    this.assertActive(actor)
     return [...this.memberships.entries()].map(([, row]) => row).filter(row => row.userKey === actor.userKey && row.schoolId === actor.schoolId)
   }
 
   exportSubmissions(actor: IdentityActor): SubmissionRecord[] {
-    this.assertActive(actor)
     return [...this.submissions.entries()].map(([, row]) => row).filter(row => row.studentKey === actor.userKey && row.schoolId === actor.schoolId)
   }
 
-  /** Clear only the disabled account's membership/submission rows, never a teacher's shared assignments. */
-  eraseAccount(actor: IdentityActor, request: { requestId: string; userId: string; userKey: string; schoolId: string }): Promise<void> {
-    return this.serial(actor, async () => {
-      if (request.userKey !== actor.userKey || request.schoolId !== actor.schoolId) throw new ClassError(403, 'FORBIDDEN', '清理账户不匹配')
-      const fences = this.domain.table('erased_accounts')
-      const prior = fences.get(actor.userKey)
-      if (prior?.requestId === request.requestId && prior.complete) return
-      if (prior !== undefined && !prior.complete && prior.requestId !== request.requestId) throw new ClassError(409, 'ERASURE_CONFLICT', '其他账户清理仍在进行')
-      await fences.put(actor.userKey, { ...request, complete: false })
-      for (const [key, row] of this.memberships.entries()) if (row.userKey === actor.userKey && row.schoolId === actor.schoolId) await this.memberships.delete(key)
-      for (const [key, row] of this.submissions.entries()) if (row.studentKey === actor.userKey && row.schoolId === actor.schoolId) await this.submissions.delete(key)
-      await fences.put(actor.userKey, { ...request, complete: true })
-    })
-  }
 
   async dispose(): Promise<void> { await Promise.all([...this.queues.values()]) }
 
   listClasses(actor: IdentityActor, limit = 100): ClassRecord[] {
-    this.assertActive(actor)
     const memberClassIds = new Set(
       [...this.memberships.entries()]
         .map(([, row]) => row)
