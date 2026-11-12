@@ -33,6 +33,9 @@ import { AccountConnections, AccountRuns, ModerationRuntime } from './moderation
 import { createModerationReviewer, ModerationModelError } from './moderation/model.ts'
 import { moderationRoutes } from './moderation/routes.ts'
 import { IDENTITY_SERVICE, createIdentityService } from './identity.ts'
+import { createMobileAuthHost, MOBILE_AUTH_SERVICE } from './mobile-service.ts'
+export type { MobileAuthHostFacade, ResolvedMobilePrincipal } from './mobile-service.ts'
+export { MOBILE_AUTH_SERVICE } from './mobile-service.ts'
 import {
   DEFAULT_WORKSPACE_TITLE,
   DEFAULT_MODEL_ATTEMPT_LIMIT,
@@ -215,6 +218,11 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     const identity = createIdentityService(service)
     ctx.provide(IDENTITY_SERVICE, identity)
 
+    /* The first-party Android API composes device credentials and the
+       account-owner mutations through this narrow face; the administrative
+       surface stays unpublished so a sibling host cannot reach it. */
+    ctx.provide(MOBILE_AUTH_SERVICE, createMobileAuthHost(service))
+
     const actorFromCookie = (
       cookie: string | undefined,
       authorization?: string,
@@ -227,7 +235,11 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
           ? { kind: 'session' }
           : {
             kind: 'api-token',
-            tokenId: resolved.credential.token.id,
+            // A first-party mobile access token carries the same read/write
+            // scope as a personal token; identity comes from the grant row.
+            tokenId: resolved.credential.kind === 'api-token'
+              ? resolved.credential.token.id
+              : resolved.credential.grant.id,
             scope: resolved.credential.scope,
           },
       }
@@ -241,7 +253,11 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
           ? { kind: 'session' }
           : {
             kind: 'api-token',
-            tokenId: resolved.credential.token.id,
+            // A first-party mobile access token carries the same read/write
+            // scope as a personal token; identity comes from the grant row.
+            tokenId: resolved.credential.kind === 'api-token'
+              ? resolved.credential.token.id
+              : resolved.credential.grant.id,
             scope: resolved.credential.scope,
           },
       }

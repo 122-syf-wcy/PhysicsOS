@@ -86,6 +86,29 @@ export type PlatformNoticeRecord = z.infer<typeof platformNotice>
 /** One account's acknowledgement row. */
 export type PlatformNoticeAckRecord = z.infer<typeof platformNoticeAck>
 
+/**
+ * One Android push terminal.
+ *
+ * Only the SHA-256 of the provider token is stored, so a leaked table cannot be
+ * replayed against the push service, and the DTO the app receives never echoes
+ * it. `userKey` scopes every read and revoke to the owning account.
+ */
+const pushTerm = z.object({
+  id: z.string().min(1),
+  userKey: z.string().min(1),
+  userId: z.string(),
+  schoolId: z.string().min(1),
+  platform: z.literal('android'),
+  tokenHash: z.string().regex(/^[a-f0-9]{64}$/),
+  deviceName: z.string().min(1).max(80).optional(),
+  appVersion: z.string().min(1).max(32).optional(),
+  registeredAt: z.string().min(1),
+  revokedAt: z.string().optional(),
+})
+
+/** One registered push terminal. */
+export type PushTermRecord = z.infer<typeof pushTerm>
+
 /** The `physicsos_notice` domain: the feedback queue plus tenant/platform announcements. */
 export const noticeDomain = defineDomain({
   name: 'physicsos_notice',
@@ -97,6 +120,7 @@ export const noticeDomain = defineDomain({
     platform_notice_acks: domainTable<string, PlatformNoticeAckRecord>(platformNoticeAck),
     website_content: domainTable<string, WebsiteContentRecord>(websiteContent),
     website_feedback: domainTable<string, WebsiteFeedbackRecord>(websiteFeedback),
+    push_terms: domainTable<string, PushTermRecord>(pushTerm),
   },
 })
 

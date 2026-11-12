@@ -8,7 +8,7 @@
 
 import crypto from 'node:crypto'
 import type {
-  AccountDeletionRecord, ApiTokenRecord, AuditEvent, AuthDomain, DeviceRecord, DeviceRevocation, InviteRecord,
+  ApiTokenRecord, AuditEvent, AuthDomain, DeviceRecord, DeviceRevocation, InviteRecord,
   LearningCount, LoginChallengeRecord, MobileGrantRecord, PendingRegistration, School, ResetRequest,
   SchoolRequestRecord, SessionRecord, UserRecord,
 } from './domain'
@@ -418,7 +418,6 @@ const localDate = (at: Date): string => {
 // Credential mutations share the domain's single-process snapshot. Keep the
 // reservation through persistence and compensation, across service instances.
 const credentialQueues = new WeakMap<AuthDomain, Promise<unknown>>()
-const erasureQueues = new WeakMap<AuthDomain, Map<string, Promise<MobileDeletionResult>>>()
 
 type LoginIssuer<T> = (
   record: UserRecord, school: School, remember: boolean,
@@ -1875,6 +1874,77 @@ export class AuthService {
         grant = this.requireMobile(resolved, true).credential.grant
       }
       await this.revokeMobileGrant(grant, 'logout')
+    })
+  }
+
+  /**
+   * Accept an irreversible account erasure from the account's own device.
+   *
+   * The password and the literal `DELETE` confirmation are verified here, not by
+   * the caller, and the job row is written before any credential is withdrawn so
+   * a crash cannot leave a half-deleted account. Withdrawing credentials is what
+   * this method does; the erase services then run against the accepted job.
+   * @param resolved - the live mobile principal requesting erasure.
+   * @param body - `mobileDeleteAccountWire`: password, `DELETE` confirmation, optional TOTP code.
+   * @param ip - trusted address for the shared account-mutation limiter.
+   * @returns the accepted job id and whether dependent erasure already finished.
+   */
+  async deleteMobileAccount(
+    resolved: ResolvedCredential,
+    body: unknown,
+    ip?: string,
+  ): Promise<MobileDeletionResult> {
+    const input = mobileDeleteAccountWire.safeParse(body)
+    if (!input.success) throw new AuthError(400, 'BAD_REQUEST', '请确认注销并输入密码')
+    return this.credentialMutation(async () => {
+      const current = this.requireMobile(resolved, true)
+      await this.allow('mobileAccount', `acct:${current.actor.userKey}`)
+      const record = this.loadActorRecord(current.actor)
+      await this.verifyAccountProof(record, input.data.password, input.data.code, ip)
+      const requestId = `del_${crypto.randomBytes(9).toString('base64url')}`
+      const now = this.now().toISOString()
+      await this.accountDeletions.put(record.id, {
+        id: requestId,
+        status: 'pending',
+        subject: {
+          userId: record.id,
+          userKey: current.actor.userKey,
+          schoolId: record.schoolId,
+          username: record.username,
+        },
+        requestedAt: now,
+        attempts: 0,
+      })
+      // The account stops authenticating the moment the job is accepted.
+      await this.users.put(current.actor.userKey, {
+        ...record, status: 'disabled', credentialVersion: (record.credentialVersion ?? 0) + 1,
+        updatedAt: now,
+      })
+      await this.revokeUserSessions(record)
+      await this.revokeUserApiTokens(record)
+      for (const [, grant] of this.mobileGrants.entries()) {
+        if (grant.userId === record.id && grant.userKey === current.actor.userKey && grant.revokedAt === undefined) {
+          await this.revokeMobileGrant(grant, 'account')
+        }
+      }
+      await this.supersedeOpenResetRequests(current.actor.userKey)
+      await this.audit(current.actor, 'account.delete_requested', current.actor.userKey, current.actor.schoolId, { requestId })
+      return { status: 'pending' as const, requestId }
+    }).then(result => ({ status: 'deletion_pending' as const, requestId: result.requestId }))
+  }
+
+  /**
+   * Mark an accepted erasure complete once every dependent domain confirmed.
+   * @param requestId - the job id returned by {@link deleteMobileAccount}.
+   */
+  async completeAccountErasure(requestId: string): Promise<void> {
+    return this.credentialMutation(async () => {
+      const row = [...this.accountDeletions.entries()].map(([, value]) => value)
+        .find(candidate => candidate.id === requestId)
+      if (row === undefined || row.status !== 'pending') return
+      await this.accountDeletions.put(row.subject?.userId ?? requestId, {
+        ...row, status: 'completed', completedAt: this.now().toISOString(),
+      })
     })
   }
 
@@ -3630,6 +3700,17 @@ export class AuthService {
       if (session.schoolId === record.schoolId && session.username === record.username
         && session.revokedAt === undefined) {
         await this.sessions.put(id, { ...session, revokedAt: now })
+      }
+    }
+  }
+
+  /** Revoke every live personal token of one account; the next call fails immediately. */
+  private async revokeUserApiTokens(record: UserRecord): Promise<void> {
+    const owner = userKey(record.schoolId, record.username)
+    const now = new Date().toISOString()
+    for (const [id, row] of this.apiTokens.entries()) {
+      if (row.userKey === owner && row.revokedAt === undefined) {
+        await this.apiTokens.put(id, { ...row, revokedAt: now })
       }
     }
   }

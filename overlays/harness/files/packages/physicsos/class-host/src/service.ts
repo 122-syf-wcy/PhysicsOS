@@ -429,7 +429,7 @@ export class ClassService {
     if (actor.role !== 'STUDENT') {
       throw new ClassError(403, 'FORBIDDEN', '只有学生可以查看自己的作业回执')
     }
-    const classroom = this.classFor(actor, classId)
+    this.classFor(actor, classId)
     if (!this.isMember(actor, classId)) {
       throw new ClassError(403, 'FORBIDDEN', '只有班级成员可以查看作业回执')
     }

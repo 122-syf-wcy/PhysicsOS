@@ -24,7 +24,12 @@ const mutationOf = (body: unknown, mutationId: string): SceneMutation => {
   const parsed = mutationWire.safeParse(body)
   if (!parsed.success) throw new LearningError(400, 'BAD_REQUEST', '必须提供有效 baseRevision；新建为 0')
   if (parsed.data.checkpoint !== undefined && parsed.data.checkpoint['version'] !== 1) throw new LearningError(400, 'CHECKPOINT_VERSION', '仅支持完整 checkpoint version 1')
-  return { ...parsed.data, mutationId }
+  return {
+    baseRevision: parsed.data.baseRevision,
+    ...(parsed.data.restore === undefined ? {} : { restore: parsed.data.restore }),
+    ...(parsed.data.checkpoint === undefined ? {} : { checkpoint: parsed.data.checkpoint }),
+    mutationId,
+  }
 }
 const attemptView = (row: ReturnType<LearningService['allAttempts']>[number]) => {
   const { userKey: _user, schoolId: _school, ...item } = row

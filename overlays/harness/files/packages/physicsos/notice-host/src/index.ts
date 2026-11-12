@@ -26,6 +26,7 @@ import { openNoticeDomain } from './domain.ts'
 import { NoticeService } from './service.ts'
 import { noticeRoutes } from './routes.ts'
 import { identityOf } from './identity.ts'
+import { createMobileNotice, createMobilePush, MOBILE_NOTICE_SERVICE, MOBILE_PUSH_SERVICE } from './mobile.ts'
 import { WebsiteService } from './website-service.ts'
 import { validateTrustedProxies } from './website-proxy.ts'
 
@@ -47,6 +48,12 @@ export async function apply(ctx: Context, config: Config = {}): Promise<void> {
     const domain = await openNoticeDomain(ctx)
     const service = new NoticeService(domain)
     const website = new WebsiteService(domain, () => ctx.get('attachments') as AttachmentStore | undefined)
+
+    /* The first-party Android API reads the two student-visible surfaces and
+       owns the push terminals; the feedback queue and website content stay
+       unpublished. */
+    ctx.provide(MOBILE_NOTICE_SERVICE, createMobileNotice(service))
+    ctx.provide(MOBILE_PUSH_SERVICE, createMobilePush(domain.table('push_terms')))
 
     yield ctx.webServer.register({
       kind: 'prefix',
