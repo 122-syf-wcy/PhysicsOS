@@ -65,6 +65,6 @@ export function learningFixture() {
   const files = new MemoryCheckpoints()
   const service = new LearningService(storage.domain, files)
   const unused = async (): Promise<never> => { throw new Error('Canvas operations are outside this scene fixture') }
-  const facade = createMobileLearning(service, { exportMetadata: unused, exportObjectIndex: unused, exportObject: unused, eraseAccount: unused })
+  const facade = createMobileLearning(service, { exportMetadata: unused, exportObjectIndex: unused, exportObject: unused })
   return { storage, files, service, facade }
 }

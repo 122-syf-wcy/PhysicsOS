@@ -10,6 +10,7 @@ import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import AgentPresets from '@deepseek-ai/dsh-agent-preset-registry'
 import { SessionId } from '@deepseek-ai/dsh-session'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import SubagentRuntime, { snapshotSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
 import { MockAdapter, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import { createConvexLensScene } from '@physicsos/physics-scene'
@@ -59,7 +60,7 @@ async function setup(adapter: MockAdapter, fetchImpl: typeof fetch) {
     setup: async agentCtx => { await ctx.agentPresets.mount(agentCtx, 'student') } })).agent
   const scene = createConvexLensScene({ sceneId: 'exact-child-question', focalLength: 23, objectDistance: 62, now: '2026-11-08T00:00:00.000Z' })
   const snapshot: PhysicsSceneSnapshot = { sceneId: scene.id, revision: scene.revision, domain: 'optics', engineId: 'engine-optics',
-    title: '本题透镜', cause: 'solved', turn: 1, scene }
+    title: '本题透镜', cause: 'solved', turn: 1, scene: scene as unknown as JsonValue }
   parent.session.append('physics/scene', { ...snapshot, visualization: { status: 'generating', jobId: 'image-job', ownerSessionId: 'parent',
     sceneId: scene.id, sceneRevision: scene.revision, deadlineAt: Date.now() + 600_000 } })
   const start = () => new PhysicsCodeProvider(ctx).start({ parent, signal: new AbortController().signal,
@@ -106,7 +107,7 @@ it('offers only code submission when this exact generation already has trusted n
 })
 it('gives a runnable native entry example without waiting for an unavailable image', async () => {
   const scene = createConvexLensScene(), snapshot: PhysicsSceneSnapshot = { sceneId: scene.id, revision: scene.revision,
-    domain: 'optics', engineId: 'engine-optics', title: '本题', cause: 'solved', turn: 1, scene }
+    domain: 'optics', engineId: 'engine-optics', title: '本题', cause: 'solved', turn: 1, scene: scene as unknown as JsonValue }
   const prompt = questionCodePrompt({ experimentId: 'convex-lens', developerPrompt: '', publishedBody: '', styleVersion: 'test',
     renderContract: 'snapshot.view is read-only', allowedAssetPaths: [] }, snapshot, undefined, undefined, [])
   const entry = prompt.slice(prompt.indexOf('export async function renderFrame'), prompt.indexOf('只读snapshot.view'))

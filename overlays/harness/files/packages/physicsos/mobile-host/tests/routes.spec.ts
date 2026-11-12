@@ -9,7 +9,7 @@ const learning: MobileLearningFacade = {
   listAttempts: () => [{ id: 'a1', at: '2026-11-01T00:00:00Z' }, { id: 'a2', at: '2026-11-02T00:00:00Z' }, { id: 'a3', at: '2026-11-03T00:00:00Z' }],
   saveAttempt: unused, listScenes: () => [{ sceneId: 's1', revision: 1 }], getScene: unused,
   saveScene: async (_actor, id) => ({ item: { sceneId: id, revision: 2 }, replayed: false, appliedRevision: 2 }),
-  deleteScene: unused, eraseAccount: unused, exportScene: unused,
+  deleteScene: unused, exportScene: unused,
   exportCanvasMetadata: unused, exportCanvasObjectIndex: unused, exportCanvasObject: unused,
 }
 const sections: ExportSection[] = [{ id: 'learning.scenes', rows: actor => learning.listScenes(actor), idOf: row => String(row['sceneId']) }]

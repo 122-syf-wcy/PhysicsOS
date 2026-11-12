@@ -18,7 +18,7 @@ it('offers every existing experiment and routes a selected target catalog correc
   fireEvent.click(choice)
   expect(screen.getAllByRole('option')).toHaveLength(76)
   expect(screen.getAllByRole('option').every(option => option.getAttribute('aria-disabled') !== 'true')).toBe(true)
-  fireEvent.click(screen.getByRole('option', { name: '小孔成像', exact: true }))
+  fireEvent.click(screen.getByRole('option', { name: '小孔成像' }))
   await waitFor(() => expect(paths).toContain('/physicsos/experiments/pinhole'))
   expect(choice.textContent).toContain('小孔成像')
 })

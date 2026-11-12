@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
-import { desktopAccountFingerprint } from '../tsdown.config.ts'
+import { desktopAccountFingerprint } from '../../../../scripts/desktop-account-fingerprint.ts'
 
 const PLUGIN_ID = '@deepseek-ai/dsh-client-ui-settings-account'
 const source = () => readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')

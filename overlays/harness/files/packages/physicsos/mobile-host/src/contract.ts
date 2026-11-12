@@ -160,13 +160,6 @@ export interface MobileLearningFacade {
     body: unknown,
     mutationId: string,
   ): Promise<Record<string, unknown> & { item: SceneSummary }>
-  eraseAccount(request: {
-    requestId: string
-    userId: string
-    userKey: string
-    schoolId: string
-    username: string
-  }): Promise<void>
 }
 
 /** Student class facade published by class-host. */
@@ -187,13 +180,6 @@ export interface MobileClassFacade {
   ): Promise<Record<string, unknown>>
   exportMemberships(actor: IdentityActor): readonly Record<string, unknown>[]
   exportSubmissions(actor: IdentityActor): readonly Record<string, unknown>[]
-  eraseAccount(request: {
-    requestId: string
-    userId: string
-    userKey: string
-    schoolId: string
-    username: string
-  }): Promise<void>
 }
 
 /** Verified paper library facade published by paper-host. */
@@ -214,8 +200,6 @@ export interface MobileNoticeFacade {
   listAnnouncements(actor: IdentityActor): readonly Record<string, unknown>[]
   /** Private account data only; platform/tenant announcements are not owned by this reader. */
   exportAccount(actor: IdentityActor): Promise<readonly Record<string, unknown>[]>
-  /** Server-only hook; no mobile route accepts an erasure principal from the request body. */
-  eraseAccount(request: { requestId: string; userId: string; userKey: string; schoolId: string; username: string }): Promise<void>
 }
 
 /** Push registration facade published by the notice host's device table. */

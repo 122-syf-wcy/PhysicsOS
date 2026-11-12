@@ -110,7 +110,7 @@ const own = (options: CreateWorkbenchInstanceOptions): WorkbenchInstanceRuntime 
   return owner
 }
 const keepDuplicate = (owner: WorkbenchInstanceRuntime): WorkbenchInstanceRuntime => {
-  const duplicate = owner.duplicate({ onCommitted: undefined, onPersist: undefined })
+  const duplicate = owner.duplicate({})
   owners.add(duplicate)
   return duplicate
 }
@@ -132,8 +132,8 @@ const reopen = (saved: WorkbenchCommittedState): WorkbenchInstanceRuntime => own
   instanceKey: saved.instanceKey,
   sceneId: String(saved.scene.id),
   scene: saved.scene,
-  originScene: saved.originScene,
-  templateId: saved.templateId,
+  ...(saved.originScene === undefined ? {} : { originScene: saved.originScene }),
+  ...(saved.templateId === undefined ? {} : { templateId: saved.templateId }),
   source: saved.source,
   buildMode: saved.buildMode,
   clock: saved.clock,

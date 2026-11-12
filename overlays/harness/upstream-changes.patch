@@ -12365,10 +12365,10 @@ index 9454f03f2d..8f1c6823d2 100644
          if (error) reject(error)
          else resolve()
 diff --git a/packages/api/gateway/tests/gateway-stream.host.spec.ts b/packages/api/gateway/tests/gateway-stream.host.spec.ts
-index 87aaaa9f75..d30759c84d 100644
+index 87aaaa9f75..ca953cd21a 100644
 --- a/packages/api/gateway/tests/gateway-stream.host.spec.ts
 +++ b/packages/api/gateway/tests/gateway-stream.host.spec.ts
-@@ -42,6 +42,129 @@ import type {
+@@ -42,6 +42,132 @@ import type {
    RemoteEventInvocationFrame,
  } from '../src/stream-protocol.ts'
 
@@ -12412,7 +12412,10 @@ index 87aaaa9f75..d30759c84d 100644
 +  const actor = (cookie?: string, authorization?: string) => {
 +    const resolved = auth.resolveCredential(cookie, authorization)
 +    return !resolved ? null : { ...resolved.actor, credential: resolved.credential.kind === 'session'
-+      ? { kind: 'session' as const } : { kind: 'api-token' as const, tokenId: resolved.credential.token.id, scope: resolved.credential.scope } }
++      ? { kind: 'session' as const }
++      : resolved.credential.kind === 'api-token'
++        ? { kind: 'api-token' as const, tokenId: resolved.credential.token.id, scope: resolved.credential.scope }
++        : { kind: 'mobile' as const, grantId: resolved.credential.grant.id, scope: resolved.credential.scope } }
 +  }
 +  ctx.provide('apiPolicy', createApiPolicy({
 +    actorFromCookie: actor, actorFromRequest: req => actor(req.headers.cookie, req.headers.authorization),
@@ -14579,18 +14582,16 @@ index ccd394d506..58fb0e21da 100644
      expect(initializeDefaultModel).toHaveBeenCalledExactlyOnceWith()
      expect(observed).toEqual([
 diff --git a/packages/client/ui-settings-account/tsdown.config.ts b/packages/client/ui-settings-account/tsdown.config.ts
-index 247d3a8ea8..d770da001a 100644
+index 247d3a8ea8..50b9efd3b8 100644
 --- a/packages/client/ui-settings-account/tsdown.config.ts
 +++ b/packages/client/ui-settings-account/tsdown.config.ts
-@@ -1,11 +1,35 @@
+@@ -1,11 +1,15 @@
  import { clientBundle } from '../tsdown.client.ts'
 +import type { UserConfig } from 'tsdown'
-+import { createHash } from 'node:crypto'
-+import { readFileSync, readdirSync } from 'node:fs'
  import { readFile } from 'node:fs/promises'
--import { basename } from 'node:path'
-+import { basename, join } from 'node:path'
+ import { basename } from 'node:path'
  import { fileURLToPath } from 'node:url'
++import { desktopAccountFingerprint } from '../../../scripts/desktop-account-fingerprint.ts'
 
 -const bundle = clientBundle('@deepseek-ai/dsh-client-ui-settings-account', ['lib/types/index.js'])
 +const PLUGIN_ID = '@deepseek-ai/dsh-client-ui-settings-account'
@@ -14598,30 +14599,11 @@ index 247d3a8ea8..d770da001a 100644
 +const bundle = clientBundle(PLUGIN_ID, ['lib/types/index.js'])
 
 -export default ((options) => bundle(options).map(config => ({
-+/** Keep the parent's immutable resource revision coupled to every local desktop input. */
-+export function desktopAccountFingerprint(root: string): string {
-+  const files = ['tsdown.config.ts', 'package.json']
-+  const visit = (relative: string): void => {
-+    for (const entry of readdirSync(join(root, relative), { withFileTypes: true })) {
-+      const name = `${relative}/${entry.name}`
-+      if (entry.isDirectory()) visit(name)
-+      else files.push(name)
-+    }
-+  }
-+  visit('src')
-+  const hash = createHash('sha256').update('desktop-account-inputs\0')
-+  for (const name of files.sort()) {
-+    const bytes = readFileSync(join(root, name))
-+    hash.update(`${Buffer.byteLength(name)}:${name}${bytes.length}:`).update(bytes)
-+  }
-+  return hash.digest('hex')
-+}
-+
 +const withAssets = (config: UserConfig): UserConfig => ({
    ...config,
    plugins: [...(config.plugins ?? []), {
      name: 'account-onboarding-assets',
-@@ -23,4 +47,29 @@ export default ((options) => bundle(options).map(config => ({
+@@ -23,4 +27,29 @@ export default ((options) => bundle(options).map(config => ({
        return `export default ${JSON.stringify(`data:${path.endsWith('.png') ? 'image/png' : 'image/svg+xml'};base64,${data.toString('base64')}`)}`
      },
    }],
@@ -20060,6 +20042,42 @@ index 4782ad5bdb..8a5d4be415 100644
    exceljs@4.4.0: patches/exceljs@4.4.0.patch
    node-pty@1.2.0-beta.15: patches/node-pty@1.2.0-beta.15.patch
 +verifyDepsBeforeRun: false
+diff --git a/scripts/desktop-account-fingerprint.ts b/scripts/desktop-account-fingerprint.ts
+new file mode 100644
+index 0000000000..6c472cf326
+--- /dev/null
++++ b/scripts/desktop-account-fingerprint.ts
+@@ -0,0 +1,30 @@
++import { createHash } from 'node:crypto'
++import { readFileSync, readdirSync } from 'node:fs'
++import { join } from 'node:path'
++
++/**
++ * Keep the parent's immutable resource revision coupled to every local desktop input.
++ *
++ * Lives outside `tsdown.config.ts` because the Host aggregate type-checks the spec
++ * that asserts this revision; importing a bundler config would drag `tsdown.client.ts`
++ * into a program that never lists it.
++ * @param root - the ui-settings-account package directory.
++ * @returns the digest embedded as `__DSH_DESKTOP_ACCOUNT_REVISION__`.
++ */
++export function desktopAccountFingerprint(root: string): string {
++  const files = ['tsdown.config.ts', 'package.json']
++  const visit = (relative: string): void => {
++    for (const entry of readdirSync(join(root, relative), { withFileTypes: true })) {
++      const name = `${relative}/${entry.name}`
++      if (entry.isDirectory()) visit(name)
++      else files.push(name)
++    }
++  }
++  visit('src')
++  const hash = createHash('sha256').update('desktop-account-inputs\0')
++  for (const name of files.sort()) {
++    const bytes = readFileSync(join(root, name))
++    hash.update(`${Buffer.byteLength(name)}:${name}${bytes.length}:`).update(bytes)
++  }
++  return hash.digest('hex')
++}
 diff --git a/tsconfig.base.json b/tsconfig.base.json
 index e2b7da61e8..1771592068 100644
 --- a/tsconfig.base.json
@@ -20113,18 +20131,37 @@ index e2b7da61e8..1771592068 100644
        "@deepseek-ai/dsh-cordis-host-runner": ["./packages/extensions/cordis-host-runner/src/index.ts"],
        "@deepseek-ai/dsh-cordis-host-runner/types": ["./packages/extensions/cordis-host-runner/src/types.ts"],
 diff --git a/tsconfig.client.json b/tsconfig.client.json
-index 0471bfa13b..41f3454047 100644
+index 0471bfa13b..83ca75c61f 100644
 --- a/tsconfig.client.json
 +++ b/tsconfig.client.json
-@@ -43,6 +43,7 @@
-     "packages/client/*/tests/**/*.host.spec.ts"
+@@ -39,10 +39,25 @@
+   // A `*.host.spec.ts` covers the Host half of a split client package and
+   // belongs to the host aggregate, which excludes this program's `*.client.*`
+   // in turn. `exclude` wins over `include`, so the test glob above stays broad.
++  //
++  // The five specs below are cross-boundary integration tests: they drive
++  // PhysicsOS client Canvas code against the real Host fixtures in
++  // `packages/physicsos/{auth,learning}-host` and `packages/storage/storage-postgres`.
++  // Importing those sources here would pull the Host Cordis merge into this
++  // program — the exact collision the two aggregates exist to prevent — and
++  // produces TS6307 for every Host file they reach. They run (and are
++  // covered) at runtime under vitest; a third aggregate that can see both
++  // faces is the follow-up, not a widened client program.
+   "exclude": [
+-    "packages/client/*/tests/**/*.host.spec.ts"
++    "packages/client/*/tests/**/*.host.spec.ts",
++    "packages/client/ui-physicsos/tests/canvas-data.client.spec.ts",
++    "packages/client/ui-physicsos/tests/canvas-recovery-contracts.client.spec.ts",
++    "packages/client/ui-physicsos/tests/canvas-resource-policy.client.spec.ts",
++    "packages/client/ui-physicsos/tests/canvas-verification-discovery.client.spec.ts",
++    "packages/client/ui-physicsos/tests/contribution-renderer.client.spec.tsx"
    ],
    "references": [
 +    { "path": "./tsconfig.physicsos.json" },
      { "path": "./tsconfig.desktop-keyboard-tests.json" },
      { "path": "./apps/desktop/tsconfig.client.json" },
      { "path": "./packages/experimental/client-ui-voice-input" },
-@@ -82,6 +83,7 @@
+@@ -82,6 +97,7 @@
      { "path": "./packages/client/ui-shortcuts" },
      { "path": "./packages/client/ui-layout" },
      { "path": "./packages/client/ui-sidebar" },

@@ -28,13 +28,14 @@ import { HomeActions } from '../src/client/HomeActions.tsx'
 import { SceneCardBody } from '../src/client/SceneChatCard.tsx'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { solvedCardData } from './solved-card-fixture.client.ts'
+import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { en } from '../src/client/locales.ts'
 
 const hash = async (value: unknown): Promise<string> => createHash('sha256').update(canonicalStringify(value), 'utf8').digest('hex')
 const controllers: CanvasController[] = []
 const assembledClients: TestClient[] = []
 const databaseNames = new Set<string>()
-const t = (key: keyof typeof en): string => en[key]
+const t: TranslateNS<'physicsos'> = key => (en as Record<string, string | undefined>)[key] ?? String(key)
 const productName = '@deepseek-ai/dsh-client-ui-physicsos-canvas-entry-test'
 const entryOwners: ReturnType<typeof createCanvasEntryController>[] = []
 const offline = () => {

@@ -53,7 +53,7 @@ describe('real mobile learning facade', () => {
     await f.facade.saveScene(student, 'scene-one', { ...original, title: 'Device B', baseRevision: 1 }, 'device-b-two')
     expect(await f.facade.saveScene(student, 'scene-one', original, 'device-a-one')).toMatchObject({ appliedRevision: 1, replayed: true, item: { revision: 2 } })
     await expect(f.facade.saveScene(student, 'scene-one', { ...original, title: 'Device A follow-up', baseRevision: 1 }, 'device-a-three')).rejects.toMatchObject({ status: 409, code: 'VERSION_CONFLICT' })
-    expect((await f.facade.getScene(student, 'scene-one')).item['title']).toBe('Device B')
+    expect(((await f.facade.getScene(student, 'scene-one')).item as { title?: string }).title).toBe('Device B')
   })
 
   it('exports tombstones, refuses changed export revisions and fails when cloud bytes are unavailable', async () => {

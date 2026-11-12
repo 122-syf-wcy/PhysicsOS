@@ -677,7 +677,7 @@ describe('verifyCanvasCapture with actual selected engines and retained requests
     expect(() => createSnapshotObject({
       scene: value.source.scene, sceneRef: value.capture.scene,
       instanceId: value.capture.instanceId, instanceEditRevision: value.capture.instanceEditRevision, capturedAt, source: 'client-engine',
-      engineInfo: value.capture.engine, request: value.capture.request, result: original, state: unrelated,
+      engineInfo: value.capture.engine, ...(value.capture.request === undefined ? {} : { request: value.capture.request }), result: original, state: unrelated,
       clock: value.capture.clock, cursor, datasets: [],
     })).toThrow(WorkbenchDataError)
   })

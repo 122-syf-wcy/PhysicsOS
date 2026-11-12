@@ -26,6 +26,7 @@ describe('motion principles in the experiment card', () => {
     } })
     const props = { ...base.props, canvasId: base.props.data.canvasId, instanceId: 'projectile-formulas',
       instanceKey: runtime.instanceKey, presentation: 'card', renderSlot: () => <div data-experiment-frame />,
+      useFactorySlot: (() => () => null) as CanvasInstanceProps['useFactorySlot'],
     } satisfies CanvasInstanceProps
     runtime.setRunning(true)
     runtime.seek(0.5)

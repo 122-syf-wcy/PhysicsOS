@@ -54,13 +54,13 @@ it('shows committed approval immediately and keeps the preview while the catalog
     })
   })
   render(<ContributionPanel onClose={() => {}} />)
-  fireEvent.click(await screen.findByRole('button', { name: '预览 v1.0.0', exact: true }))
+  fireEvent.click(await screen.findByRole('button', { name: '预览 v1.0.0' }))
   const frame = await screen.findByTitle('候选三维实验')
   expect(
-    screen.getByRole('link', { name: '下载冻结审核 ZIP', exact: true }).getAttribute('href'),
+    screen.getByRole('link', { name: '下载冻结审核 ZIP' }).getAttribute('href'),
   ).toBe('/physicsos/experiments/packages/package-1/archive')
   expect(screen.getByLabelText('审核文件 SHA-256').textContent).toBe(pending.sha256)
-  fireEvent.click(screen.getByRole('button', { name: '审核通过并发布', exact: true }))
+  fireEvent.click(screen.getByRole('button', { name: '审核通过并发布' }))
   await waitFor(() => {
     expect(screen.getAllByRole('status').some(node => node.textContent?.includes('已发布'))).toBe(
       true,
@@ -68,7 +68,7 @@ it('shows committed approval immediately and keeps the preview while the catalog
   })
   expect(screen.getByTitle('候选三维实验')).toBe(frame)
   expect(screen.getAllByText('当前默认')).toHaveLength(1)
-  expect(screen.queryByRole('button', { name: '审核通过并发布', exact: true })).toBeNull()
+  expect(screen.queryByRole('button', { name: '审核通过并发布' })).toBeNull()
   await act(async () => {
     finishRefresh?.()
     await Promise.resolve()
@@ -146,7 +146,7 @@ it('requires the current V2 candidate first render, resets on failure and candid
     return port
   }
   const approve = () => screen.getByRole<HTMLButtonElement>('button', { name: '审核通过并发布' })
-  fireEvent.click(await screen.findByRole('button', { name: '预览 v2.0.0', exact: true }))
+  fireEvent.click(await screen.findByRole('button', { name: '预览 v2.0.0' }))
   await screen.findByTitle('候选三维实验')
   expect(scrollIntoView.mock.instances[0]).toBe(
     screen.getByRole('region', { name: '候选实验预览' }),
@@ -174,7 +174,7 @@ it('requires the current V2 candidate first render, resets on failure and candid
     }),
   )
   expect(approve().disabled).toBe(true)
-  fireEvent.click(screen.getByRole('button', { name: '预览 v2.0.1', exact: true }))
+  fireEvent.click(screen.getByRole('button', { name: '预览 v2.0.1' }))
   await waitFor(() => { expect(view.getByRole('heading', { name: '预览 v2.0.1 · b' })).toBeTruthy() })
   expect(scrollIntoView).toHaveBeenCalledTimes(2)
   acknowledge()

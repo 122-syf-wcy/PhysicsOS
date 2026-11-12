@@ -14,7 +14,7 @@ export const MOBILE_PAPER_SERVICE = 'physicsosMobilePaper'
 export interface StudentAssignmentReader {
   assignmentForStudent(actor: IdentityActor, classId: string, assignmentId: string): {
     assignment: {
-      id: string; classId: string; schoolId: string; title: string; dueAt: string; instructions?: string;
+      id: string; classId: string; schoolId: string; title: string; dueAt: string; instructions?: string | undefined;
       target: { kind: 'paper' | 'experiment'; id: string };
     }
     answerPolicy: { mode: 'never' | 'after-due' | 'after-review'; released: boolean }

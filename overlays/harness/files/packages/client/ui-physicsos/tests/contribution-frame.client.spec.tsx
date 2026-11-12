@@ -30,8 +30,8 @@ it('only binds the trusted wrapper frame and revokes its commands on unmount', a
   const target = frame.contentWindow!
   const token = new URL(frame.src).searchParams.get('channel')
   const transferred: MessagePort[] = []
-  const send = vi.spyOn(target, 'postMessage').mockImplementation((_data, _origin, transfer) => {
-    transferred.push(...(transfer as MessagePort[]))
+  const send = vi.spyOn(target, 'postMessage').mockImplementation((_data: unknown, options?: WindowPostMessageOptions) => {
+    transferred.push(...(options?.transfer as MessagePort[]))
   })
   const ready = { type: 'experiment/ready', protocolVersion: 1, channel: token }
   const emit = (source: Window, origin: string, data: unknown): void => {

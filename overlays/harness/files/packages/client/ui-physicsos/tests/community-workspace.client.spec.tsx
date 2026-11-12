@@ -6,6 +6,7 @@ import { contributionApi, type ContributionCatalog, type ExperimentPackageView }
 import { createExperimentSession } from '../src/client/experiments/experiment-session.ts'
 import { buildWorkspaceRuntime } from '../src/client/physics/build-workspace-runtime.ts'
 import { findExperimentTemplate } from '../src/client/physics/experiment-templates.ts'
+import type { SceneMetadata } from '@physicsos/physics-scene'
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
 const entryUrl = '/physicsos/experiment-assets/embed/releases/p/hash/dist/index.html'
@@ -13,7 +14,7 @@ const packageOf = (id: string, experimentId = 'incline'): ExperimentPackageView 
   id, experimentId, version: '1.0.0', schemaVersion: 3, protocolVersion: 3, sha256: id,
   status: 'approved', author: { name: 'Contributor' }, createdAt: '2026-11-04T00:00:00Z', entryUrl,
 })
-function fixture(pinned?: { kind: 'official' | 'community'; id: string; experimentId: string; version: string; sha256?: string }) {
+function fixture(pinned?: NonNullable<SceneMetadata['experimentRelease']>) {
   const template = findExperimentTemplate('incline')!
   const scene = template.createScene('斜面实验').scene
   if (pinned) scene.metadata.experimentRelease = pinned

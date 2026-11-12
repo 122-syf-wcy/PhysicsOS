@@ -251,7 +251,7 @@ describe('CanvasService on the actual domain write chain and JSON medium', () =>
     const digest = await upload(service, 'failure', { ...opened.manifest, title: 'Rejected' })
     const events: unknown[] = []
     const dispose = context.on('domain/changed', change => { if (change.domain === 'physicsos_canvas' && change.table === 'heads') events.push(change) })
-    onTestFinished(dispose)
+    onTestFinished(() => { dispose() })
     faults.before = async write => { if (write.table === 'heads') throw new Error('injected durable head failure') }
     await expect(service.commit(actor, 'failure', { expectedVersion: 1, mutationId: 'rejected', manifestDigest: digest })).rejects.toThrow('injected')
     expect(domain.table('heads').get(canvasRecordKey(actor.schoolId, actor.userKey, 'failure'))?.version).toBe(1)

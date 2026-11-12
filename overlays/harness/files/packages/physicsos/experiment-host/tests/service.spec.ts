@@ -77,6 +77,7 @@ describe('immutable upload, review and release service', () => {
         service.review(admin, item.id, { action: 'approve', expectedSha256: item.sha256 }),
       ),
     )
+    if (a === undefined || b === undefined) throw new Error('expected two reviewed packages')
     expect(service.list(contributor).active?.id).toBe(b.id)
     await expect(
       service.rollback(admin, { packageId: a.id, expectedActiveId: a.id }),

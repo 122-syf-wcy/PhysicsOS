@@ -58,7 +58,9 @@ async function host(adapter: MockAdapter): Promise<{ ctx: Context; parent: Agent
   } as never)
   const created: unknown[] = []
   ctx.provide('questionCodeArtifacts', {
-    context: (experimentId: string) => Promise.resolve(questionCodeContext(experimentId, { current: () => PROMPT_SEED })),
+    context: (experimentId: string) => Promise.resolve(questionCodeContext(experimentId, { current: () => ({
+      ...PROMPT_SEED, id: 'seed-style', version: '1.0.0', sha256: '0'.repeat(64), publishedAt: null,
+    }) })),
     create: async (input: Parameters<CodeGenerationDependencies['create']>[0]) => {
       created.push(input)
       const scene = input.scene as PhysicsScene

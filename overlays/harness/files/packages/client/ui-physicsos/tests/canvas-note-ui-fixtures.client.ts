@@ -34,7 +34,7 @@ export async function createOwnedNoteUI(input?: { body?: string; format?: 'plain
       return channel as unknown as BroadcastChannel
     },
     schedule: (callback, delay) => { const id = ++timerId; timers.set(id, { at: now + delay, callback }); return id },
-    cancel: id => { timers.delete(id) },
+    cancel: id => { timers.delete(id as number) },
   })
   const controller = makeController(persistence)
   let peer: CanvasController | undefined

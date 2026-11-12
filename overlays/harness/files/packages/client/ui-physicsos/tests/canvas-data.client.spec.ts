@@ -465,7 +465,7 @@ describe('document cache recovery and local cross-tab conflicts', () => {
       return snapshot
     } }
     const second = fixture({ api, getAccount: () => account, persistence, online: () => true })
-    let opening: Promise<void> | undefined
+    let opening: ReturnType<typeof second.controller.open> | undefined
     try {
       await vi.waitFor(() => expect(createStarted).toBe(true), { timeout: 10_000 })
       const namespace = `${encodeURIComponent(account.id)}|${encodeURIComponent(account.schoolId)}`

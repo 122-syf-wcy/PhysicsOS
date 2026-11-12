@@ -1,33 +1,13 @@
 import { clientBundle } from '../tsdown.client.ts'
 import type { UserConfig } from 'tsdown'
-import { createHash } from 'node:crypto'
-import { readFileSync, readdirSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import { basename, join } from 'node:path'
+import { basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { desktopAccountFingerprint } from '../../../scripts/desktop-account-fingerprint.ts'
 
 const PLUGIN_ID = '@deepseek-ai/dsh-client-ui-settings-account'
 const OPTIONAL_FILE = 'optional-desktop-account.js'
 const bundle = clientBundle(PLUGIN_ID, ['lib/types/index.js'])
-
-/** Keep the parent's immutable resource revision coupled to every local desktop input. */
-export function desktopAccountFingerprint(root: string): string {
-  const files = ['tsdown.config.ts', 'package.json']
-  const visit = (relative: string): void => {
-    for (const entry of readdirSync(join(root, relative), { withFileTypes: true })) {
-      const name = `${relative}/${entry.name}`
-      if (entry.isDirectory()) visit(name)
-      else files.push(name)
-    }
-  }
-  visit('src')
-  const hash = createHash('sha256').update('desktop-account-inputs\0')
-  for (const name of files.sort()) {
-    const bytes = readFileSync(join(root, name))
-    hash.update(`${Buffer.byteLength(name)}:${name}${bytes.length}:`).update(bytes)
-  }
-  return hash.digest('hex')
-}
 
 const withAssets = (config: UserConfig): UserConfig => ({
   ...config,

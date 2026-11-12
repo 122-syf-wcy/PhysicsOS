@@ -189,12 +189,6 @@ export function PhysicsSurface({
   /* 管理后台 is role-gated twice: the sidebar only offers the entry to
      SCHOOL_ADMIN/SUPER_ADMIN and the host re-checks every admin call, so a
      missing role or api simply renders nothing actionable. */
-  /* 实验贡献 is a docs-and-standard front door with no scene of its own: the
-     portal page holds the standard, this surface explains the path and states
-     honestly which steps exist yet. */
-  if (surface === 'contribute') {
-    return <ContributeWorkspace t={t} useSessions={useSessions} useWorkspaces={useWorkspaces} />
-  }
   if (surface === 'notice') {
     if (noticeApi === undefined) return null
     return (

@@ -294,15 +294,18 @@ export function createCanvasNodeTestProps<K extends CanvasFlowKind>(kind: K, opt
     requestCanvasSource: unusedSeat, requestSceneInCanvas: unusedSeat,
     addPendingCanvasSource: unusedSeat, addPendingToNewCanvas: unusedSeat,
     cancelPendingCanvasSource: unusedSeat, openCanvasInstanceInLab: unusedSeat,
-    renderFactorySlot: vi.fn<CanvasNodeProps<K>['renderFactorySlot']>(() => null),
+    renderFactorySlot: (() => null) as unknown as CanvasNodeProps<K>['renderFactorySlot'],
     t: (key: Parameters<CanvasNodeProps<K>['t']>[0], params?: Record<string, unknown>): string => {
-      if (!(key in en)) throw new Error(`This canvas test requested an unrelated locale key: ${key}`)
-      const text = Object.entries(en).find(([entry]) => entry === key)?.[1]
+      const text = (en as Record<string, string | undefined>)[key]
+      if (text === undefined) throw new Error(`This canvas test requested an unrelated locale key: ${key}`)
       if (text === undefined) throw new Error(`Missing canvas locale key: ${key}`)
       return text.replace(/\{([^}]+)\}/g, (token: string, name: string) =>
         params !== undefined && Object.prototype.hasOwnProperty.call(params, name) ? String(params[name]) : token)
     },
     ...options.overrides,
-  } satisfies CanvasNodeProps<K>
+    // `K` is still generic at this definition site, so the check against
+    // `FactoryLocalInputPropsOf<..., K>` stays deferred and cannot be
+    // discharged here. Call sites bind concrete kinds and are checked there.
+  } as unknown as CanvasNodeProps<K>
   return { props, document, view, commands }
 }

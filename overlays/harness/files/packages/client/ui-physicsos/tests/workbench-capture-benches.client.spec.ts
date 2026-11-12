@@ -819,14 +819,14 @@ describe('bench raw capture · source identity, release metadata and failed evid
 
   it('uses lever model semantics for failed zero-length dynamics and nonzero-time static samples', () => {
     const realSimulate = leverPhysics.LeverEngine.prototype.simulate
-    vi.spyOn(leverPhysics.LeverEngine.prototype, 'simulate').mockImplementation(function (this: PhysicsEngine<PhysicsScene>, scene, request) {
+    vi.spyOn(leverPhysics.LeverEngine.prototype, 'simulate').mockImplementation(function (this: PhysicsEngine<PhysicsScene>, scene, request): ReturnType<typeof realSimulate> {
       const model = leverPhysics.resolveMomentBalance(scene)
       if (model.left.mass > 0.3) request.options.endTime = quantity(0, 's', 'time')
       else {
         request.options.startTime = quantity(4, 's', 'time')
         request.options.endTime = quantity(4, 's', 'time')
       }
-      return failedResult(realSimulate.call(this, scene, request))
+      return failedResult(realSimulate.call(this, scene, request)) as ReturnType<typeof realSimulate>
     })
     const dynamic = createLeverWorkspaceRuntime(createLeverBalanceScene({ leftMass: 400 })).captureRaw()
     expect(dynamic.clock).toEqual({ time: 0, total: 0, running: false, rate: 1 })

@@ -20,12 +20,12 @@ it('offers a clearly named upload destination on the compact sidebar', () => {
   const props = {
     wide: false,
     openSurface,
-    t: (key) => zh[key],
+    t: (key) => (zh as Record<string, string>)[key] ?? String(key),
     usePhysicsSurface: (select) => select({ surface: 'home' }),
     useAuth: (select) => select({ status: 'guest' }),
   } as SidebarNavProps
   render(<SidebarNav {...props} />)
-  const entry = screen.getByRole('button', { name: '实验上传', exact: true })
+  const entry = screen.getByRole('button', { name: '实验上传' })
   fireEvent.click(entry)
   expect(openSurface).toHaveBeenCalledWith('contribute')
 })
@@ -90,7 +90,7 @@ it('uses the Chinese file action, shows selection details and removes the pendin
   await screen.findByText('PhysicsOS 官方实验样板', { exact: false })
   const input = screen.getByLabelText('实验文件 ZIP', { exact: false }) as HTMLInputElement
   const openPicker = vi.spyOn(input, 'click').mockImplementation(() => {})
-  fireEvent.click(screen.getByRole('button', { name: '选择 ZIP 文件', exact: true }))
+  fireEvent.click(screen.getByRole('button', { name: '选择 ZIP 文件' }))
   expect(openPicker).toHaveBeenCalledOnce()
   fireEvent.change(input, {
     target: {
@@ -99,13 +99,13 @@ it('uses the Chinese file action, shows selection details and removes the pendin
   })
   expect(screen.getByText('my-lens.zip')).toBeTruthy()
   expect(screen.getByText('2 KiB')).toBeTruthy()
-  expect(screen.getByRole('button', { name: '更换实验文件', exact: true })).toBeTruthy()
-  const remove = screen.getByRole('button', { name: '移除实验文件', exact: true })
+  expect(screen.getByRole('button', { name: '更换实验文件' })).toBeTruthy()
+  const remove = screen.getByRole('button', { name: '移除实验文件' })
   remove.focus()
   fireEvent.click(remove)
   expect(screen.queryByText('my-lens.zip')).toBeNull()
   expect(document.activeElement).toBe(
-    screen.getByRole('button', { name: '选择 ZIP 文件', exact: true }),
+    screen.getByRole('button', { name: '选择 ZIP 文件' }),
   )
   expect(
     (screen.getByRole('button', { name: '上传并提交审核' }) as HTMLButtonElement).disabled,

@@ -247,6 +247,7 @@ describe('PhysicsOS overlay presentation', () => {
         openSurface={openSurface}
         startQuestion={startQuestion}
         openCanvasView={openCanvasView}
+        newCanvas={vi.fn()}
         requestSceneInCanvas={requestSceneInCanvas}
         useRecentExperiments={useRecentExperiments}
         t={t}
@@ -275,6 +276,9 @@ describe('PhysicsOS overlay presentation', () => {
     render(
       <HomeActions
         openSurface={openSurface}
+        openCanvasView={vi.fn()}
+        newCanvas={vi.fn()}
+        requestSceneInCanvas={vi.fn()}
         useRecentExperiments={useRecentExperiments}
         t={t}
       />,
@@ -420,6 +424,7 @@ describe('PhysicsOS overlay presentation', () => {
     render(
       <RecentSpaces
         wide
+        requestSceneInCanvas={vi.fn()}
         openSurface={vi.fn()}
         removeRecent={vi.fn()}
         openSession={vi.fn()}
@@ -454,6 +459,7 @@ describe('PhysicsOS overlay presentation', () => {
     render(
       <RecentSpaces
         wide
+        requestSceneInCanvas={vi.fn()}
         openSurface={openSurface}
         removeRecent={removeRecent}
         openSession={vi.fn()}
@@ -508,6 +514,7 @@ describe('PhysicsOS overlay presentation', () => {
     render(
       <RecentSpaces
         wide
+        requestSceneInCanvas={vi.fn()}
         openSurface={vi.fn()}
         removeRecent={vi.fn()}
         openSession={openSession}

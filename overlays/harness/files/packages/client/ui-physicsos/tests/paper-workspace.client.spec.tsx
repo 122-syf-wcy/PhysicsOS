@@ -460,8 +460,8 @@ describe('PaperWorkspace polling', () => {
     api.bankPlan = vi.fn().mockResolvedValue([])
     api.confirmSpec = vi.fn().mockResolvedValue(a)
     api.runDraft = vi.fn().mockResolvedValue({ status: 'drafting' })
-    api.getJob = vi.fn((id: string) => Promise.resolve(id === 'paper-b' ? b
-      : { ...a, status: vi.mocked(api.runDraft).mock.calls.length > 0 ? 'drafting' : 'spec' }))
+    api.getJob = vi.fn<typeof api.getJob>((id: string) => Promise.resolve(id === 'paper-b' ? b
+      : { ...a, status: vi.mocked(api.runDraft).mock.calls.length > 0 ? 'drafting' as const : 'spec' as const }))
     const view = await openStudio(api)
     fireEvent.click(screen.getByRole('button', { name: /试卷A/ }))
     await vi.advanceTimersByTimeAsync(0)
