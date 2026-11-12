@@ -4,8 +4,84 @@ import { constants } from 'node:fs'
 import { lstat, mkdir, open, readdir, rename, rmdir, unlink } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { LearningError, type IdentityActor } from './identity.ts'
+import { z } from 'zod'
+import { parsePhysicsScene } from '@physicsos/physics-scene'
+import { readInstanceSource } from '@physicsos/physics-workbench/codec'
+import { canonicalStringify } from '@physicsos/physics-workbench/json'
 
 export const MOBILE_CHECKPOINT_BYTES = 8 * 1024 * 1024
+const jsonObject = z.record(z.string(), z.unknown())
+const safeRevision = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER)
+const componentTypes = ['voltage_source', 'switch', 'resistor', 'variable_resistor', 'ammeter', 'voltmeter'] as const
+const allowedParams: Record<(typeof componentTypes)[number], readonly string[]> = {
+  voltage_source: ['voltage', 'internalResistance'], switch: ['state'], resistor: ['resistance'],
+  variable_resistor: ['totalResistance', 'sliderPosition'], ammeter: ['internalResistance'], voltmeter: ['internalResistance'],
+}
+/** Persisted editing data only: disconnected circuits remain valid; no solve is performed here. */
+const draftWire = z.object({
+  title: z.string(), description: z.string(), nextNet: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  components: z.array(z.object({
+    id: z.string().min(1), type: z.enum(componentTypes), nets: z.record(z.string(), z.number().int().positive().max(Number.MAX_SAFE_INTEGER)),
+    placement: z.object({ x: z.number().finite(), y: z.number().finite(), rotation: z.union([z.literal(0), z.literal(90), z.literal(180), z.literal(270)]) }).strict(),
+    params: z.object({ resistance: z.number().positive().optional(), voltage: z.number().finite().optional(),
+      internalResistance: z.number().nonnegative().optional(), state: z.enum(['open', 'closed']).optional(),
+      totalResistance: z.number().positive().optional(), sliderPosition: z.number().min(0).max(1).optional() }).strict(),
+  }).strict()),
+}).strict().refine(draft => new Set(draft.components.map(row => row.id)).size === draft.components.length && draft.components.every(row => {
+  const terminals = row.type === 'voltage_source' ? ['positive', 'negative'] : ['a', 'b']
+  return Object.keys(row.nets).length === terminals.length && terminals.every(key => row.nets[key] !== undefined && row.nets[key]! < draft.nextNet)
+    && Object.keys(row.params).every(key => allowedParams[row.type].includes(key))
+}))
+const historyEntryWire = z.object({
+  id: z.string().min(1).max(200), label: z.string().min(1).max(500), before: jsonObject, after: jsonObject,
+  beforeDraft: draftWire.optional(), afterDraft: draftWire.optional(),
+}).strict()
+const checkpointWire = z.object({
+  version: z.literal(1), scene: jsonObject, originScene: jsonObject, templateId: z.string().min(1).max(200).optional(),
+  playback: z.object({ time: z.number().nonnegative(), duration: z.number().nonnegative(), rate: z.number().positive().max(100), running: z.boolean() }).strict(),
+  history: z.object({ past: z.array(historyEntryWire).max(500), future: z.array(historyEntryWire).max(500) }).strict(),
+  editing: z.object({
+    instanceKey: z.string().min(1).max(256), instanceEditRevision: safeRevision, source: jsonObject,
+    buildMode: z.enum(['inspect', 'construct']), draft: draftWire.optional(),
+    selectedIds: z.array(z.string().min(1).max(256)).max(256), observables: z.record(z.string(), z.boolean()).refine(value => Object.keys(value).length <= 4096),
+    viewport: z.object({ x: z.number().min(-1e7).max(1e7), y: z.number().min(-1e7).max(1e7), zoom: z.number().min(0.25).max(8) }).strict(),
+    activePanel: z.enum(['parameters', 'apparatus', 'data', 'guide', 'report']),
+  }).strict(),
+}).strict()
+
+/** Validate the full native checkpoint using the existing shared PhysicsScene/source decoders. */
+export function validateMobileCheckpoint(input: Readonly<Record<string, unknown>>, sceneId?: string,
+  scene?: unknown, originScene?: unknown): void {
+  let values = 0
+  const ancestors = new Set<object>()
+  const visit = (value: unknown, depth: number): void => {
+    if (depth > 64 || ++values > 400_000) throw new Error('checkpoint complexity')
+    if (value === null || typeof value === 'string' || typeof value === 'boolean') return
+    if (typeof value === 'number' && Number.isFinite(value)) return
+    if (typeof value !== 'object' || ancestors.has(value)) throw new Error('checkpoint JSON')
+    ancestors.add(value)
+    for (const child of Object.values(value)) visit(child, depth + 1)
+    ancestors.delete(value)
+  }
+  try { visit(input, 0) } catch { throw new LearningError(400, 'CHECKPOINT_INVALID', '检查点必须是有界、有限数值的完整 JSON') }
+  if (Buffer.byteLength(JSON.stringify(input)) > MOBILE_CHECKPOINT_BYTES) throw new LearningError(413, 'CHECKPOINT_TOO_LARGE', '完整检查点最多 8 MiB，历史未截断')
+  const parsed = checkpointWire.safeParse(input)
+  if (!parsed.success) throw new LearningError(400, 'CHECKPOINT_INVALID', '检查点缺少有效场景、播放、编辑状态或完整历史')
+  const checkpoint = parsed.data
+  const entries = [...checkpoint.history.past, ...checkpoint.history.future]
+  if (new Set(entries.map(row => row.id)).size !== entries.length) throw new LearningError(400, 'CHECKPOINT_INVALID', '历史记录标识不能重复')
+  try { readInstanceSource(checkpoint.editing.source) } catch { throw new LearningError(400, 'CHECKPOINT_INVALID', '检查点来源无效') }
+  for (const snapshot of [checkpoint.scene, checkpoint.originScene, ...entries.flatMap(row => [row.before, row.after])]) {
+    if (!parsePhysicsScene(snapshot).ok || (sceneId !== undefined && snapshot['id'] !== sceneId)) {
+      throw new LearningError(400, 'CHECKPOINT_INVALID', '检查点及全部历史场景必须有效且属于同一场景标识')
+    }
+  }
+  if ((scene !== undefined && canonicalStringify(scene) !== canonicalStringify(checkpoint.scene))
+    || (originScene !== undefined && canonicalStringify(originScene) !== canonicalStringify(checkpoint.originScene))) {
+    throw new LearningError(400, 'CHECKPOINT_MISMATCH', '请求场景与检查点中的场景不一致')
+  }
+}
+
 const hash = (value: string | Uint8Array): string => createHash('sha256').update(value).digest('hex')
 const missing = (error: unknown): boolean => error instanceof Error && 'code' in error && error.code === 'ENOENT'
 

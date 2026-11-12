@@ -17,7 +17,8 @@
 
 import type { IncomingMessage } from 'node:http'
 import type { AuthService, ResolvedCredential } from './service.ts'
-import { toMobileUser, type MobileDevice, type MobileUser } from './mobile.ts'
+import { toMobileUser, type MobileAuthenticated, type MobileDevice, type MobileLoginResult, type MobileUser } from './mobile.ts'
+import { clientAddress } from './proxy.ts'
 
 /** Cordis service name consumed by `@deepseek-ai/dsh-mobile-host`. */
 export const MOBILE_AUTH_SERVICE = 'physicsosMobileAuth'
@@ -26,7 +27,7 @@ export const MOBILE_AUTH_SERVICE = 'physicsosMobileAuth'
 export interface ResolvedMobilePrincipal {
   readonly actor: {
     readonly userKey: string
-    readonly userId?: string
+    readonly userId: string
     readonly schoolId: string
     readonly username: string
     readonly role: 'STUDENT' | 'TEACHER' | 'SCHOOL_ADMIN' | 'SUPER_ADMIN'
@@ -39,19 +40,21 @@ export interface ResolvedMobilePrincipal {
 export interface MobileAuthHostFacade {
   /** The mobile principal for this request, or null for anything else. */
   resolve(req: IncomingMessage): ResolvedMobilePrincipal | null
-  login(body: unknown, ip?: string, userAgent?: string): Promise<unknown>
-  register(body: unknown, ip?: string, userAgent?: string): Promise<unknown>
-  loginTwoFactor(body: unknown, ip?: string, userAgent?: string): Promise<unknown>
-  refresh(body: unknown, ip?: string): Promise<unknown>
+  /** Apply auth-host's configured proxy trust, never a caller-chosen forwarded hop. */
+  clientAddress(req: IncomingMessage): string
+  requestPasswordReset(body: unknown, ip?: string): Promise<{ ok: true }>
+  submitPasswordReset(body: unknown, ip?: string): Promise<{ ok: true }>
+  login(body: unknown, ip?: string, userAgent?: string): Promise<MobileLoginResult>
+  register(body: unknown, ip?: string, userAgent?: string): Promise<MobileLoginResult>
+  loginTwoFactor(body: unknown, ip?: string, userAgent?: string): Promise<MobileAuthenticated>
+  refresh(body: unknown, ip?: string): Promise<MobileAuthenticated>
   /** Revoking by access needs the request; by refresh token it does not. */
   logout(req: IncomingMessage, body: unknown, ip?: string): Promise<void>
   listDevices(req: IncomingMessage): { items: MobileDevice[] }
-  revokeDevice(req: IncomingMessage, grantId: string): Promise<void>
+  revokeDevice(req: IncomingMessage, grantId: string): Promise<{ ok: true; reauthenticate: boolean }>
   updateProfile(req: IncomingMessage, body: unknown): Promise<MobileUser>
-  changePassword(req: IncomingMessage, body: unknown, ip?: string): Promise<void>
+  changePassword(req: IncomingMessage, body: unknown, ip?: string): Promise<{ ok: true; reauthenticate: true }>
   deleteAccount(req: IncomingMessage, body: unknown, ip?: string): Promise<{ status: 'deleted' | 'deletion_pending'; requestId: string }>
-  /** Mark an accepted erasure complete once every dependent domain confirmed. */
-  completeErasure(requestId: string): Promise<void>
   schools(query: string): Promise<unknown>
 }
 
@@ -99,17 +102,32 @@ export function createMobileAuthHost(service: AuthService): MobileAuthHostFacade
       const resolved = credentialOf(service, req)
       return resolved === null ? null : principalOf(resolved)
     },
+    clientAddress: req => clientAddress(req, service.config.trustedProxies ?? []),
+    requestPasswordReset: async (body, ip) => {
+      await service.requestPasswordReset(body, ip)
+      return { ok: true }
+    },
+    submitPasswordReset: async (body, ip) => {
+      await service.submitPasswordReset(body, ip)
+      return { ok: true }
+    },
     login: (body, ip, userAgent) => service.loginMobile(body, ip, userAgent),
     register: (body, ip, userAgent) => service.registerMobile(body, ip, userAgent),
     loginTwoFactor: (body, ip, userAgent) => service.loginMobileTwoFactor(body, ip, userAgent),
     refresh: (body, ip) => service.refreshMobile(body, ip),
     logout: (req, body, ip) => service.logoutMobile(credentialOf(service, req), body, ip),
     listDevices: req => service.listMobileDevices(requireCredential(service, req)),
-    revokeDevice: (req, grantId) => service.revokeMobileDevice(requireCredential(service, req), grantId),
-    updateProfile: (req, body) => service.updateMobileProfile(requireCredential(service, req), body),
-    changePassword: (req, body, ip) => service.changeMobilePassword(requireCredential(service, req), body, ip),
-    deleteAccount: (req, body, ip) => service.deleteMobileAccount(requireCredential(service, req), body, ip),
-    completeErasure: requestId => service.completeAccountErasure(requestId),
+    revokeDevice: async (req, grantId) => {
+      const resolved = requireCredential(service, req)
+      await service.revokeMobileDevice(resolved, grantId)
+      return { ok: true, reauthenticate: resolved.credential.kind === 'mobile' && resolved.credential.grant.id === grantId }
+    },
+    updateProfile: async (req, body) => service.updateMobileProfile(requireCredential(service, req), body),
+    changePassword: async (req, body, ip) => {
+      await service.changeMobilePassword(requireCredential(service, req), body, ip)
+      return { ok: true, reauthenticate: true }
+    },
+    deleteAccount: async (req, body, ip) => service.deleteMobileAccount(requireCredential(service, req), body, ip),
     schools: async query => service.searchSchools(query),
   }
 }

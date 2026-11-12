@@ -94,6 +94,7 @@ export interface ApiPolicyActor {
   readonly credential?:
     | { readonly kind: 'session' }
     | { readonly kind: 'api-token'; readonly tokenId: string; readonly scope: 'read' | 'write' }
+    | { readonly kind: 'mobile'; readonly grantId: string; readonly scope: 'read' | 'write' }
 }
 
 /** Resource kinds whose ownership is persisted by the auth domain. */
@@ -582,12 +583,27 @@ export function asOnceLedger(value: unknown): ApiPolicyOnceLedger | undefined {
  */
 export function createApiPolicy(deps: ApiPolicyDeps): {
   authorizeRequest(req: Pick<IncomingMessage, 'headers'>): boolean
+  /** Wait for complete admitted handlers, including request/response ownership writes. */
+  drainAccountRequests(owner: string): Promise<void>
   wrapFetch(next: FetchLike): FetchLike
   scopeEvents(req: IncomingMessage, events: EventsApi): Promise<EventsApi | undefined>
   admitUpgrade(
     req: Pick<IncomingMessage, 'headers'>,
   ): ApiPolicyPeerAdmission | null | undefined
 } {
+  const requests = new Map<string, Set<Promise<void>>>()
+  const withAccountRequest = async <T>(owner: string, operation: () => Promise<T>): Promise<T> => {
+    let release!: () => void
+    const completed = new Promise<void>(resolve => { release = resolve })
+    const active = requests.get(owner) ?? new Set<Promise<void>>()
+    requests.set(owner, active)
+    active.add(completed)
+    try { return await operation() } finally {
+      active.delete(completed)
+      if (!active.size) requests.delete(owner)
+      release()
+    }
+  }
   const pendingResponses = new Map<string, { expiresAt: number }>()
   const approvalResponseKeys = new Map<string, string>()
   const admin = (actor: ApiPolicyActor): boolean => actor.role === 'SUPER_ADMIN'
@@ -1086,6 +1102,9 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
   }
 
   return {
+    drainAccountRequests: async owner => {
+      while (requests.get(owner)?.size) await Promise.all([...requests.get(owner)!])
+    },
     authorizeRequest: (req) => {
       /* Fail closed, and audibly: a storage failure while resolving the cookie
          must refuse the request rather than throw into the web server's
@@ -1118,7 +1137,7 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
           if (['session/control', 'workspace/follow', '$events'].includes(endpoint)) return true
           // No unknown user stream gets a host-wide default. Operators retain other tools.
           if (!admin(actor)) return false
-          return actor.credential?.kind !== 'api-token' || actor.credential.scope !== 'read'
+          return actor.credential === undefined || actor.credential.kind === 'session' || actor.credential.scope !== 'read'
         },
         mapDownlink: (endpoint: string, value: unknown): { value: unknown } | undefined => {
           if (!active()) return undefined
@@ -1170,9 +1189,12 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
       const authorization = request.headers.get('authorization') ?? undefined
       const actor = deps.actorFromCookie(cookie, authorization)
       if (actor === null) {
-        return Response.json({ error: 'unauthenticated' }, { status: 401 })
+        const error = new URL(request.url).pathname === '/api/session/uploadFileBinary'
+          ? { code: 'UNAUTHENTICATED', message: '未登录或凭据已失效' } : 'unauthenticated'
+        return Response.json({ error }, { status: 401 })
       }
 
+      return withAccountRequest(actor.userKey, async () => {
       const credentialRejection = (): Response | undefined => sameCredential(actor, deps.actorFromCookie(cookie, authorization))
         ? undefined : Response.json({ error: 'unauthenticated' }, { status: 401 })
       const dispatch = async (forwarded: Request, check: () => Response | undefined = credentialRejection): Promise<Response> => {
@@ -1192,6 +1214,37 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
         }
         const site = request.headers.get('sec-fetch-site')
         if (site === 'cross-site') return new Response('forbidden', { status: 403 })
+      }
+
+      // file-upload/protocol.ts registers this exact streaming HTTP path, not a JSON RPC body.
+      // Never clone/parse its bytes before query ownership and the original credential are checked.
+      if (endpoint === 'session/uploadFileBinary') {
+        const failure = (status: number, code: string, message: string): Response =>
+          Response.json({ error: { code, message } }, { status })
+        if (request.method !== 'POST') return new Response('method not allowed', { status: 405, headers: { allow: 'POST' } })
+        const ids = url.searchParams.getAll('sessionId')
+        const sessionId = ids[0]
+        const contentType = request.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase()
+        const uploadGuard = (): Response | undefined => {
+          try {
+            if (credentialRejection()) return failure(401, 'UNAUTHENTICATED', '未登录或凭据已失效')
+            if ((actor.credential?.kind === 'api-token' || actor.credential?.kind === 'mobile') && actor.credential.scope !== 'write') {
+              return failure(403, 'TOKEN_SCOPE_REQUIRED', '上传需要写权限')
+            }
+            if (ids.length !== 1 || sessionId === undefined || sessionId.trim() === '' || /[\u0000-\u001f\u007f]/.test(sessionId)) {
+              return failure(400, 'BAD_REQUEST', '必须提供唯一有效的 sessionId')
+            }
+            // owns() intentionally has an operator bypass elsewhere. Uploads never use it.
+            if (deps.store.ownerKey === undefined) return failure(503, 'DEPENDENCY_UNAVAILABLE', '会话权属服务尚未就绪')
+            if (deps.store.ownerKey('session', sessionId) !== actor.userKey) return failure(404, 'NOT_FOUND', '会话不存在')
+            if (contentType !== 'application/octet-stream') return failure(415, 'UNSUPPORTED_MEDIA_TYPE', '上传需要 application/octet-stream')
+            return undefined
+          } catch {
+            return failure(503, 'DEPENDENCY_UNAVAILABLE', '上传权限暂时无法确认')
+          }
+        }
+        // withAccountRequest includes the entire streaming save and its final receipt check.
+        return dispatch(request, uploadGuard)
       }
 
       if (method === 'session.export') {
@@ -1220,12 +1273,16 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
 
       let body: ClientEnvelope | undefined
       if (request.method === 'POST') {
+        if (request.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase() === 'application/octet-stream') {
+          return new Response('unsupported streaming endpoint', { status: 415 })
+        }
         try {
           const raw: unknown = await request.clone().json()
           if (isEnvelope(raw)) body = raw
         } catch {
-          return dispatch(request)
+          return new Response('invalid JSON request', { status: 400 })
         }
+        if (body === undefined) return new Response('invalid RPC envelope', { status: 400 })
       }
       if (body === undefined) return dispatch(request)
       const rpcId = rpcIdOf(body)
@@ -1239,7 +1296,7 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
         if (denied) throw new ApiPolicyBoundaryError(denied)
       }
       try {
-        if (actor.credential?.kind === 'api-token'
+        if ((actor.credential?.kind === 'api-token' || actor.credential?.kind === 'mobile')
           && actor.credential.scope === 'read'
           && !READ_ONLY_METHODS.has(method)) {
           return rpcError(
@@ -1284,6 +1341,7 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
         }
         return rpcError(rpcId, 'gateway/internal', `请求处理失败：${reason}`, {})
       }
+      })
     },
     scopeEvents: (req, events) => {
       const actor = deps.actorFromRequest(req)

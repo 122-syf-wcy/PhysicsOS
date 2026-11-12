@@ -10,7 +10,8 @@ import com.physicsos.student.feature.home.long
 import com.physicsos.student.feature.home.number
 import com.physicsos.student.feature.home.obj
 import com.physicsos.student.feature.home.requiredText
-import com.physicsos.student.feature.home.safeHttpsUrl
+import com.physicsos.student.feature.home.encoded
+import com.physicsos.student.feature.document.assignmentFigurePath
 import com.physicsos.student.feature.home.strings
 import com.physicsos.student.feature.home.text
 import kotlinx.serialization.json.JsonObject
@@ -45,7 +46,10 @@ internal data class PaperQuestion(
         append(stem)
         if (options.isNotEmpty()) append("\n\n" + options.mapIndexed { index, text -> "${('A'.code + index).toChar()}. $text" }.joinToString("\n\n"))
         if (subQuestions.isNotEmpty()) append("\n\n" + subQuestions.joinToString("\n\n"))
-        if (figureUrl != null) append("\n\n![${figureCaption.orEmpty()}]($figureUrl)")
+        if (figureUrl != null) {
+            val caption = figureCaption.orEmpty().replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]").replace('\n', ' ')
+            append("\n\n![$caption]($figureUrl)")
+        }
         else if (figureCaption != null) append("\n\n$figureCaption")
     }
 }
@@ -136,12 +140,18 @@ internal object ClassDecoders {
                         val answer = if (released) question.obj("answer") else null
                         val solution = answer?.let { listOfNotNull(it.text("result"), it.strings("steps").joinToString("\n\n").takeIf(String::isNotBlank)).joinToString("\n\n") }
                         val figure = question.obj("figure")
+                        val figureUrl = if (figure == null) null else {
+                            val url = assignmentFigurePath(figure.requiredText("url")) ?: throw LearningContractException()
+                            val prefix = "/physicsos/mobile/v1/classes/${encoded(assignment.classId)}/assignments/${encoded(assignment.id)}/target/figures/"
+                            if (!url.startsWith(prefix)) throw LearningContractException()
+                            url
+                        }
                         PaperQuestion(
                             key = "$sectionIndex:$number", number = number, section = section.text("title").orEmpty(),
                             kind = question.requiredText("kind"), score = question.number("score"), stem = question.requiredText("stem"),
                             options = question.strings("options"),
                             subQuestions = question.array("subQuestions").map { sub -> sub.asObject().let { "${it.text("no").orEmpty()} ${it.requiredText("text")}" } },
-                            figureCaption = figure?.text("caption"), figureUrl = safeHttpsUrl(figure?.text("ref")), solution = solution,
+                            figureCaption = figure?.text("caption"), figureUrl = figureUrl, solution = solution,
                         )
                     }
                 }

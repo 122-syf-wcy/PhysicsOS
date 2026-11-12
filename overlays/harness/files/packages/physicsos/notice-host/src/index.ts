@@ -53,7 +53,7 @@ export async function apply(ctx: Context, config: Config = {}): Promise<void> {
        owns the push terminals; the feedback queue and website content stay
        unpublished. */
     ctx.provide(MOBILE_NOTICE_SERVICE, createMobileNotice(service))
-    ctx.provide(MOBILE_PUSH_SERVICE, createMobilePush(domain.table('push_terms')))
+    ctx.provide(MOBILE_PUSH_SERVICE, createMobilePush(service))
 
     yield ctx.webServer.register({
       kind: 'prefix',
@@ -71,6 +71,6 @@ export async function apply(ctx: Context, config: Config = {}): Promise<void> {
         },
       }),
     })
-    yield () => domain.close()
+    yield async () => { await service.dispose(); await domain.close() }
   }, 'notice-host')
 }

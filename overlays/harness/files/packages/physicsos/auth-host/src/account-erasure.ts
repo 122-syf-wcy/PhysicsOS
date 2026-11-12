@@ -1,4 +1,33 @@
 /** Server-only erasure coordination; public HTTP credentials never authorize these calls. */
+import type { AuthService } from './service.ts'
+import type { MobileUser } from './mobile.ts'
+
+/** Server-resolved export identity; no field is an administrator impersonation override. */
+export interface AccountErasureActor extends Pick<AccountErasureRequest, 'userId' | 'userKey' | 'schoolId' | 'username'> {
+  readonly role: MobileUser['role']
+}
+
+/** Accepted-job capabilities, deliberately separate from physicsosMobileAuth. */
+export const ACCOUNT_ERASURE_AUTH_SERVICE = 'physicsosAccountErasureAuth'
+
+export interface AccountErasureAuth {
+  readonly workspaceRoot: string
+  accountResources(actor: AccountErasureActor): AccountOwnedResource[]
+  accountProfile(actor: AccountErasureActor): MobileUser
+  resources(request: AccountErasureRequest): AccountOwnedResource[]
+  /** Initiate cancellation and wait for actual account writers, not a timeout receipt. */
+  quiesce(request: AccountErasureRequest): Promise<void>
+}
+
+export function createAccountErasureAuth(service: AuthService, workspaceRoot: string): AccountErasureAuth {
+  return {
+    get workspaceRoot() { return workspaceRoot },
+    accountResources: (actor: AccountErasureActor) => service.accountExportResources(actor),
+    accountProfile: (actor: AccountErasureActor) => service.accountExportProfile(actor),
+    resources: (request: AccountErasureRequest) => service.accountErasureResources(request),
+    quiesce: (request: AccountErasureRequest) => service.quiesceAccountErasure(request),
+  }
+}
 
 /** The composed erasure provider, resolved on every request/retry. */
 export const ACCOUNT_ERASURE_SERVICE = 'physicsosAccountErasure'

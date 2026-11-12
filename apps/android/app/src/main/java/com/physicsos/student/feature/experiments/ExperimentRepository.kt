@@ -268,9 +268,12 @@ internal class ExperimentRepository(
                     val local = entry(owner, item.sceneId)
                     // Discover remote entries, but do not silently replace a local edit
                     // or move its optimistic base revision to an unreviewed cloud head.
-                    if (local == null) putIndex(owner, item)
+                    if (item.remoteDeleted) {
+                        // A tombstone has no live metadata. Preserve an existing local copy
+                        // and its reviewed CAS base; do not invent a live index for a deletion.
+                        if (local != null && !local.remoteDeleted) putIndex(owner, local.copy(remoteDeleted = true))
+                    } else if (local == null) putIndex(owner, item)
                     else if (!local.hasLocal && local.syncKey == null) putIndex(owner, item)
-                    else if (item.remoteDeleted && !local.remoteDeleted) putIndex(owner, local.copy(remoteDeleted = true))
                 }
             }
         }
@@ -364,10 +367,15 @@ internal class ExperimentRepository(
             requireOwner(owner)
             val id = checkedId(sceneId)
             val index = entry(owner, id)
-            val unresolved = sync.observe(owner).first().any {
-                it.path == "learning/scenes/$id" && it.state != OutboxState.ACKNOWLEDGED
+            val operations = sync.observe(owner).first().filter { it.owner == owner && it.path == "learning/scenes/$id" }
+            val unresolved = operations.any { it.state != OutboxState.ACKNOWLEDGED }
+            val acknowledgedDeletion = operations.any { operation ->
+                val item = (operation.result as? JsonObject)?.get("item") as? JsonObject
+                operation.method == "DELETE" && operation.state == OutboxState.ACKNOWLEDGED &&
+                    item != null && item.text("sceneId") == id && item.text("deletedAt") != null &&
+                    (item.long("revision") ?: 0) >= (index?.cloudRevision ?: 0)
             }
-            if (unresolved || (index != null && index.cloudRevision > 0 && !index.remoteDeleted)) {
+            if (unresolved || (index != null && index.cloudRevision > 0 && !index.remoteDeleted && !acknowledgedDeletion)) {
                 throw ApiException(0, "scene_removal_requires_resolution", "Resolve cloud synchronization before removing this local scene.")
             }
             putOwned(TOMBSTONE_KIND, owner, id, buildJsonObject { put("deletedAt", System.currentTimeMillis()) })
@@ -491,39 +499,73 @@ internal class ExperimentRepository(
         // Serializes index read/modify/write across list, detail and navigation imports.
         private val mutation = Mutex()
 
+        /** One cloud document identity, even when the renderer/import/copy used another scene id. */
         fun sceneBody(index: ExperimentEntry, checkpoint: LabCheckpoint): JsonObject {
-            StrictBridgeJson.utf8Size(JsonArray(listOf(checkpoint.scene, checkpoint.originScene)).toString(), SCENE_PAIR_BYTES)
-            StrictBridgeJson.utf8Size(checkpoint.value.toString(), BridgeLimits.CHECKPOINT_BYTES)
+            val cloud = checkpointForScene(checkedId(index.sceneId), checkpoint)
+            StrictBridgeJson.utf8Size(JsonArray(listOf(cloud.scene, cloud.originScene)).toString(), SCENE_PAIR_BYTES)
+            StrictBridgeJson.utf8Size(cloud.value.toString(), BridgeLimits.CHECKPOINT_BYTES)
             return buildJsonObject {
                 put("sceneId", index.sceneId)
                 put("title", index.title)
                 put("domain", index.domain)
                 put("kind", "experiment")
                 put("updatedAt", Instant.ofEpochMilli(index.updatedAt).toString())
-                put("scene", checkpoint.scene)
-                put("originScene", checkpoint.originScene)
-                put("checkpoint", checkpoint.value)
-                if ((checkpoint.value["editing"] as? JsonObject)?.text("buildMode") == "construct") put("buildMode", true)
+                put("scene", cloud.scene)
+                put("originScene", cloud.originScene)
+                put("checkpoint", cloud.value)
+                if ((cloud.value["editing"] as? JsonObject)?.text("buildMode") == "construct") put("buildMode", true)
                 put("baseRevision", index.cloudRevision)
             }.also { StrictBridgeJson.utf8Size(it.toString(), BridgeLimits.MESSAGE_BYTES) }
         }
 
-        private fun receiptRevision(operation: OutboxItem, sceneId: String): Long {
-            val item = (operation.result as? JsonObject)?.get("item") as? JsonObject
-                ?: throw ApiException(0, "invalid_sync_receipt", "The server did not return a scene receipt.")
-            if (item.text("sceneId") != sceneId) throw ApiException(0, "invalid_sync_receipt", "The scene receipt does not match.")
-            return item.integer("revision", 1)
+        /** Rebase only scene-root identities, never component ids, drafts, playback or history evidence. */
+        private fun checkpointForScene(id: String, checkpoint: LabCheckpoint): LabCheckpoint {
+            fun scene(value: JsonElement): JsonObject = JsonObject(value.objectValue() + ("id" to JsonPrimitive(id)))
+            val history = checkpoint.value.getValue("history").objectValue()
+            val rebasedHistory = JsonObject(history + listOf("past", "future").associateWith { direction ->
+                val entries = history.getValue(direction) as JsonArray
+                JsonArray(entries.map { value ->
+                    val entry = value.objectValue()
+                    JsonObject(entry + mapOf("before" to scene(entry.getValue("before")), "after" to scene(entry.getValue("after"))))
+                })
+            })
+            return LabBridgeProtocol.checkpoint(JsonObject(checkpoint.value + mapOf(
+                "scene" to scene(checkpoint.scene), "originScene" to scene(checkpoint.originScene), "history" to rebasedHistory,
+            )))
         }
 
-        private fun remoteIndex(item: JsonObject): ExperimentEntry = ExperimentEntry(
-            sceneId = checkedId(item.string("sceneId", 128)),
-            title = item.string("title", 300), domain = item.string("domain", 64),
-            updatedAt = runCatching { Instant.parse(item.string("updatedAt", 64)).toEpochMilli() }
-                .getOrElse { throw ApiException(0, "invalid_scene_response", "The scene timestamp is invalid.") },
-            saved = true, cloudRevision = item.integer("revision", 1),
-            hasCheckpoint = item.flag("hasCheckpoint"),
-            remoteDeleted = item.text("deletedAt") != null,
-        )
+        private fun receiptRevision(operation: OutboxItem, sceneId: String): Long {
+            val result = operation.result as? JsonObject
+                ?: throw ApiException(0, "invalid_sync_receipt", "The server did not return a scene receipt.")
+            val item = result["item"] as? JsonObject
+                ?: throw ApiException(0, "invalid_sync_receipt", "The server did not return a scene receipt.")
+            if (item.text("sceneId") != sceneId) throw ApiException(0, "invalid_sync_receipt", "The scene receipt does not match.")
+            val applied = result.long("appliedRevision")
+            val head = item.integer("revision", 1)
+            if (applied == null || applied < 1 || applied > head || (applied != head && !result.flag("replayed"))) {
+                throw ApiException(0, "invalid_sync_receipt", "The applied scene revision is invalid.")
+            }
+            // A replay can describe a newer head that this device has never loaded.
+            // A follow-up write must conflict with it, not silently adopt its CAS base.
+            return applied
+        }
+
+        private fun remoteIndex(item: JsonObject): ExperimentEntry {
+            val id = checkedId(item.string("sceneId", 128))
+            val revision = item.integer("revision", 1)
+            val deletedAt = item.text("deletedAt")
+            val timestamp = if (deletedAt != null) item.text("savedAt") ?: deletedAt else item.string("updatedAt", 64)
+            val updatedAt = runCatching { Instant.parse(timestamp).toEpochMilli() }
+                .getOrElse { throw ApiException(0, "invalid_scene_response", "The scene timestamp is invalid.") }
+            if (deletedAt != null) return ExperimentEntry(
+                sceneId = id, title = "", domain = "", updatedAt = updatedAt,
+                saved = true, cloudRevision = revision, remoteDeleted = true,
+            )
+            return ExperimentEntry(
+                sceneId = id, title = item.string("title", 300), domain = item.string("domain", 64),
+                updatedAt = updatedAt, saved = true, cloudRevision = revision, hasCheckpoint = item.flag("hasCheckpoint"),
+            )
+        }
 
         private fun checkedId(value: String): String {
             if (!Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,127}").matches(value)) throw ApiException(0, "invalid_scene_id", "Invalid scene identifier.")

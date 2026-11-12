@@ -47,6 +47,7 @@ const actorOf = (req: IncomingMessage): IdentityActor | null => {
   if (!ROLES.includes(role as IdentityRole)) return null
   return {
     userKey: `${schoolId}:u-${role}`,
+    userId: `instance-${schoolId}-${role}`,
     schoolId: schoolId!,
     username: `u-${role}`,
     role: role as IdentityRole,
@@ -199,6 +200,7 @@ describe('platform notice', () => {
     const service = new NoticeService(makeDomain())
     const actor: IdentityActor = {
       userKey: 'GZU:admin',
+      userId: 'instance-admin',
       schoolId: 'GZU',
       username: 'admin',
       role: 'SUPER_ADMIN',

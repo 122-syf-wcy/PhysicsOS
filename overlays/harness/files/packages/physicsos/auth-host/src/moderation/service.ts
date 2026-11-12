@@ -4,6 +4,7 @@ import type { AuthDomain } from '../domain.ts'
 import { userKey } from '../domain.ts'
 import { AuthError } from '../service.ts'
 import type { AdminActor, AuthService } from '../service.ts'
+import type { AccountErasureRequest } from '../account-erasure.ts'
 import { ModerationModelError, reviewWithDeadline } from './model.ts'
 import type {
   CapturedMessage, ModerationCase, ModerationCaseRecord, ModerationDecision, ModerationDeps,
@@ -27,6 +28,9 @@ const querySchema = z.object({
 interface DomainWork {
   locks: Map<string, Promise<void>>
   active?: AbortController
+  activeOwner?: string
+  /** Actual reviewer promises outlive reviewWithDeadline when a driver ignores abort. */
+  reviews: Map<string, Set<Promise<unknown>>>
   processing: boolean
   lastCompleted?: number
 }
@@ -47,7 +51,7 @@ export class ModerationService {
   private readonly work: DomainWork
   constructor(private readonly domain: AuthDomain, private readonly auth: AuthService, private readonly deps: ModerationDeps) {
     const existing = work.get(domain)
-    this.work = existing ?? { locks: new Map(), processing: false }
+    this.work = existing ?? { locks: new Map(), reviews: new Map(), processing: false }
     work.set(domain, this.work)
   }
 
@@ -103,7 +107,8 @@ export class ModerationService {
       const owner = this.domain.table('api_resources').get(`session:${data.sessionId}`)
       if (!owner || owner.kind !== 'session' || owner.id !== `session:${data.sessionId}` || owner.resourceId !== data.sessionId) return { created: false }
       const user = this.domain.table('users').get(owner.ownerKey)
-      if (!user || user.schoolId !== owner.schoolId || userKey(user.schoolId, user.username) !== owner.ownerKey) return { created: false }
+      if (!user || user.schoolId !== owner.schoolId || userKey(user.schoolId, user.username) !== owner.ownerKey
+        || this.auth.accountDeletionPending(user.id)) return { created: false }
       const id = moderationCaptureId(data)
       const existing = this.cases.get(id)
       if (existing) return { id: existing.id, created: false }
@@ -140,12 +145,15 @@ export class ModerationService {
     let didRun = false
     try {
       const selected = [...this.cases.entries()].map(([, row]) => row)
-        .filter(row => !row.decision && (row.status === 'pending' || row.status === 'reviewing'))
+        .filter(row => !row.decision && !this.auth.accountDeletionPending(row.userId)
+          && (row.status === 'pending' || row.status === 'reviewing'))
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))[0]
       if (!selected) return false
+      this.work.activeOwner = selected.ownerKey
       const claimed = await this.serial(selected.id, async () => {
-        const current = this.load(selected.id)
-        if (current.decision || !['pending', 'reviewing'].includes(current.status) || !this.readSettings().enabled) return undefined
+        const current = this.cases.get(selected.id)
+        if (!current || this.auth.accountDeletionPending(current.userId) || current.decision
+          || !['pending', 'reviewing'].includes(current.status) || !this.readSettings().enabled) return undefined
         const next: ModerationCaseRecord = { ...current, status: 'reviewing', version: current.version + 1, updatedAt: this.now().toISOString() }
         await this.cases.put(next.id, next)
         return next
@@ -155,16 +163,26 @@ export class ModerationService {
       let review: ModerationCaseRecord['review']
       let error: string | undefined
       try {
-        review = await reviewWithDeadline(this.deps.review, {
+        review = await reviewWithDeadline((input, reviewSignal) => {
+          if (this.auth.accountDeletionPending(claimed.userId)) throw new ModerationModelError('REVIEW_ABORTED')
+          const pending = this.deps.review(input, reviewSignal)
+          const active = this.work.reviews.get(claimed.ownerKey) ?? new Set<Promise<unknown>>()
+          this.work.reviews.set(claimed.ownerKey, active)
+          active.add(pending)
+          const release = (): void => { active.delete(pending); if (!active.size) this.work.reviews.delete(claimed.ownerKey) }
+          void pending.then(release, release)
+          return pending
+        }, {
           text: claimed.text, context: claimed.context, textTruncated: claimed.textTruncated, contextTruncated: claimed.contextTruncated,
         }, signal ? AbortSignal.any([controller.signal, signal]) : controller.signal)
       } catch (failure) {
         error = failure instanceof ModerationModelError && safeModelCodes.has(failure.code) ? failure.code : 'REVIEW_FAILED'
       }
       await this.serial(claimed.id, async () => {
-        const current = this.load(claimed.id)
-        // A human decision/retry committed meanwhile; old model work has no authority over it.
-        if (current.version !== claimed.version || current.status !== 'reviewing' || current.decision) return
+        const current = this.cases.get(claimed.id)
+        // A human decision/retry/deletion committed meanwhile; old work has no authority over it.
+        if (!current || this.auth.accountDeletionPending(current.userId)
+          || current.version !== claimed.version || current.status !== 'reviewing' || current.decision) return
         const allowed = review?.risk === 'allow' && review.confidence >= 0.8 && review.severity === 'none'
           && !current.textTruncated && !current.contextTruncated
         await this.cases.put(current.id, {
@@ -176,9 +194,39 @@ export class ModerationService {
       return true
     } finally {
       delete this.work.active
+      delete this.work.activeOwner
       this.work.processing = false
       if (didRun) this.work.lastCompleted = this.now().getTime()
     }
+  }
+
+  /** Server-only erasure shares the original intake and case-write locks; it never impersonates an admin. */
+  async eraseAccount(request: AccountErasureRequest): Promise<void> {
+    this.auth.accountErasureResources(request)
+    if (this.work.activeOwner === request.userKey) this.work.active?.abort(new ModerationModelError('REVIEW_ABORTED'))
+    // Drain admitted intake without holding the shared lock during a slow account-specific review.
+    await this.serial('intake-settings', async () => undefined)
+    while (this.work.reviews.get(request.userKey)?.size) {
+      await Promise.allSettled([...this.work.reviews.get(request.userKey)!])
+    }
+    const anonymous = `erased:${request.requestId}`
+    for (const [id, row] of [...this.cases.entries()]) {
+      if (row.ownerKey !== request.userKey || row.userId !== request.userId) continue
+      await this.serial(id, async () => {
+        this.auth.accountErasureResources(request)
+        const current = this.cases.get(id)
+        if (!current || current.ownerKey !== request.userKey || current.userId !== request.userId) return
+        // Redact before deleting the cross-reference so interrupted erasure can retry.
+        for (const [key, audit] of this.domain.table('admin_audit').entries()) {
+          if (audit.target !== id) continue
+          const { detail: _detail, ...retained } = audit
+          await this.domain.table('admin_audit').put(key, { ...retained, target: anonymous,
+            actorKey: audit.actorKey === request.userKey ? anonymous : audit.actorKey })
+        }
+        await this.cases.delete(id)
+      })
+    }
+    this.auth.accountErasureResources(request)
   }
 
   list(actor: AdminActor, query: ModerationQuery = {}): ModerationPage {
@@ -196,6 +244,7 @@ export class ModerationService {
     const input = this.parse(decisionSchema, body)
     return this.serial(id, async () => {
       const current = this.load(id)
+      if (this.auth.accountDeletionPending(current.userId)) throw new AuthError(409, 'OWNER_CHANGED', '该账号正在注销')
       this.matchVersion(current, input.version)
       if (current.decision) throw new AuthError(409, 'DECISION_FINAL', '该记录已有人工决定')
       if (input.decision === 'ban') {
@@ -224,6 +273,7 @@ export class ModerationService {
     const input = this.parse(retrySchema, body)
     return this.serial(id, async () => {
       const row = this.load(id)
+      if (this.auth.accountDeletionPending(row.userId)) throw new AuthError(409, 'OWNER_CHANGED', '该账号正在注销')
       this.matchVersion(row, input.version)
       if (row.decision || row.status === 'pending' || row.status === 'reviewing') throw new AuthError(409, 'RETRY_UNAVAILABLE', '当前记录不能重试')
       const { review: _review, error: _error, ...retained } = row

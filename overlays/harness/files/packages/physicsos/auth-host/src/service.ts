@@ -8,7 +8,7 @@
 
 import crypto from 'node:crypto'
 import type {
-  ApiTokenRecord, AuditEvent, AuthDomain, DeviceRecord, DeviceRevocation, InviteRecord,
+  AccountDeletionRecord, ApiTokenRecord, AuditEvent, AuthDomain, DeviceRecord, DeviceRevocation, InviteRecord,
   LearningCount, LoginChallengeRecord, MobileGrantRecord, PendingRegistration, School, ResetRequest,
   SchoolRequestRecord, SessionRecord, UserRecord,
 } from './domain'
@@ -23,7 +23,7 @@ import {
 import { hashPassword, verifyPassword } from './passwords'
 import { newSessionToken, readSessionCookieHeader, sessionTokenHash } from './cookies'
 import type { IdentityActor } from './identity'
-import type { AccountErasure, AccountErasureRequest, AccountOwnedResource } from './account-erasure.ts'
+import type { AccountErasure, AccountErasureActor, AccountErasureRequest, AccountOwnedResource } from './account-erasure.ts'
 import {
   isMobileToken, mobileDeleteAccountWire, mobileLoginWire, mobileLogoutWire,
   mobilePasswordWire, mobileProfileWire, mobileRefreshWire, mobileRegisterWire,
@@ -270,8 +270,10 @@ export interface AuthServiceDeps {
   onUserDisabled?: (ownerKey: string) => void | Promise<void>
   /** Resolve the composite provider at use time; plugin order never disables erasure silently. */
   accountErasure?: () => AccountErasure | undefined
+  /** Runtime readiness is checked before accepting an irreversible job. */
+  assertErasureRuntimeAvailable?: () => void | Promise<void>
   /** Moderation owns its intake/review locks while deleting private evidence. */
-  eraseModerationAccount?: (ownerKey: string) => Promise<void>
+  eraseModerationAccount?: (request: AccountErasureRequest) => Promise<void>
   /** Drain account API requests already admitted before erasure was accepted. */
   drainAccountRequests?: (ownerKey: string) => Promise<void>
   /** Atomic shared limiter. Defaults to {@link InMemoryLimiterBackend}. */
@@ -418,6 +420,7 @@ const localDate = (at: Date): string => {
 // Credential mutations share the domain's single-process snapshot. Keep the
 // reservation through persistence and compensation, across service instances.
 const credentialQueues = new WeakMap<AuthDomain, Promise<unknown>>()
+const erasureQueues = new WeakMap<AuthDomain, Map<string, Promise<MobileDeletionResult>>>()
 
 type LoginIssuer<T> = (
   record: UserRecord, school: School, remember: boolean,
@@ -443,6 +446,9 @@ export class AuthService {
   private readonly onceLedger: InviteClaimLedger | undefined
   /** Account-decision notifications; undefined when the deployment has no mailbox. */
   private readonly notifier: AccountNotifier | undefined
+  private erasureTimer: ReturnType<typeof setInterval> | undefined
+  private erasureClosed = false
+  private readonly erasureTasks = new Set<Promise<MobileDeletionResult>>()
 
   constructor(
     private readonly domain: AuthDomain,
@@ -537,20 +543,70 @@ export class AuthService {
       .map(([, row]) => ({ kind: row.kind, resourceId: row.resourceId }))
   }
 
+  private requireAccountExportActor(actor: AccountErasureActor): { user: UserRecord; school: School } {
+    const user = this.users.get(actor.userKey)
+    const school = this.schools.get(actor.schoolId)
+    if (user === undefined || school === undefined || user.id !== actor.userId
+      || user.schoolId !== actor.schoolId || user.username !== actor.username || user.role !== actor.role
+      || userKey(actor.schoolId, actor.username) !== actor.userKey || user.status !== 'active'
+      || school.status !== 'active' || this.accountDeletions.get(actor.userId) !== undefined || this.pendingErasureOwner(actor.userKey)) {
+      throw new AuthError(401, 'UNAUTHENTICATED', '账号实例不存在或已停用')
+    }
+    return { user, school }
+  }
+
+  /** Server-only live-account export. SUPER_ADMIN never widens this inventory. */
+  accountExportResources(actor: AccountErasureActor): AccountOwnedResource[] {
+    this.requireAccountExportActor(actor)
+    return this.ownedResources(actor.userKey)
+  }
+
+  /** Reuse the strict mobile projection, excluding credentials and contact/reset information. */
+  accountExportProfile(actor: AccountErasureActor): MobileUser {
+    const { user, school } = this.requireAccountExportActor(actor)
+    return toMobileUser(this.toPublic(user, school))
+  }
+
   /**
    * Enumerate resources only for one accepted, still-pending account erasure.
    * @param request - durable job id and exact account incarnation.
    * @returns trusted session/workspace ownership; attachment references remain owned by Harness.
    */
-  accountErasureResources(request: Pick<AccountErasureRequest, 'requestId' | 'userKey' | 'userId'>): AccountOwnedResource[] {
-    const job = this.accountDeletions.get(request.userId)
+  accountErasureResources(request: AccountErasureRequest): AccountOwnedResource[] {
+    this.acceptedErasure(request)
     const user = this.users.get(request.userKey)
-    if (job?.status !== 'pending' || job.id !== request.requestId
-      || job.subject?.userId !== request.userId || job.subject.userKey !== request.userKey
-      || (user !== undefined && (user.id !== request.userId || user.status !== 'disabled'))) {
-      throw new AuthError(403, 'FORBIDDEN', '没有该账号的待处理注销任务')
+    if (user !== undefined && user.status !== 'disabled') {
+      throw new AuthError(403, 'FORBIDDEN', '注销账号尚未停用')
+    }
+    for (const [key, row] of this.apiResources.entries()) {
+      if (row.ownerKey === request.userKey && (row.schoolId !== request.schoolId || row.id !== key || key !== `${row.kind}:${row.resourceId}`)) {
+        throw new AuthError(503, 'DEPENDENCY_UNAVAILABLE', '账户资源权属记录需要核对')
+      }
     }
     return this.ownedResources(request.userKey)
+  }
+
+  /** Reject forged jobs and, especially, a replacement account at the same username. */
+  private acceptedErasure(request: AccountErasureRequest): AccountDeletionRecord {
+    const job = this.accountDeletions.get(request.userId)
+    const subject = job?.subject
+    if (job?.status !== 'pending' || job.id !== request.requestId
+      || subject?.userId !== request.userId || subject.userKey !== request.userKey
+      || subject.schoolId !== request.schoolId || subject.username !== request.username
+      || userKey(request.schoolId, request.username) !== request.userKey) {
+      throw new AuthError(403, 'FORBIDDEN', '没有该账号的待处理注销任务')
+    }
+    const user = this.users.get(request.userKey)
+    if (user !== undefined && (user.id !== request.userId || user.schoolId !== request.schoolId
+      || user.username !== request.username)) {
+      throw new AuthError(409, 'OWNER_CHANGED', '账号实例已变更，注销任务须等待核对')
+    }
+    if (user?.role === 'SUPER_ADMIN') throw new AuthError(403, 'FORBIDDEN', '配置管理的账号不能通过移动端注销')
+    return job
+  }
+
+  private pendingErasureOwner(owner: string): boolean {
+    return [...this.accountDeletions.entries()].some(([, job]) => job.status === 'pending' && job.subject?.userKey === owner)
   }
 
   /**
@@ -567,7 +623,7 @@ export class AuthService {
     credential: { credentialVersion?: number | undefined; schoolCredentialVersion?: number | undefined },
   ): boolean {
     return record.status === 'active' && school.status === 'active'
-      && !this.accountDeletionPending(record.id)
+      && this.accountDeletions.get(record.id) === undefined
       && (credential.credentialVersion ?? 0) === (record.credentialVersion ?? 0)
       && (credential.schoolCredentialVersion ?? 0) === (school.credentialVersion ?? 0)
   }
@@ -841,7 +897,7 @@ export class AuthService {
       const { school, request } = await this.openSchoolApplication(input.schoolName, input.email)
       const now = this.now().toISOString()
       const key = userKey(school.id, username)
-      if (this.users.get(key) !== undefined) {
+      if (this.users.get(key) !== undefined || this.pendingErasureOwner(key)) {
         throw new AuthError(409, 'USERNAME_TAKEN', '该账号已被注册')
       }
       const duplicate = [...this.pendingRegistrations.entries()]
@@ -1110,7 +1166,7 @@ export class AuthService {
         throw new AuthError(403, 'DEVICE_REVOKED', '这台设备已被注销,请联系学校管理员')
       }
       const key = userKey(resolvedSchool.id, username)
-      if (this.users.get(key) !== undefined) {
+      if (this.users.get(key) !== undefined || this.pendingErasureOwner(key)) {
         throw new AuthError(409, 'USERNAME_TAKEN', '该账号已被注册')
       }
 
@@ -1877,75 +1933,241 @@ export class AuthService {
     })
   }
 
-  /**
-   * Accept an irreversible account erasure from the account's own device.
-   *
-   * The password and the literal `DELETE` confirmation are verified here, not by
-   * the caller, and the job row is written before any credential is withdrawn so
-   * a crash cannot leave a half-deleted account. Withdrawing credentials is what
-   * this method does; the erase services then run against the accepted job.
-   * @param resolved - the live mobile principal requesting erasure.
-   * @param body - `mobileDeleteAccountWire`: password, `DELETE` confirmation, optional TOTP code.
-   * @param ip - trusted address for the shared account-mutation limiter.
-   * @returns the accepted job id and whether dependent erasure already finished.
-   */
-  async deleteMobileAccount(
-    resolved: ResolvedCredential,
-    body: unknown,
-    ip?: string,
-  ): Promise<MobileDeletionResult> {
+  /** Accept and durably coordinate erasure; HTTP never coordinates or finalizes a job. */
+  async deleteMobileAccount(resolved: ResolvedCredential, body: unknown, ip?: string): Promise<MobileDeletionResult> {
     const input = mobileDeleteAccountWire.safeParse(body)
     if (!input.success) throw new AuthError(400, 'BAD_REQUEST', '请确认注销并输入密码')
-    return this.credentialMutation(async () => {
+    const request = await this.credentialMutation(async (): Promise<AccountErasureRequest> => {
       const current = this.requireMobile(resolved, true)
-      await this.allow('mobileAccount', `acct:${current.actor.userKey}`)
       const record = this.loadActorRecord(current.actor)
+      // Bootstrap identities are configuration-owned, not disposable mobile accounts.
+      if (record.role === 'SUPER_ADMIN') throw new AuthError(403, 'FORBIDDEN', '配置管理的账号不能通过移动端注销')
+      await this.allow('mobileAccount', `acct:${current.actor.userKey}`)
+      // In particular, do this before consuming a one-use recovery proof.
+      await this.requireErasureProvider()
       await this.verifyAccountProof(record, input.data.password, input.data.code, ip)
-      const requestId = `del_${crypto.randomBytes(9).toString('base64url')}`
-      const now = this.now().toISOString()
-      await this.accountDeletions.put(record.id, {
-        id: requestId,
-        status: 'pending',
-        subject: {
-          userId: record.id,
-          userKey: current.actor.userKey,
-          schoolId: record.schoolId,
-          username: record.username,
-        },
-        requestedAt: now,
-        attempts: 0,
-      })
-      // The account stops authenticating the moment the job is accepted.
-      await this.users.put(current.actor.userKey, {
-        ...record, status: 'disabled', credentialVersion: (record.credentialVersion ?? 0) + 1,
-        updatedAt: now,
-      })
-      await this.revokeUserSessions(record)
-      await this.revokeUserApiTokens(record)
-      for (const [, grant] of this.mobileGrants.entries()) {
-        if (grant.userId === record.id && grant.userKey === current.actor.userKey && grant.revokedAt === undefined) {
-          await this.revokeMobileGrant(grant, 'account')
-        }
+      this.requireMobile(resolved, true)
+      if (this.users.get(current.actor.userKey)?.passwordHash !== record.passwordHash) {
+        throw new AuthError(401, 'UNAUTHENTICATED', '账号凭据已变更')
       }
-      await this.supersedeOpenResetRequests(current.actor.userKey)
-      await this.audit(current.actor, 'account.delete_requested', current.actor.userKey, current.actor.schoolId, { requestId })
-      return { status: 'pending' as const, requestId }
-    }).then(result => ({ status: 'deletion_pending' as const, requestId: result.requestId }))
+      const requestId = `del_${crypto.randomBytes(9).toString('base64url')}`
+      const subject = { userId: record.id, userKey: current.actor.userKey, schoolId: record.schoolId, username: record.username }
+      // This durable fence rejects all credential families, even if the next write crashes.
+      await this.accountDeletions.put(record.id, {
+        id: requestId, status: 'pending', subject, requestedAt: this.now().toISOString(), attempts: 0,
+      })
+      return { requestId, ...subject }
+    })
+    const execution = this.executeAccountErasure(request)
+    // A slow/uncooperative writer may not hold the HTTP receipt indefinitely.
+    // The execution remains tracked; a timeout NEVER grants permission to finalize.
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      return await Promise.race([execution, new Promise<MobileDeletionResult>(resolve => {
+        timer = setTimeout(() => resolve({ status: 'deletion_pending', requestId: request.requestId }), 1_000)
+        timer.unref()
+      })])
+    } finally { clearTimeout(timer) }
   }
 
-  /**
-   * Mark an accepted erasure complete once every dependent domain confirmed.
-   * @param requestId - the job id returned by {@link deleteMobileAccount}.
-   */
-  async completeAccountErasure(requestId: string): Promise<void> {
-    return this.credentialMutation(async () => {
-      const row = [...this.accountDeletions.entries()].map(([, value]) => value)
-        .find(candidate => candidate.id === requestId)
-      if (row === undefined || row.status !== 'pending') return
-      await this.accountDeletions.put(row.subject?.userId ?? requestId, {
-        ...row, status: 'completed', completedAt: this.now().toISOString(),
-      })
-    })
+  private async requireErasureProvider(): Promise<AccountErasure> {
+    let provider: AccountErasure | undefined
+    try { provider = this.deps.accountErasure?.() } catch {
+      throw new AuthError(503, 'DEPENDENCY_UNAVAILABLE', '账户擦除服务尚未就绪')
+    }
+    if (provider === undefined || provider === null || typeof provider.assertAvailable !== 'function' || typeof provider.eraseAccount !== 'function'
+      || typeof this.deps.onUserDisabled !== 'function' || typeof this.deps.drainAccountRequests !== 'function'
+      || typeof this.deps.eraseModerationAccount !== 'function' || this.erasureClosed) {
+      throw new AuthError(503, 'DEPENDENCY_UNAVAILABLE', '账户擦除服务尚未就绪')
+    }
+    try {
+      await this.deps.assertErasureRuntimeAvailable?.()
+      await provider.assertAvailable()
+    } catch {
+      throw new AuthError(503, 'DEPENDENCY_UNAVAILABLE', '账户擦除服务尚未就绪')
+    }
+    return provider
+  }
+
+  /** Server-only; a bounded disable notification is not a substitute for writer drains. */
+  async quiesceAccountErasure(request: AccountErasureRequest): Promise<void> {
+    this.accountErasureResources(request)
+    const stop = this.deps.onUserDisabled
+    const drain = this.deps.drainAccountRequests
+    if (stop === undefined || drain === undefined) throw new AuthError(503, 'DEPENDENCY_UNAVAILABLE', '账户写入排空服务尚未就绪')
+    await stop(request.userKey)
+    await drain(request.userKey)
+    this.accountErasureResources(request)
+  }
+
+  /** Start only once runtime hooks are wired. Provider lookup remains late-bound on every attempt. */
+  startAccountErasureRecovery(): void {
+    if (this.erasureTimer !== undefined || this.erasureClosed) return
+    const retry = (): void => { void this.retryAccountErasures().catch(() => undefined) }
+    retry()
+    this.erasureTimer = setInterval(retry, this.config.accountErasureRetryMs ?? DEFAULT_AUTH_CONFIG.accountErasureRetryMs)
+    this.erasureTimer.unref()
+  }
+
+  async stopAccountErasureRecovery(): Promise<void> {
+    this.erasureClosed = true
+    clearInterval(this.erasureTimer)
+    this.erasureTimer = undefined
+    await Promise.all([...this.erasureTasks])
+  }
+
+  /** Deterministic recovery seam as well as the timer/startup entry point. */
+  async retryAccountErasures(): Promise<void> {
+    if (this.erasureClosed) return
+    const pending = [...this.accountDeletions.entries()].filter(([key, row]) => row.status === 'pending'
+      && row.subject?.userId === key && (row.nextAttemptAt === undefined || !validUntil(row.nextAttemptAt, this.now().getTime())))
+    await Promise.all(pending.map(([, row]) => this.executeAccountErasure({ requestId: row.id, ...row.subject! })))
+  }
+
+  private executeAccountErasure(request: AccountErasureRequest): Promise<MobileDeletionResult> {
+    let queue = erasureQueues.get(this.domain)
+    if (queue === undefined) { queue = new Map(); erasureQueues.set(this.domain, queue) }
+    const key = `${request.userId}\u0000${request.requestId}`
+    const existing = queue.get(key)
+    if (existing !== undefined) return existing
+    const run = (async (): Promise<MobileDeletionResult> => {
+      try {
+        await this.credentialMutation(async () => {
+          const job = this.acceptedErasure(request)
+          await this.accountDeletions.put(request.userId, {
+            ...job, attempts: job.attempts + 1,
+            nextAttemptAt: new Date(this.now().getTime() + (this.config.accountErasureRetryMs ?? DEFAULT_AUTH_CONFIG.accountErasureRetryMs)).toISOString(),
+          })
+          const record = this.users.get(request.userKey)
+          if (record !== undefined) {
+            if (record.status !== 'disabled') {
+              await this.users.put(request.userKey, { ...record, status: 'disabled',
+                credentialVersion: (record.credentialVersion ?? 0) + 1, updatedAt: this.now().toISOString() })
+            }
+          }
+        })
+        await this.quiesceAccountErasure(request)
+        await this.credentialMutation(async () => {
+          this.acceptedErasure(request)
+          const record = this.users.get(request.userKey)
+          if (record === undefined) return
+          await this.revokeUserSessions(record)
+          await this.revokeUserApiTokens(record)
+          for (const [, grant] of this.mobileGrants.entries()) {
+            if (grant.userId === request.userId && grant.userKey === request.userKey && grant.revokedAt === undefined) {
+              await this.revokeMobileGrant(grant, 'account')
+            }
+          }
+          await this.supersedeOpenResetRequests(request.userKey)
+        })
+        const provider = await this.requireErasureProvider()
+        await this.deps.eraseModerationAccount!(request)
+        this.acceptedErasure(request)
+        await provider.eraseAccount(request)
+        await this.credentialMutation(async () => {
+          const job = this.acceptedErasure(request)
+          await this.eraseAuthPrivateData(request)
+          // Drop subject/error/retry metadata. The opaque key still fences old incarnations.
+          await this.accountDeletions.put(request.userId, {
+            id: request.requestId, status: 'completed', requestedAt: job.requestedAt,
+            completedAt: this.now().toISOString(), attempts: job.attempts,
+          })
+        })
+        return { status: 'deleted', requestId: request.requestId }
+      } catch (error) {
+        // Even a failed disable write must initiate shutdown after the durable admission fence.
+        try { this.acceptedErasure(request); await this.deps.onUserDisabled?.(request.userKey) } catch { /* still pending */ }
+        // Only bounded error categories are durable; never provider messages, tokens or evidence.
+        await this.credentialMutation(async () => {
+          const job = this.accountDeletions.get(request.userId)
+          if (job?.status !== 'pending' || job.id !== request.requestId || job.subject?.userKey !== request.userKey) return
+          await this.accountDeletions.put(request.userId, { ...job,
+            nextAttemptAt: new Date(this.now().getTime() + (this.config.accountErasureRetryMs ?? DEFAULT_AUTH_CONFIG.accountErasureRetryMs)).toISOString(),
+            lastError: error instanceof AuthError && error.code === 'DEPENDENCY_UNAVAILABLE' ? 'DEPENDENCY_UNAVAILABLE' : 'ERASURE_FAILED',
+          })
+        }).catch(() => undefined) // The original pending row is sufficient to recover after a storage outage.
+        return { status: 'deletion_pending', requestId: request.requestId }
+      }
+    })()
+    queue.set(key, run)
+    this.erasureTasks.add(run)
+    void run.finally(() => { if (queue.get(key) === run) queue.delete(key); this.erasureTasks.delete(run) })
+    return run
+  }
+
+  /** Called only after every external owner and writer confirmed erasure, with credential writes serialized. */
+  private async eraseAuthPrivateData(request: AccountErasureRequest): Promise<void> {
+    this.acceptedErasure(request)
+    const erase = async <T>(table: { entries(): Iterable<readonly [string, T]>; delete(key: string): Promise<unknown> }, own: (row: T) => boolean): Promise<void> => {
+      for (const [key, row] of [...table.entries()]) if (own(row)) { this.acceptedErasure(request); await table.delete(key) }
+    }
+    const instance = (row: { userId: string }): boolean => row.userId === request.userId
+    const owner = (row: { schoolId: string; username: string }): boolean => row.schoolId === request.schoolId && row.username === request.username
+    const auditTargets = new Set([request.userKey, request.userId])
+    for (const [, row] of this.mobileGrants.entries()) if (instance(row)) auditTargets.add(row.id)
+    for (const [, row] of this.apiTokens.entries()) if (instance(row)) auditTargets.add(row.id)
+    for (const [, row] of this.resets.entries()) if (owner(row)) auditTargets.add(row.id)
+    const anonymous = `erased:${request.requestId}`
+    // Redact before removing cross-references, so interrupted cleanup can still resume safely.
+    for (const [key, row] of this.domain.table('admin_audit').entries()) {
+      if (row.actorKey === request.userKey || auditTargets.has(row.target)) {
+        const { detail: _detail, ...retained } = row
+        await this.domain.table('admin_audit').put(key, { ...retained,
+          actorKey: row.actorKey === request.userKey ? anonymous : row.actorKey,
+          target: auditTargets.has(row.target) ? anonymous : row.target })
+      }
+    }
+    // Registration can retain a copy of contact details on the shared school application.
+    // Use the owned applicant's exact request/email linkage; never delete the shared school row.
+    const applicants = [...this.pendingRegistrations.entries()].map(([, row]) => row).filter(owner)
+    for (const [key, row] of this.domain.table('school_requests').entries()) {
+      const contactOwned = row.requestedBy === request.userKey || (row.requestedBy === null && row.schoolId === request.schoolId
+        && applicants.some(applicant => applicant.requestId === row.id && applicant.email === row.email && row.contact === applicant.email))
+      if (contactOwned) {
+        const { email: _email, ...retained } = row
+        await this.domain.table('school_requests').put(key, { ...retained, requestedBy: null, contact: '已注销',
+          ...(row.decidedBy === request.userKey ? { decidedBy: anonymous } : {}) })
+      } else if (row.decidedBy === request.userKey) {
+        await this.domain.table('school_requests').put(key, { ...row, decidedBy: anonymous })
+      }
+    }
+    for (const [key, row] of this.pendingRegistrations.entries()) {
+      if (!owner(row) && row.decidedBy === request.userKey) await this.pendingRegistrations.put(key, { ...row, decidedBy: anonymous })
+    }
+    for (const [key, row] of this.resets.entries()) {
+      if (!owner(row) && row.decidedBy === request.userKey) await this.resets.put(key, { ...row, decidedBy: anonymous })
+    }
+    // Remove indexes BEFORE grants; after a crash the remaining grant still identifies every digest.
+    for (const [key, grant] of [...this.mobileGrants.entries()]) {
+      if (!instance(grant) || grant.userKey !== request.userKey) continue
+      await erase(this.mobileTokens, row => row.grantId === grant.id)
+      this.acceptedErasure(request)
+      await this.mobileGrants.delete(key)
+    }
+    await erase(this.sessions, instance)
+    await erase(this.apiTokens, instance)
+    await erase(this.loginChallenges, instance)
+    await erase(this.recoveryCodes, instance)
+    await erase(this.resetTokens, instance)
+    await erase(this.resets, owner)
+    await erase(this.pendingRegistrations, owner)
+    await erase(this.domain.table('devices'), row => row.primaryUserKey === request.userKey && row.schoolId === request.schoolId)
+    await erase(this.apiResources, row => row.ownerKey === request.userKey && row.schoolId === request.schoolId)
+    for (const [key, row] of this.invites.entries()) {
+      if (row.createdBy === request.userKey || row.disabledBy === request.userKey) {
+        await this.invites.put(key, { ...row, createdBy: row.createdBy === request.userKey ? anonymous : row.createdBy,
+          ...(row.disabledBy === request.userKey ? { disabledBy: anonymous } : {}) })
+      }
+    }
+    for (const [key, row] of this.domain.table('device_revocations').entries()) {
+      if (row.revokedBy === request.userKey) await this.domain.table('device_revocations').put(key, { ...row, revokedBy: anonymous })
+    }
+    for (const [key, row] of this.domain.table('school_merges').entries()) {
+      if (row.operatorKey === request.userKey) await this.domain.table('school_merges').put(key, { ...row, operatorKey: anonymous })
+    }
+    this.acceptedErasure(request)
+    // Last private write; a failure writing the completion receipt keeps the owner fenced.
+    if (this.users.get(request.userKey)?.id === request.userId) await this.users.delete(request.userKey)
   }
 
   /**
@@ -2714,7 +2936,7 @@ export class AuthService {
     for (const row of rows) {
       const now = this.now().toISOString()
       const key = userKey(school.id, row.username)
-      if (this.users.get(key) !== undefined) {
+      if (this.users.get(key) !== undefined || this.pendingErasureOwner(key)) {
         await this.pendingRegistrations.put(row.id, {
           ...row,
           status: 'rejected',
@@ -3675,7 +3897,7 @@ export class AuthService {
     password: string, role: UserRecord['role'],
   ): Promise<UserRecord> {
     const key = userKey(schoolId, username)
-    if (this.users.get(key) !== undefined) {
+    if (this.users.get(key) !== undefined || this.pendingErasureOwner(key)) {
       throw new AuthError(409, 'USERNAME_TAKEN', '该账号已被注册')
     }
     const now = new Date().toISOString()

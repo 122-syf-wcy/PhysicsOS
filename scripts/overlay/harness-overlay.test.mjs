@@ -90,6 +90,27 @@ test('verify detects any content drift without modifying either tree', async (t)
   assert.equal(await readFile(target, 'utf8'), 'local edit')
 })
 
+test('apply and verify include the sync and mobile host packages', async (t) => {
+  const f = await fixture(t)
+  for (const name of ['mobile-host', 'account-sync-host']) {
+    const relative = `packages/physicsos/${name}/src/index.ts`
+    const source = join(f.root, 'overlays/harness/files', relative)
+    await mkdir(join(source, '..'), { recursive: true })
+    await writeFile(source, `export const name = '${name}'\n`)
+  }
+  assert.equal(f.run('apply').status, 0)
+  assert.equal(f.run('verify').status, 0)
+  for (const name of ['mobile-host', 'account-sync-host']) {
+    const target = join(f.vendor, `packages/physicsos/${name}/src/index.ts`)
+    assert.equal(await readFile(target, 'utf8'), `export const name = '${name}'\n`)
+  }
+  const target = join(f.vendor, 'packages/physicsos/mobile-host/src/index.ts')
+  await writeFile(target, 'drift\n')
+  const result = f.run('verify')
+  assert.equal(result.status, 1)
+  assert.match(result.stderr, /packages\/physicsos\/mobile-host\/src\/index\.ts/)
+})
+
 test('apply refuses to remove a deleted managed file that has local edits', async (t) => {
   const f = await fixture(t)
   assert.equal(f.run('apply').status, 0)

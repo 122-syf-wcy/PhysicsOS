@@ -30,6 +30,7 @@ export type IdentityRole = 'STUDENT' | 'TEACHER' | 'SCHOOL_ADMIN' | 'SUPER_ADMIN
 /** The signed-in account resolved from a session cookie. */
 export interface IdentityActor {
   readonly userKey: string
+  readonly userId: string
   readonly schoolId: string
   readonly username: string
   readonly role: IdentityRole

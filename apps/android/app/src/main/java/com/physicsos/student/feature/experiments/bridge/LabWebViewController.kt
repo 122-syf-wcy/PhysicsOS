@@ -97,6 +97,7 @@ internal class LabWebViewController(
     context: Context,
     initialContent: LabContent,
     private val onIncoming: (LabIncoming) -> Unit,
+    private val documentAssets: com.physicsos.student.feature.document.DocumentFigureAssets? = null,
     private val onIssue: (String) -> Unit,
 ) {
     private val appContext = context.applicationContext
@@ -389,6 +390,9 @@ internal class LabWebViewController(
             val assetLoader = WebViewAssetLoader.Builder()
                 .setDomain(LabUrlPolicy.HOST)
                 .setHttpAllowed(false)
+                .apply {
+                    if (content.page == LabPage.DOCUMENT) documentAssets?.let { addPathHandler(it.pathPrefix, it) }
+                }
                 .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(appContext))
                 .build()
             view.webViewClient = client(assetLoader, session)

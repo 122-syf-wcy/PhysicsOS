@@ -7,6 +7,7 @@ import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-query'
 import type { ApiResourceOwner, AuthDomain, ModerationCursor } from '../domain.ts'
 import { AuthError, type AuthService } from '../service.ts'
+import type { AccountErasureRequest } from '../account-erasure.ts'
 import type { CapturedMessage, ModerationReviewer } from './types.ts'
 import { ModerationService, moderationCaptureId } from './service.ts'
 import { ModerationModelError } from './model.ts'
@@ -70,12 +71,32 @@ export class AccountRuns {
   }
   private disabledOwner(agent: Agent): string | undefined {
     const exact = this.auth.sessionOwnerKey(agent.id)
-    if (exact && this.domain.table('users').get(exact)?.status !== 'active') return exact
+    if (exact && this.ownerDisabled(exact)) return exact
     const owners = new Set((this.ctx.get('agents')?.list() ?? []).map(root => this.auth.sessionOwnerKey(root.id)))
     for (const owner of owners) {
-      if (owner && this.domain.table('users').get(owner)?.status !== 'active' && this.family(owner).includes(agent)) return owner
+      if (owner && this.ownerDisabled(owner) && this.family(owner).includes(agent)) return owner
     }
     return undefined
+  }
+  private ownerDisabled(owner: string): boolean {
+    const user = this.domain.table('users').get(owner)
+    return user === undefined || user.status !== 'active' || this.auth.accountDeletionPending(user.id)
+  }
+  assertAvailable(): void {
+    if (!this.ctx.get('agents')) throw new AuthError(503, 'DEPENDENCY_UNAVAILABLE', '运行任务注册表尚未就绪')
+  }
+  /** Unlike disable(), completion here proves real idle; a timeout must leave erasure pending. */
+  async drain(owner: string): Promise<void> {
+    this.assertAvailable()
+    for (;;) {
+      const registry = this.ctx.get('agents')
+      this.assertAvailable()
+      const family = this.family(owner)
+      for (const agent of family) agent.cancel({ kind: 'hook', reason: 'account-disabled' }, { keepInbox: false })
+      await Promise.all(family.map(agent => agent.whenIdle()))
+      if (this.ctx.get('agents') !== registry) throw new AuthError(503, 'DEPENDENCY_UNAVAILABLE', '运行任务注册表已变更')
+      if (this.family(owner).every(agent => family.includes(agent))) return
+    }
   }
   guardInput(sessionId: string): void {
     const agent = this.ctx.get('agents')?.get(SessionId(sessionId))
@@ -152,7 +173,7 @@ export class ModerationRuntime {
       // Capture only, never call the model on the publication stack.
       this.enqueue(async () => {
         const ownerKey = this.auth.sessionOwnerKey(session.id)
-        if (ownerKey === undefined) return
+        if (ownerKey === undefined || !this.captureAllowed(ownerKey)) return
         const id = `claim:${session.id}`
         // Retain a durable replay boundary before writing cases. A transient
         // case write failure must not turn a committed user event into a lost job.
@@ -169,7 +190,7 @@ export class ModerationRuntime {
       if (!row || row.kind !== 'session' || row.id !== change.key || row.id !== `session:${row.resourceId}`
         || auth.sessionOwnerKey(row.resourceId) !== row.ownerKey) return
       this.enqueue(async () => {
-        if (auth.sessionOwnerKey(row.resourceId) !== row.ownerKey) return
+        if (auth.sessionOwnerKey(row.resourceId) !== row.ownerKey || !this.captureAllowed(row.ownerKey)) return
         const id = `claim:${row.resourceId}`
         await this.mutateClaimCursor(id, old => old?.ownerKey === row.ownerKey
           ? { ...old, generation: (old.generation ?? 0) + 1, done: false }
@@ -196,16 +217,20 @@ export class ModerationRuntime {
       if (!this.closed && this.ready()) await this.service.processNext(this.lifetime.signal)
     })().catch(() => { this.ctx.logger.warn('moderation: worker retry pending') }).finally(() => { this.running = false })
   }
+  private captureAllowed(owner: string): boolean {
+    const user = this.domain.table('users').get(owner)
+    return user !== undefined && !this.auth.accountDeletionPending(user.id)
+  }
   private valid(cursor: ModerationCursor): boolean {
     return !this.closed && this.auth.sessionOwnerKey(cursor.sessionId) === cursor.ownerKey
-      && this.domain.table('users').get(cursor.ownerKey)?.status === 'active'
+      && this.domain.table('users').get(cursor.ownerKey)?.status === 'active' && this.captureAllowed(cursor.ownerKey)
   }
   /** Serialize the read/compare/write of every claim cursor, without blocking live intake on history IO. */
   private mutateClaimCursor(id: string, update: (current: ModerationCursor | undefined) => ModerationCursor | undefined): Promise<boolean> {
     const next = this.cursorWrites.then(async () => {
       const table = this.domain.table('moderation_cursors')
       const value = update(table.get(id))
-      if (!value) return false
+      if (!value || (value.kind !== 'activation' && !this.captureAllowed(value.ownerKey))) return false
       await table.put(id, value)
       return true
     })
@@ -233,7 +258,7 @@ export class ModerationRuntime {
     for (const [key, owner] of this.domain.table('api_resources').entries()) {
       if (owner.kind !== 'session' || key !== owner.id || owner.id !== `session:${owner.resourceId}`
         || this.auth.sessionOwnerKey(owner.resourceId) !== owner.ownerKey
-        || this.domain.table('users').get(owner.ownerKey)?.status !== 'active') continue
+        || this.domain.table('users').get(owner.ownerKey)?.status !== 'active' || !this.captureAllowed(owner.ownerKey)) continue
       if (!first || owner.id < first.id) first = owner
       if (owner.id > this.lastCursor && (!next || owner.id < next.id)) next = owner
     }
@@ -319,6 +344,28 @@ export class ModerationRuntime {
       if (this.valid(cursor)) await cursors.put(id, { ...progress, done: !held && visited < 5_000 })
     }
     return result
+  }
+  assertAvailable(): void {
+    if (this.closed) throw new AuthError(503, 'DEPENDENCY_UNAVAILABLE', '审核擦除服务正在关闭')
+  }
+  /** Drain intake/history first, then erase under the service's real case locks. */
+  async eraseAccount(request: AccountErasureRequest): Promise<void> {
+    this.assertAvailable()
+    this.auth.accountErasureResources(request)
+    await Promise.all([this.queue, this.history, this.cursorWrites])
+    await this.service.eraseAccount(request)
+    await this.withHistory(async () => {
+      const cleanup = this.cursorWrites.then(async () => {
+        this.auth.accountErasureResources(request)
+        const cursors = this.domain.table('moderation_cursors')
+        for (const [id, row] of [...cursors.entries()]) {
+          if (row.kind !== 'activation' && row.ownerKey === request.userKey) await cursors.delete(id)
+        }
+      })
+      this.cursorWrites = cleanup.then(() => undefined, () => undefined)
+      await cleanup
+    })
+    this.auth.accountErasureResources(request)
   }
   async flush(): Promise<void> { await this.queue }
   async dispose(): Promise<void> {

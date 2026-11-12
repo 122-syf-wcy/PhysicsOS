@@ -26,6 +26,8 @@ const feedback = z.object({
   schoolId: z.string().min(1),
   /** `schoolId:username` of the writer, as the SERVER resolved it. */
   authorKey: z.string().min(1),
+  /** Missing only on pre-mobile rows; never silently claimed by a replacement account. */
+  userId: z.string().min(1).optional(),
   kind: feedbackKind,
   /** What the reporter typed. Free text by nature; length-capped at the wire. */
   body: z.string().min(1),
@@ -73,6 +75,8 @@ const platformNotice = z.object({
 const platformNoticeAck = z.object({
   /** `schoolId:username`, resolved by the identity gate. */
   userKey: z.string().min(1),
+  userId: z.string().min(1).optional(),
+  schoolId: z.string().min(1).optional(),
   version: z.number().min(1),
   acknowledgedAt: z.string(),
 })
@@ -86,17 +90,11 @@ export type PlatformNoticeRecord = z.infer<typeof platformNotice>
 /** One account's acknowledgement row. */
 export type PlatformNoticeAckRecord = z.infer<typeof platformNoticeAck>
 
-/**
- * One Android push terminal.
- *
- * Only the SHA-256 of the provider token is stored, so a leaked table cannot be
- * replayed against the push service, and the DTO the app receives never echoes
- * it. `userKey` scopes every read and revoke to the owning account.
- */
+/** Legacy terminal metadata, not a delivery capability. Registration stays unavailable until a real provider exists. */
 const pushTerm = z.object({
   id: z.string().min(1),
   userKey: z.string().min(1),
-  userId: z.string(),
+  userId: z.string().min(1),
   schoolId: z.string().min(1),
   platform: z.literal('android'),
   tokenHash: z.string().regex(/^[a-f0-9]{64}$/),
@@ -106,8 +104,18 @@ const pushTerm = z.object({
   revokedAt: z.string().optional(),
 })
 
-/** One registered push terminal. */
+/** Only fully instance-bound records may be written by a future real provider. */
 export type PushTermRecord = z.infer<typeof pushTerm>
+/** Pre-provider builds wrote hashes without userId. Reopen them as quarantined data, never as an owned terminal. */
+const legacyPushTerm = pushTerm.omit({ userId: true }).extend({ userId: z.undefined().optional() })
+const storedPushTerm = z.union([pushTerm, legacyPushTerm])
+export type StoredPushTermRecord = z.infer<typeof storedPushTerm>
+
+const erasedAccount = z.object({
+  requestId: z.string().min(1), userId: z.string().min(1), userKey: z.string().min(1),
+  schoolId: z.string().min(1), complete: z.boolean(),
+})
+export type NoticeErasureRecord = z.infer<typeof erasedAccount>
 
 /** The `physicsos_notice` domain: the feedback queue plus tenant/platform announcements. */
 export const noticeDomain = defineDomain({
@@ -120,7 +128,8 @@ export const noticeDomain = defineDomain({
     platform_notice_acks: domainTable<string, PlatformNoticeAckRecord>(platformNoticeAck),
     website_content: domainTable<string, WebsiteContentRecord>(websiteContent),
     website_feedback: domainTable<string, WebsiteFeedbackRecord>(websiteFeedback),
-    push_terms: domainTable<string, PushTermRecord>(pushTerm),
+    push_terms: domainTable<string, StoredPushTermRecord>(storedPushTerm),
+    erased_accounts: domainTable<string, NoticeErasureRecord>(erasedAccount),
   },
 })
 

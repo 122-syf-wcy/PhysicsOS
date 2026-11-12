@@ -12,6 +12,8 @@ import com.physicsos.student.feature.home.OwnedLearningViewModel
 import com.physicsos.student.feature.home.asObject
 import com.physicsos.student.feature.home.encoded
 import com.physicsos.student.feature.home.learningProblem
+import com.physicsos.student.feature.home.long
+import com.physicsos.student.feature.home.flag
 import com.physicsos.student.feature.home.requireOwner
 import java.io.IOException
 import java.util.UUID
@@ -301,10 +303,14 @@ internal class ClassesViewModel(
         try {
             val result = operation.result?.asObject() ?: throw LearningContractException()
             val receipt = ClassDecoders.receipt(result) ?: throw LearningContractException()
+            val applied = result.long("appliedRevision") ?: throw LearningContractException()
+            if (applied < 1 || applied > receipt.revision || (applied != receipt.revision && result.flag("replayed") != true)) throw LearningContractException()
+            val newerHead = applied != receipt.revision
             mutable.update {
                 it.copy(
-                    receipt = receipt, changedElsewhere = false, actionProblem = null,
-                    draft = it.draft.copy(baseRevision = receipt.revision, operationKey = null, queuedContent = null, lastSubmittedContent = receipt.content),
+                    receipt = receipt, changedElsewhere = newerHead, actionProblem = null,
+                    draft = it.draft.copy(baseRevision = applied, operationKey = null, queuedContent = null,
+                        lastSubmittedContent = if (newerHead) it.draft.queuedContent else receipt.content),
                 )
             }
             withContext(Dispatchers.IO) { graph.store.put("learning.value", current, submissionPath!!, result) }

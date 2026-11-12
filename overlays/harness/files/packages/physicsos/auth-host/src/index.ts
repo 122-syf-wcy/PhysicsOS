@@ -17,7 +17,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
 import type { IncomingMessage } from 'node:http'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import type {} from '@deepseek-ai/dsh-storage-domain'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
@@ -34,6 +34,9 @@ import { createModerationReviewer, ModerationModelError } from './moderation/mod
 import { moderationRoutes } from './moderation/routes.ts'
 import { IDENTITY_SERVICE, createIdentityService } from './identity.ts'
 import { createMobileAuthHost, MOBILE_AUTH_SERVICE } from './mobile-service.ts'
+import { ACCOUNT_ERASURE_SERVICE, ACCOUNT_ERASURE_AUTH_SERVICE, asAccountErasure, createAccountErasureAuth } from './account-erasure.ts'
+export { ACCOUNT_ERASURE_SERVICE, ACCOUNT_ERASURE_AUTH_SERVICE } from './account-erasure.ts'
+export type { AccountErasure, AccountErasureAuth, AccountErasureActor, AccountErasureRequest, AccountOwnedResource } from './account-erasure.ts'
 export type { MobileAuthHostFacade, ResolvedMobilePrincipal } from './mobile-service.ts'
 export { MOBILE_AUTH_SERVICE } from './mobile-service.ts'
 import {
@@ -178,12 +181,36 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     const connections = new AccountConnections()
     yield () => connections.dispose()
     let runs: AccountRuns | undefined
+    let policy: ReturnType<typeof createApiPolicy> | undefined
     const service = new AuthService(domain, config as AuthServiceConfig, {
       ...(limiter === undefined ? {} : { limiter }),
       ...(resetDelivery === undefined ? {} : { resetDelivery }),
       ...(onceLedger === undefined ? {} : { onceLedger }),
       ...(notifier === undefined ? {} : { notifier }),
       onUserDisabled: async owner => { connections.invalidate(owner); await runs?.disable(owner) },
+      accountErasure: () => asAccountErasure(ctx.get(ACCOUNT_ERASURE_SERVICE)),
+      assertErasureRuntimeAvailable: () => {
+        if (runs === undefined || policy === undefined) throw new Error('Account erasure runtime unavailable')
+        runs.assertAvailable()
+        moderation.assertAvailable()
+      },
+      drainAccountRequests: async owner => {
+        if (policy === undefined || runs === undefined) throw new Error('Account erasure drain unavailable')
+        await policy.drainAccountRequests(owner)
+        await runs.drain(owner)
+        // Never hand a re-registered username the erased incarnation's cached workspace.
+        for (const key of workspacePromises.keys()) {
+          if (key === owner || key.startsWith(`${owner}\u0000`)) workspacePromises.delete(key)
+        }
+      },
+      eraseModerationAccount: async request => {
+        await moderation.eraseAccount(request)
+        // Settle private accounting work before the composite erases its owning domains.
+        await moderationReceipts.flush()
+        if ([...domain.table('usage_receipts').entries()].some(([, row]) => row.receipt.owner?.userKey === request.userKey)) {
+          throw new Error('Account usage receipts still pending')
+        }
+      },
     })
 
     runs = new AccountRuns(ctx, domain, service)
@@ -222,6 +249,8 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
        account-owner mutations through this narrow face; the administrative
        surface stays unpublished so a sibling host cannot reach it. */
     ctx.provide(MOBILE_AUTH_SERVICE, createMobileAuthHost(service))
+    ctx.provide(ACCOUNT_ERASURE_AUTH_SERVICE, createAccountErasureAuth(service,
+      resolve(config.workspaceRoot ?? dshHomePath('physicsos-users'))))
 
     const actorFromCookie = (
       cookie: string | undefined,
@@ -233,15 +262,9 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         ...resolved.actor,
         credential: resolved.credential.kind === 'session'
           ? { kind: 'session' }
-          : {
-            kind: 'api-token',
-            // A first-party mobile access token carries the same read/write
-            // scope as a personal token; identity comes from the grant row.
-            tokenId: resolved.credential.kind === 'api-token'
-              ? resolved.credential.token.id
-              : resolved.credential.grant.id,
-            scope: resolved.credential.scope,
-          },
+          : resolved.credential.kind === 'api-token'
+            ? { kind: 'api-token', tokenId: resolved.credential.token.id, scope: resolved.credential.scope }
+            : { kind: 'mobile', grantId: resolved.credential.grant.id, scope: resolved.credential.scope },
       }
     }
     const actorFromRequest = (req: IncomingMessage): ApiPolicyActor | null => {
@@ -251,15 +274,9 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         ...resolved.actor,
         credential: resolved.credential.kind === 'session'
           ? { kind: 'session' }
-          : {
-            kind: 'api-token',
-            // A first-party mobile access token carries the same read/write
-            // scope as a personal token; identity comes from the grant row.
-            tokenId: resolved.credential.kind === 'api-token'
-              ? resolved.credential.token.id
-              : resolved.credential.grant.id,
-            scope: resolved.credential.scope,
-          },
+          : resolved.credential.kind === 'api-token'
+            ? { kind: 'api-token', tokenId: resolved.credential.token.id, scope: resolved.credential.scope }
+            : { kind: 'mobile', grantId: resolved.credential.grant.id, scope: resolved.credential.scope },
       }
     }
 
@@ -317,7 +334,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       return pending
     }
 
-    ctx.provide(API_POLICY_SERVICE, createApiPolicy({
+    policy = createApiPolicy({
       actorFromCookie,
       actorFromRequest,
       connectionLifetime: (owner, active) => connections.lifetime(owner, active),
@@ -337,7 +354,10 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         windowMs: config.modelAttemptWindowMs ?? DEFAULT_MODEL_ATTEMPT_WINDOW_MS,
         maxBuckets: config.attemptBucketLimit ?? DEFAULT_AUTH_CONFIG.attemptBucketLimit,
       },
-    }))
+    })
+    ctx.provide(API_POLICY_SERVICE, policy)
+    service.startAccountErasureRecovery()
+    yield () => service.stopAccountErasureRecovery()
 
     const seededAdmins = await seedBootstrapAdmins(domain, config.bootstrapAdmins ?? [])
     if (seededAdmins > 0) ctx.logger.info(`auth-host: seeded ${seededAdmins} bootstrap admins`)

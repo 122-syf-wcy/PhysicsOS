@@ -6,7 +6,8 @@ import {
   type LearningDomain, type PersonalAttemptRecord, type SavedSceneRecord, type StoredSceneRecord,
   type LearningErasure,
 } from './domain.ts'
-import { CheckpointStore, MOBILE_CHECKPOINT_BYTES } from './checkpoint-store.ts'
+import { CheckpointStore, MOBILE_CHECKPOINT_BYTES, validateMobileCheckpoint } from './checkpoint-store.ts'
+import { parsePhysicsScene } from '@physicsos/physics-scene'
 
 const DEFAULT_PAGE_SIZE = 50
 const MAX_PAGE_SIZE = 100
@@ -158,6 +159,11 @@ export class LearningService {
       if (!parsed.success || parsed.data.sceneId !== id || parsed.data.scene.id !== id) throw new LearningError(400, 'BAD_REQUEST', '实验场景格式或标识符无效')
       const contentBytes = Buffer.byteLength(JSON.stringify([parsed.data.scene, parsed.data.originScene]))
       if (contentBytes > (mutation === undefined ? LEGACY_SCENE_BYTES : MOBILE_SCENE_BYTES)) throw new LearningError(413, 'PAYLOAD_TOO_LARGE', '实验场景超过允许的完整大小')
+      if (mutation !== undefined && (!parsePhysicsScene(parsed.data.scene).ok
+        || (parsed.data.originScene !== undefined && !parsePhysicsScene(parsed.data.originScene).ok))) {
+        throw new LearningError(400, 'BAD_REQUEST', '场景未通过共享 PhysicsScene 格式校验')
+      }
+      if (mutation?.checkpoint !== undefined) validateMobileCheckpoint(mutation.checkpoint, id, parsed.data.scene, parsed.data.originScene)
       const checkpointBytes = mutation?.checkpoint === undefined ? 0 : Buffer.byteLength(JSON.stringify(mutation.checkpoint))
       if (checkpointBytes > MOBILE_CHECKPOINT_BYTES) throw new LearningError(413, 'CHECKPOINT_TOO_LARGE', '完整检查点最多 8 MiB，历史未截断')
       const current = this.currentScene(actor, id)
@@ -200,9 +206,24 @@ export class LearningService {
       const row = this.currentScene(actor, id)
       if (row === undefined) throw new LearningError(404, 'NOT_FOUND', '场景不存在')
       if ('deletedAt' in row) throw new LearningError(410, 'SCENE_DELETED', '场景已删除', { currentRevision: sceneRevision(row), current: sceneSummary(row) })
-      if (row.checkpointRef !== undefined && this.checkpoints === undefined) throw new LearningError(503, 'CHECKPOINT_UNAVAILABLE', '私有检查点存储未挂载')
-      const checkpoint = row.checkpointRef === undefined ? undefined : await this.checkpoints!.read(actor, row.checkpointRef).catch(() => { throw new LearningError(503, 'CHECKPOINT_UNAVAILABLE', '持久检查点读取失败，未返回不完整成功') })
-      return { ...sceneSummary(row), scene: row.scene, ...(row.originScene === undefined ? {} : { originScene: row.originScene }), ...(checkpoint === undefined ? {} : { checkpoint }) }
+      return this.sceneContent(actor, row)
+    })
+  }
+  private async sceneContent(actor: IdentityActor, row: SavedSceneRecord) {
+    if (row.checkpointRef !== undefined && this.checkpoints === undefined) throw new LearningError(503, 'CHECKPOINT_UNAVAILABLE', '私有检查点存储未挂载')
+    const checkpoint = row.checkpointRef === undefined ? undefined : await this.checkpoints!.read(actor, row.checkpointRef).then(value => {
+      validateMobileCheckpoint(value, row.sceneId, row.scene, row.originScene)
+      return value
+    }).catch(() => { throw new LearningError(503, 'CHECKPOINT_UNAVAILABLE', '持久检查点读取或验证失败，未返回不完整成功') })
+    return { ...sceneSummary(row), scene: row.scene, ...(row.originScene === undefined ? {} : { originScene: row.originScene }), ...(checkpoint === undefined ? {} : { checkpoint }) }
+  }
+  /** Export one owned live scene or tombstone; concurrent changes refuse rather than mixing revisions. */
+  exportScene(actor: IdentityActor, id: string, revision: number): Promise<Record<string, unknown>> {
+    return this.serial(actor, async () => {
+      this.assertActive(actor)
+      const row = this.currentScene(actor, id)
+      if (row === undefined || sceneRevision(row) !== revision) throw new LearningError(409, 'EXPORT_CHANGED', '场景已变化，请重新导出')
+      return 'deletedAt' in row ? sceneSummary(row) : this.sceneContent(actor, row)
     })
   }
   async deleteScene(actor: IdentityActor, id: string): Promise<void> { await this.deleteSceneInternal(actor, id) }

@@ -35,7 +35,7 @@ const identity: PhysicsosIdentity = {
       ? 'SUPER_ADMIN' : undefined
     const role = tokenRole ?? req.headers.cookie?.replace('role=', '') as IdentityRole | undefined
     if (role === undefined || !['STUDENT', 'TEACHER', 'SCHOOL_ADMIN', 'SUPER_ADMIN'].includes(role)) return null
-    return { role, userKey: `school:${role}`, schoolId: 'school', username: role } satisfies IdentityActor
+    return { role, userKey: `school:${role}`, userId: `instance-${role}`, schoolId: 'school', username: role } satisfies IdentityActor
   },
   async record(_actor, action, _target, detail) { audit.push({ action, ...(detail === undefined ? {} : { detail }) }) },
 }

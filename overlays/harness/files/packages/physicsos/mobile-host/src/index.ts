@@ -57,8 +57,10 @@ export const CLASS_SERVICE = 'physicsosMobileClasses'
 export const PAPER_SERVICE = 'physicsosMobilePaper'
 export const NOTICE_SERVICE = 'physicsosMobileNotice'
 export const PUSH_SERVICE = 'physicsosMobilePush'
-/** Composite provider published by `account-erasure-host`. */
-export const ERASURE_SERVICE = 'physicsosAccountErasure'
+/** Remaining identity-sensitive domains are composed by the account owner, never guessed here. */
+export const PERSONAL_EXPORT_SERVICE = 'physicsosMobilePersonalExports'
+export interface MobilePersonalExports { sections(): readonly ExportSection[] }
+export const REQUIRED_PERSONAL_EXPORTS = ['learning.whiteboards', 'learning.usage', 'account.profile', 'account.sessions'] as const
 
 type ServiceLookup = (service: string) => unknown
 
@@ -89,47 +91,46 @@ function depsOf(ctx: Context): RouteDeps {
     notice: () => facade<MobileNoticeFacade>(lookup, NOTICE_SERVICE),
     push: () => facade<MobilePushFacade>(lookup, PUSH_SERVICE),
     exports: () => exportSections(lookup),
-    clientIp: req => {
-      // The auth host owns proxy trust; hand it the socket address and let it decide.
-      const forwarded = req.headers['x-forwarded-for']
-      if (typeof forwarded === 'string' && forwarded.length > 0) return forwarded.split(',')[0]?.trim()
-      return req.socket.remoteAddress ?? undefined
-    },
-    erase: async request => {
-      const provider = facade<{ assertAvailable(): void; eraseAccount(input: unknown): Promise<void> }>(lookup, ERASURE_SERVICE)
-      if (provider === undefined) {
-        // Reporting `deleted` without a provider would strand the account's rows.
-        throw new MobileApiError(503, 'ERASURE_UNAVAILABLE', '账户擦除服务未挂载')
-      }
-      provider.assertAvailable()
-      await provider.eraseAccount(request)
-      return 'deleted'
-    },
   }
 }
 
+/** Stable row identities are explicit: a scene's identity is sceneId, not id. */
+function exportId(row: Record<string, unknown>, name = 'id'): string {
+  const value = row[name]
+  if (typeof value !== 'string' || value.length === 0 || value.length > 1024) throw new MobileApiError(503, 'EXPORT_UNAVAILABLE', '导出对象缺少稳定标识')
+  return value
+}
+
 /**
- * The export manifest. Sections are derived from the facades that are
- * actually mounted, so the app never receives a manifest naming a section the
- * server cannot answer.
+ * A complete manifest or 503. Dependency outages never masquerade as an empty account.
+ * File-backed sections enumerate indexes and hydrate one authorized object at a time.
  * @param lookup - service getter.
- * @returns the ordered sections.
+ * @returns every required personal section, with no credentials.
  */
-function exportSections(lookup: ServiceLookup): ExportSection[] {
-  const sections: ExportSection[] = []
+export function exportSections(lookup: ServiceLookup): ExportSection[] {
   const learning = facade<MobileLearningFacade>(lookup, LEARNING_SERVICE)
-  if (learning !== undefined) {
-    sections.push(
-      { id: 'learning.attempts', rows: actor => learning.listAttempts(actor) },
-      { id: 'learning.scenes', rows: actor => learning.listScenes(actor) },
-    )
-  }
   const classes = facade<MobileClassFacade>(lookup, CLASS_SERVICE)
-  if (classes !== undefined) {
-    sections.push(
-      { id: 'classes.memberships', rows: actor => classes.exportMemberships(actor) },
-      { id: 'classes.submissions', rows: actor => classes.exportSubmissions(actor) },
-    )
+  const notice = facade<MobileNoticeFacade>(lookup, NOTICE_SERVICE)
+  const personal = facade<MobilePersonalExports>(lookup, PERSONAL_EXPORT_SERVICE)
+  if (learning === undefined || classes === undefined || notice === undefined || personal === undefined) {
+    throw new MobileApiError(503, 'EXPORT_UNAVAILABLE', '完整账户导出所需服务未就绪')
+  }
+  const sections: ExportSection[] = [
+    { id: 'learning.attempts', rows: actor => learning.listAttempts(actor), idOf: row => exportId(row) },
+    { id: 'learning.scenes', rows: actor => learning.listScenes(actor), idOf: row => exportId(row, 'sceneId'),
+      load: (actor, row) => learning.exportScene(actor, exportId(row, 'sceneId'), Number(row['revision'])) },
+    { id: 'learning.canvas.metadata', rows: actor => learning.exportCanvasMetadata(actor), idOf: row => exportId(row) },
+    { id: 'learning.canvas.objects', rows: actor => learning.exportCanvasObjectIndex(actor), idOf: row => exportId(row),
+      load: (actor, row) => learning.exportCanvasObject(actor, exportId(row)) },
+    { id: 'classes.memberships', rows: actor => classes.exportMemberships(actor), idOf: row => exportId(row) },
+    { id: 'classes.submissions', rows: actor => classes.exportSubmissions(actor), idOf: row => exportId(row) },
+    { id: 'notices.account', rows: actor => notice.exportAccount(actor), idOf: row => exportId(row) },
+    ...personal.sections(),
+  ]
+  const ids = sections.map(section => section.id)
+  if (new Set(ids).size !== ids.length || ids.some(id => !/^[a-z][a-z0-9.]{0,79}$/.test(id))
+    || REQUIRED_PERSONAL_EXPORTS.some(id => !ids.includes(id))) {
+    throw new MobileApiError(503, 'EXPORT_UNAVAILABLE', '账户导出清单不完整或重复')
   }
   return sections
 }

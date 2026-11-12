@@ -14,6 +14,7 @@ export interface AccountErasureRequest {
 }
 const student = (actor: IdentityActor): void => {
   if (actor.role !== 'STUDENT') throw new LearningError(403, 'STUDENT_REQUIRED', '移动学习入口仅供学生本人使用')
+  if (actor.userId === undefined || actor.userId.length === 0) throw new LearningError(401, 'UNAUTHENTICATED', '缺少有效账户实例')
 }
 const mutationWire = z.object({
   baseRevision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
@@ -37,7 +38,7 @@ const attemptView = (row: ReturnType<LearningService['allAttempts']>[number]) =>
 }
 
 /** Construction accepts already-open services; it never creates a storage domain. */
-export function createMobileLearning(service: LearningService, canvas: CanvasService) {
+export function createMobileLearning(service: LearningService, canvas: Pick<CanvasService, 'exportMetadata' | 'exportObjectIndex' | 'exportObject' | 'eraseAccount'>) {
   return {
     listAttempts(actor: IdentityActor) { student(actor); return service.allAttempts(actor).map(attemptView) },
     async saveAttempt(actor: IdentityActor, id: string, body: unknown) {
@@ -46,6 +47,7 @@ export function createMobileLearning(service: LearningService, canvas: CanvasSer
     },
     listScenes(actor: IdentityActor) { student(actor); return service.allScenes(actor).map(sceneSummary) },
     async getScene(actor: IdentityActor, id: string) { student(actor); return { item: await service.openScene(actor, id) } },
+    async exportScene(actor: IdentityActor, id: string, revision: number) { student(actor); return service.exportScene(actor, id, revision) },
     async saveScene(actor: IdentityActor, id: string, body: unknown, mutationId: string) {
       student(actor)
       const result = await service.saveMobileScene(actor, id, body, mutationOf(body, mutationId))

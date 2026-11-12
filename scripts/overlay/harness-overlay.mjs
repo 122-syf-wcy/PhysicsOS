@@ -67,6 +67,10 @@ const OVERLAY_PATHS = [
   'packages/physicsos/learning-host',
   /* Class, assignment, submission, review, and completion host plugin. */
   'packages/physicsos/class-host',
+  /* First-party Android API and its independent sync/export plugin. Account
+     erasure remains a separate, optionally enabled extension. */
+  'packages/physicsos/mobile-host',
+  'packages/physicsos/account-sync-host',
   /* PostgreSQL storage backend (kv facet) — the production storage medium. */
   'packages/storage/storage-postgres',
   /* Redis/memory rate limits and one-time claims shared across replicas. */
@@ -83,7 +87,7 @@ const OVERLAY_PATHS = [
 const EXCLUDED_NAMES = new Set(['node_modules', 'dist', 'lib', '.turbo'])
 
 function isExcluded(absolutePath) {
-  const segments = absolutePath.split(path.sep)
+  const segments = absolutePath.split(/[\\/]/)
   if (segments.some((segment) => EXCLUDED_NAMES.has(segment))) return true
   return absolutePath.endsWith('.tsbuildinfo')
 }
@@ -119,7 +123,7 @@ async function inventory(root) {
     if ((await stat(absolute)).isDirectory()) {
       for (const child of await readdir(absolute)) await visit(path.join(relativePath, child))
     } else {
-      files[relativePath] = digest(await readFile(absolute))
+      files[relativePath.split(path.sep).join('/')] = digest(await readFile(absolute))
     }
   }
   for (const relativePath of OVERLAY_PATHS) await visit(relativePath)
@@ -268,7 +272,8 @@ async function apply() {
 
   const expected = await inventory(filesRoot)
   const manifest = manifestPath()
-  const previous = existsSync(manifest) ? JSON.parse(await readFile(manifest, 'utf8')) : {}
+  const stored = existsSync(manifest) ? JSON.parse(await readFile(manifest, 'utf8')) : {}
+  const previous = Object.fromEntries(Object.entries(stored).map(([name, hash]) => [name.replaceAll('\\', '/'), hash]))
   const deleted = Object.keys(previous).filter((relativePath) => {
     const safe =
       !relativePath.split(/[\\/]/).includes('..') &&

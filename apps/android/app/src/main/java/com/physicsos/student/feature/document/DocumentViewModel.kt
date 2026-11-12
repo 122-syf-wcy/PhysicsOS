@@ -99,10 +99,14 @@ internal class DocumentViewModel(
                     StrictBridgeJson.utf8Size(value, BridgeLimits.DOCUMENT_BYTES)
                 }
                 if (graph.auth.state.value.experimentAccount() != account) return@launch
-                markdown = value
+                val assets = if (account.userId == null) null else DocumentFigureAssets.forAccount(appContext, graph, account)
+                val prepared = assets?.prepare(value) ?: value
+                withContext(Dispatchers.Default) { StrictBridgeJson.utf8Size(prepared, BridgeLimits.DOCUMENT_BYTES) }
+                if (graph.auth.state.value.experimentAccount() != account) return@launch
+                markdown = prepared
                 val content = LabContent.Document(title, markdown, documentFontScale(systemScale, _state.value.textSize))
                 val current = _renderer.value
-                if (current == null) _renderer.value = LabWebViewController(appContext, content, {}, { code ->
+                if (current == null) _renderer.value = LabWebViewController(appContext, content, {}, documentAssets = assets, onIssue = { code ->
                     if (graph.auth.state.value.experimentAccount() == boundAccount) _state.update { it.copy(problem = code) }
                 }) else current.updateDocument(content)
                 _state.update { it.copy(account = account, title = title, loading = false, problem = null) }

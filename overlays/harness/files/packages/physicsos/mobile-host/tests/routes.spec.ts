@@ -1,196 +1,108 @@
-/**
- * Mobile envelope and routing contract.
- *
- * The facades are stand-ins here on purpose: this file pins the ADAPTER (the
- * `{data}`/`{error}` envelope, identity resolution, idempotency requirement,
- * pagination cursors and the 503-vs-404 distinction), not the business hosts —
- * those are exercised by their own composition specs. Every failure path is
- * asserted to be a non-2xx, so no unknown error can masquerade as success.
- */
-import { describe, expect, it } from 'vitest'
-import { Readable } from 'node:stream'
-import type { IncomingMessage, ServerResponse } from 'node:http'
-import { mobileRoutes, type RouteDeps } from '../src/routes.ts'
-import { MOBILE_PREFIX, type IdentityActor, type MobileAuthFacade, type MobileLearningFacade } from '../src/contract.ts'
+/** Adapter/HTTP checks. Real learning/class/paper/notice facade integration is in data.spec.ts. */
+import { describe, expect, it, vi } from 'vitest'
+import type { MobileLearningFacade } from '../src/contract.ts'
+import type { ExportSection } from '../src/routes.ts'
+import { authFor, call, routeDeps, student } from './fixture.ts'
 
-const actor: IdentityActor = {
-  userKey: 'PHYSICSOS-OPEN:student',
-  userId: 'u_1',
-  schoolId: 'PHYSICSOS-OPEN',
-  username: 'student',
-  role: 'STUDENT',
-}
-
-/** Minimal request double: the adapter only reads method, url and headers. */
-function request(method: string, path: string, options: { body?: unknown; headers?: Record<string, string> } = {}): IncomingMessage {
-  const payload = options.body === undefined ? '' : JSON.stringify(options.body)
-  const stream = Readable.from(payload === '' ? [] : [Buffer.from(payload)]) as unknown as IncomingMessage
-  stream.method = method
-  stream.url = `${MOBILE_PREFIX}${path}`
-  stream.headers = { ...(options.headers ?? {}) }
-  ;(stream as unknown as { socket: { remoteAddress: string } }).socket = { remoteAddress: '127.0.0.1' }
-  return stream
-}
-
-interface Captured {
-  status: number
-  headers: Record<string, string>
-  body: string
-}
-
-function response(): { res: ServerResponse; done: Promise<Captured> } {
-  let status = 0
-  const headers: Record<string, string> = {}
-  const chunks: Buffer[] = []
-  let settle: (value: Captured) => void
-  const done = new Promise<Captured>(resolve => { settle = resolve })
-  const res = {
-    get headersSent() { return status !== 0 },
-    writeHead(next: number, extra: Record<string, string> = {}) {
-      status = next
-      Object.assign(headers, extra)
-      return res
-    },
-    end(chunk?: string | Buffer) {
-      if (chunk !== undefined) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
-      settle({ status, headers, body: Buffer.concat(chunks).toString('utf8') })
-    },
-  } as unknown as ServerResponse
-  return { res, done }
-}
-
-function auth(overrides: Partial<MobileAuthFacade> = {}): MobileAuthFacade {
-  return {
-    resolve: () => ({ actor, user: { ...actor, userId: 'u_1', displayName: 'Student' }, grantId: 'g_1' }),
-    login: async () => ({ status: 'authenticated', user: { ...actor, userId: 'u_1', displayName: 'Student' }, tokens: { accessToken: 'pma_x', expiresAt: 'x', refreshToken: 'pmr_x', refreshExpiresAt: 'y' } }),
-    register: async () => ({ status: 'pending', message: '待审核' }),
-    loginTwoFactor: async () => ({ status: 'authenticated', user: { ...actor, userId: 'u_1', displayName: 'Student' }, tokens: { accessToken: 'pma_x', expiresAt: 'x', refreshToken: 'pmr_x', refreshExpiresAt: 'y' } }),
-    refresh: async () => ({ status: 'authenticated', user: { ...actor, userId: 'u_1', displayName: 'Student' }, tokens: { accessToken: 'pma_x', expiresAt: 'x', refreshToken: 'pmr_x', refreshExpiresAt: 'y' } }),
-    logout: async () => undefined,
-    listDevices: () => ({ items: [] }),
-    revokeDevice: async () => undefined,
-    updateProfile: async () => ({ ...actor, userId: 'u_1', displayName: 'Student' }),
-    changePassword: async () => undefined,
-    deleteAccount: async () => ({ status: 'deletion_pending', requestId: 'del_1' }),
-    completeErasure: async () => undefined,
-    schools: async () => [],
-    ...overrides,
-  }
-}
-
+const unused = async (): Promise<never> => { throw new Error('Unexpected facade operation') }
 const learning: MobileLearningFacade = {
-  listAttempts: () => [
-    { id: 'a1', at: '2026-11-01T00:00:00Z' },
-    { id: 'a2', at: '2026-11-02T00:00:00Z' },
-    { id: 'a3', at: '2026-11-03T00:00:00Z' },
-  ],
-  saveAttempt: async (_actor, id) => ({ item: { id, at: '2026-11-04T00:00:00Z' } }),
-  listScenes: () => [{ sceneId: 's1', revision: 1 }],
-  getScene: async (_actor, id) => ({ item: { sceneId: id } }),
-  saveScene: async (_actor, id) => ({ item: { sceneId: id, revision: 2 } }),
-  deleteScene: async (_actor, id) => ({ item: { sceneId: id, revision: 3 } }),
-  eraseAccount: async () => undefined,
+  listAttempts: () => [{ id: 'a1', at: '2026-11-01T00:00:00Z' }, { id: 'a2', at: '2026-11-02T00:00:00Z' }, { id: 'a3', at: '2026-11-03T00:00:00Z' }],
+  saveAttempt: unused, listScenes: () => [{ sceneId: 's1', revision: 1 }], getScene: unused,
+  saveScene: async (_actor, id) => ({ item: { sceneId: id, revision: 2 }, replayed: false, appliedRevision: 2 }),
+  deleteScene: unused, eraseAccount: unused, exportScene: unused,
+  exportCanvasMetadata: unused, exportCanvasObjectIndex: unused, exportCanvasObject: unused,
 }
+const sections: ExportSection[] = [{ id: 'learning.scenes', rows: actor => learning.listScenes(actor), idOf: row => String(row['sceneId']) }]
+const deps = () => routeDeps({ learning: () => learning, exports: () => sections })
 
-/** The export manifest the real host derives from the mounted facades. */
-function learningSections() {
-  return [
-    { id: 'learning.attempts', rows: (who: IdentityActor) => learning.listAttempts(who) },
-    { id: 'learning.scenes', rows: (who: IdentityActor) => learning.listScenes(who) },
-  ]
-}
-
-function deps(overrides: Partial<RouteDeps> = {}): RouteDeps {
-  return {
-    auth: () => auth(),
-    learning: () => learning,
-    classes: () => undefined,
-    paper: () => undefined,
-    notice: () => undefined,
-    push: () => undefined,
-    exports: overrides.exports ?? (() => learningSections()),
-    clientIp: () => '127.0.0.1',
-    erase: async () => 'deleted',
-    ...overrides,
-  }
-}
-
-async function call(depsValue: RouteDeps, req: IncomingMessage): Promise<Captured> {
-  const { res, done } = response()
-  await mobileRoutes(depsValue)(req, res)
-  return done
-}
-
-describe('mobile envelope', () => {
-  it('wraps a successful list in {data} and paginates with a cursor', async () => {
-    const first = await call(deps(), request('GET', '/learning/attempts?limit=2'))
+describe('mobile HTTP boundary', () => {
+  it('returns newest-first pages with opaque cursors rather than accepting coercible limits', async () => {
+    const first = await call(deps(), 'GET', '/learning/attempts?limit=2')
     expect(first.status).toBe(200)
-    const payload = JSON.parse(first.body) as { data: { items: { id: string }[]; nextCursor?: string } }
-    expect(payload.data.items.map(row => row.id)).toEqual(['a1', 'a2'])
-    expect(payload.data.nextCursor).toBe('a2')
-
-    const second = await call(deps(), request('GET', '/learning/attempts?limit=2&cursor=a2'))
-    expect(JSON.parse(second.body).data.items.map((row: { id: string }) => row.id)).toEqual(['a3'])
-    expect(JSON.parse(second.body).data.nextCursor).toBeUndefined()
+    expect(first.json.data['items']).toEqual([{ id: 'a3', at: '2026-11-03T00:00:00Z' }, { id: 'a2', at: '2026-11-02T00:00:00Z' }])
+    const cursor = String(first.json.data['nextCursor'])
+    expect(cursor).not.toBe('a2')
+    const second = await call(deps(), 'GET', `/learning/attempts?limit=2&cursor=${cursor}`)
+    expect(second.json.data['items']).toEqual([{ id: 'a1', at: '2026-11-01T00:00:00Z' }])
+    expect(second.json.data['nextCursor']).toBeUndefined()
+    for (const limit of ['0', '-1', '1.5', '1e2', 'NaN', 'Infinity', '101', '01', '']) {
+      expect((await call(deps(), 'GET', `/learning/attempts?limit=${limit}`)).status).toBe(400)
+    }
   })
 
-  it('answers 401 with the app sign-in code when no credential resolves', async () => {
-    const denied = await call(deps({ auth: () => auth({ resolve: () => null }) }), request('GET', '/auth/me'))
-    expect(denied.status).toBe(401)
-    expect(JSON.parse(denied.body).error.code).toBe('sign_in_required')
+  it('binds cursors to account instance, route and filters, and rejects duplicate query keys', async () => {
+    const first = await call(deps(), 'GET', '/learning/attempts?limit=1')
+    const cursor = String(first.json.data['nextCursor'])
+    const replacement = routeDeps({ ...deps(), auth: () => authFor({ ...student, userId: 'replacement' }) })
+    expect((await call(replacement, 'GET', `/learning/attempts?cursor=${cursor}`)).json.error.code).toBe('BAD_CURSOR')
+    expect((await call(deps(), 'GET', `/learning/scenes?cursor=${cursor}`)).json.error.code).toBe('BAD_CURSOR')
+    expect((await call(deps(), 'GET', '/learning/attempts?limit=1&limit=2')).status).toBe(400)
+    expect((await call(deps(), 'GET', '/learning/attempts?cursor=broken')).json.error.code).toBe('BAD_CURSOR')
   })
 
-  it('answers 503 — not an empty success — when a dependency is not mounted', async () => {
-    const missing = await call(deps({ learning: () => undefined }), request('GET', '/learning/attempts'))
-    expect(missing.status).toBe(503)
-    expect(JSON.parse(missing.body).error.code).toBe('LEARNING_UNAVAILABLE')
+  it('uses the refresh-compatible 401 code and never promotes admin roles to students', async () => {
+    const signedOut = routeDeps({ auth: () => authFor(student, { resolve: () => null }) })
+    expect((await call(signedOut, 'GET', '/auth/me')).json.error.code).toBe('UNAUTHENTICATED')
+    for (const role of ['TEACHER', 'SCHOOL_ADMIN', 'SUPER_ADMIN'] as const) {
+      const denied = routeDeps({ ...deps(), auth: () => authFor({ ...student, role }) })
+      expect((await call(denied, 'GET', '/learning/attempts')).status).toBe(403)
+      expect((await call(denied, 'GET', '/account/export')).status).toBe(403)
+    }
   })
 
-  it('requires an Idempotency-Key on scene mutations', async () => {
-    const rejected = await call(deps(), request('PUT', '/learning/scenes/s1', { body: { baseRevision: 1 } }))
-    expect(rejected.status).toBe(400)
-    expect(JSON.parse(rejected.body).error.code).toBe('IDEMPOTENCY_KEY_REQUIRED')
+  it('fails unavailable dependencies and preserves business errors', async () => {
+    expect((await call(routeDeps(), 'GET', '/learning/attempts')).status).toBe(503)
+    const failing = routeDeps({ learning: () => ({ ...learning, listScenes: () => { throw Object.assign(new Error('deleted'), { status: 410, code: 'SCENE_DELETED' }) } }) })
+    expect((await call(failing, 'GET', '/learning/scenes')).json.error.code).toBe('SCENE_DELETED')
+    expect((await call(deps(), 'GET', '/does-not-exist')).status).toBe(404)
+  })
 
-    const accepted = await call(deps(), request('PUT', '/learning/scenes/s1', {
-      body: { baseRevision: 1 }, headers: { 'idempotency-key': 'mutation-0001' },
-    }))
+  it('requires the idempotency key before applying a scene mutation', async () => {
+    expect((await call(deps(), 'PUT', '/learning/scenes/s1', { body: { baseRevision: 1 } })).status).toBe(400)
+    const accepted = await call(deps(), 'PUT', '/learning/scenes/s1', { body: { baseRevision: 1 }, headers: { 'idempotency-key': 'mutation-0001' } })
     expect(accepted.status).toBe(200)
-    expect(JSON.parse(accepted.body).data.item.revision).toBe(2)
+    expect(accepted.json.data['appliedRevision']).toBe(2)
   })
 
-  it('maps a business error class to its real status instead of 500 or 200', async () => {
-    const failure = await call(deps({
-      learning: () => ({
-        ...learning,
-        listScenes: () => { throw Object.assign(new Error('场景已删除'), { status: 410, code: 'SCENE_DELETED' }) },
-      }),
-    }), request('GET', '/learning/scenes'))
-    expect(failure.status).toBe(410)
-    expect(JSON.parse(failure.body).error.code).toBe('SCENE_DELETED')
+  it('rejects browser mutations, ambiguous JSON, invalid UTF-8 and media types before writes', async () => {
+    const headers = { 'idempotency-key': 'mutation-0001' }
+    for (const raw of ['[]', 'null', '{"n":1e309}', '{"baseRevision":0,"baseRevision":1}', '{"x":0,"\\u0078":1}', '{"x":' + '['.repeat(65) + '0' + ']'.repeat(65) + '}']) {
+      expect((await call(deps(), 'PUT', '/learning/scenes/s1', { raw, headers })).status).toBe(400)
+    }
+    expect((await call(deps(), 'PUT', '/learning/scenes/s1', { raw: new Uint8Array([123, 34, 255, 34, 58, 48, 125]), headers })).status).toBe(400)
+    expect((await call(deps(), 'PUT', '/learning/scenes/s1', { body: {}, headers: { ...headers, 'content-type': 'text/plain' } })).status).toBe(415)
+    expect((await call(deps(), 'PUT', '/learning/scenes/s1', { body: {}, headers: { ...headers, origin: 'https://untrusted.example' } })).status).toBe(403)
+    expect((await call(deps(), 'PUT', '/learning/scenes/s1', { body: {}, headers: { ...headers, 'content-encoding': 'gzip' } })).status).toBe(415)
   })
 
-  it('answers 404 for an unknown mobile path and never 200', async () => {
-    const unknown = await call(deps(), request('GET', '/does-not-exist'))
-    expect(unknown.status).toBe(404)
-    expect(JSON.parse(unknown.body).error.code).toBe('NOT_FOUND')
+  it('decodes a path segment exactly once and rejects traversal before URL normalization', async () => {
+    const figure = vi.fn(async () => new Uint8Array([1]))
+    const paper = { figure } as unknown as NonNullable<ReturnType<ReturnType<typeof deps>['paper']>>
+    const configured = routeDeps({ classes: () => ({} as NonNullable<ReturnType<ReturnType<typeof deps>['classes']>>), paper: () => paper })
+    const response = await call(configured, 'GET', '/classes/c/assignments/a/target/figures/fig%3Aone')
+    expect(response.status).toBe(200)
+    expect(figure).toHaveBeenCalledWith(student, 'c', 'a', 'fig:one')
+    for (const path of ['/classes/%2e%2e/library', '/learning/scenes/a%2fb', '/learning/scenes/%252e', '/learning/scenes/%ff', '/learning//scenes/a', '/learning/scenes/../a']) {
+      expect((await call(deps(), 'GET', path)).status).toBe(400)
+    }
   })
 
-  it('refuses a non-student account on student routes', async () => {
-    const teacher = await call(deps({
-      auth: () => auth({ resolve: () => ({ actor: { ...actor, role: 'TEACHER' }, user: { ...actor, role: 'TEACHER', userId: 'u_1', displayName: 'T' }, grantId: 'g_1' }) }),
-    }), request('GET', '/learning/attempts'))
-    expect(teacher.status).toBe(403)
-    expect(JSON.parse(teacher.body).error.code).toBe('STUDENT_REQUIRED')
-  })
-
-  it('reports export sections only for facades that are mounted', async () => {
-    const manifest = await call(deps(), request('GET', '/account/export'))
-    expect(manifest.status).toBe(200)
-    const sections = JSON.parse(manifest.body).data.sections as { id: string; path: string }[]
-    expect(sections.map(section => section.id)).toEqual(['learning.attempts', 'learning.scenes'])
-    expect(sections[0]?.path).toBe('account/export?section=learning.attempts')
-
-    const page = await call(deps(), request('GET', '/account/export?section=learning.attempts&limit=2'))
-    expect(JSON.parse(page.body).data).toMatchObject({ section: 'learning.attempts', nextCursor: 'a2' })
+  it('uses auth-owned client address and passes through reset/password/revoke/deletion receipts', async () => {
+    const reset = vi.fn(async () => ({ ok: true as const }))
+    const password = vi.fn(async () => ({ ok: true as const, reauthenticate: true as const }))
+    const revoke = vi.fn(async () => ({ ok: true as const, reauthenticate: true }))
+    const deletion = vi.fn(async () => ({ status: 'deletion_pending' as const, requestId: 'pending-one' }))
+    const auth = authFor(student, { clientAddress: () => 'trusted-socket', requestPasswordReset: reset, submitPasswordReset: reset,
+      changePassword: password, revokeDevice: revoke, deleteAccount: deletion })
+    const configured = routeDeps({ auth: () => auth })
+    for (const path of ['/auth/password-reset/request', '/auth/password-reset/submit']) {
+      expect((await call(configured, 'POST', path, { body: {}, headers: { 'x-forwarded-for': 'forged' } })).status).toBe(200)
+    }
+    expect(reset).toHaveBeenLastCalledWith({}, 'trusted-socket')
+    expect((await call(configured, 'POST', '/auth/password', { body: {} })).json.data).toEqual({ ok: true, reauthenticate: true })
+    expect((await call(configured, 'DELETE', '/auth/devices/d')).json.data).toEqual({ ok: true, reauthenticate: true })
+    const pending = routeDeps({ auth: () => ({ ...auth, resolve: () => null }) })
+    expect((await call(pending, 'DELETE', '/auth/account', { body: {} })).json.data).toEqual({ status: 'deletion_pending', requestId: 'pending-one' })
+    expect(deletion).toHaveBeenCalledTimes(1)
   })
 })

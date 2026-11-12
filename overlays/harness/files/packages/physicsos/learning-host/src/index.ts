@@ -33,6 +33,7 @@ import { openWhiteboardDomain } from './whiteboard-domain.ts'
 import { WhiteboardService } from './whiteboard-service.ts'
 import { createWhiteboardModel } from './whiteboard-model.ts'
 import { whiteboardRoutes, WHITEBOARD_PREFIX } from './whiteboard-routes.ts'
+import { createLearningPersonalData, LEARNING_PERSONAL_DATA_SERVICE } from './personal-data.ts'
 
 export { CanvasService } from './canvas-service.ts'
 export { CanvasBlobStore } from './canvas-blob-store.ts'
@@ -94,6 +95,7 @@ export async function apply(ctx: Context, config: Config = {}): Promise<() => Pr
     })
     yield () => whiteboard.dispose()
     await whiteboard.initialize()
+    ctx.provide(LEARNING_PERSONAL_DATA_SERVICE, createLearningPersonalData(whiteboard, usage, name => ctx.get(name)))
     yield ctx.webServer.register({ kind: 'prefix', path: WHITEBOARD_PREFIX, handler: whiteboardRoutes({ service: whiteboard, identity }) })
     const learningHandler = learningRoutes({ service, identity })
     const canvasHandler = canvasRoutes({ service: canvas, identity })

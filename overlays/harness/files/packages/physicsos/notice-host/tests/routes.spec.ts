@@ -60,6 +60,7 @@ const stubIdentity = (): PhysicsosIdentity => ({
     if (!ROLES.includes(role as IdentityRole)) return null
     return {
       userKey: `${schoolId}:u-${role}`,
+      userId: `instance-${schoolId}-${role}`,
       schoolId: schoolId!,
       username: `u-${role}`,
       role: role as IdentityRole,

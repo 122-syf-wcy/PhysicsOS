@@ -37,6 +37,8 @@ export const IDENTITY_SERVICE = 'physicsosIdentity'
 export interface IdentityActor {
   /** `schoolId:username` — the key the audit ledger files actions under. */
   readonly userKey: string
+  /** Opaque account incarnation; optional only for source compatibility with older consumers. */
+  readonly userId?: string
   readonly schoolId: string
   readonly username: string
   readonly role: 'STUDENT' | 'TEACHER' | 'SCHOOL_ADMIN' | 'SUPER_ADMIN'
@@ -75,7 +77,7 @@ export const createIdentityService = (service: AuthService): PhysicsosIdentity =
   actorOf: (req) => {
     const resolved = service.resolveCredential(req.headers.cookie, req.headers.authorization)
     if (resolved === null) return null
-    return resolved.actor
+    return { ...resolved.actor, userId: resolved.user.id }
   },
   sessionOwnerKey: sessionId => service.sessionOwnerKey(sessionId),
   usageSessionOwner: sessionId => service.usageSessionOwner(sessionId),

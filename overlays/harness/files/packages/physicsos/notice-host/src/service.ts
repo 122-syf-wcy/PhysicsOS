@@ -62,6 +62,16 @@ export const DEFAULT_PLATFORM_NOTICE: PlatformNoticeRecord = {
 }
 
 const id = (prefix: string): string => `${prefix}_${crypto.randomBytes(9).toString('base64url')}`
+export interface NoticeErasureRequest {
+  readonly requestId: string
+  readonly userId: string
+  readonly userKey: string
+  readonly schoolId: string
+  readonly username: string
+}
+type AccountScope = Pick<IdentityActor, 'schoolId' | 'userKey'>
+const accountKey = (actor: AccountScope): string => JSON.stringify([actor.schoolId, actor.userKey])
+const instanceKey = (actor: AccountScope & { userId: string }): string => JSON.stringify([actor.schoolId, actor.userKey, actor.userId])
 
 /**
  * The notice rules over the `physicsos_notice` domain: the feedback queue
@@ -81,6 +91,25 @@ export class NoticeService {
   private get announcements() { return this.domain.table('announcements') }
   private get platformNotices() { return this.domain.table('platform_notice') }
   private get platformNoticeAcks() { return this.domain.table('platform_notice_acks') }
+  private readonly accounts = new Map<string, Promise<void>>()
+  private closing = false
+
+  private serial<T>(scope: AccountScope, action: () => Promise<T>): Promise<T> {
+    if (this.closing) return Promise.reject(new NoticeError(503, 'NOTICE_UNAVAILABLE', '通知服务正在关闭'))
+    const key = accountKey(scope)
+    const result = (this.accounts.get(key) ?? Promise.resolve()).then(action)
+    const settled = result.then(() => {}, () => {})
+    this.accounts.set(key, settled)
+    void settled.then(() => { if (this.accounts.get(key) === settled) this.accounts.delete(key) })
+    return result
+  }
+  private assertActive(actor: IdentityActor): void {
+    if (typeof actor.userId !== 'string' || actor.userId.length === 0) throw new NoticeError(401, 'UNAUTHENTICATED', '缺少有效账户实例')
+    if (this.domain.table('erased_accounts').get(instanceKey(actor)) !== undefined) throw new NoticeError(410, 'ACCOUNT_ERASED', '账户已删除或正在删除')
+  }
+  private account<T>(actor: IdentityActor, action: () => Promise<T>): Promise<T> {
+    return this.serial(actor, async () => { this.assertActive(actor); return action() })
+  }
 
   /** The persisted notice when present, otherwise the immutable default copy. */
   private currentPlatformNotice(): PlatformNoticeRecord {
@@ -95,10 +124,11 @@ export class NoticeService {
   getPlatformNotice(
     actor: IdentityActor,
   ): { notice: PlatformNoticeRecord; acknowledgedVersion: number | null } {
+    this.assertActive(actor)
     const acknowledgement = this.platformNoticeAcks.get(actor.userKey)
     return {
       notice: this.currentPlatformNotice(),
-      acknowledgedVersion: acknowledgement?.version ?? null,
+      acknowledgedVersion: acknowledgement?.userId === actor.userId && acknowledgement.schoolId === actor.schoolId ? acknowledgement.version : null,
     }
   }
 
@@ -153,17 +183,16 @@ export class NoticeService {
     if (!input.success) {
       throw new NoticeError(400, 'BAD_REQUEST', '声明版本无效')
     }
-    const current = this.currentPlatformNotice()
-    if (input.data.version !== current.version) {
-      throw new NoticeError(409, 'VERSION_CONFLICT', '声明已更新，请刷新后重试')
-    }
-    const acknowledgement: PlatformNoticeAckRecord = {
-      userKey: actor.userKey,
-      version: input.data.version,
-      acknowledgedAt: new Date().toISOString(),
-    }
-    await this.platformNoticeAcks.put(actor.userKey, acknowledgement)
-    return { acknowledgedVersion: acknowledgement.version }
+    return this.account(actor, async () => {
+      const current = this.currentPlatformNotice()
+      if (input.data.version !== current.version) throw new NoticeError(409, 'VERSION_CONFLICT', '声明已更新，请刷新后重试')
+      const acknowledgement: PlatformNoticeAckRecord = {
+        userKey: actor.userKey, userId: actor.userId, schoolId: actor.schoolId,
+        version: input.data.version, acknowledgedAt: new Date().toISOString(),
+      }
+      await this.platformNoticeAcks.put(actor.userKey, acknowledgement)
+      return { acknowledgedVersion: acknowledgement.version }
+    })
   }
 
   /**
@@ -176,19 +205,16 @@ export class NoticeService {
   async submitFeedback(actor: IdentityActor, body: unknown): Promise<FeedbackRecord> {
     const input = feedbackWire.safeParse(body)
     if (!input.success) throw new NoticeError(400, 'BAD_REQUEST', '请填写反馈内容')
-    const record: FeedbackRecord = {
-      id: id('fb'),
-      schoolId: actor.schoolId,
-      authorKey: actor.userKey,
-      kind: input.data.kind,
-      body: input.data.body,
-      status: 'open',
-      createdAt: new Date().toISOString(),
-      ...(input.data.contact === undefined ? {} : { contact: input.data.contact }),
-      ...(input.data.context === undefined ? {} : { context: input.data.context }),
-    }
-    await this.feedback.put(record.id, record)
-    return record
+    return this.account(actor, async () => {
+      const record: FeedbackRecord = {
+        id: id('fb'), schoolId: actor.schoolId, authorKey: actor.userKey, userId: actor.userId,
+        kind: input.data.kind, body: input.data.body, status: 'open', createdAt: new Date().toISOString(),
+        ...(input.data.contact === undefined ? {} : { contact: input.data.contact }),
+        ...(input.data.context === undefined ? {} : { context: input.data.context }),
+      }
+      await this.feedback.put(record.id, record)
+      return record
+    })
   }
 
   /**
@@ -204,11 +230,15 @@ export class NoticeService {
     actor: IdentityActor,
     filter: { schoolId?: string; status?: string } = {},
   ): FeedbackRecord[] {
+    this.assertActive(actor)
     const schoolId = actor.role === 'SUPER_ADMIN' ? filter.schoolId : actor.schoolId
-    return [...this.feedback.entries()]
-      .map(([, row]) => row)
-      /* A student's view is their own submissions, never the tenant queue. */
-      .filter(row => atLeast(actor.role, 'TEACHER') || row.authorKey === actor.userKey)
+    const rows = [...this.feedback.entries()].map(([, row]) => row)
+    if (actor.role === 'STUDENT' && rows.some(row => row.authorKey === actor.userKey && row.schoolId === actor.schoolId && row.userId === undefined)) {
+      throw new NoticeError(503, 'NOTICE_MIGRATION_REQUIRED', '旧反馈尚未完成账户实例归属迁移')
+    }
+    return rows
+      /* A student's view is their own account incarnation, never the tenant queue. */
+      .filter(row => atLeast(actor.role, 'TEACHER') || (row.authorKey === actor.userKey && row.userId === actor.userId))
       .filter(row => schoolId === undefined || row.schoolId === schoolId)
       .filter(row => filter.status === undefined || row.status === filter.status)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
@@ -234,15 +264,18 @@ export class NoticeService {
     if (actor.role !== 'SUPER_ADMIN' && existing.schoolId !== actor.schoolId) {
       throw new NoticeError(403, 'FORBIDDEN', '无权回复其他学校的反馈')
     }
-    const updated: FeedbackRecord = {
-      ...existing,
-      reply: input.data.reply,
-      repliedBy: actor.userKey,
-      repliedAt: new Date().toISOString(),
-      status: input.data.status ?? 'answered',
-    }
-    await this.feedback.put(updated.id, updated)
-    return updated
+    return this.serial({ schoolId: existing.schoolId, userKey: existing.authorKey }, async () => {
+      this.assertActive(actor)
+      const current = this.feedback.get(feedbackId)
+      if (current === undefined) throw new NoticeError(404, 'NOT_FOUND', '反馈不存在')
+      const erased = [...this.domain.table('erased_accounts').entries()].some(([, row]) =>
+        row.schoolId === current.schoolId && row.userKey === current.authorKey && (current.userId === undefined || current.userId === row.userId))
+      if (erased) throw new NoticeError(410, 'ACCOUNT_ERASED', '反馈所属账户已删除或正在删除')
+      const updated: FeedbackRecord = { ...current, reply: input.data.reply, repliedBy: actor.userKey,
+        repliedAt: new Date().toISOString(), status: input.data.status ?? 'answered' }
+      await this.feedback.put(updated.id, updated)
+      return updated
+    })
   }
 
   /**
@@ -287,6 +320,7 @@ export class NoticeService {
    * @returns the visible notices.
    */
   listAnnouncements(actor: IdentityActor): AnnouncementRecord[] {
+    this.assertActive(actor)
     return [...this.announcements.entries()]
       .map(([, row]) => row)
       .filter(row => row.retiredAt === undefined)
@@ -313,6 +347,78 @@ export class NoticeService {
     const updated: AnnouncementRecord = { ...existing, retiredAt: new Date().toISOString() }
     await this.announcements.put(updated.id, updated)
     return updated
+  }
+
+  /** No provider/SDK is configured: a database row is not an operational push registration. */
+  registerPush(actor: IdentityActor, _body: unknown): Promise<{ id: string; platform: 'android'; registeredAt: string }> {
+    return this.account(actor, async () => { throw new NoticeError(503, 'PUSH_UNAVAILABLE', '尚未配置并验证真实推送服务') })
+  }
+
+  /** Revoke only this exact account incarnation's legacy terminal. */
+  revokePush(actor: IdentityActor, id: string): Promise<void> {
+    return this.account(actor, async () => {
+      const table = this.domain.table('push_terms')
+      const row = table.get(id)
+      if (row === undefined || row.userKey !== actor.userKey || row.schoolId !== actor.schoolId || row.userId !== actor.userId) {
+        throw new NoticeError(404, 'NOT_FOUND', '推送终端不存在')
+      }
+      if (row.revokedAt === undefined) await table.put(id, { ...row, revokedAt: new Date().toISOString() })
+    })
+  }
+
+  /** All private notice data, not merely a list of public announcements; tokens/digests are excluded. */
+  exportAccount(actor: IdentityActor): Promise<Record<string, unknown>[]> {
+    return this.account(actor, async () => {
+      const feedback = [...this.feedback.entries()].filter(([, row]) => row.authorKey === actor.userKey && row.schoolId === actor.schoolId)
+      const ack = this.platformNoticeAcks.get(actor.userKey)
+      const terminals = [...this.domain.table('push_terms').entries()].filter(([, row]) => row.userKey === actor.userKey && row.schoolId === actor.schoolId)
+      if (feedback.some(([, row]) => row.userId === undefined) || terminals.some(([, row]) => row.userId === undefined)
+        || (ack !== undefined && (ack.userId === undefined || ack.schoolId === undefined))) {
+        throw new NoticeError(503, 'NOTICE_MIGRATION_REQUIRED', '旧通知数据缺少账户实例归属，不能返回不完整导出')
+      }
+      const rows: Record<string, unknown>[] = feedback.filter(([, row]) => row.userId === actor.userId)
+        .map(([key, value]) => ({ id: `feedback:${key}`, table: 'feedback', value }))
+      if (ack?.userId === actor.userId && ack.schoolId === actor.schoolId) rows.push({ id: `ack:${actor.userId}`, table: 'platform_notice_acks', value: ack })
+      for (const [key, row] of terminals) {
+        if (row.userId !== actor.userId) continue
+        const { tokenHash: _hash, ...value } = row
+        rows.push({ id: `push:${key}`, table: 'push_terms', value })
+      }
+      return rows
+    })
+  }
+
+  /** Server-only, durable incarnation fence plus the same write queue used by feedback, acknowledgement and push. */
+  eraseAccount(request: NoticeErasureRequest): Promise<void> {
+    if (!request.requestId || !request.userId || !request.userKey || !request.schoolId || !request.username) {
+      throw new NoticeError(400, 'BAD_REQUEST', '账户擦除必须绑定真实账户实例')
+    }
+    return this.serial(request, async () => {
+      const fences = this.domain.table('erased_accounts')
+      const key = instanceKey(request)
+      const prior = fences.get(key)
+      if (prior?.complete) return
+      if (prior !== undefined && prior.requestId !== request.requestId) throw new NoticeError(409, 'ERASURE_CONFLICT', '该账户的另一擦除请求尚未完成')
+      const fence = { requestId: request.requestId, userId: request.userId, userKey: request.userKey, schoolId: request.schoolId, complete: false }
+      await fences.put(key, fence)
+      for (const [id, row] of this.feedback.entries()) {
+        if (row.schoolId === request.schoolId && row.authorKey === request.userKey && (row.userId === undefined || row.userId === request.userId)) await this.feedback.delete(id)
+      }
+      const ack = this.platformNoticeAcks.get(request.userKey)
+      if (ack !== undefined && (ack.schoolId === undefined || ack.schoolId === request.schoolId) && (ack.userId === undefined || ack.userId === request.userId)) {
+        await this.platformNoticeAcks.delete(request.userKey)
+      }
+      const push = this.domain.table('push_terms')
+      for (const [id, row] of push.entries()) {
+        if (row.schoolId === request.schoolId && row.userKey === request.userKey && (row.userId === undefined || row.userId === request.userId)) await push.delete(id)
+      }
+      await fences.put(key, { ...fence, complete: true })
+    })
+  }
+
+  async dispose(): Promise<void> {
+    this.closing = true
+    await Promise.all([this.platformNoticeTail, ...this.accounts.values()])
   }
 
   /**

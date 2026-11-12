@@ -106,6 +106,7 @@ describe('identity service', () => {
     const token = await logIn()
     const actor = identity.actorOf(requestWith(`physicsos_session=${token}`))
     expect(actor).toEqual({
+      userId: teacher.id,
       userKey: `${school.id}:${teacher.username}`,
       schoolId: school.id,
       username: teacher.username,
@@ -124,7 +125,7 @@ describe('identity service', () => {
       name: 'identity-seam',
       scope: 'read',
     })
-    expect(identity.actorOf(requestWith(undefined, `Bearer ${created.secret}`))).toEqual(actor)
+    expect(identity.actorOf(requestWith(undefined, `Bearer ${created.secret}`))).toEqual({ ...actor, userId: teacher.id })
 
     await service.revokeApiToken(actor, created.token.id)
     expect(identity.actorOf(requestWith(undefined, `Bearer ${created.secret}`))).toBeNull()

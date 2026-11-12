@@ -58,14 +58,15 @@ internal fun testCheckpoint(revision: Long = 1, order: Long = 100): LabCheckpoin
         put("history", buildJsonObject {
             put("past", kotlinx.serialization.json.JsonArray(listOf(buildJsonObject {
                 put("id", "edit-1"); put("label", "Edit"); put("before", before); put("after", scene)
-                put("beforeDraft", buildJsonObject { put("note", "retained-before") })
-                put("afterDraft", buildJsonObject { put("note", "retained-after") })
+                put("beforeDraft", StrictBridgeJson.parse("""{"components":[],"title":"Before","description":"retained-before","nextNet":1}"""))
+                put("afterDraft", StrictBridgeJson.parse("""{"components":[],"title":"After","description":"retained-after","nextNet":1}"""))
             })))
             put("future", kotlinx.serialization.json.JsonArray(emptyList()))
         })
         put("editing", StrictBridgeJson.parse("""{"instanceKey":"fixture-instance","instanceEditRevision":1,
-          "source":{"kind":"blank"},"buildMode":"construct","selectedIds":[],"observables":{},
-          "viewport":{"x":12,"y":-4,"zoom":1.5},"activePanel":"data","draft":{"note":"retained-draft"}}"""))
+          "source":{"kind":"import"},"buildMode":"construct","selectedIds":[],"observables":{},
+          "viewport":{"x":12,"y":-4,"zoom":1.5},"activePanel":"data",
+          "draft":{"components":[],"title":"Draft","description":"retained-draft","nextNet":1}}"""))
     }).also { it.receivedOrder = order }
 }
 
@@ -149,5 +150,7 @@ internal fun testOperation(owner: String, sceneId: String, key: String, state: O
     attempts = 0, createdAt = 100, updatedAt = 100, nextAttemptAt = 0, errorStatus = null, errorCode = null,
     errorMessage = null, errorDetails = null, result = if (state == OutboxState.ACKNOWLEDGED) buildJsonObject {
         put("item", buildJsonObject { put("sceneId", sceneId); put("revision", revision) })
+        put("appliedRevision", revision)
+        put("replayed", false)
     } else null,
 )
