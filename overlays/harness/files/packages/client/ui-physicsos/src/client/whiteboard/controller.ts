@@ -145,6 +145,7 @@ export function createWhiteboardController(options: WhiteboardControllerOptions)
         acceptJob(job)
       }
       publish({ loading: false }); persistQuietly(); laterPoll()
+      if (state.dirty || pendingSave) laterSave()
     } catch (error) { if (valid(token)) { publish({ loading: false }); failState(error) }; throw error }
   }
   const controller: WhiteboardController = {

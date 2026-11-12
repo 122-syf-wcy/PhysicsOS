@@ -178,7 +178,7 @@ export class ClassService {
       studentKey: submission.studentKey,
       submittedAt: submission.submittedAt,
       dueAt: assignment.dueAt,
-      late: submission.submittedAt > assignment.dueAt,
+      late: Date.parse(submission.submittedAt) > Date.parse(assignment.dueAt),
       status: submission.review?.status ?? 'submitted',
       ...(submission.review === undefined ? {} : { review: submission.review }),
     }
@@ -299,7 +299,7 @@ export class ClassService {
     return [...this.assignments.entries()]
       .map(([, row]) => row)
       .filter(row => row.classId === classId && row.schoolId === classroom.schoolId)
-      .sort((a, b) => a.dueAt.localeCompare(b.dueAt) || a.createdAt.localeCompare(b.createdAt))
+      .sort((a, b) => Date.parse(a.dueAt) - Date.parse(b.dueAt) || Date.parse(a.createdAt) - Date.parse(b.createdAt))
       .slice(0, limit)
   }
 

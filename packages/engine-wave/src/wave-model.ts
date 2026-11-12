@@ -204,6 +204,12 @@ export const resolveWaveModel = (scene: PhysicsScene): ResolvedWaveModel => {
     if (!Number.isFinite(observerSpeed) || observerSpeed < 0) {
       throw modelError('WAVE_DOPPLER_OBSERVER_SPEED', 'Observer speed must be finite and >= 0.')
     }
+    if (bench.observerDirection === 'receding' && observerSpeed >= waveSpeed) {
+      throw modelError(
+        'WAVE_DOPPLER_OBSERVER_UNREACHABLE',
+        'A receding observer must move slower than the wave for emitted fronts to reach it.',
+      )
+    }
     const signedSourceSpeed = bench.sourceDirection === 'approaching' ? sourceSpeed : -sourceSpeed
     const signedObserverSpeed =
       bench.observerDirection === 'approaching'

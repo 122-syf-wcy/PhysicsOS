@@ -253,4 +253,49 @@ describe('Doppler model', () => {
     expect(support.supported).toBe(false)
     if (!support.supported) expect(support.reason).toBe('unsupported_model')
   })
+
+  it.each([340, 374])('rejects a receding observer at %s m/s when emitted waves cannot reach it', (observerSpeed) => {
+    const scene = createDopplerScene({
+      sourceFrequency: 500,
+      waveSpeed: 340,
+      sourceSpeed: 0,
+      observerSpeed,
+      observerDirection: 'receding',
+    })
+    const support = new WaveEngine().canHandle(scene)
+    expect(support.supported).toBe(false)
+    if (!support.supported) expect(support.reason).toBe('unsupported_model')
+    // Direct solver callers must not receive a verified zero/negative frequency.
+    expect(() => simulate(scene)).toThrow()
+  })
+
+  it('preserves the positive frequency immediately below the receding speed limit', () => {
+    const scene = createDopplerScene({
+      sourceFrequency: 500,
+      waveSpeed: 340,
+      sourceSpeed: 0,
+      observerSpeed: 339.999,
+      observerDirection: 'receding',
+    })
+    const result = simulate(scene)
+    const observed = derivedScalar(result.derivedQuantities, 'observed_frequency').value
+    expect(new WaveEngine().canHandle(scene).supported).toBe(true)
+    expect(result.verification.status).toBe('passed')
+    expect(observed).toBeGreaterThan(0)
+    expect(observed).toBeCloseTo(0.0014705882352941176, 12)
+  })
+
+  it('allows an approaching observer faster than the wave because it still meets incoming fronts', () => {
+    const scene = createDopplerScene({
+      sourceFrequency: 500,
+      waveSpeed: 340,
+      sourceSpeed: 0,
+      observerSpeed: 374,
+      observerDirection: 'approaching',
+    })
+    const result = simulate(scene)
+    expect(new WaveEngine().canHandle(scene).supported).toBe(true)
+    expect(result.verification.status).toBe('passed')
+    expect(derivedScalar(result.derivedQuantities, 'observed_frequency').value).toBeCloseTo(1050, 12)
+  })
 })

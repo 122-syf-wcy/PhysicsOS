@@ -249,6 +249,51 @@ describe('learning host routes', () => {
     expect(await restored.json()).toMatchObject({ items: [{ originScene: scene('origin'), buildMode: true }] })
   })
 
+  it.each(['attempts', 'scenes'] as const)(
+    'pages through every %s record exactly once when mixed-case IDs share a timestamp',
+    async resource => {
+      const ids = ['0', '9', 'A', 'Z', 'a', 'z', 'a-1', 'a_1']
+      const at = '2026-09-26T08:00:00.000Z'
+      for (const id of ids) {
+        const response = await call(
+          'PUT',
+          `/physicsos/learning/${resource}/${id}`,
+          'student-a',
+          resource === 'attempts' ? attempt(id, at) : sceneEntry(id, at),
+        )
+        expect(response.status).toBe(200)
+      }
+
+      const seen: string[] = []
+      let cursor: string | undefined
+      // Bound the traversal so a repeated cursor fails instead of hanging the suite.
+      for (let page = 0; page <= ids.length; page++) {
+        const query = cursor === undefined ? '' : `&cursor=${encodeURIComponent(cursor)}`
+        const response = await call(
+          'GET',
+          `/physicsos/learning/${resource}?limit=1${query}`,
+          'student-a',
+        )
+        expect(response.status).toBe(200)
+        const body = await response.json() as {
+          items: { id?: string; sceneId?: string }[]
+          nextCursor?: string
+        }
+        for (const item of body.items) {
+          const id = resource === 'attempts' ? item.id : item.sceneId
+          expect(id).toBeTypeOf('string')
+          seen.push(id!)
+        }
+        cursor = body.nextCursor
+        if (cursor === undefined) break
+      }
+
+      expect(cursor).toBeUndefined()
+      expect(seen).toHaveLength(ids.length)
+      expect([...seen].sort()).toEqual([...ids].sort())
+    },
+  )
+
   it('serves saved scenes across devices and removes them idempotently', async () => {
     const created = await call(
       'PUT',

@@ -72,6 +72,10 @@ const pageSize = (value: string | undefined): number => {
   return parsed
 }
 
+// Sorting and cursor comparisons must use the same locale-independent order.
+const compareText = (left: string, right: string): number =>
+  left === right ? 0 : left < right ? -1 : 1
+
 const pageOf = <T>(
   rows: readonly T[],
   query: ListQuery,
@@ -81,14 +85,15 @@ const pageOf = <T>(
   const limit = pageSize(query.limit)
   const cursor = query.cursor === undefined ? undefined : decodeCursor(query.cursor)
   const ordered = [...rows].sort(
-    (a, b) => primaryOf(b).localeCompare(primaryOf(a)) || keyOf(b).localeCompare(keyOf(a)),
+    (a, b) => compareText(primaryOf(b), primaryOf(a)) || compareText(keyOf(b), keyOf(a)),
   )
   let remaining = ordered
   if (cursor !== undefined) {
     remaining = ordered.filter((row) => {
       const primary = primaryOf(row)
       const key = keyOf(row)
-      return primary < cursor.primary || (primary === cursor.primary && key < cursor.key)
+      return compareText(primary, cursor.primary) < 0
+        || (primary === cursor.primary && compareText(key, cursor.key) < 0)
     })
   }
   const items = remaining.slice(0, limit)
