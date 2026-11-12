@@ -1,3 +1,4 @@
+import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import { canonicalBytes, canonicalStringify } from '@physicsos/physics-workbench/json'
 
 /** Hash the canonical persisted representation, not a formatted view. */
@@ -72,5 +73,5 @@ export function createCanvasDigest(hash: (value: unknown) => Promise<string> = p
 
 /** Independent document, node, and mutation identities never reuse scene IDs. */
 export function canvasId(prefix: string): string {
-  return `${prefix}-${globalThis.crypto.randomUUID()}`
+  return `${prefix}-${randomUUID()}`
 }

@@ -10,6 +10,7 @@
  * a corrupt payload degrades to an empty record.
  */
 
+import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import { createSnapshotStore, type SnapshotStore } from './runtime-compat.ts'
 import type { MistakeType } from '@physicsos/question-core'
 import { LearningApiError, type LearningApi } from './learning-api.ts'
@@ -206,7 +207,7 @@ export function createLearningRecordController(
     record: (input) => {
       const attempt: StudentAttempt = {
         ...input,
-        id: `attempt-${Date.now().toString(36)}-${(attemptSerial++).toString(36)}-${globalThis.crypto.randomUUID()}`,
+        id: `attempt-${Date.now().toString(36)}-${(attemptSerial++).toString(36)}-${randomUUID()}`,
         at: new Date().toISOString(),
       }
       const attempts = [attempt, ...store.getSnapshot().attempts].slice(0, ATTEMPT_LIMIT)

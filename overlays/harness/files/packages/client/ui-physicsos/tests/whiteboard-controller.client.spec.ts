@@ -33,10 +33,32 @@ function fixture(overrides: Partial<WhiteboardApi> = {}, scheduling: Pick<Whiteb
     schedule: () => undefined, cancelSchedule: () => undefined,
     ...scheduling,
   })
-  return { controller, drafts, setNamespace: (owner: string | undefined) => { namespace = owner; controller.resetNamespace() }, remote: () => remote }
+  return { api, controller, drafts, setNamespace: (owner: string | undefined) => { namespace = owner; controller.resetNamespace() }, remote: () => remote }
 }
 
 describe('owned durable whiteboard editing', () => {
+  it('creates and saves with default operation IDs when only crypto.getRandomValues is available', async () => {
+    const getRandomValues = globalThis.crypto.getRandomValues.bind(globalThis.crypto)
+    vi.stubGlobal('crypto', { getRandomValues })
+    const operationIds: string[] = []
+    const f = fixture({
+      create: async input => { operationIds.push(input.operationId); return { ...record, document: { ...document, title: input.title } } },
+      save: async input => { operationIds.push(input.operationId); return { ...record, document: input.document, revision: 2 } },
+    })
+    const controller = createWhiteboardController({ api: f.api, getNamespace: () => 'account-a', schedule: () => undefined, cancelSchedule: () => undefined })
+    try {
+      await expect(controller.create('HTTP lesson')).resolves.toBe('board-1')
+      controller.rename('Saved HTTP lesson')
+      await controller.save()
+      expect(controller.getSnapshot()).toMatchObject({ dirty: false, status: 'saved', record: { document: { title: 'Saved HTTP lesson' } } })
+      expect(operationIds).toHaveLength(2)
+      expect(new Set(operationIds).size).toBe(2)
+      for (const id of operationIds) expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+    } finally {
+      controller.dispose()
+      vi.unstubAllGlobals()
+    }
+  })
   it('opens a saved full scene and preserves edits made while an earlier save is in flight', async () => {
     const first = deferred<WhiteboardRecord>()
     const requestSent = deferred<void>()

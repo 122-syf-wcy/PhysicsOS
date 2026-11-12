@@ -1,3 +1,4 @@
+import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import { forkExperimentalScene, parsePhysicsScene, type ExperimentObservation, type PhysicsScene } from '@physicsos/physics-scene'
 import { asSceneId, type IsoDateTime } from '@physicsos/shared'
 import type { BuildMode, CapturedResult, InstanceSource } from '@physicsos/physics-workbench/types'
@@ -184,7 +185,7 @@ export interface WorkbenchInstanceRuntime extends WorkbenchInstanceActions {
 }
 
 const uniqueId = (prefix: string): string =>
-  `${prefix}-${globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`}`
+  `${prefix}-${randomUUID()}`
 
 const freeze = <T>(value: T): T => {
   if (value !== null && typeof value === 'object' && !Object.isFrozen(value)) {

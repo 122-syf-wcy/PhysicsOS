@@ -1,4 +1,5 @@
 /** Versioned official website configuration and a private, platform-wide inbox. */
+import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import { useEffect, useState, type ReactNode } from 'react'
 import {
   AdminCard, AdminCardActions, AdminCardHead, AdminCardMeta,
@@ -169,7 +170,7 @@ export function AdminWebsiteTab({ api, t }: { api: WebsiteApi; t: Translate }): 
   const addTestimonial = (source?: WebsiteFeedback): void => {
     if (draft === undefined || draft.testimonials.length >= LIMIT || busy || loading) return
     const entry: WebsiteTestimonial = {
-      id: crypto.randomUUID(), name: '', role: '', quote: source?.body.slice(0, 280) ?? '', topic: '', color: COLOR,
+      id: randomUUID(), name: '', role: '', quote: source?.body.slice(0, 280) ?? '', topic: '', color: COLOR,
       order: Math.max(-1, ...draft.testimonials.map(item => item.order)) + 1, enabled: false,
       ...(source === undefined ? {} : { sourceFeedbackId: source.id }),
     }
@@ -216,7 +217,7 @@ export function AdminWebsiteTab({ api, t }: { api: WebsiteApi; t: Translate }): 
         <button className={shared.ghost} type="button" disabled={busy || loading || draft[section].length >= LIMIT} onClick={() => {
           if (section === 'testimonials') addTestimonial()
           else change(value => ({ ...value, contributors: [...value.contributors, {
-            id: crypto.randomUUID(), name: '', role: '', project: '', description: '', url: '', avatar: '', color: COLOR,
+            id: randomUUID(), name: '', role: '', project: '', description: '', url: '', avatar: '', color: COLOR,
             order: Math.max(-1, ...value.contributors.map(item => item.order)) + 1, enabled: false,
           }] }))
         }}>{t(section === 'testimonials' ? 'admin.website.addTestimonial' : 'admin.website.addContributor')}</button>

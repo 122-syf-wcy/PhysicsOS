@@ -28,6 +28,9 @@
 - [x] Reproduce and fix diffraction playback rewinding after a visibility toggle; retain the lesson window before capturing its frame.
 - [x] Align stale authentication, clock and product regression fixtures with existing production contracts, keeping numerical and ownership assertions.
 
+- [x] Reproduce browser UUID unavailability in the actual candidate and use the existing secure ID helper across client operations, preserving ID prefixes.
+- [x] Fix read-only operations Docker configuration and replace runtime dependency token scanning with the existing TypeScript parser; retain all validation guards.
+
 ## Verification and publication
 
 - [x] Review each fix and run its regression tests against real owning services/controllers/engines.

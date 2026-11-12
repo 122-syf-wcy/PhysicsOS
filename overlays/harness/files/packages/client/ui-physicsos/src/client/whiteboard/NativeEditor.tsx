@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode, type PointerEvent as ReactPointerEvent } from 'react'
+import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import { applyScenePatch, diffScene, type JsonObject, type WhiteboardHistory, type WhiteboardScene } from '@physicsos/physics-whiteboard'
 import type { WhiteboardKey } from './locales.ts'
 import { inkElementPoints, readInkSamples, type InkSample } from './ink.ts'
@@ -61,14 +62,14 @@ export function NativeEditor({ scene, history, onUndo, onRedo, onChange, images,
     const element = hitElement(current.current.elements, first.x, first.y, 7 / view.zoom)
     if (activeTool === 'text') {
       if (element?.type === 'text') editText(element)
-      else setText({ id: crypto.randomUUID(), x: first.x, y: first.y, value: '', before: current.current })
+      else setText({ id: randomUUID(), x: first.x, y: first.y, value: '', before: current.current })
       return
     }
     let selected = selection
     if (activeTool === 'select') { selected = element ? event.shiftKey ? [...new Set([...selection, String(element.id)])] : selection.includes(String(element.id)) ? selection : [String(element.id)] : []; setSelection(selected) }
     else setSelection([])
     event.currentTarget.setPointerCapture(event.pointerId)
-    const g: Gesture = { pointerId: event.pointerId, tool: activeTool, before: current.current, start: first, samples: [...captured], elementId: crypto.randomUUID(), selected, mouse: event.pointerType !== 'pen', scene: current.current }
+    const g: Gesture = { pointerId: event.pointerId, tool: activeTool, before: current.current, start: first, samples: [...captured], elementId: randomUUID(), selected, mouse: event.pointerType !== 'pen', scene: current.current }
     gesture.current = g; updateGesture(g, first)
   }
   const updateGesture = (g: Gesture, last: InkSample) => {
