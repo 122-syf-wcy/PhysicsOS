@@ -35,10 +35,10 @@
 
 - [x] Review each fix and run its regression tests against real owning services/controllers/engines.
 - [x] Run core, web, host, tooling and deployment checks in Docker; record any pre-existing failure separately with reproduction.
-- [ ] Commit and freeze the source, rebuild affected packages, validate runtime digests and plugin signatures.
-- [ ] Start a candidate with isolated data and exercise login, scoped reads, editor and affected behavior.
-- [ ] Recheck origin/main, server checkout and production image, then publish with paired backup and authenticated acceptance.
-- [ ] Verify the public entry, record revision/image/recovery evidence and push the final report.
+- [x] Commit and freeze the source, rebuild affected packages, validate runtime digests and plugin signatures.
+- [x] Start a candidate with isolated data and exercise login, scoped reads, editor and affected behavior.
+- [x] Recheck origin/main, server checkout and production image, then publish with paired backup and authenticated acceptance.
+- [x] Verify the public entry, record revision/image/recovery evidence and push the final report.
 
 ## Review focus
 
