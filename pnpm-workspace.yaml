@@ -2,3 +2,11 @@ packages:
   - apps/*
   - packages/*
   - tests/*
+
+# pnpm 11 fails an install when a dependency's build script is neither allowed
+# nor explicitly denied. `apps/mobile-lab` is the only workspace member that
+# pulls in esbuild, and its install script only probes the platform binary that
+# the `@esbuild/<platform>` optional dependency already provides, so the server
+# image can skip it.
+allowBuilds:
+  esbuild: false
