@@ -545,8 +545,8 @@ describe('学习记录 surface', () => {
   })
 })
 
-describe('sidebar 学习记录 entry', () => {
-  it('opens the record surface from the account menu', () => {
+describe('sidebar 访问与用量 entry', () => {
+  it('opens the record surface from the account usage menu', () => {
     const openRecord = vi.fn()
     render(
       <SidebarFooter
@@ -563,12 +563,12 @@ describe('sidebar 学习记录 entry', () => {
         t={t}
       />,
     )
-    /* 学习记录 rides the account menu, not a footer row: the foot has no room
+    /* 访问与用量 rides the account menu, not a footer row: the foot has no room
        left for another row, and the menu is the one place that already belongs
        to this account. */
-    expect(screen.queryByRole('button', { name: '学习记录' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '访问与用量' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: '账户菜单' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: '学习记录' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '访问与用量' }))
     expect(openRecord).toHaveBeenCalledOnce()
   })
 })

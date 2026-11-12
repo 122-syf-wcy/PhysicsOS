@@ -41,13 +41,44 @@ const decodeCursor = (value: string): Cursor => {
     return { version: 1, primary: parsed.primary, key: parsed.key }
   } catch { throw new LearningError(400, 'BAD_CURSOR', '分页游标无效') }
 }
-const compare = (left: string, right: string): number => left < right ? -1 : left > right ? 1 : 0
-const pageOf = <T>(rows: readonly T[], query: ListQuery, primaryOf: (row: T) => string, keyOf: (row: T) => string): Page<T> => {
-  const limit = query.limit === undefined ? DEFAULT_PAGE_SIZE : Number(query.limit)
-  if (!Number.isInteger(limit) || limit < 1 || limit > MAX_PAGE_SIZE || (query.limit !== undefined && !/^\d+$/.test(query.limit))) throw new LearningError(400, 'BAD_REQUEST', 'limit must be 1..100')
+
+const pageSize = (value: string | undefined): number => {
+  if (value === undefined) return DEFAULT_PAGE_SIZE
+  const parsed = Number(value)
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > MAX_PAGE_SIZE) {
+    throw new LearningError(
+      400,
+      'BAD_REQUEST',
+      `limit must be an integer from 1 to ${MAX_PAGE_SIZE}`,
+    )
+  }
+  return parsed
+}
+
+// Sorting and cursor comparisons must use the same locale-independent order.
+const compareText = (left: string, right: string): number =>
+  left === right ? 0 : left < right ? -1 : 1
+
+const pageOf = <T>(
+  rows: readonly T[],
+  query: ListQuery,
+  primaryOf: (row: T) => string,
+  keyOf: (row: T) => string,
+): Page<T> => {
+  const limit = pageSize(query.limit)
   const cursor = query.cursor === undefined ? undefined : decodeCursor(query.cursor)
-  const ordered = [...rows].sort((a, b) => compare(primaryOf(b), primaryOf(a)) || compare(keyOf(b), keyOf(a)))
-  const remaining = cursor === undefined ? ordered : ordered.filter(row => primaryOf(row) < cursor.primary || (primaryOf(row) === cursor.primary && keyOf(row) < cursor.key))
+  const ordered = [...rows].sort(
+    (a, b) => compareText(primaryOf(b), primaryOf(a)) || compareText(keyOf(b), keyOf(a)),
+  )
+  let remaining = ordered
+  if (cursor !== undefined) {
+    remaining = ordered.filter((row) => {
+      const primary = primaryOf(row)
+      const key = keyOf(row)
+      return compareText(primary, cursor.primary) < 0
+        || (primary === cursor.primary && compareText(key, cursor.key) < 0)
+    })
+  }
   const items = remaining.slice(0, limit)
   const last = items.at(-1)
   return last === undefined || remaining.length <= limit ? { items } : { items, nextCursor: encodeCursor(primaryOf(last), keyOf(last)) }

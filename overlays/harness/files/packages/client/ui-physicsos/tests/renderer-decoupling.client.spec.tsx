@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { useStudentAuth } from './student-auth-fixture.client.ts'
 import { withOfficialRenderer } from './official-renderer-fixture.client.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -54,7 +55,7 @@ describe('#123 renderer/React decoupling', () => {
         t={t}
         useSessions={neverHook}
         useWorkspaces={neverHook}
-        useAuth={neverHook}
+        useAuth={useStudentAuth}
       />,
     )
     const lab = container.querySelector('[data-physicsos-surface="lab"]')
@@ -93,7 +94,7 @@ describe('#123 renderer/React decoupling', () => {
         t={t}
         useSessions={neverHook}
         useWorkspaces={neverHook}
-        useAuth={neverHook}
+        useAuth={useStudentAuth}
       />,
     )
     const playback = () => screen.getByRole('button', { name: '播放 / 暂停' })

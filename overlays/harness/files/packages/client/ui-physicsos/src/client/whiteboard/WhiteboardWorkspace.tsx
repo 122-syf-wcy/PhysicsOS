@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import { Button, Input } from '@deepseek-ai/dsh-client-ui-primitives'
 import { completeExportSvg } from './export.ts'
 import { sceneBounds } from './editor-model.ts'
@@ -121,7 +122,7 @@ export function WhiteboardWorkspace(props: WhiteboardFactoryProps) {
       <button type="button" disabled={!record || localBusy} onClick={() => { void perform(() => exportFile('png')) }}>{t('whiteboard.exportPng')}</button>
       {selectedSource ? <><span className={css.menuDivider} aria-hidden="true" />
         <button type="button" disabled={!originals[selectedSource.id]} onClick={() => { const original = originals[selectedSource.id]; if (original) download(original, `question-${selectedSource.id}.${selectedSource.mimeType.split('/')[1]}`) }}>{t('whiteboard.downloadSource')}</button>
-        <button type="button" disabled={!record} onClick={() => { if (record) controller.edit({ ...record.document.scene, elements: [...record.document.scene.elements, { id: crypto.randomUUID(), type: 'image', fileId: selectedSource.id, x: 0, y: 0, width: selectedSource.width, height: selectedSource.height }] }) }}>{t('whiteboard.insertSource')}</button>
+        <button type="button" disabled={!record} onClick={() => { if (record) controller.edit({ ...record.document.scene, elements: [...record.document.scene.elements, { id: randomUUID(), type: 'image', fileId: selectedSource.id, x: 0, y: 0, width: selectedSource.width, height: selectedSource.height }] }) }}>{t('whiteboard.insertSource')}</button>
       </> : null}
     </div></details>
   </>

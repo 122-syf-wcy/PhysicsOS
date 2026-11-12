@@ -225,8 +225,8 @@ describe('direct regeneration route', { timeout: 30_000 }, () => {
       expect(latest.revision).toBe(original.revision)
     })
 
-    it('settles its own generating marker after the parent starts a newer turn', async () => {
-      const { ctx, parent, handler, original } = await solvedHost()
+    it('completes its own generation across a newer parent turn when the scene facts are unchanged', async () => {
+      const { ctx, parent, handler, original, created } = await solvedHost()
       let release!: () => void
       let entered!: () => void
       const held = new Promise<void>(resolve => { release = resolve })
@@ -241,10 +241,20 @@ describe('direct regeneration route', { timeout: 30_000 }, () => {
         parent.followup(createUserMessage({ content: [{ type: 'text', text: '只解释已有结果，不改变题目条件。' }], source: { kind: 'user' } }))
         await parent.whenIdle()
         expect(turnsOf(parent)).toBe(2)
+        expect(scenesOf(parent).at(-1)?.visualization).toMatchObject({
+          status: 'generating', jobId: accepted.body?.state?.jobId,
+          ownerSessionId: 'parent', sceneId: original.sceneId, sceneRevision: original.revision,
+        })
         release()
-        await vi.waitFor(() => { expect(scenesOf(parent).at(-1)?.visualization?.status).toBe('failed') }, { timeout: 2_000 })
+        await vi.waitFor(() => { expect(scenesOf(parent).at(-1)?.visualization?.status).toBe('ready') }, { timeout: 10_000 })
         const latest = scenesOf(parent).at(-1)!
-        expect(latest.visualization).toMatchObject({ status: 'failed', code: 'STALE_GENERATION', jobId: accepted.body?.state?.jobId, ownerSessionId: 'parent' })
+        expect(created).toHaveLength(2)
+        expect(latest.visualization).toMatchObject({
+          status: 'ready', artifactId: 'private-2', ownerSessionId: 'parent',
+          sceneId: original.sceneId, sceneRevision: original.revision,
+        })
+        expect(latest.sceneId).toBe(original.sceneId)
+        expect(latest.revision).toBe(original.revision)
         expect(latest.scene).toEqual(original.scene)
         expect(latest.solve).toEqual(original.solve)
       } finally { release() }

@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { DrawingDiagram, SourceImage, WhiteboardDocument } from '@physicsos/physics-whiteboard'
-import { createWhiteboardController, type WhiteboardDraft } from '../src/client/whiteboard/controller.ts'
+import { createWhiteboardController, type WhiteboardControllerOptions, type WhiteboardDraft } from '../src/client/whiteboard/controller.ts'
 import type { WhiteboardApi, WhiteboardGeneration, WhiteboardRecord } from '../src/client/whiteboard/api.ts'
 
 const source: SourceImage = { id: 'img-1', sha256: 'a'.repeat(64), mimeType: 'image/png', width: 800, height: 400, byteLength: 90, viewBox: { x: 0, y: 0, width: 800, height: 400 } }
@@ -11,7 +11,7 @@ const record: WhiteboardRecord = { document, revision: 1, updatedAt: '2026-11-10
 const job: WhiteboardGeneration = { id: 'job-1', whiteboardId: 'board-1', imageId: 'img-1', status: 'queued' }
 const deferred = <T>() => { let resolve!: (value: T) => void; let reject!: (error: unknown) => void; const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no }); return { promise, resolve, reject } }
 
-function fixture(overrides: Partial<WhiteboardApi> = {}) {
+function fixture(overrides: Partial<WhiteboardApi> = {}, scheduling: Pick<WhiteboardControllerOptions, 'schedule' | 'cancelSchedule'> = {}) {
   let namespace: string | undefined = 'account-a'
   let counter = 0
   let remote = structuredClone(record)
@@ -31,11 +31,34 @@ function fixture(overrides: Partial<WhiteboardApi> = {}) {
   const controller = createWhiteboardController({ api, getNamespace: () => namespace, id: () => `operation-${++counter}`,
     cache: { read: async (owner, id) => drafts.get(`${owner}:${id}`), write: async (owner, id, draft) => { drafts.set(`${owner}:${id}`, structuredClone(draft)) } },
     schedule: () => undefined, cancelSchedule: () => undefined,
+    ...scheduling,
   })
-  return { controller, drafts, setNamespace: (owner: string | undefined) => { namespace = owner; controller.resetNamespace() }, remote: () => remote }
+  return { api, controller, drafts, setNamespace: (owner: string | undefined) => { namespace = owner; controller.resetNamespace() }, remote: () => remote }
 }
 
 describe('owned durable whiteboard editing', () => {
+  it('creates and saves with default operation IDs when only crypto.getRandomValues is available', async () => {
+    const getRandomValues = globalThis.crypto.getRandomValues.bind(globalThis.crypto)
+    vi.stubGlobal('crypto', { getRandomValues })
+    const operationIds: string[] = []
+    const f = fixture({
+      create: async input => { operationIds.push(input.operationId); return { ...record, document: { ...document, title: input.title } } },
+      save: async input => { operationIds.push(input.operationId); return { ...record, document: input.document, revision: 2 } },
+    })
+    const controller = createWhiteboardController({ api: f.api, getNamespace: () => 'account-a', schedule: () => undefined, cancelSchedule: () => undefined })
+    try {
+      await expect(controller.create('HTTP lesson')).resolves.toBe('board-1')
+      controller.rename('Saved HTTP lesson')
+      await controller.save()
+      expect(controller.getSnapshot()).toMatchObject({ dirty: false, status: 'saved', record: { document: { title: 'Saved HTTP lesson' } } })
+      expect(operationIds).toHaveLength(2)
+      expect(new Set(operationIds).size).toBe(2)
+      for (const id of operationIds) expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+    } finally {
+      controller.dispose()
+      vi.unstubAllGlobals()
+    }
+  })
   it('opens a saved full scene and preserves edits made while an earlier save is in flight', async () => {
     const first = deferred<WhiteboardRecord>()
     const requestSent = deferred<void>()
@@ -65,6 +88,66 @@ describe('owned durable whiteboard editing', () => {
     f.setNamespace('account-b')
     await f.controller.open('board-1')
     expect(f.controller.getSnapshot().record?.document.scene.elements).toEqual([])
+  })
+  it('automatically saves a recovered dirty draft after closing before its save timer fires', async () => {
+    vi.useFakeTimers()
+    const f = fixture({}, {
+      schedule: (callback, delay) => setTimeout(callback, delay),
+      cancelSchedule: handle => clearTimeout(handle as ReturnType<typeof setTimeout>),
+    })
+    try {
+      await f.controller.open('board-1')
+      f.controller.rename('Recovered lesson')
+      f.controller.close()
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(f.remote().document.title).toBe('Lesson')
+
+      await f.controller.open('board-1')
+      expect(f.controller.getSnapshot()).toMatchObject({ dirty: true, record: { document: { title: 'Recovered lesson' } } })
+      await vi.advanceTimersByTimeAsync(1000)
+
+      expect(f.remote().document.title).toBe('Recovered lesson')
+      expect(f.controller.getSnapshot()).toMatchObject({ dirty: false, status: 'saved' })
+    } finally {
+      f.controller.dispose()
+      vi.useRealTimers()
+    }
+  })
+  it('does not automatically save a recovered draft that conflicts with the server head', async () => {
+    vi.useFakeTimers()
+    const save = vi.fn<WhiteboardApi['save']>()
+    const f = fixture({ read: async () => ({ ...record, revision: 2, document: { ...document, title: 'Other device' } }), save }, {
+      schedule: (callback, delay) => setTimeout(callback, delay),
+      cancelSchedule: handle => clearTimeout(handle as ReturnType<typeof setTimeout>),
+    })
+    f.drafts.set('account-a:board-1', { record: { ...record, document: { ...document, title: 'Local draft' } }, dirty: true })
+    try {
+      await f.controller.open('board-1')
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(save).not.toHaveBeenCalled()
+      expect(f.controller.getSnapshot()).toMatchObject({ dirty: true, status: 'conflict', record: { document: { title: 'Local draft' } } })
+    } finally {
+      f.controller.dispose()
+      vi.useRealTimers()
+    }
+  })
+  it('retains a recovered draft without automatically saving when the server head cannot be read', async () => {
+    vi.useFakeTimers()
+    const save = vi.fn<WhiteboardApi['save']>()
+    const f = fixture({ read: async () => { throw new Error('Server unavailable') }, save }, {
+      schedule: (callback, delay) => setTimeout(callback, delay),
+      cancelSchedule: handle => clearTimeout(handle as ReturnType<typeof setTimeout>),
+    })
+    f.drafts.set('account-a:board-1', { record: { ...record, document: { ...document, title: 'Local draft' } }, dirty: true })
+    try {
+      await f.controller.open('board-1')
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(save).not.toHaveBeenCalled()
+      expect(f.controller.getSnapshot()).toMatchObject({ dirty: true, status: 'unsaved', error: 'Server unavailable', record: { document: { title: 'Local draft' } } })
+    } finally {
+      f.controller.dispose()
+      vi.useRealTimers()
+    }
   })
   it('retries the same lost-response operation receipt instead of issuing a second mutation', async () => {
     const identities: string[] = []

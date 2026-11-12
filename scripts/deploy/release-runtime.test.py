@@ -26,6 +26,19 @@ def frozen():
     return source, plan, evidence, marker
 
 
+def inventory_fixture(files, mode='host'):
+    """Run the actual inventory program against inert JavaScript fixture files."""
+    with tempfile.TemporaryDirectory() as temporary:
+        root = pathlib.Path(temporary)
+        prefix = 'packages/request-fixture'
+        (root / prefix / 'lib').mkdir(parents=True)
+        (root / prefix / 'package.json').write_text(json.dumps({'name': 'request-fixture'}))
+        for name, code in files.items():
+            (root / prefix / 'lib' / name).write_text(code)
+        request = {'root': str(root), 'selections': [{'root': prefix, 'mode': mode, 'items': ['lib', 'package.json']}]}
+        return subprocess.run(['node', '-e', runtime.INVENTORY_JS], input=json.dumps(request), text=True, capture_output=True)
+
+
 class RuntimeDeltaTests(unittest.TestCase):
     def test_legacy_prefixes_normalize_to_real_paths_and_reject_unknown_ownership(self):
         result = runtime.normalize_manifest({'schemaVersion': 1, 'files': {
@@ -123,6 +136,66 @@ class RuntimeDeltaTests(unittest.TestCase):
             self.assertEqual(meta['clientRequests'], [])
             self.assertEqual(meta['resolvedBare'], {})
             self.assertEqual(runtime.workspace_updates({prefix: meta}, {prefix: meta}, {})['links'], [])
+
+    def test_real_inventory_does_not_turn_bundle_regex_and_from_properties_into_dependencies(self):
+        # The deployed bundle contains quoted-character regexes followed by
+        # connector {from, to} fields. Neither is an import declaration.
+        code = r'''export function parse(v) {
+  const pattern = /["']/;
+  return {from: id(v.from, "from"), to: id(v.to, "to")};
+}
+const regexCalls = /require("regex-decoy")|import("regex-import-decoy")/;
+const text = 'require("string-decoy")';
+const template = `import "template-decoy"`;
+// require("line-comment-decoy")
+/* export * from "block-comment-decoy" */
+obj.require("member-decoy"); obj.__require("member-helper-decoy");
+obj["require"]("computed-member-decoy"); obj?.require("optional-member-decoy");
+'''
+        result = inventory_fixture({'index.js': code})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        meta = json.loads(result.stdout)['packages']['packages/request-fixture']
+        self.assertEqual(meta['nodeRequests'], [])
+        self.assertEqual(meta['resolvedBare'], {})
+
+    def test_real_inventory_keeps_static_dynamic_helper_and_client_requests(self):
+        result = inventory_fixture({
+            'index.js': r'''import "fixture-side-effect";
+import value from "fixture-default/subpath";
+export { value } from "fixture-export/subpath";
+export * from "@fixture/export/all";
+require("fixture-cjs/subpath"); __require("@fixture/helper/subpath");
+(require)("fixture-parenthesized");
+import("fixture-dynamic"); import(`fixture-static-template`);
+require("\x66ixture-escaped");
+const template = `value: ${require("fixture-interpolation")}`;
+import "node:fs"; require("path"); import "./chunk.js";
+''',
+            'chunk.js': 'export * from "fixture-chunk"; require("./index.js");',
+            'client.js': r'''window.__ModuleLoader__.load({factory: require => {
+  const pattern = /["']/;
+  require("@fixture/client/subpath"); __require("fixture-client-helper");
+  return `value: ${import("fixture-client-dynamic")}`;
+}});''',
+            'optional-plot.js': 'import("fixture-optional"); obj.require("not-a-module-request");',
+        }, mode='client')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        meta = json.loads(result.stdout)['packages']['packages/request-fixture']
+        self.assertEqual(meta['nodeRequests'], sorted([
+            '@fixture/export/all', '@fixture/helper/subpath', 'fixture-chunk',
+            'fixture-cjs/subpath', 'fixture-default/subpath', 'fixture-dynamic',
+            'fixture-escaped', 'fixture-export/subpath', 'fixture-interpolation',
+            'fixture-parenthesized', 'fixture-side-effect', 'fixture-static-template',
+        ]))
+        self.assertEqual(meta['clientRequests'], sorted([
+            '@fixture/client/subpath', 'fixture-client-dynamic',
+            'fixture-client-helper', 'fixture-optional',
+        ]))
+
+    def test_real_inventory_refuses_invalid_javascript_instead_of_silently_missing_requests(self):
+        result = inventory_fixture({'index.js': 'export const broken = /unterminated'})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Invalid JavaScript in runtime dependency inventory', result.stderr)
 
     def test_noop_preserves_the_published_image_revision_and_reports_requested_inputs_separately(self):
         base = {'revision': 'a' * 40, 'sourceDigest': 'b' * 64, 'codeDigest': 'c' * 64}

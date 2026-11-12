@@ -266,16 +266,17 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
       }
       const actualRunSeconds = this.retainedEndTime
       if (actualRunSeconds === undefined) throw new Error('波动仿真未产出时间范围。')
-      if (model.subModel !== 'wave_interference') this.currentTime = Math.min(this.currentTime, actualRunSeconds)
       this.failure = undefined
       const initialState = this.engine.stateAt(scene, quantity(0, 's', 'time'))
       this.computed = { simulation, model, initialState, runSeconds: actualRunSeconds }
+      // Diffraction and formation can outlast the stored simulation window.
+      // Clamp against the current lesson duration before retaining its frame.
+      if (model.subModel !== 'wave_interference') this.currentTime = Math.min(this.currentTime, this.runSeconds)
       if (this.currentTime === 0) {
         this.retainFrame(scene, simulation, initialState)
       } else {
         this.frameStateOf(scene, simulation)
       }
-      if (model.subModel !== 'wave_interference') this.currentTime = Math.min(this.currentTime, this.runSeconds)
     } catch (error: unknown) {
       this.failure = error instanceof Error ? error.message : '波动 Runtime 无法启动。'
       this.computed = undefined

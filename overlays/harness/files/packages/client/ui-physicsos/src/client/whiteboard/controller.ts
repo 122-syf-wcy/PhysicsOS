@@ -1,4 +1,5 @@
 import { editWhiteboardDocument, moveWhiteboardHistory, insertDiagram, parseWhiteboardDocument, type WhiteboardDocument, type WhiteboardScene } from '@physicsos/physics-whiteboard'
+import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import type { WhiteboardApi, WhiteboardGeneration, WhiteboardRecord, WhiteboardSummary } from './api.ts'
 
 export interface WhiteboardDraft {
@@ -55,7 +56,7 @@ export interface WhiteboardController {
 }
 export function createWhiteboardController(options: WhiteboardControllerOptions): WhiteboardController {
   const { api, cache } = options
-  const makeId = options.id ?? (() => crypto.randomUUID())
+  const makeId = options.id ?? randomUUID
   const schedule = options.schedule ?? ((fn: () => void, delay: number) => setTimeout(fn, delay))
   const cancelSchedule = options.cancelSchedule ?? (handle => clearTimeout(handle as ReturnType<typeof setTimeout>))
   const listeners = new Set<() => void>()
@@ -145,6 +146,7 @@ export function createWhiteboardController(options: WhiteboardControllerOptions)
         acceptJob(job)
       }
       publish({ loading: false }); persistQuietly(); laterPoll()
+      if (state.dirty || pendingSave) laterSave()
     } catch (error) { if (valid(token)) { publish({ loading: false }); failState(error) }; throw error }
   }
   const controller: WhiteboardController = {

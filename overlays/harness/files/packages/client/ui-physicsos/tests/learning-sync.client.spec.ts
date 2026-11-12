@@ -295,7 +295,9 @@ it('restores original question facts after a fork has been saved and reloaded', 
   expect(saved.originScene).toEqual(original)
   const restoredRuntime = buildWorkspaceRuntime('mechanics', saved.scene, saved.originScene)!
   restoredRuntime.restoreOrigin!()
-  expect(restoredRuntime.getScene!()).toEqual(original)
+  // Restoring facts is a new commit in the retained branch, not an identity rollback.
+  expect(edited.revision).toBe(1)
+  expect(restoredRuntime.getScene!()).toEqual({ ...original, id: edited.id, revision: 2 })
 })
 
 

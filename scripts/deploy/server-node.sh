@@ -108,7 +108,8 @@ if [[ $mode == --check ]]; then
 fi
 # The tools image inherits runtime ENV from its production base. Clear it at
 # exec so Compose sees only explicitly selected operations configuration.
-env_args=(PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin "PHYSICSOS_DIR=$project_dir")
+# Docker/buildx writes its own configuration inside this container's tmpfs.
+env_args=(PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin "PHYSICSOS_DIR=$project_dir" DOCKER_CONFIG=/tmp/physicsos-docker)
 for name in PHYSICSOS_BACKUP_KEY_FILE PHYSICSOS_BACKUP_OFFSITE_DIR PHYSICSOS_BACKUP_RETENTION_DAYS PHYSICSOS_FULL_BACKUP_DIR PHYSICSOS_BACKUP_DIR PHYSICSOS_POSTGRES_SERVICE PHYSICSOS_BACKUP_STAMP; do
   [[ ! -v $name ]] || env_args+=("$name=${!name}")
 done

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { useStudentAuth } from './student-auth-fixture.client.ts'
 import { webcrypto } from 'node:crypto'
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -113,12 +114,13 @@ it.each([false, true])('retains verified solution scope %s when the chat experim
     usePhysicsSurface: (selector: (value: ReturnType<typeof surface.store.getSnapshot>) => unknown) =>
       selector(surface.store.getSnapshot()),
     useLearningRecord: unavailable, useRecentExperiments: unavailable, useSessions: unavailable,
-    useWorkspaces: unavailable, useAuth: unavailable,
+    useWorkspaces: unavailable, useAuth: useStudentAuth,
     questionCodeOwner: f.questionCodeOwner, t } as unknown as PhysicsSurfaceProps
   const lab = render(<PhysicsSurface {...props} />)
   expect(lab.container.querySelector('[data-private-question-code-workspace]')).not.toBeNull()
   expect(lab.queryByText('当前场景演示') !== null).toBe(!verified)
-  expect(surface.store.getSnapshot().sceneRef?.originScene).toBe(scene)
+  // The import boundary validates/copies the scene; its facts and digest survive handover.
+  expect(surface.store.getSnapshot().sceneRef?.originScene).toEqual(scene)
   expect(JSON.stringify(scene)).toBe(frozen)
   expect(await questionCodeSceneSha256(surface.store.getSnapshot().sceneRef!.originScene!)).toBe(f.ref.sceneSha256)
 })
@@ -205,6 +207,7 @@ it('renders exact question physics rather than template defaults, with independe
   fireEvent.click(view.getByRole('button', { name: '在实验室中探索' }))
   expect(f.openSceneInLab).toHaveBeenCalledWith({
     sceneId: scene.id, scene: withQuestionCodeVisualization(scene, f.ref), originScene: scene, hasVerifiedSolution: false,
+    canvasSource: { kind: 'question-code', id: scene.id, title: f.ref.title, questionId: 'exact-question' },
   })
   expect(f.fetch.mock.calls.every(([url]) => url.includes(`sha256=${f.ref.sha256}`))).toBe(true)
 })

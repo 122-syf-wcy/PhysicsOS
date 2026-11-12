@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { useStudentAuth } from './student-auth-fixture.client.ts'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
@@ -62,7 +63,7 @@ const mountDraft = (draft: CircuitDraft) => {
       t={t}
       useSessions={neverHook}
       useWorkspaces={neverHook}
-      useAuth={neverHook}
+      useAuth={useStudentAuth}
     />,
   )
 }

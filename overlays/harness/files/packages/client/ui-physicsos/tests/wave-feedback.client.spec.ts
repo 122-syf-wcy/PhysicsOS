@@ -19,9 +19,17 @@ describe('wave lesson playback', () => {
 
   it('keeps a late diffraction instant when only visibility changes', () => {
     const runtime = createWaveWorkspaceRuntime(createDiffractionScene())
-    runtime.seek(4)
+    expect(runtime.seek(4).clock.time).toBe(4)
     expect(runtime.setObservable('waveform', false).clock.time).toBe(4)
     expect(runtime.setObservable('waveform', true).clock.time).toBe(4)
+  })
+
+  it('keeps a late standing-wave formation instant when only visibility changes', () => {
+    const runtime = createWaveWorkspaceRuntime(createStandingWaveScene({ harmonic: 1, frequency: 0.5 }))
+    runtime.setChoice('standing-mode', 'formation')
+    expect(runtime.seek(4).clock.time).toBe(4)
+    expect(runtime.setObservable('nodes', false).clock.time).toBe(4)
+    expect(runtime.setObservable('nodes', true).clock.time).toBe(4)
   })
 
   it('replays the formation lesson from rest while steady mode wraps without a phase jump', () => {

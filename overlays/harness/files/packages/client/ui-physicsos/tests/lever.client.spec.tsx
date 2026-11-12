@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { useStudentAuth } from './student-auth-fixture.client.ts'
 import { withOfficialRenderer } from './official-renderer-fixture.client.ts'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -56,7 +57,7 @@ const mountLab = (templateId: string) => {
       t={t}
       useSessions={neverHook}
       useWorkspaces={neverHook}
-      useAuth={neverHook}
+      useAuth={useStudentAuth}
     />,
   )
   return { surface, ...view }
@@ -288,7 +289,7 @@ describe('lever Lab surface', () => {
         t={t}
         useSessions={neverHook}
         useWorkspaces={neverHook}
-        useAuth={neverHook}
+        useAuth={useStudentAuth}
       />,
     )
     expect(picker.container.querySelector('[data-physicsos-state="picker"]')).toBeTruthy()
@@ -309,7 +310,7 @@ describe('lever Lab surface', () => {
         t={t}
         useSessions={neverHook}
         useWorkspaces={neverHook}
-        useAuth={neverHook}
+        useAuth={useStudentAuth}
       />,
     )
     expect(container.querySelector('[data-physicsos-domain="mechanics"]')).toBeTruthy()

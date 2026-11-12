@@ -1330,6 +1330,7 @@ export class WaveEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLike>
         'WAVE_DIFFRACTION_ORDER_UNAVAILABLE',
         'WAVE_DOPPLER_GEOMETRY',
         'WAVE_DOPPLER_SOURCE_SPEED',
+        'WAVE_DOPPLER_OBSERVER_UNREACHABLE',
       ])
       if (code !== undefined && unsupportedCodes.has(code)) {
         return unsupportedModel(

@@ -1,3 +1,4 @@
+import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import {
   Background, BackgroundVariant, MiniMap, Panel, ReactFlow, SelectionMode,
@@ -320,7 +321,7 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
       if (datasetRef === undefined) continue
       const dataset = document?.objects[datasetRef.digest]
       if (dataset?.kind !== 'dataset' || dataset.metrics[0] === undefined) continue
-      members.push({ id: `comparison-member:${crypto.randomUUID()}`, snapshotAliasId: alias.id, dataset: datasetRef,
+      members.push({ id: `comparison-member:${randomUUID()}`, snapshotAliasId: alias.id, dataset: datasetRef,
         metricId: dataset.metrics[0].id, ...(dataset.axes.length === 1 ? { axisId: dataset.axes[0]!.id } : {}), label: alias.title })
     }
     if (members.length < 2) { actions.showToast('canvas.compareEmpty', undefined, true); return }

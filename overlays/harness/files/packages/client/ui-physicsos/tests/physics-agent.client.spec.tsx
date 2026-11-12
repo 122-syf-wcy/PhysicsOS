@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { useStudentAuth } from './student-auth-fixture.client.ts'
 import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import {
@@ -274,7 +275,7 @@ describe('agent drawer', () => {
         t={t}
         useSessions={neverHook}
         useWorkspaces={neverHook}
-        useAuth={neverHook}
+        useAuth={useStudentAuth}
       />,
     )
 
@@ -303,7 +304,7 @@ describe('agent drawer', () => {
         t={t}
         useSessions={neverHook}
         useWorkspaces={neverHook}
-        useAuth={neverHook}
+        useAuth={useStudentAuth}
       />,
     )
 
@@ -334,7 +335,7 @@ describe('agent drawer', () => {
         t={t}
         useSessions={neverHook}
         useWorkspaces={neverHook}
-        useAuth={neverHook}
+        useAuth={useStudentAuth}
       />,
     )
 

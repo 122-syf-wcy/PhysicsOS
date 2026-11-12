@@ -7,6 +7,7 @@ import { join, extname } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { chromium } from '@playwright/test'
 import { readArchive } from './downloaded-experiment-release.mjs'
+import { assertParameterRoundTrip } from '../../scripts/developers/lab-parameter-round-trip.mjs'
 const directory = process.env.PHYSICSOS_LAB_RELEASE_DIR ?? '/tmp/physicsos-lab-collection-20261105'
 const output = process.env.PHYSICSOS_LAB_SHOTS ?? '/tmp/physicsos-lab-collection-shots'
 const index = JSON.parse(await readFile(join(directory, 'index.json')))
@@ -164,7 +165,7 @@ try {
         assert.equal(intent.id, parameter.id); assert.equal(intent.value, value)
         runtime.editParameter(intent.id, intent.value)
         const snapshot = snapshotOf(runtime, id)
-        assert.equal(snapshot.inspector.flatMap(s => s.parameters ?? []).find(p => p.id === parameter.id)?.value, value, `${id}: host did not apply parameter`)
+        assertParameterRoundTrip(snapshot.inspector.flatMap(s => s.parameters ?? []).find(p => p.id === parameter.id)?.value, value, `${id}: host did not apply parameter`)
         await page.evaluate(snapshot => window.port.postMessage({ type: 'experiment/snapshot', protocolVersion: 3, frameId: 'parameter', snapshot }), snapshot)
         await ack('parameter'); parameterChecked = true; parameterVisualChanged = before !== await visualDigest()
       }

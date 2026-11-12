@@ -8,6 +8,48 @@ import { NativeEditor } from '../src/client/whiteboard/NativeEditor.tsx'
 import { whiteboardEn } from '../src/client/whiteboard/locales.ts'
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 describe('native editable whiteboard', () => {
+  it.each(['text', 'freedraw'] as const)('creates a real %s element when only crypto.getRandomValues is available', tool => {
+    const getRandomValues = globalThis.crypto.getRandomValues.bind(globalThis.crypto)
+    vi.stubGlobal('crypto', { getRandomValues })
+    let latest: WhiteboardScene = { elements: [], appState: {} }
+    function Fixture() {
+      const [scene, setScene] = useState(latest)
+      return <NativeEditor documentId="http-board" scene={scene} history={{ undo: [], redo: [] }} onUndo={() => undefined} onRedo={() => undefined}
+        onChange={next => { latest = next; setScene(next) }} images={{}} t={key => whiteboardEn[key]} clearRequest={0} onSave={() => undefined} />
+    }
+    const view = render(<Fixture />)
+    const canvas = view.getByRole('application')
+    Object.defineProperties(canvas, {
+      setPointerCapture: { value: () => undefined },
+      hasPointerCapture: { value: () => false },
+    })
+    const pointer = (type: string, clientX: number, clientY: number, pressure = 0.5) => {
+      const event = new MouseEvent(type, { bubbles: true, clientX, clientY, button: 0 })
+      Object.defineProperties(event, { pointerId: { value: 1 }, pointerType: { value: 'pen' }, pressure: { value: pressure } })
+      fireEvent(canvas, event)
+    }
+    const errors: string[] = []
+    const captureError = (event: ErrorEvent) => { errors.push(event.message); event.preventDefault() }
+    window.addEventListener('error', captureError)
+    try {
+      fireEvent.click(view.getByTestId(`toolbar-${tool}`))
+      pointer('pointerdown', 10, 20)
+      expect(errors).toEqual([])
+      if (tool === 'text') {
+        fireEvent.change(view.getByRole('textbox', { name: 'Edit text' }), { target: { value: 'F = ma' } })
+        fireEvent.keyDown(view.getByRole('textbox', { name: 'Edit text' }), { key: 'Escape' })
+      } else {
+        pointer('pointermove', 25, 30)
+        pointer('pointerup', 25, 30, 0)
+      }
+      expect(errors).toEqual([])
+      expect(latest.elements).toHaveLength(1)
+      expect(latest.elements[0]?.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+      expect(latest.elements[0]).toMatchObject(tool === 'text'
+        ? { type: 'text', text: 'F = ma', x: 10, y: 20 }
+        : { type: 'freedraw', points: [[0, 0], [15, 10], [15, 10]], pressures: [0.5, 0.5, 0] })
+    } finally { window.removeEventListener('error', captureError) }
+  })
   it('edits a real vector text label and restores it through operation undo and redo', () => {
     let latest: WhiteboardScene = { elements: [{ id: 'label', type: 'text', text: 'F', x: 20, y: 20, fontSize: 24 }], appState: {} }
     function Fixture() { const [document, setDocument] = useState<WhiteboardDocument>({ schemaVersion: 1, id: "lesson", title: "Lesson", scene: latest, sourceImages: [], appliedGenerationIds: [] }); const publish = (next: WhiteboardDocument) => { latest = next.scene; setDocument(next) }; return <NativeEditor documentId="lesson" scene={document.scene} history={document.history ?? { undo: [], redo: [] }} onUndo={() => publish(moveWhiteboardHistory(document, "undo"))} onRedo={() => publish(moveWhiteboardHistory(document, "redo"))} onChange={next => publish(editWhiteboardDocument(document, next))} images={{}} t={key => whiteboardEn[key]} clearRequest={0} onSave={() => undefined} /> }

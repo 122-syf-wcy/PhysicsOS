@@ -1,3 +1,4 @@
+import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import { useEffect, useRef, useState } from 'react'
 import type { WorkspaceFrame } from '../physics/workspace-runtime.ts'
 import { universalContributionSnapshot } from '../experiments/contribution-protocol.ts'
@@ -26,7 +27,7 @@ export function CanvasRendererFrame({ renderer, frame, onIntent, onCancel, onFai
     const element = iframe.current
     if (element === null || renderer.entryUrl === undefined || renderer.experimentId === undefined) return
     const experimentId = renderer.experimentId
-    const token = globalThis.crypto.randomUUID()
+    const token = randomUUID()
     const url = new URL(renderer.entryUrl, window.location.origin)
     if (url.origin !== window.location.origin || !url.pathname.startsWith('/physicsos/experiment-assets/embed/') || url.username || url.password) {
       latest.current.onFailure()

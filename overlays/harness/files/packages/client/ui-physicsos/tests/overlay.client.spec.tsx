@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { useStudentAuth } from './student-auth-fixture.client.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { HomeActions } from '../src/client/HomeActions.tsx'
@@ -238,25 +239,33 @@ describe('PhysicsOS overlay presentation', () => {
         }],
       })) as never
     const openSurface = vi.fn()
+    const startQuestion = vi.fn()
+    const openCanvasView = vi.fn()
+    const requestSceneInCanvas = vi.fn()
     render(
       <HomeActions
         openSurface={openSurface}
+        startQuestion={startQuestion}
+        openCanvasView={openCanvasView}
+        requestSceneInCanvas={requestSceneInCanvas}
         useRecentExperiments={useRecentExperiments}
         t={t}
       />,
     )
-    fireEvent.click(screen.getByRole('button', { name: '新建物理实验' }))
-    fireEvent.click(screen.getByRole('button', { name: '题目练习' }))
-    fireEvent.click(screen.getByRole('button', { name: '打开场景' }))
-    fireEvent.click(screen.getByRole('button', { name: '浏览实验模板' }))
+    fireEvent.click(screen.getByRole('button', { name: '物理实验室' }))
+    fireEvent.click(screen.getByRole('button', { name: 'AI 物理解题' }))
+    fireEvent.click(screen.getByRole('button', { name: '打开' }))
+    fireEvent.click(screen.getByRole('button', { name: '项目' }))
     expect(screen.getByText('电磁学 / 磁场与洛伦兹力 · 实验')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: /磁场实验/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^磁场实验/ }))
     expect(openSurface).toHaveBeenNthCalledWith(1, 'lab')
-    expect(openSurface).toHaveBeenNthCalledWith(2, 'record')
+    expect(startQuestion).toHaveBeenCalledOnce()
+    expect(openCanvasView).toHaveBeenCalledOnce()
+    expect(openSurface).toHaveBeenNthCalledWith(2, 'projects')
     /* The recent row restores the REAL stored scene, not a session. */
     expect(openSurface).toHaveBeenLastCalledWith('lab', { sceneId: ref.sceneId, scene: ref.scene })
-    expect(screen.getByRole('button', { name: '打开场景' }).getAttribute('disabled')).not.toBeNull()
-    expect(screen.getByRole('button', { name: '浏览实验模板' }).getAttribute('disabled')).not.toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '加入工作台 · 磁场实验' }))
+    expect(requestSceneInCanvas).toHaveBeenCalledWith({ sceneId: ref.sceneId, scene: ref.scene })
   })
 
   it('shows the empty physics-world state', () => {
@@ -273,7 +282,7 @@ describe('PhysicsOS overlay presentation', () => {
     expect(screen.getByText('正电粒子垂直进入匀强磁场')).toBeTruthy()
     expect(screen.getByText('比较不同角度的平抛轨迹')).toBeTruthy()
     expect(screen.getByText('为什么洛伦兹力不做功？')).toBeTruthy()
-    expect(screen.getByText('最近空间')).toBeTruthy()
+    expect(screen.getByText('最近实验')).toBeTruthy()
     expect(screen.getByText('还没有创建物理世界')).toBeTruthy()
     expect(screen.getByText(/PhysicsOS 会为你建立对应的物理世界/)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '创建物理实验' }))
@@ -349,7 +358,7 @@ describe('PhysicsOS overlay presentation', () => {
       </>,
     )
     expect(screen.getByText('探索一个物理世界')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: '新建物理实验' }))
+    fireEvent.click(screen.getByRole('button', { name: '物理实验室' }))
     expect(openSurface).toHaveBeenCalledWith('lab')
   })
 
@@ -421,14 +430,14 @@ describe('PhysicsOS overlay presentation', () => {
         useWorkspaces={emptyWorkspaces}
       />,
     )
-    expect(screen.getByText('最近空间')).toBeTruthy()
+    expect(screen.getByText('最近实验')).toBeTruthy()
     expect(screen.getByText('暂无最近空间')).toBeTruthy()
     expect(screen.getByText('历史对话')).toBeTruthy()
     expect(screen.getByText('暂无历史对话')).toBeTruthy()
     expect(screen.queryByText('工作区')).toBeNull()
   })
 
-  it('lists real scenes in 最近空间 and restores one on click', () => {
+  it('lists real scenes in 最近实验 and restores one on click', () => {
     const surface = createPhysicsSurfaceController()
     openLabOnTemplate(surface, 'velocity-selector')
     surface.open('home')
@@ -457,7 +466,7 @@ describe('PhysicsOS overlay presentation', () => {
     )
     expect(screen.getByText('速度选择器')).toBeTruthy()
     expect(screen.getByText('实验')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: /速度选择器/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^速度选择器/ }))
     expect(openSurface).toHaveBeenCalledWith('lab', {
       sceneId: items[0]!.sceneId,
       scene: items[0]!.scene,
@@ -584,7 +593,7 @@ describe('PhysicsOS overlay presentation', () => {
         t={t}
         useSessions={neverHook}
         useWorkspaces={neverHook}
-        useAuth={neverHook}
+        useAuth={useStudentAuth}
       />,
     )
     expect(screen.getByText('磁场中的带电粒子运动')).toBeTruthy()
@@ -636,7 +645,7 @@ describe('PhysicsOS overlay presentation', () => {
         t={t}
         useSessions={neverHook}
         useWorkspaces={neverHook}
-        useAuth={neverHook}
+        useAuth={useStudentAuth}
       />,
     )
     const velocityLabels = () =>
@@ -657,7 +666,7 @@ describe('PhysicsOS overlay presentation', () => {
         t={t}
         useSessions={neverHook}
         useWorkspaces={neverHook}
-        useAuth={neverHook}
+        useAuth={useStudentAuth}
       />,
     )
     const lab = container.querySelector('[data-physicsos-surface="lab"]')
@@ -789,7 +798,7 @@ describe('PhysicsOS overlay presentation', () => {
         t={t}
         useSessions={neverHook}
         useWorkspaces={neverHook}
-        useAuth={neverHook}
+        useAuth={useStudentAuth}
       />,
     )
     /* The picker lists every domain; mechanics is reachable from 全部. The
@@ -815,7 +824,7 @@ describe('PhysicsOS overlay presentation', () => {
         t={t}
         useSessions={neverHook}
         useWorkspaces={neverHook}
-        useAuth={neverHook}
+        useAuth={useStudentAuth}
       />,
     )
     expect(mechanics.container.querySelector('[data-physicsos-domain="mechanics"]')).toBeTruthy()
@@ -836,7 +845,7 @@ describe('PhysicsOS overlay presentation', () => {
         t={t}
         useSessions={neverHook}
         useWorkspaces={neverHook}
-        useAuth={neverHook}
+        useAuth={useStudentAuth}
       />,
     )
     expect(container.querySelector('[data-physicsos-state="picker"]')).toBeTruthy()
@@ -889,7 +898,7 @@ describe('PhysicsOS overlay presentation', () => {
         t={t}
         useSessions={neverHook}
         useWorkspaces={neverHook}
-        useAuth={neverHook}
+        useAuth={useStudentAuth}
       />,
     )
     /* Grid entries (and only they) carry data-stage; the rail stays personal. */
@@ -940,7 +949,7 @@ describe('PhysicsOS overlay presentation', () => {
         t={t}
         useSessions={neverHook}
         useWorkspaces={neverHook}
-        useAuth={neverHook}
+        useAuth={useStudentAuth}
       />,
     )
     fireEvent.click(screen.getByRole('tab', { name: '初中' }))
@@ -977,7 +986,7 @@ describe('PhysicsOS overlay presentation', () => {
         t={t}
         useSessions={neverHook}
         useWorkspaces={neverHook}
-        useAuth={neverHook}
+        useAuth={useStudentAuth}
       />,
     )
     const card = screen.getByRole('button', { name: /继续上次实验/ })
@@ -1024,7 +1033,7 @@ describe('PhysicsOS overlay presentation', () => {
         t={t}
         useSessions={neverHook}
         useWorkspaces={neverHook}
-        useAuth={neverHook}
+        useAuth={useStudentAuth}
       />,
     )
     expect(screen.getByText('为你推荐')).toBeTruthy()
@@ -1057,7 +1066,7 @@ describe('PhysicsOS overlay presentation', () => {
         t={t}
         useSessions={neverHook}
         useWorkspaces={neverHook}
-        useAuth={neverHook}
+        useAuth={useStudentAuth}
       />,
     )
     expect(view.container.querySelector('[data-physicsos-state="picker"]')).toBeTruthy()
@@ -1078,7 +1087,7 @@ describe('PhysicsOS overlay presentation', () => {
         t={t}
         useSessions={neverHook}
         useWorkspaces={neverHook}
-        useAuth={neverHook}
+        useAuth={useStudentAuth}
       />,
     )
     expect(navigated.container.querySelector('[data-physicsos-state="picker"]')).toBeNull()
