@@ -9,6 +9,7 @@ import { test } from 'node:test'
 const toolPath = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
 const imageDefaults = {
   PATH: '/image-only/bin', HOME: '/root', NODE_ENV: 'production', DSH_HOME: '/var/lib/physicsos',
+  DOCKER_CONFIG: '/image-only/docker-config-poison',
   DATABASE_URL_FILE: '/run/secrets/database_url', REDIS_URL_FILE: '/run/secrets/redis_url',
   DEEPSEEK_API_KEY_FILE: '/run/secrets/deepseek_api_key',
   PHYSICSOS_ADMIN_PASSWORD_FILE: '/run/secrets/admin_password',
@@ -84,14 +85,24 @@ if (args[0] === 'inspect') {
 `
   await writeFile(join(bin, 'docker'), fakeDocker, { mode: 0o700 })
   await writeFile(join(project, 'capture.mjs'), `import { spawnSync } from 'node:child_process'
-console.log(JSON.stringify({environment:process.env,cwd:process.cwd(),node:spawnSync('node',['--version'],{encoding:'utf8'}).stdout?.trim(),python:spawnSync('python3',['--version'],{encoding:'utf8'}).stdout?.trim()}))
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+await mkdir(process.env.DOCKER_CONFIG, { recursive: true, mode: 0o700 })
+const directory = await mkdtemp(join(process.env.DOCKER_CONFIG, 'server-node-test-'))
+let dockerConfigWritable = false
+try {
+  const file = join(directory, 'config.json')
+  await writeFile(file, '{"fixture":true}', { flag: 'wx', mode: 0o600 })
+  dockerConfigWritable = await readFile(file, 'utf8') === '{"fixture":true}'
+} finally { await rm(directory, { recursive: true, force: true }) }
+console.log(JSON.stringify({environment:process.env,dockerConfigWritable,cwd:process.cwd(),node:spawnSync('node',['--version'],{encoding:'utf8'}).stdout?.trim(),python:spawnSync('python3',['--version'],{encoding:'utf8'}).stdout?.trim()}))
 `)
   return { project, bin, script: join(scriptDir, 'server-node.sh') }
 }
 
 function run(f, environment = {}) {
   const result = spawnSync('/bin/bash', [f.script, 'capture.mjs'], {
-    env: { PATH: `${f.bin}:${toolPath}`, PHYSICSOS_DIR: f.project, PHYSICSOS_HOST_POISON: 'host-only', ...environment },
+    env: { PATH: `${f.bin}:${toolPath}`, PHYSICSOS_DIR: f.project, PHYSICSOS_HOST_POISON: 'host-only', DOCKER_CONFIG: '/host-only/docker-config-poison', ...environment },
     encoding: 'utf8',
   })
   assert.equal(result.status, 0, result.stderr)
@@ -108,7 +119,8 @@ test('operations Node receives only controlled paths and explicitly allowed back
     PHYSICSOS_BACKUP_STAMP: '',
   }
   const child = run(f, { ...allowed, PHYSICSOS_ADMIN_PASSWORD_FILE: '/host-only/admin-password' })
-  assert.deepEqual(child.environment, { PATH: toolPath, PHYSICSOS_DIR: f.project, ...allowed })
+  assert.deepEqual(child.environment, { PATH: toolPath, PHYSICSOS_DIR: f.project, DOCKER_CONFIG: '/tmp/physicsos-docker', ...allowed })
+  assert.equal(child.dockerConfigWritable, true)
   assert.equal(child.cwd, f.project)
   assert.match(child.node, /^v\d+\./)
   assert.match(child.python, /^Python 3\./)
@@ -117,5 +129,6 @@ test('operations Node receives only controlled paths and explicitly allowed back
 test('unset backup settings do not fall back to inherited tool image defaults', { skip: process.platform !== 'linux' }, async t => {
   const f = await fixture(t)
   const child = run(f)
-  assert.deepEqual(child.environment, { PATH: toolPath, PHYSICSOS_DIR: f.project })
+  assert.deepEqual(child.environment, { PATH: toolPath, PHYSICSOS_DIR: f.project, DOCKER_CONFIG: '/tmp/physicsos-docker' })
+  assert.equal(child.dockerConfigWritable, true)
 })

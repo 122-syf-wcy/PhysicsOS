@@ -243,9 +243,27 @@ if((doc.exact||[]).includes('package.json'))packages['']=pkg('');
 for(const name of doc.required||[]){const abs=p.resolve(root,safe(name));if(!f.existsSync(abs)||!f.statSync(abs).size)throw Error('Required runtime artifact absent');}
 const children=n=>f.existsSync(p.join(root,n))?f.readdirSync(p.join(root,n),{withFileTypes:true}).filter(x=>x.isDirectory()).map(x=>n+'/'+x.name):[];
 for(const n of children('packages'))pkg(n);for(const group of children('vendor/deepseek-harness/packages'))for(const n of children(group))pkg(n);for(const n of children('vendor/deepseek-harness/vendor'))pkg(n);for(const n of children('vendor/deepseek-harness/apps'))pkg(n);for(const n of children('vendor/deepseek-harness/native/system/packages'))pkg(n);
-const requests=code=>{const out=new Set(),tokens=/\/\*[\s\S]*?\*\/|\/\/[^\n]*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|[A-Za-z_$][\w$]*|[^\s]/g;let previous=[],statement=false,match;while((match=tokens.exec(code))){const value=match[0];if(value.startsWith('//')||value.startsWith('/*'))continue;if(['import','export'].includes(value)&&previous.at(-1)!=='.')statement=true;if(value[0]==='"'||value[0]==="'"){if(previous.at(-1)==='('&&['require','__require','import'].includes(previous.at(-2))&&previous.at(-3)!=='.'||statement&&['from','import'].includes(previous.at(-1)))out.add(value.slice(1,-1));}if(value===';')statement=false;previous.push(value);if(previous.length>3)previous.shift();}return [...out];};
+let parser;
+const requests=(code,file)=>{
+  const ts=parser??=require(require.resolve('typescript',{paths:[process.cwd(),'/app/vendor/deepseek-harness']}));
+  const source=ts.createSourceFile(file,code,ts.ScriptTarget.Latest,true,ts.ScriptKind.JS);
+  if(source.parseDiagnostics.length)throw Error('Invalid JavaScript in runtime dependency inventory: '+file+': '+ts.flattenDiagnosticMessageText(source.parseDiagnostics[0].messageText,' '));
+  const out=new Set();
+  const add=node=>{if(node&&(ts.isStringLiteral(node)||ts.isNoSubstitutionTemplateLiteral(node)))out.add(node.text);};
+  const walk=node=>{
+    if(ts.isImportDeclaration(node)||ts.isExportDeclaration(node))add(node.moduleSpecifier);
+    else if(ts.isCallExpression(node)){
+      let callee=node.expression;
+      while(ts.isParenthesizedExpression(callee))callee=callee.expression;
+      if(callee.kind===ts.SyntaxKind.ImportKeyword||ts.isIdentifier(callee)&&['require','__require'].includes(callee.text))add(node.arguments[0]);
+    }
+    ts.forEachChild(node,walk);
+  };
+  walk(source);
+  return [...out];
+};
 const external=n=>!n.startsWith('.')&&!p.isAbsolute(n)&&!builtinModules.includes(n.replace(/^node:/,''));
-for(const [path,m]of Object.entries(packages)){const req=createRequire(p.join(root,path,'package.json')),node=new Set(),client=new Set(),seen=new Set();const follow=n=>{if(seen.has(n)||!f.existsSync(n))return;seen.add(n);for(const name of requests(f.readFileSync(n,'utf8'))){if(external(name))node.add(name);else if(name.startsWith('.')){const next=p.resolve(p.dirname(n),name);if(next.startsWith(p.join(root,path,'lib')+'/'))follow(next);}}};if(!['source','files'].includes(m.mode))for(const name of ['index.js','invariant.js','startup.js'])follow(p.join(root,path,'lib',name));if(m.mode==='client')for(const [name]of Object.entries(files))if(name.startsWith(path+'/lib/')&&/^\/(?:client(?:\.[^/]+)?|optional-[^/]+)\.js$/.test(name.slice((path+'/lib').length)))for(const request of requests(f.readFileSync(p.join(root,name),'utf8')))if(external(request))client.add(request);m.nodeRequests=[...node].sort();m.clientRequests=[...client].sort();m.resolvedBare={};for(const name of m.nodeRequests){const bare=name.startsWith('@')?name.split('/').slice(0,2).join('/'):name.split('/')[0];if(bare in workspace)continue;try{let file;try{file=req.resolve(bare+'/package.json')}catch{let dir=p.dirname(f.realpathSync(req.resolve(name)));while(!f.existsSync(p.join(dir,'package.json'))){const parent=p.dirname(dir);if(parent===dir)throw Error('External dependency manifest absent');dir=parent;}file=p.join(dir,'package.json');}const meta=JSON.parse(f.readFileSync(file));m.resolvedBare[name]={name:meta.name,version:meta.version};}catch{m.resolvedBare[name]=null;}}}
+for(const [path,m]of Object.entries(packages)){const req=createRequire(p.join(root,path,'package.json')),node=new Set(),client=new Set(),seen=new Set();const follow=n=>{if(seen.has(n)||!f.existsSync(n))return;seen.add(n);for(const name of requests(f.readFileSync(n,'utf8'),n)){if(external(name))node.add(name);else if(name.startsWith('.')){const next=p.resolve(p.dirname(n),name);if(next.startsWith(p.join(root,path,'lib')+'/'))follow(next);}}};if(!['source','files'].includes(m.mode))for(const name of ['index.js','invariant.js','startup.js'])follow(p.join(root,path,'lib',name));if(m.mode==='client')for(const [name]of Object.entries(files))if(name.startsWith(path+'/lib/')&&/^\/(?:client(?:\.[^/]+)?|optional-[^/]+)\.js$/.test(name.slice((path+'/lib').length)))for(const request of requests(f.readFileSync(p.join(root,name),'utf8'),name))if(external(request))client.add(request);m.nodeRequests=[...node].sort();m.clientRequests=[...client].sort();m.resolvedBare={};for(const name of m.nodeRequests){const bare=name.startsWith('@')?name.split('/').slice(0,2).join('/'):name.split('/')[0];if(bare in workspace)continue;try{let file;try{file=req.resolve(bare+'/package.json')}catch{let dir=p.dirname(f.realpathSync(req.resolve(name)));while(!f.existsSync(p.join(dir,'package.json'))){const parent=p.dirname(dir);if(parent===dir)throw Error('External dependency manifest absent');dir=parent;}file=p.join(dir,'package.json');}const meta=JSON.parse(f.readFileSync(file));m.resolvedBare[name]={name:meta.name,version:meta.version};}catch{m.resolvedBare[name]=null;}}}
 console.log(JSON.stringify({files,packages,workspace}));});
 '''
 
