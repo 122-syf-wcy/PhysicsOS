@@ -393,9 +393,9 @@ describe('physics scene chat card', () => {
     expect(unowned.container.querySelector('[data-scene-card]')).not.toBeNull()
   })
 
-  it('shows the unsupported note for a scene no domain runtime accepts', () => {
-    /* domainOfScene classifies on content, not a domain field: strip the
-       bodies so no domain runtime accepts the scene. */
+  it('rejects a structurally incomplete scene before mounting a runtime or renderer', () => {
+    /* Removing bodies leaves the original scene's references unresolved. The
+       import boundary must reject those facts before selecting a runtime. */
     const broken = { ...ref.scene, bodies: [] }
     const data: PhysicsSceneCardData = {
       sceneId: 'scene-broken',
@@ -409,9 +409,11 @@ describe('physics scene chat card', () => {
     }
     const view = render(<SceneChatCard {...cardProps(data)} />)
 
-    expect(view.getByRole('status').textContent)
-      .toContain('这段历史记录还没有本题代码实验')
+    expect(view.getByRole('alert').textContent)
+      .toContain('无法导入这份文件，请检查格式和完整性')
     expect(view.queryByRole('button', { name: '播放 / 暂停' })).toBeNull()
+    expect(view.queryByRole('button', { name: '在实验室中探索' })).toBeNull()
+    expect(view.container.querySelector('iframe')).toBeNull()
   })
 
   it('renders the solve summary: knowns, targets, answers, steps and the verdict', () => {

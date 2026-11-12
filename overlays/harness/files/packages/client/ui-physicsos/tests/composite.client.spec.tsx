@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { useStudentAuth } from './student-auth-fixture.client.ts'
 import { withOfficialRenderer } from './official-renderer-fixture.client.ts'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -55,7 +56,7 @@ const mountLab = (templateId: string) => {
       t={t}
       useSessions={neverHook}
       useWorkspaces={neverHook}
-      useAuth={neverHook}
+      useAuth={useStudentAuth}
     />,
   )
   return { surface, ...view }
@@ -353,7 +354,7 @@ describe('composite Lab surface', () => {
         openExperimentPicker={openExperimentPicker}
         useSessions={neverHook}
         useWorkspaces={neverHook}
-        useAuth={neverHook}
+        useAuth={useStudentAuth}
       />,
     )
     fireEvent.click(screen.getByTitle('切换实验'))
@@ -379,7 +380,7 @@ describe('composite Lab surface', () => {
         openSurface={openSurface}
         useSessions={neverHook}
         useWorkspaces={neverHook}
-        useAuth={neverHook}
+        useAuth={useStudentAuth}
       />,
     )
     expect(screen.getByText('实验中心')).toBeTruthy()

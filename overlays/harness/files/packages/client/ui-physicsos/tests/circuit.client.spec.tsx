@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { useStudentAuth } from './student-auth-fixture.client.ts'
 import { withOfficialRenderer } from './official-renderer-fixture.client.ts'
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
@@ -254,7 +255,7 @@ const mountLab = (templateId: string) => {
       t={t}
       useSessions={neverHook}
       useWorkspaces={neverHook}
-      useAuth={neverHook}
+      useAuth={useStudentAuth}
     />,
   )
   return { surface, ...view }

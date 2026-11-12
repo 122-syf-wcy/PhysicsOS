@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { useStudentAuth } from './student-auth-fixture.client.ts'
 import { useSyncExternalStore } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -24,7 +25,7 @@ it('persists a real inspector edit without rebuilding runtime, then resumes and 
   const { container } = render(<PhysicsSurface usePhysicsSurface={useSurface}
     useLearningRecord={selector => selector({ attempts: [] })}
     useRecentExperiments={selector => selector(controller.recent.getSnapshot())}
-    useSessions={neverHook} useWorkspaces={neverHook} useAuth={neverHook} t={t}
+    useSessions={neverHook} useWorkspaces={neverHook} useAuth={useStudentAuth} t={t}
     updateScene={controller.updateScene} openSurface={controller.open} openExperimentPicker={controller.openExperimentPicker} />)
   const originalLab = container.querySelector('[data-physicsos-surface="lab"]')
   const input = screen.getByRole('textbox', { name: '质量' })

@@ -8,7 +8,7 @@ import { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
 import SessionStore, { SessionId, type Session } from '@deepseek-ai/dsh-session'
 import { createMessage, type TokenUsage } from '@deepseek-ai/dsh-llm'
 import { RetryId } from '@deepseek-ai/dsh-llm-retry'
-import { describe, expect, it, onTestFinished } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { openUsageDomain } from '../src/usage-domain.ts'
 import { UsageService } from '../src/usage-service.ts'
 
@@ -17,20 +17,27 @@ const b = { schoolId: 'school-a', userKey: 'school-a:other', username: 'other', 
 const c = { schoolId: 'school-b', userKey: 'school-b:student', username: 'student', role: 'STUDENT' as const }
 const admin = { ...a, userKey: 'school-a:admin', username: 'admin', role: 'SCHOOL_ADMIN' as const }
 const root = { ...admin, role: 'SUPER_ADMIN' as const }
+
+beforeEach(() => {
+  // Session events and usage windows must observe the same Shanghai day.
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-11-10T16:00:01Z'))
+})
+afterEach(() => { vi.useRealTimers() })
+
 async function fixture() {
   const path = await mkdtemp(join(tmpdir(), 'physicsos-usage-'))
   let ctx: Context, backend: JsonStorageBackend, service: UsageService
-  let instant = new Date('2026-11-10T16:00:01Z')
   const open = async () => {
     ctx = new Context(); await ctx.plugin(Storage); await ctx.plugin(SessionStore)
     backend = new JsonStorageBackend(path); ctx.storage.backend.register('json', backend)
     ctx.provide('storageDomain', new DomainFacility(ctx, { backend: 'json' }))
-    service = new UsageService(await openUsageDomain(ctx), { now: () => instant })
+    service = new UsageService(await openUsageDomain(ctx))
   }
   const close = async () => { await service.dispose(); await service.domain.close(); await backend.close(); await ctx.fiber.dispose() }
   await open()
   onTestFinished(async () => { await close(); await rm(path, { recursive: true, force: true }) })
-  return { get ctx() { return ctx }, get service() { return service }, now: (value: string) => { instant = new Date(value) },
+  return { get ctx() { return ctx }, get service() { return service }, now: (value: string) => { vi.setSystemTime(new Date(value)) },
     restart: async () => { await close(); await open() } }
 }
 function final(session: Session, usage?: TokenUsage, turn = 1, step = 1) {

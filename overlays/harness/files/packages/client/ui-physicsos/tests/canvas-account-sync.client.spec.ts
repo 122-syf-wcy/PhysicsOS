@@ -110,8 +110,10 @@ describe('restored outbox and remote account changes', () => {
     await offline.dispose()
     const online = browser(remote, name)
     await online.refreshAccount()
-    await waitFor(() => expect(remote.documents.get(canvas)?.manifest.title).toBe('Final offline title'))
-    expect(online.documentSource(canvas).getSnapshot().status).toBe('saved')
+    await waitFor(() => {
+      expect(remote.documents.get(canvas)?.manifest.title).toBe('Final offline title')
+      expect(online.documentSource(canvas).getSnapshot().status).toBe('saved')
+    })
   })
 
   it('pulls remote changes when an already-visible browser window regains focus', async () => {

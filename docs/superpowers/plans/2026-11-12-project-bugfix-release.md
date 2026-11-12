@@ -23,12 +23,15 @@
 - [x] Reproduce incorrect assignment late receipts and sorting for offset timestamps, including existing records. Compare instants, retaining wire values.
 - [x] Reproduce a dirty whiteboard draft staying unsaved after closing/reopening. Resume autosave only after successful remote reconciliation; preserve conflict and failed-read behavior.
 - [x] Reproduce unsupported receding Doppler observers producing nonpositive frequency. Reject that domain while retaining valid near-limit and approaching cases.
-- [ ] Verify the experiment unit round-trip comparator accepts only finite values within a few floating-point rounding units; preserve strict intent checks and rejection of genuinely wrong values.
+- [x] Verify the experiment unit round-trip comparator accepts only finite values within a few floating-point rounding units; preserve strict intent checks and rejection of genuinely wrong values.
+
+- [x] Reproduce and fix diffraction playback rewinding after a visibility toggle; retain the lesson window before capturing its frame.
+- [x] Align stale authentication, clock and product regression fixtures with existing production contracts, keeping numerical and ownership assertions.
 
 ## Verification and publication
 
-- [ ] Review each fix and run its regression tests against real owning services/controllers/engines.
-- [ ] Run core, web, host, tooling and deployment checks in Docker; record any pre-existing failure separately with reproduction.
+- [x] Review each fix and run its regression tests against real owning services/controllers/engines.
+- [x] Run core, web, host, tooling and deployment checks in Docker; record any pre-existing failure separately with reproduction.
 - [ ] Commit and freeze the source, rebuild affected packages, validate runtime digests and plugin signatures.
 - [ ] Start a candidate with isolated data and exercise login, scoped reads, editor and affected behavior.
 - [ ] Recheck origin/main, server checkout and production image, then publish with paired backup and authenticated acceptance.

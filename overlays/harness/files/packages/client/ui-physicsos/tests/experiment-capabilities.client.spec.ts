@@ -78,16 +78,11 @@ describe('ExperimentCapabilities manifest', () => {
     }
   })
 
-  it('reports every shipped experiment engine-verified, and all but the fixed rig editable', () => {
+  it('reports every shipped experiment engine-verified and editable', () => {
     for (const entry of manifest) {
       expect(entry.verifiable, entry.id).toBe(true)
+      expect(entry.editable, entry.id).toBe(true)
     }
-    /* The photoelectric bench mounts an empty inspector: there is no parameter
-       or choice to edit, so the derivation declares it uneditable rather than
-       inheriting a blanket true. */
-    expect(
-      manifest.filter(entry => !entry.editable).map(entry => entry.id),
-    ).toEqual(['photoelectric-effect'])
   })
 
   it('declares nothing measurable until an interactive measurement tool ships', () => {
