@@ -1,8 +1,23 @@
 import type { Context } from '@deepseek-ai/cordis'
-import { BlockAssembler, type ToolCallBlock } from '@deepseek-ai/dsh-llm'
+import { BlockAssembler, type LlmResolvedModelInfo, type ReasoningEffortId, type ToolCallBlock } from '@deepseek-ai/dsh-llm'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { JsonObject } from '@physicsos/physics-whiteboard'
 import type { CanvasAssistantModel } from './canvas-assistant-types.ts'
+
+/** Prefer the lightest advertised effort; reasoning channels otherwise spend the whole budget thinking. */
+const LIGHT_EFFORTS = ['off', 'none', 'minimal', 'low'] as const
+/** A canvas proposal is a bounded JSON artifact, not a reasoning task. */
+const lightEffort = (info: LlmResolvedModelInfo): ReasoningEffortId | undefined => {
+  for (const level of LIGHT_EFFORTS) {
+    const effort = info.reasoning?.efforts.find(item => item.id.toLowerCase() === level)
+    if (effort !== undefined) return effort.id
+  }
+  return undefined
+}
+export const canvasAssistantBudget = (schemaBytes: number, promptBytes: number): number =>
+  // Reasoning channels reserve the budget before emitting the tool call, so the
+  // submitted artifact and its surrounding JSON need a bounded, honest share.
+  Math.min(8000, Math.max(1500, Math.ceil((schemaBytes + promptBytes) / 3) + 1200))
 
 /** One bounded submit tool using the existing configured provider and admitted attachments. */
 export function createCanvasAssistantModel(ctx: Context, route: { readonly provider: string; readonly model: string }): CanvasAssistantModel {
@@ -26,11 +41,15 @@ export function createCanvasAssistantModel(ctx: Context, route: { readonly provi
         if (request.attachment && !info.inputModalities?.includes('image')) return { error: 'MODEL_VISION_UNAVAILABLE' }
         signal.throwIfAborted()
         await onRequestStart?.()
+        // A reasoning channel keeps its answer inside reasoning_content unless the
+        // effort is reduced; at full effort it spends the whole budget thinking and
+        // never submits the one tool call this job requires.
+        const effort = lightEffort(info)
         for await (const chunk of llm.stream({
           provider: request.provider, model: request.model, system: request.system,
           messages: [{ role: 'user', content: [{ type: 'text', text: request.prompt }, ...(request.attachment ? [{ type: 'image' as const, attachment: request.attachment as unknown as ImageAttachmentRef }] : [])] }],
           tools: [{ name: tool, description: 'Submit one complete bounded review and editable annotation proposal. Never submit executable code or claim engine verification.', parameters: request.schema }],
-          maxTokens: request.maxTokens, temperature: 0.1, signal,
+          maxTokens: request.maxTokens, temperature: 0.1, ...(effort === undefined ? {} : { reasoningEffort: effort }), signal,
         })) {
           signal.throwIfAborted()
           bytes += Buffer.byteLength(JSON.stringify(chunk))

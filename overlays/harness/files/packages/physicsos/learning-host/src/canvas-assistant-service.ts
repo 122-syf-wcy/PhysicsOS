@@ -14,6 +14,7 @@ import { usageTokenSchema } from './usage-domain.ts'
 import type { CanvasAssistantAccount, CanvasAssistantDomain, CanvasAssistantStoredJob } from './canvas-assistant-domain.ts'
 import type { CanvasAssistantBinding, CanvasAssistantJob, CanvasAssistantMode, CanvasAssistantModelRequest, CanvasAssistantResult, CanvasAssistantServiceOptions } from './canvas-assistant-types.ts'
 import { modelAnnotationContext } from './canvas-assistant-annotations.ts'
+import { canvasAssistantBudget } from './canvas-assistant-model.ts'
 
 const identifier = z.string().min(1).max(128).regex(/^[A-Za-z0-9._:-]+$/)
 const integer = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
@@ -223,7 +224,9 @@ export class CanvasAssistantService {
       await this.checkHead(actor, binding)
       this.assertOpen()
       const at = this.now().toISOString()
-      const request: CanvasAssistantModelRequest = { provider: this.options.model.provider, model: this.options.model.model, mode: body.mode, system: CANVAS_ASSISTANT_POLICY, prompt, schema: proposalSchema(body.mode), maxTokens: 8000, ...(attachment ? { attachment } : {}) }
+      const schema = proposalSchema(body.mode)
+      const request: CanvasAssistantModelRequest = { provider: this.options.model.provider, model: this.options.model.model, mode: body.mode, system: CANVAS_ASSISTANT_POLICY, prompt, schema,
+        maxTokens: canvasAssistantBudget(Buffer.byteLength(JSON.stringify(schema)), Buffer.byteLength(prompt)), ...(attachment ? { attachment } : {}) }
       const job: CanvasAssistantStoredJob = { id, canvasId, mode: body.mode, status: 'queued', operationId: body.operationId, requestHash, binding, request, nodeIds, createdAt: at, updatedAt: at, attempt: 0, usageRecorded: false }
       // Reserve synchronously before the asynchronous durable write; simultaneous accounts share this bound.
       const key = canvasScopeKey(actor.schoolId, actor.userKey, id)
@@ -303,7 +306,11 @@ export class CanvasAssistantService {
       if (!active(job)) return
       controller.signal.throwIfAborted()
       if (output.error) {
-        await update(current => { current.error = output.error === 'MODEL_VISION_UNAVAILABLE' ? '当前模型通道未启用图像输入，请联系管理员检查配置。' : '当前助手模型暂不可用，请稍后重试。' })
+        // Artifact problems mean this attempt produced nothing usable; say so
+        // precisely instead of blaming the whole channel for a retryable answer.
+        await update(current => { current.error = output.error === 'MODEL_VISION_UNAVAILABLE' ? '当前模型通道未启用图像输入，请联系管理员检查配置。'
+          : output.error === 'MODEL_INCOMPLETE' || output.error === 'MODEL_ARTIFACT_MISSING' ? '助手本次未给出完整建议，请重试或缩小选择范围。'
+            : '当前助手模型暂不可用，请稍后重试。' })
         throw new Error('Model failed')
       }
       await update(current => { if (active(current)) current.status = 'validating' })
