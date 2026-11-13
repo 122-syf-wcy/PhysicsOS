@@ -88,6 +88,20 @@ function groupDocument(): CanvasDocumentState {
 afterEach(() => { cleanup(); observed.current = undefined; vi.restoreAllMocks() })
 
 describe('controlled experiment canvas workspace', () => {
+  it('offers pen and bounded shape tools while keeping the Agent panel optional', () => {
+    const fixture = rootFixture()
+    render(<CanvasWorkspace {...fixture.props} />)
+    expect(screen.queryByRole('complementary', { name: 'Canvas Agent' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Pen' }))
+    expect(fixture.view.getSnapshot().tool).toBe('pen')
+    expect(currentFlow().nodesDraggable).toBe(false)
+    expect(screen.getByRole('button', { name: 'Rectangle' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Agent' }))
+    expect(screen.getByRole('complementary', { name: 'Canvas Agent' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Check canvas' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Draw with AI' })).toBeTruthy()
+  })
+
   it('starts in single-finger canvas movement on a touch tablet and keeps an explicit editing mode', () => {
     vi.stubGlobal('matchMedia', () => ({ matches: true, addEventListener() {}, removeEventListener() {} }))
     onTestFinished(() => { vi.unstubAllGlobals() })

@@ -28,6 +28,9 @@ import { openWhiteboardDomain } from './whiteboard-domain.ts'
 import { WhiteboardService } from './whiteboard-service.ts'
 import { createWhiteboardModel } from './whiteboard-model.ts'
 import { whiteboardRoutes, WHITEBOARD_PREFIX } from './whiteboard-routes.ts'
+import { openCanvasAssistantDomain } from './canvas-assistant-domain.ts'
+import { CanvasAssistantService } from './canvas-assistant-service.ts'
+import { createCanvasAssistantModel } from './canvas-assistant-model.ts'
 
 export { CanvasService } from './canvas-service.ts'
 export { CanvasBlobStore } from './canvas-blob-store.ts'
@@ -86,8 +89,16 @@ export async function apply(ctx: Context, config: Config = {}): Promise<() => Pr
     yield () => whiteboard.dispose()
     await whiteboard.initialize()
     yield ctx.webServer.register({ kind: 'prefix', path: WHITEBOARD_PREFIX, handler: whiteboardRoutes({ service: whiteboard, identity }) })
+    const assistantDomain = await openCanvasAssistantDomain(ctx)
+    yield () => assistantDomain.close()
+    const assistant = new CanvasAssistantService(assistantDomain, canvas, {
+      model: createCanvasAssistantModel(ctx, { provider: config.whiteboardProvider ?? 'physicsos-pool', model: config.whiteboardModel ?? 'deepseek-v4.1-flash' }),
+      recordUsage: input => usage.recordModelReceipt(input),
+    })
+    yield () => assistant.dispose()
+    await assistant.initialize()
     const learningHandler = learningRoutes({ service, identity })
-    const canvasHandler = canvasRoutes({ service: canvas, identity })
+    const canvasHandler = canvasRoutes({ service: canvas, assistant, identity })
     yield ctx.webServer.register({
       kind: 'prefix',
       path: '/physicsos/learning',

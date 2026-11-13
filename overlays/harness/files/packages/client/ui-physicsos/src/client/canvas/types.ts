@@ -1,4 +1,5 @@
 import type { PhysicsScene } from '@physicsos/physics-scene'
+import type { CanvasAnnotationScene } from '@physicsos/physics-whiteboard'
 import type { CanvasHead } from '@physicsos/physics-workbench/protocol'
 import type {
   AxisDescriptor, BuildMode, CanvasFile, CanvasGraph, CanvasLayout, CanvasManifest, CanvasNode,
@@ -10,7 +11,7 @@ import type {
   WorkbenchInstanceSummary,
 } from '../physics/workbench-instance-runtime.ts'
 import type { WorkspaceFrame } from '../physics/workspace-runtime.ts'
-import type { CanvasApi, CanvasListQuery, CanvasVerificationResponse } from './api.ts'
+import type { CanvasApi, CanvasAssistantJob, CanvasAssistantRequest, CanvasListQuery, CanvasVerificationResponse } from './api.ts'
 import type { CanvasPersistence } from './persistence.ts'
 import type { GraphLimits } from '@physicsos/physics-workbench/graph'
 
@@ -158,6 +159,12 @@ export interface CanvasControllerOptions extends CanvasEnvironment {
 }
 
 export interface CanvasController {
+  startAssistant(canvasId: string, input: Pick<CanvasAssistantRequest, 'mode' | 'prompt' | 'viewport' | 'selectedNodeIds' | 'image'>, expected: CanvasAnnotationRevision, signal?: AbortSignal): Promise<CanvasAssistantJob>
+  assistantJob(canvasId: string, jobId: string, expected: CanvasAnnotationRevision, signal?: AbortSignal): Promise<CanvasAssistantJob>
+  cancelAssistant(canvasId: string, jobId: string, namespace: string, signal?: AbortSignal): Promise<CanvasAssistantJob>
+  appendAnnotations(canvasId: string, scene: CanvasAnnotationScene, expected?: CanvasAnnotationRevision): Promise<number | void>
+  replaceAnnotations(canvasId: string, scene: CanvasAnnotationScene, expected?: CanvasAnnotationRevision): Promise<number | void>
+  removeAnnotations(canvasId: string, primitiveIds: readonly string[], expected?: CanvasAnnotationRevision): Promise<number | void>
   assignProject(canvasId: string, projectId?: string): Promise<void>
   readonly state: CanvasObservable<CanvasRosterState>
   getSnapshot(this: void): CanvasRosterState
@@ -227,6 +234,12 @@ export interface CanvasController {
   /** Wait for every queued local write; rejection means the draft is not durably saved. */
   flush(canvasId?: string): Promise<void>
   dispose(): Promise<void>
+}
+
+export interface CanvasAnnotationRevision {
+  readonly namespace: string
+  readonly editSequence: number
+  readonly head?: { readonly version: number; readonly generation: number; readonly manifestDigest: string }
 }
 
 export interface CanvasClipboard {

@@ -32,7 +32,7 @@ export function OptionalPhysicsSurface(props: PhysicsSurfaceProps) {
 }
 
 export function OptionalSceneChatCard(props: SceneChatCardProps) {
-  return <OptionalComponent load={loadCard} componentProps={props} />
+  return <OptionalComponent load={loadCard} componentProps={props} loading="compact" />
 }
 
 export function OptionalAdminWorkspace(props: ComponentProps<typeof AdminWorkspace>) {
@@ -47,19 +47,19 @@ export function OptionalCanvasOverlay(props: CanvasOverlayProps) {
   const active = props.usePhysicsSurface(state => state.surface === 'canvas')
   const requested = props.useStore(state => state.toast !== undefined || state.pendingSourceKey !== undefined)
   if (!active && !requested) return null
-  return <OptionalComponent load={loadCanvasOverlay} componentProps={props} />
+  return <OptionalComponent load={loadCanvasOverlay} componentProps={props} loading="none" />
 }
 export function OptionalCanvasWorkspace(props: CanvasWorkbenchProps) {
   return <OptionalComponent load={loadCanvasWorkspace} componentProps={props} />
 }
 export function OptionalCanvasInstance(props: CanvasInstanceProps) {
-  return <OptionalComponent load={loadCanvasInstance} componentProps={props} />
+  return <OptionalComponent load={loadCanvasInstance} componentProps={props} loading="compact" />
 }
 export function OptionalCanvasFrame(props: CanvasFrameProps) {
-  return <OptionalComponent load={loadCanvasFrame} componentProps={props} />
+  return <OptionalComponent load={loadCanvasFrame} componentProps={props} loading="compact" />
 }
 
 /** The turn-tail only mounts this after its published scene is present. */
 export function OptionalSceneCardBody(props: SceneCardBodyProps) {
-  return <OptionalComponent load={loadBody} componentProps={props} />
+  return <OptionalComponent load={loadBody} componentProps={props} loading="compact" />
 }

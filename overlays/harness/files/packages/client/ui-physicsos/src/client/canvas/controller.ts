@@ -1,5 +1,7 @@
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { PhysicsScene } from '@physicsos/physics-scene'
+import { parseCanvasAnnotations, readCanvasAnnotations } from '@physicsos/physics-whiteboard'
+import type { CanvasAnnotationRevision } from './types.ts'
 import type { CanvasHead, CanvasVerificationListResponse } from '@physicsos/physics-workbench/protocol'
 import type {
   CanvasGraph, CanvasLayout, CanvasManifest, CanvasNode, ComparisonConfig,
@@ -34,6 +36,7 @@ import type {
   CanvasNoteDraftState,
 } from './types.ts'
 import { canvasComparisonAxisSignature, canvasNoteDraftKey } from './types.ts'
+import { annotationPatch, applyAnnotationPatch, refreshAnnotationPatch } from './annotation-history.ts'
 
 interface StableCells {
   readonly summary: SnapshotStore<WorkbenchInstanceSummary | undefined>
@@ -184,7 +187,8 @@ const documentPatch = (before: CanvasManifest, after: CanvasManifest, label: str
         fields: oldEntity === undefined || newEntity === undefined ? [] : diffFields(oldEntity, newEntity) })
     }
   }
-  return freezeData({ label, entities, ...(before.title === after.title ? {} : { title: { before: before.title, after: after.title } }) })
+  const annotations = annotationPatch(before.metadata?.physicsosAnnotations, after.metadata?.physicsosAnnotations)
+  return freezeData({ label, entities, ...(annotations === undefined ? {} : { annotations }), ...(before.title === after.title ? {} : { title: { before: before.title, after: after.title } }) })
 }
 const setJsonPath = (input: JsonObject, path: readonly string[], value: JsonValue | undefined): JsonObject => {
   const key = path[0]
@@ -219,11 +223,18 @@ const applyDocumentPatch = (manifest: CanvasManifest, patch: DocumentPatch, reve
     working[collection] = [...entities.values()]
   }
   if (patch.title !== undefined) working.title = reverse ? patch.title.before : patch.title.after
+  if (patch.annotations !== undefined) {
+    const next = applyAnnotationPatch(working.metadata && isJsonRecord(working.metadata) ? working.metadata.physicsosAnnotations : undefined, patch.annotations, reverse)
+    const metadata: Record<string, JsonValue> = { ...(isJsonRecord(working.metadata) ? working.metadata : {}) }
+    if (next === undefined) delete metadata.physicsosAnnotations
+    else metadata.physicsosAnnotations = copyJsonObject(next)
+    working.metadata = metadata
+  }
   return unwrap(parseManifest(working))
 }
 const refreshRemovedEntities = (manifest: CanvasManifest, patch: DocumentPatch, reverse: boolean): DocumentPatch => {
   const input = copyJsonObject(manifest)
-  return { ...patch, entities: patch.entities.map(change => {
+  return { ...patch, ...(patch.annotations ? { annotations: refreshAnnotationPatch(manifest.metadata?.physicsosAnnotations, patch.annotations, reverse) } : {}), entities: patch.entities.map(change => {
     const removes = reverse ? change.before === undefined : change.after === undefined
     if (!removes) return change
     const current = entityList(input, change.collection).find(value => entityId(change.collection, value) === change.id)
@@ -1420,7 +1431,90 @@ export function createCanvasController(options: CanvasControllerOptions): Canvas
     }
   }
 
+  const assertAnnotationRevision = (entry: DocumentEntry, expected?: CanvasAnnotationRevision): void => {
+    if (expected === undefined) return
+    if (entry.namespace !== expected.namespace || currentScope().namespace !== expected.namespace) throw new Error('CANVAS_ACCOUNT_MISMATCH')
+    const current = requireRecord(entry)
+    if (current.editSequence !== expected.editSequence) throw new Error('CANVAS_ANNOTATIONS_STALE')
+    if (expected.head !== undefined && (current.head?.version !== expected.head.version || current.head?.generation !== expected.head.generation || current.head?.manifestDigest !== expected.head.manifestDigest)) throw new Error('CANVAS_ANNOTATIONS_STALE')
+  }
   const controller: CanvasController = {
+    startAssistant: async (canvas, input, expected, signal) => {
+      await activating
+      const current = currentScope(); const entry = entryOf(canvas); await openEntry(entry)
+      assertAnnotationRevision(entry, expected)
+      const saved = requireRecord(entry)
+      if (!current.api || !saved.head || saved.editSequence !== saved.acknowledgedSequence || !entry.localSaved || entry.writing || entryNotes(entry).some(owner => owner.dirty || owner.saving)) throw new Error('CANVAS_ASSISTANT_SAVE_REQUIRED')
+      const job = await current.api.startAssistant(canvas, { ...input, operationId: id('assistant'), namespace: expected.namespace, editSequence: expected.editSequence,
+        expectedVersion: saved.head.version, expectedGeneration: saved.head.generation, manifestDigest: saved.head.manifestDigest }, signal)
+      try {
+        assertAnnotationRevision(entry, expected)
+        if (currentScope().epoch !== current.epoch || signal?.aborted) throw new Error('CANVAS_ACCOUNT_MISMATCH')
+      } catch (error) {
+        // Keep the original owner-bound cancellation handle even when local edits
+        // or account switching make the new proposal ineligible for display.
+        if (!['ready', 'error', 'cancelled'].includes(job.status)) {
+          try { await current.api.cancelAssistant(canvas, job.id, id('cancel-stale-assistant')) } catch (cancellationError) { report(cancellationError) }
+        }
+        throw error
+      }
+      return job
+    },
+    assistantJob: async (canvas, jobId, expected, signal) => {
+      await activating
+      const current = currentScope(); const entry = entryOf(canvas); await openEntry(entry)
+      assertAnnotationRevision(entry, expected)
+      if (!current.api) throw new Error('CANVAS_ASSISTANT_LOGIN_REQUIRED')
+      const job = await current.api.assistantJob(canvas, jobId, signal)
+      assertAnnotationRevision(entry, expected)
+      if (currentScope().epoch !== current.epoch || job.binding.namespace !== expected.namespace || job.binding.editSequence !== expected.editSequence) throw new Error('CANVAS_ANNOTATIONS_STALE')
+      return job
+    },
+    cancelAssistant: async (canvas, jobId, namespace, signal) => {
+      await activating
+      const current = currentScope()
+      if (!current.api || current.namespace !== namespace) throw new Error('CANVAS_ACCOUNT_MISMATCH')
+      const job = await current.api.cancelAssistant(canvas, jobId, id('cancel-assistant'), signal)
+      if (currentScope().epoch !== current.epoch || job.binding.namespace !== namespace) throw new Error('CANVAS_ACCOUNT_MISMATCH')
+      return job
+    },
+    appendAnnotations: async (canvas, input, expected) => {
+      const scene = parseCanvasAnnotations(input)
+      const entry = await openForEdit(canvas)
+      let sequence = 0
+      await mutate(entry, 'append-annotations', manifest => {
+        assertAnnotationRevision(entry, expected)
+        const previous = readCanvasAnnotations(manifest.metadata)
+        const combined = parseCanvasAnnotations({ schemaVersion: 1, primitives: [...previous.primitives, ...scene.primitives] })
+        const next = { ...manifest, metadata: copyJsonObject({ ...manifest.metadata, physicsosAnnotations: combined }) }
+        sequence = requireRecord(entry).editSequence + (sameJson(manifest, next) ? 0 : 1)
+        return next
+      })
+      return sequence
+    },
+    replaceAnnotations: async (canvas, input, expected) => {
+      const scene = parseCanvasAnnotations(input)
+      const entry = await openForEdit(canvas)
+      let sequence = 0
+      await mutate(entry, 'replace-annotations', manifest => {
+        assertAnnotationRevision(entry, expected)
+        const next = { ...manifest, metadata: copyJsonObject({ ...manifest.metadata, physicsosAnnotations: scene }) }
+        sequence = requireRecord(entry).editSequence + (sameJson(manifest, next) ? 0 : 1)
+        return next
+      })
+      return sequence
+    },
+    removeAnnotations: async (canvas, primitiveIds, expected) => {
+      const removed = new Set(primitiveIds); const entry = await openForEdit(canvas); let sequence = 0
+      await mutate(entry, 'remove-annotations', manifest => {
+        assertAnnotationRevision(entry, expected)
+        const scene = readCanvasAnnotations(manifest.metadata)
+        const next = { ...manifest, metadata: copyJsonObject({ ...manifest.metadata, physicsosAnnotations: { schemaVersion: 1, primitives: scene.primitives.filter(p => !removed.has(p.id)) } }) }
+        sequence = requireRecord(entry).editSequence + (sameJson(manifest, next) ? 0 : 1)
+        return next
+      })
+      return sequence
+    },
     assignProject: async (canvas, projectId) => {
       if (projectId !== undefined && (projectId.trim() === '' || projectId.length > 200 || /[\u0000-\u001f]/.test(projectId))) throw new Error('INVALID_PROJECT')
       const entry = await openForEdit(canvas)
@@ -1590,6 +1684,7 @@ export function createCanvasController(options: CanvasControllerOptions): Canvas
       const { importGraph } = await import('@physicsos/physics-workbench/graph')
       const result = unwrap(await importGraph(input, { id: kind => id(kind), hash: canonical => hash(JSON.parse(canonical)),
         ...(title === undefined ? {} : { title }), now: now(), limits: limitsFor(current.namespace) }))
+      readCanvasAnnotations(result.graph.manifest.metadata)
       if (currentScope().epoch !== current.epoch) throw new Error('CANVAS_ACCOUNT_MISMATCH')
       return createFromGraph(result.graph)
     },

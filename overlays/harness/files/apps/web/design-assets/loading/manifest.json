@@ -1,0 +1,110 @@
+{
+  "brand": "PhysicsOS",
+  "purpose": "Shared loading-screen IP character cutouts",
+  "generated_at": "2026-11-13T04:45:09.719531+00:00",
+  "mode": "fallback CLI edit",
+  "cli": "/Users/dongsiwei/.codex/skills/.system/imagegen/scripts/image_gen.py (bundled, unmodified)",
+  "endpoint": "https://image.haqiuhaqiu.xyz/v1",
+  "model": "gpt-image-2.6-sunburst",
+  "reference": {
+    "path": "../splash/splash-campus-wide-master.png",
+    "sha256": "8b5a6a88717d8b17d03d99872a5653d761d1f8ca7c8088b2d3ad9925cac361d8"
+  },
+  "generation_parameters": {
+    "size": "1024x1024",
+    "quality": "high",
+    "background": "transparent",
+    "output_format": "png",
+    "n": 1,
+    "input_fidelity": "omitted"
+  },
+  "style_lock": "campus-watercolour-cartoon; bright watercolor, expressive eyes, fine linework, rounded youthful faces, warm daylight; reference proportions preserved",
+  "postprocessing": {
+    "crop": "Native-alpha silhouette bbox at alpha >= 16, expanded by 4 source pixels; preserves original alpha within crop",
+    "resize": "Lanczos; fit within 296x296 on centered 320x320 transparent canvas",
+    "encoding": {
+      "format": "WebP",
+      "quality": 86,
+      "method": 6,
+      "alpha_quality": 100
+    },
+    "masters": "Untracked, Git-ignored output/imagegen/physicsos-loading/{boy,girl,cat}-master.png"
+  },
+  "assets": {
+    "boy": {
+      "url": "/physicsos/loading/boy.webp",
+      "dimensions": [
+        320,
+        320
+      ],
+      "bytes": 20498,
+      "sha256": "04f04505fdffcb1c69368c9e21a96305c656ee54b88c6868d48dc5b10afbbc63",
+      "master_sha256": "436d0175a22589cf6c37764cf70083157d587c77cd27542d6eba70ee577ab820",
+      "source_crop": [
+        120,
+        0,
+        903,
+        1024
+      ],
+      "character_dimensions": [
+        226,
+        296
+      ],
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "prompt": "Use case: identity-preserve\nAsset type: PhysicsOS loading-screen character cutout, displayed at 84–108 pixels.\nInput image 1: approved PhysicsOS watercolor campus character master; preserve the selected character's identity, face, clothing, and painterly linework.\nPrimary request: extract and redraw ONLY the black-haired boy in the cream knit shirt as an isolated, centered character on a genuinely transparent background. Remove all other characters and the entire campus setting.\nStyle/medium: match the reference exactly: bright watercolor cartoon, large expressive brown/amber eyes, softly rounded faces, delicate fine linework, warm daylight, softly brushed shading. Preserve the detailed reference proportions; do not turn this into super-deformed chibi, photorealism, 3D, a flat vector icon, or an unrelated mascot.\nSubject: The boy from the left of the reference: youthful soft round face, short black slightly tousled hair, expressive warm brown eyes, small gentle smile, cream short-sleeve knit shirt with ribbed collar and a short brown-buttoned placket. Preserve his hairstyle, face shape, clothing and delicate knit texture.\nComposition/framing: Waist-up portrait with upper torso, both shoulders and relaxed arms visible; upright front-facing pose. Centered on a square transparent canvas with generous clear margin around all visible edges. Clear readable silhouette when rendered at 100 pixels. Gentle welcoming expression and look toward the viewer.\nConstraints: maintain the character identity and signature colors from input image 1. One character only; true transparent alpha everywhere outside the character, no paper background, white rectangle, campus, floor, shadows outside the subject, props, badge, halo, border, text, logos, or watermark. Keep the watercolor edge detail and soft shading within the character. No cropped hair, ears, elbows, or paws.\n"
+    },
+    "girl": {
+      "url": "/physicsos/loading/girl.webp",
+      "dimensions": [
+        320,
+        320
+      ],
+      "bytes": 29830,
+      "sha256": "c1ad88cff73aec7870e0b67659b591ed065574314cdbaac0b0d23779758e710f",
+      "master_sha256": "cd4e731ae1c1be0b9b9d901dabdb0fd45d22cf9b786ccb159ab7414c9a40c3cb",
+      "source_crop": [
+        167,
+        0,
+        946,
+        1024
+      ],
+      "character_dimensions": [
+        225,
+        296
+      ],
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "prompt": "Use case: identity-preserve\nAsset type: PhysicsOS loading-screen character cutout, displayed at 84–108 pixels.\nInput image 1: approved PhysicsOS watercolor campus character master; preserve the selected character's identity, face, clothing, and painterly linework.\nPrimary request: extract and redraw ONLY the round-glasses girl in the navy striped top and dark cardigan as an isolated, centered character on a genuinely transparent background. Remove all other characters and the entire campus setting.\nStyle/medium: match the reference exactly: bright watercolor cartoon, large expressive brown/amber eyes, softly rounded faces, delicate fine linework, warm daylight, softly brushed shading. Preserve the detailed reference proportions; do not turn this into super-deformed chibi, photorealism, 3D, a flat vector icon, or an unrelated mascot.\nSubject: The girl from the right of the reference: youthful soft round face, long dark-brown wavy hair with bangs, large warm brown eyes, clear round eyeglasses, small gentle smile, navy and blue horizontally striped top beneath a dark knit cardigan. Preserve her hairstyle, transparent round glasses, face shape and clothing.\nComposition/framing: Waist-up portrait with upper torso, both shoulders and relaxed arms visible; upright front-facing pose. Centered on a square transparent canvas with generous clear margin around all visible edges. Clear readable silhouette when rendered at 100 pixels. Gentle welcoming expression and look toward the viewer.\nConstraints: maintain the character identity and signature colors from input image 1. One character only; true transparent alpha everywhere outside the character, no paper background, white rectangle, campus, floor, shadows outside the subject, props, badge, halo, border, text, logos, or watermark. Keep the watercolor edge detail and soft shading within the character. No cropped hair, ears, elbows, or paws.\n"
+    },
+    "cat": {
+      "url": "/physicsos/loading/cat.webp",
+      "dimensions": [
+        320,
+        320
+      ],
+      "bytes": 29632,
+      "sha256": "4f721e2eab50803ab1629d56ee1a647adedf1edfba881600eecd7135259cf2e1",
+      "master_sha256": "48f539309e5e4ceca4b8d3d43fd09acf535e7d78d8c4d9cd3038d4d7545cb2b5",
+      "source_crop": [
+        52,
+        76,
+        962,
+        872
+      ],
+      "character_dimensions": [
+        296,
+        259
+      ],
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "prompt": "Use case: identity-preserve\nAsset type: PhysicsOS loading-screen character cutout, displayed at 84–108 pixels.\nInput image 1: approved PhysicsOS watercolor campus character master; preserve the selected character's identity, face, clothing, and painterly linework.\nPrimary request: extract and redraw ONLY the silver tabby cat with the cream patch and pale-blue collar as an isolated, centered character on a genuinely transparent background. Remove all other characters and the entire campus setting.\nStyle/medium: match the reference exactly: bright watercolor cartoon, large expressive brown/amber eyes, softly rounded faces, delicate fine linework, warm daylight, softly brushed shading. Preserve the detailed reference proportions; do not turn this into super-deformed chibi, photorealism, 3D, a flat vector icon, or an unrelated mascot.\nSubject: The same silver tabby cat as the reference: round amber eyes, pink nose, white muzzle and chest, grey tabby M on forehead, big pointed pink-inner ears, dark tail tip and pale-blue collar. CRITICAL identity invariant: a clearly visible warm cream-colored patch on its upper back, amid silver-grey tabby stripes; do not omit it.\nComposition/framing: The whole cat in the same compact resting crouch as the reference, body turned slightly so the cream upper-back patch remains clearly visible; head facing viewer, both front paws and curved tail in frame. Centered on a square transparent canvas with generous clear margin around all visible edges. Clear readable silhouette when rendered at 100 pixels. Gentle welcoming expression and look toward the viewer.\nConstraints: maintain the character identity and signature colors from input image 1. One character only; true transparent alpha everywhere outside the character, no paper background, white rectangle, campus, floor, shadows outside the subject, props, badge, halo, border, text, logos, or watermark. Keep the watercolor edge detail and soft shading within the character. No cropped hair, ears, elbows, or paws.\n"
+    }
+  }
+}

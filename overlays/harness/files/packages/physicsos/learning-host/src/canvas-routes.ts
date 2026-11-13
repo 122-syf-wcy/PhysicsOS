@@ -2,6 +2,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { PhysicsosIdentity } from './identity.ts'
 import type { CanvasService, CanvasListQuery } from './canvas-service.ts'
+import type { CanvasAssistantService } from './canvas-assistant-service.ts'
 import { CanvasError } from './canvas-error.ts'
 import {
   canvasActor,
@@ -19,6 +20,7 @@ export const CANVAS_PREFIX = '/physicsos/learning/canvases'
 /** Actual service and per-request identity resolver. */
 export interface CanvasRouteDependencies {
   readonly service: CanvasService
+  readonly assistant?: CanvasAssistantService
   readonly identity: () => PhysicsosIdentity | undefined
 }
 
@@ -96,9 +98,9 @@ export function canvasRoutes(deps: CanvasRouteDependencies): (req: IncomingMessa
           responseCompletion()
           canvasSend(res, status, body)
         }
-        const read = async (): Promise<unknown> => {
+        const read = async (limit = deps.service.config.limits.maxRequestBytes): Promise<unknown> => {
           canvasJsonMutation(req)
-          return canvasReadJson(req, deps.service.config.limits.maxRequestBytes, signal)
+          return canvasReadJson(req, limit, signal)
         }
         try {
         if (segments.length === 0 && method === 'GET') {
@@ -128,6 +130,20 @@ export function canvasRoutes(deps: CanvasRouteDependencies): (req: IncomingMessa
         }
         const id = segments[0]
         if (id === undefined) throw new CanvasError(404, 'NOT_FOUND', 'Canvas route does not exist.')
+        if (deps.assistant && segments[1] === 'assistant' && segments[2] === 'jobs') {
+          if (segments.length === 3 && method === 'POST') {
+            reply(202, await deps.assistant.create(actor, id, await read(deps.assistant.maxRequestBytes)))
+            return
+          }
+          if (segments.length === 4 && method === 'GET') {
+            reply(200, await deps.assistant.read(actor, id, segments[3]!))
+            return
+          }
+          if (segments.length === 5 && segments[4] === 'cancel' && method === 'POST') {
+            reply(200, await deps.assistant.cancel(actor, id, segments[3]!, await read(4096)))
+            return
+          }
+        }
         if (segments.length === 1 && method === 'GET') {
           reply(200, await deps.service.open(actor, id))
           return

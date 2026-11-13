@@ -35,6 +35,10 @@ export type DrawingPrimitive = PrimitiveBase & (
   | { readonly type: 'arc'; readonly cx: number; readonly cy: number; readonly radius: number; readonly startAngle: number; readonly endAngle: number }
   | { readonly type: 'text'; readonly x: number; readonly y: number; readonly text: string; readonly fontSize: number; readonly textAlign?: 'left' | 'center' | 'right' }
 )
+/** Raw device input is retained separately from the smoothed display geometry. */
+export interface CanvasInkSample { readonly x: number; readonly y: number; readonly pressure: number; readonly time: number }
+export type CanvasAnnotationPrimitive = DrawingPrimitive & { readonly samples?: readonly CanvasInkSample[] }
+export interface CanvasAnnotationScene { readonly schemaVersion: 1; readonly primitives: readonly CanvasAnnotationPrimitive[] }
 export interface DrawingUncertainty {
   readonly kind: 'illegible' | 'not-to-scale' | 'missing-measurement'
   readonly message: string

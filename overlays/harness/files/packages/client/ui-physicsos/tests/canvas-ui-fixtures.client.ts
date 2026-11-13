@@ -162,6 +162,12 @@ export function keyedSelectorHook<T>(resolve: (key: string) => CanvasObservable<
 
 function commandSpies() {
   return {
+    appendAnnotations: vi.fn<CanvasCommands['appendAnnotations']>(async () => undefined),
+    startAssistant: vi.fn<CanvasCommands['startAssistant']>(unusedCommand),
+    assistantJob: vi.fn<CanvasCommands['assistantJob']>(unusedCommand),
+    cancelAssistant: vi.fn<CanvasCommands['cancelAssistant']>(unusedCommand),
+    replaceAnnotations: vi.fn<CanvasCommands['replaceAnnotations']>(async () => undefined),
+    removeAnnotations: vi.fn<CanvasCommands['removeAnnotations']>(async () => undefined),
     create: vi.fn<CanvasCommands['create']>(unusedCommand),
     open: vi.fn<CanvasCommands['open']>(unusedCommand),
     list: vi.fn<CanvasCommands['list']>(unusedCommand),

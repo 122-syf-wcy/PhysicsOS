@@ -1,5 +1,6 @@
 import type { DrawingDiagram, DrawingPrimitive, JsonObject, JsonValue, SceneChange, ScenePatch, SourceImage, ViewBox, WhiteboardDocument, WhiteboardScene } from './types.ts'
 export type * from './types.ts'
+export { CANVAS_ANNOTATION_LIMITS, parseCanvasAnnotations, readCanvasAnnotations, canvasAnnotationsJsonSchema } from './annotations.ts'
 
 const fail = (message: string): never => { throw new Error(message) }
 function json(input: unknown, ancestors = new Set<object>(), depth = 0): JsonValue {

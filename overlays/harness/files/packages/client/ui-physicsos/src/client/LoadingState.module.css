@@ -1,0 +1,63 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  width: 100%;
+  min-height: min(58vh, 420px);
+  padding: 36px 20px;
+  box-sizing: border-box;
+  color: var(--text-secondary, #727a83);
+  animation: arrive 280ms ease-out both;
+}
+.scene {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  width: min(280px, 100%);
+  height: 124px;
+  isolation: isolate;
+}
+.halo {
+  position: absolute;
+  z-index: -1;
+  inset: 18px -10px -6px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, #e5eceb80, transparent 72%);
+}
+.scene img {
+  display: block;
+  width: 108px;
+  height: 108px;
+  object-fit: contain;
+  animation: float 3.6s ease-in-out infinite;
+}
+.scene .boy { margin-right: -18px; }
+.scene .girl { animation-delay: -1.2s; }
+.scene .cat { width: 84px; height: 84px; margin-left: -17px; animation-delay: -2.4s; }
+.brand { font-size: 13px; letter-spacing: .12em; font-weight: 500; opacity: .8; }
+.track { width: 72px; height: 3px; border-radius: 9px; overflow: hidden; background: #8a9eaa20; }
+.track > span {
+  display: block;
+  width: 36px;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, transparent, #829ba7a0, transparent);
+  animation: sweep 1.8s ease-in-out infinite;
+}
+.compact { min-height: 108px; padding: 16px; gap: 8px; }
+.compact .scene { width: 134px; height: 54px; }
+.compact .scene img { width: 54px; height: 54px; }
+.compact .scene .boy { margin-right: -9px; }
+.compact .scene .cat { width: 42px; height: 42px; margin-left: -9px; }
+.compact .brand { display: none; }
+.compact .track { width: 48px; }
+@keyframes arrive { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@keyframes sweep { from { transform: translateX(-36px); } to { transform: translateX(108px); } }
+@media (prefers-reduced-motion: reduce) {
+  .root, .scene img, .track > span { animation: none; }
+  .track > span { width: 100%; }
+}

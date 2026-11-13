@@ -25,6 +25,7 @@ const json = (value: unknown, status = 200): Response => Response.json(value, { 
 function server() {
   const documents = new Map<string, { head: CanvasHead; manifest: CanvasManifest; objects: Map<string, CanvasStoredValue> }>()
   let sequence = 0
+  let hook: ((path: string, method: string, body: unknown, init?: RequestInit) => Promise<Response | undefined>) | undefined
   const head = async (manifest: CanvasManifest, version: number): Promise<CanvasHead> => ({ id: manifest.id, title: manifest.title,
     version, generation: 1, changeSeq: ++sequence, manifestDigest: await hash(manifest), createdAt: manifest.createdAt, updatedAt: now })
   const fetcher = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
@@ -33,6 +34,8 @@ function server() {
     const path = url.pathname
     const method = init?.method ?? 'GET'
     const body: unknown = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined
+    const intercepted = await hook?.(path, method, body, init)
+    if (intercepted !== undefined) return intercepted
     const base = '/physicsos/learning/canvases'
     if (path === `${base}/policy`) return json({ schemaVersion: 1, limits: GRAPH_LIMITS })
     if (path === base && method === 'GET') return json({ items: [...documents.values()].map(value => value.head) })
@@ -74,7 +77,7 @@ function server() {
     }
     return json({ error: { code: 'NOT_FOUND', message: 'No route.' } }, 404)
   }
-  return { api: createCanvasApi(fetcher), documents, changeTitle: async (canvas: string, title: string) => {
+  return { api: createCanvasApi(fetcher), documents, setHook: (next: typeof hook) => { hook = next }, changeTitle: async (canvas: string, title: string) => {
     const value = documents.get(canvas)
     if (value === undefined) throw new Error('The browser never published this canvas.')
     value.manifest = unwrap(parseManifest({ ...value.manifest, title }))
@@ -101,6 +104,48 @@ afterEach(async () => {
 })
 
 describe('restored outbox and remote account changes', () => {
+  it('cancels a created assistant job through its captured owner API when local editing makes the response stale', async () => {
+    const remote = server(); const controller = browser(remote, databaseName(), { schedule: () => 0, cancel: () => undefined })
+    const canvas = await controller.create('Delayed assistant admission'); await controller.sync(canvas)
+    let release!: () => void; let enter!: () => void
+    const gate = new Promise<void>(resolve => { release = resolve }); const entered = new Promise<void>(resolve => { enter = resolve })
+    const cancelled: string[] = []; const owners: (string | null)[] = []; let admitted: unknown
+    remote.setHook(async (path, method, body, init) => {
+      if (path === `/physicsos/learning/canvases/${encodeURIComponent(canvas)}/assistant/jobs` && method === 'POST') {
+        const input = body as { namespace: string; editSequence: number; expectedVersion: number; expectedGeneration: number; manifestDigest: string }
+        admitted = { id: 'job-stale', canvasId: canvas, mode: 'check', status: 'thinking', binding: { canvasId: canvas, namespace: input.namespace, editSequence: input.editSequence, head: { version: input.expectedVersion, generation: input.expectedGeneration, manifestDigest: input.manifestDigest } }, createdAt: now, updatedAt: now }
+        enter(); await gate; return json(admitted)
+      }
+      if (path.endsWith('/assistant/jobs/job-stale/cancel') && method === 'POST') {
+        cancelled.push('job-stale'); owners.push(new Headers(init?.headers).get('x-physicsos-canvas-owner'))
+        return json({ ...(admitted as object), status: 'cancelled' })
+      }
+      return undefined
+    })
+    const saved = controller.documentSource(canvas).getSnapshot()
+    const starting = controller.startAssistant(canvas, { mode: 'check', prompt: 'Check saved ink', viewport: { x: 0, y: 0, zoom: 1, width: 800, height: 600 }, selectedNodeIds: [] }, { namespace: saved.namespace!, editSequence: saved.editSequence, head: saved.head! })
+    const rejection = expect(starting).rejects.toThrow(/STALE/)
+    await entered; await controller.appendAnnotations(canvas, { schemaVersion: 1, primitives: [{ id: 'local', type: 'line', points: [[0, 0], [10, 10]] }] }); release(); await rejection
+    expect(cancelled).toEqual(['job-stale'])
+    expect(owners).toEqual([encodeURIComponent(canonicalStringify({ schoolId: 'school', username: 'A' }))])
+  })
+  it('undoes only local ink after a remote append and restores the current removed primitive on redo', async () => {
+    const remote = server(); const controller = browser(remote, databaseName(), { schedule: () => 0, cancel: () => undefined })
+    const canvas = await controller.create('Shared handwriting'); await controller.sync(canvas)
+    const local = { id: 'ink-A', type: 'polyline' as const, points: [[0, 0], [10, 10]] as const, samples: [{ x: 0, y: 0, pressure: 0.2, time: 1 }, { x: 10, y: 10, pressure: 0.8, time: 2 }] }
+    await controller.appendAnnotations(canvas, { schemaVersion: 1, primitives: [local] }); await controller.sync(canvas)
+    const value = remote.documents.get(canvas)!
+    const currentA = { ...local, style: { strokeColor: '#123456' } }
+    const foreign = { id: 'ink-B', type: 'line' as const, points: [[20, 0], [30, 10]] as const }
+    value.manifest = { ...value.manifest, metadata: { ...value.manifest.metadata, physicsosAnnotations: { schemaVersion: 1, primitives: [currentA, foreign] } } }
+    await remote.changeTitle(canvas, value.manifest.title); await controller.sync(canvas)
+    await controller.undo(canvas)
+    expect(controller.documentSource(canvas).getSnapshot().manifest?.metadata?.physicsosAnnotations).toEqual({ schemaVersion: 1, primitives: [foreign] })
+    await controller.redo(canvas)
+    expect(controller.documentSource(canvas).getSnapshot().manifest?.metadata?.physicsosAnnotations).toEqual({ schemaVersion: 1, primitives: [currentA, foreign] })
+    await controller.sync(canvas)
+    expect(remote.documents.get(canvas)?.manifest.metadata?.physicsosAnnotations).toEqual({ schemaVersion: 1, primitives: [currentA, foreign] })
+  })
   it('drains an existing offline outbox on an already-online startup without another edit or reconnect event', async () => {
     const remote = server()
     const name = databaseName()

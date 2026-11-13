@@ -1,6 +1,7 @@
 import type { CanvasHead, CanvasOpenResponse } from '@physicsos/physics-workbench/protocol'
 import type { CanvasManifest, JsonObject, MergeConflict } from '@physicsos/physics-workbench/types'
 import { parseManifest } from '@physicsos/physics-workbench/codec'
+import { readAnnotationPatch } from './annotation-history.ts'
 import {
   boolean, canonicalStringify, digest, exactKeys, fail, freezeData, integer, isoDate,
   jsonObject, jsonValue, list, oneOf, optional, record, text, unique, unwrap,
@@ -100,7 +101,8 @@ const readEntityPatch = (input: unknown, path: string): CanvasEntityPatch => {
 }
 const readDocumentPatch = (input: unknown, path: string): CanvasDocumentPatch => {
   const value = record(input, path)
-  exactKeys(value, ['label', 'entities', 'title'], path)
+  exactKeys(value, ['label', 'entities', 'title', 'annotations'], path)
+  const annotations = optional(value.annotations, `${path}/annotations`, readAnnotationPatch)
   const title = optional(value.title, `${path}/title`, (input, at) => {
     const title = record(input, at)
     exactKeys(title, ['before', 'after'], at)
@@ -108,7 +110,7 @@ const readDocumentPatch = (input: unknown, path: string): CanvasDocumentPatch =>
   })
   const entities = list(value.entities, `${path}/entities`, readEntityPatch)
   unique(entities, entity => canonicalStringify([entity.collection, entity.id]), `${path}/entities`)
-  return { label: text(value.label, `${path}/label`, true), entities, ...(title === undefined ? {} : { title }) }
+  return { label: text(value.label, `${path}/label`, true), entities, ...(title === undefined ? {} : { title }), ...(annotations === undefined ? {} : { annotations }) }
 }
 const readDocumentHistory = (input: unknown, path: string): CanvasDocumentHistory => {
   const value = record(input, path)

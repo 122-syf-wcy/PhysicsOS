@@ -1,18 +1,21 @@
 import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import {
-  Background, BackgroundVariant, MiniMap, Panel, ReactFlow, SelectionMode,
+  Background, BackgroundVariant, MiniMap, ReactFlow, SelectionMode,
   type Edge, type NodeChange, type NodeTypes, type ReactFlowInstance, type Viewport,
 } from '@xyflow/react'
 import {
   Button, IconChevronLeftOutlineRegular, IconEllipsisOutlineRegular, Input, Menu, Modal, StateDot, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { readCanvasAnnotations, type CanvasAnnotationPrimitive, type CanvasAnnotationScene } from '@physicsos/physics-whiteboard'
 import type { CanvasLayout, CanvasNode, ComparisonMember } from '@physicsos/physics-workbench/types'
 
 import type { CanvasFlowNode, CanvasWorkbenchProps } from './contract.ts'
 import type { CanvasNodePatch } from './types.ts'
 import { CanvasComparisonNode, CanvasExperimentNode, CanvasGroupNode, CanvasNoteNode, CanvasResultNode } from './CanvasNodes.tsx'
 import { descendants } from './geometry.ts'
+import { CanvasAnnotations } from './CanvasAnnotations.tsx'
+import { CanvasAssistantPanel } from './CanvasAssistantPanel.tsx'
 import { downloadCanvasFile } from './download.ts'
 import { draftToScene, starterDraft } from '../physics/circuit-builder.ts'
 import css from './CanvasWorkspace.module.css'
@@ -65,7 +68,10 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
   const [resolving, setResolving] = useState(false)
   const [resolveError, setResolveError] = useState<string | undefined>()
   const resolutionRun = useRef(0)
-  const [minimap, setMinimap] = useState(true)
+  const [minimap, setMinimap] = useState(false)
+  const [agentOpen, setAgentOpen] = useState(false)
+  const [candidate, setCandidate] = useState<CanvasAnnotationScene>()
+  const [shapeSuggestion, setShapeSuggestion] = useState<{ originalId: string; primitive: CanvasAnnotationPrimitive }>()
   const [spacePan, setSpacePan] = useState(false)
   const [suspendingPanKeys, setSuspendingPanKeys] = useState(false)
   const importInput = useRef<HTMLInputElement>(null)
@@ -78,6 +84,8 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
   useEffect(() => {
     resolutionRun.current += 1
     setResolveOpen(false)
+    setCandidate(undefined)
+    setShapeSuggestion(undefined)
     setResolving(false)
     setResolveError(undefined)
   }, [canvasId, document?.namespace])
@@ -182,6 +190,21 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
       type: 'straight', style: { pointerEvents: 'none' } }))
   }, [manifest?.edges, flowNodes])
   const viewport = view.transientViewport ?? manifest?.viewport ?? { x: 0, y: 0, zoom: 1 }
+  const annotations = useMemo(() => { try { return readCanvasAnnotations(manifest?.metadata) } catch { return { schemaVersion: 1 as const, primitives: [] } } }, [manifest?.metadata])
+  const annotationError = useCallback((error: unknown) => { actions.showToast('canvas.error.generic', errorMessage(error, props), true) }, [actions, props])
+  const toWorld = (point: { readonly clientX: number; readonly clientY: number }) => {
+    if (flow.current) return flow.current.screenToFlowPosition({ x: point.clientX, y: point.clientY })
+    const bounds = board.current?.getBoundingClientRect()
+    return { x: (point.clientX - (bounds?.left ?? 0) - viewport.x) / viewport.zoom, y: (point.clientY - (bounds?.top ?? 0) - viewport.y) / viewport.zoom }
+  }
+  const acceptShape = (): void => {
+    if (!shapeSuggestion || !document?.namespace || !annotations.primitives.some(p => p.id === shapeSuggestion.originalId)) return
+    const selected = shapeSuggestion
+    void run(async () => {
+      await canvasCommands.replaceAnnotations(canvasId, { schemaVersion: 1, primitives: annotations.primitives.map(p => p.id === selected.originalId ? selected.primitive : p) }, { namespace: document.namespace!, editSequence: document.editSequence })
+      setShapeSuggestion(undefined)
+    })
+  }
 
   const positionsToWorld = (changes: readonly NodeChange<CanvasFlowNode>[]): void => {
     if (drag.current === undefined) return
@@ -340,10 +363,11 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
     if (modifier && lower === 'v') { event.preventDefault(); if (editable) paste(); return }
     if (modifier && lower === 'g') { event.preventDefault(); if (!editable) return; if (event.shiftKey) void run(() => canvasCommands.ungroup(canvasId, groups.map(group => group.id))); else if (view.selected.length >= 2) void run(() => canvasCommands.group(canvasId, view.selected, t('canvas.node.groupName'))); return }
     if (event.key === 'Delete' || event.key === 'Backspace') { event.preventDefault(); if (editable && unlocked.length > 0) void run(() => canvasCommands.removeNodes(canvasId, unlocked.map(node => node.id)), 'canvas.removed'); return }
-    if (event.key === 'Escape') { event.preventDefault(); actions.select([]); gestureLayouts.current = {}; drag.current = undefined; actions.clearGesture(); return }
+    if (event.key === 'Escape') { event.preventDefault(); actions.setTool('select'); setShapeSuggestion(undefined); actions.select([]); gestureLayouts.current = {}; drag.current = undefined; actions.clearGesture(); return }
     if (!modifier && lower === 'f') { event.preventDefault(); fit(event.shiftKey ? view.selected : undefined); return }
     if (modifier && lower === 'f') { event.preventDefault(); setLocateOpen(true); return }
     if (!modifier && lower === 'n') { event.preventDefault(); if (editable) addNote(); return }
+    if (!modifier && ['p', 'l', 'r', 'o', 'e', 'v'].includes(lower)) { event.preventDefault(); actions.setTool(({ p: 'pen', l: 'line', r: 'rectangle', o: 'ellipse', e: 'eraser', v: 'select' } as const)[lower as 'p' | 'l' | 'r' | 'o' | 'e' | 'v']); return }
     if (!modifier && lower === 'h') { event.preventDefault(); actions.setTool(view.tool === 'hand' ? 'select' : 'hand'); return }
     const direction = event.key === 'ArrowLeft' ? [-1, 0] : event.key === 'ArrowRight' ? [1, 0] : event.key === 'ArrowUp' ? [0, -1] : event.key === 'ArrowDown' ? [0, 1] : undefined
     if (direction !== undefined && editable && view.selected.length > 0 && manifest !== undefined) {
@@ -392,6 +416,11 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
   }
   const actionMenu = (choice: string): void => {
     setMenuOpen(false)
+    if (choice === 'new-bench') addBench()
+    if (choice === 'library') actions.setLibraryOpen(true)
+    if (choice === 'note') addNote()
+    if (choice === 'compare') createComparison()
+    if (choice === 'save') void run(async () => { await canvasCommands.flush(canvasId); await canvasCommands.sync(canvasId) })
     if (choice === 'rename') { setRename(manifest?.title ?? t('canvas.untitled')); setRenameOpen(true) }
     if (choice === 'copy') void run(async () => { props.openCanvasView(await canvasCommands.duplicate(canvasId)) }, 'canvas.copied')
     if (choice === 'copy-selection') void run(() => canvasCommands.copyNodes(canvasId, view.selected))
@@ -407,7 +436,7 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
   }
   const located = (manifest?.nodes ?? []).filter(node => `${node.title ?? ''} ${node.kind} ${node.id}`.toLocaleLowerCase().includes(locateSearch.toLocaleLowerCase()))
 
-  return <main ref={root} className={`${css.workspace} ${view.tool === 'hand' ? css.handMode : ''}`} data-physicsos-canvas-workspace="true" data-canvas-id={canvasId}
+  return <main ref={root} className={`${css.workspace} ${view.tool === 'hand' ? css.handMode : ''} ${agentOpen ? css.agentVisible : ''}`} data-physicsos-canvas-workspace="true" data-canvas-id={canvasId}
     tabIndex={0} aria-label={t('canvas.title')} onKeyDown={keyboard}
     onFocusCapture={event => { setSuspendingPanKeys(inputTarget(event.target)) }}
     onBlurCapture={event => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) { setSpacePan(false); setSuspendingPanKeys(false) } }}
@@ -420,6 +449,40 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
         </div>
         <span className={css.saveState} role="status"><StateDot state={document?.status === 'syncing' || document?.status === 'saving-local' ? 'ongoing' : document?.status === 'saved' || document?.status === 'local-saved' ? 'done' : document?.status === 'error' || document?.status === 'conflict' ? 'warning' : 'idle'} /> {t(`canvas.sync.${document?.status ?? 'loading'}`)}</span>
       </div>
+        <div className={css.toolbarActions}>
+          <Button size="sm" variant="primary" className={css.dockPrimary} disabled={!editable || addingBench} onClick={addBench}>{t('canvas.newBench')}</Button>
+          {editInstanceId === undefined ? null : <Button size="sm" variant="outline" className={css.mobileEdit} data-testid="canvas-edit-experiment"
+            onClick={() => { actions.focus(props.canvasInstanceKey(canvasId, editInstanceId)) }}>{t('canvas.editExperiment')}</Button>}
+          <Button size="sm" variant="outline" disabled={!editable} onClick={() => { actions.setLibraryOpen(true) }}>{t('canvas.addExperiment')}</Button>
+          <Button size="sm" variant="outline" disabled={!editable} onClick={addNote}>{t('canvas.addNote')}</Button>
+          <Button size="sm" variant="outline" disabled={!editable || (manifest?.snapshots.length ?? 0) < 2} onClick={createComparison}>{t('canvas.compare')}</Button>
+          <Button size="sm" variant="outline" disabled={!editable || document?.status === 'syncing'} onClick={() => { void run(async () => { await canvasCommands.flush(canvasId); await canvasCommands.sync(canvasId) }) }}>{t('canvas.save')}</Button>
+          <Menu open={menuOpen} portal autoFocus side="bottom" align="end" listClassName={css.dockMenu} onClose={() => { setMenuOpen(false) }}
+            anchor={<Button size="sm" variant="toolbar" className={css.assetMenuTrigger} aria-label={t('canvas.more')} onClick={() => { setMenuOpen(!menuOpen) }}><IconEllipsisOutlineRegular size={14} /></Button>}
+            items={[
+              { id: 'new-bench', label: t('canvas.newBench'), disabled: !editable || addingBench },
+              { id: 'library', label: t('canvas.addExperiment'), disabled: !editable },
+              { id: 'note', label: t('canvas.addNote'), disabled: !editable },
+              { id: 'compare', label: t('canvas.compare'), disabled: !editable || (manifest?.snapshots.length ?? 0) < 2 },
+              { id: 'save', label: t('canvas.save'), disabled: !editable || document?.status === 'syncing' },
+              { id: 'rename', label: t('canvas.rename'), disabled: !editable },
+              { id: 'copy', label: t('canvas.copy'), disabled: !editable },
+              { id: 'copy-selection', label: t('canvas.node.copySelection'), disabled: view.selected.length === 0 },
+              { id: 'paste', label: t('canvas.node.paste'), disabled: !editable },
+              { id: 'lock', label: t('canvas.node.lock'), disabled: !editable || view.selected.length === 0 },
+              { id: 'unlock', label: t('canvas.node.unlock'), disabled: !editable || view.selected.length === 0 },
+              { id: 'group', label: t('canvas.node.group'), disabled: !editable || view.selected.length < 2 },
+              { id: 'ungroup', label: t('canvas.node.ungroup'), disabled: !editable || groups.length === 0 },
+              { id: 'front', label: t('canvas.node.front'), disabled: !editable || unlocked.length === 0 },
+              { id: 'back', label: t('canvas.node.back'), disabled: !editable || unlocked.length === 0 },
+              { id: 'forward', label: t('canvas.node.forward'), disabled: !editable || unlocked.length === 0 },
+              { id: 'backward', label: t('canvas.node.backward'), disabled: !editable || unlocked.length === 0 },
+              { id: 'export', label: t('canvas.export'), disabled: manifest === undefined },
+              { id: 'import', label: t('canvas.import') },
+              { id: 'remove', label: t('canvas.node.delete'), danger: true, disabled: !editable || unlocked.length === 0 },
+            ]} onSelect={actionMenu} />
+        </div>
+      <Button size="sm" variant="toolbar" aria-pressed={agentOpen} aria-label={t('canvas.agent')} onClick={() => { setAgentOpen(!agentOpen) }}>{t('canvas.agent')}</Button>
     </header>
     {document?.error === undefined ? null : <div className={css.notice} role="alert">{document.error.message}<Button size="sm" variant="ghost" onClick={() => { void run(() => canvasCommands.retry(canvasId)) }}>{t('canvas.retry')}</Button></div>}
     {document?.status === 'conflict' ? <div className={css.notice} role="alert">
@@ -433,6 +496,7 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
         <Button size="sm" variant="ghost" onClick={() => { actionMenu('export') }}>{t('canvas.export')}</Button>
       </div>
     </div> : null}
+    <div className={css.canvasBody}>
     <div ref={board} className={css.board}>
       {manifest === undefined && document?.loading !== false ? <div className={css.loading} role="status" aria-label={t('canvas.sync.loading')}><StateDot state="ongoing" /></div> :
         <ReactFlow<CanvasFlowNode, Edge> className={css.flow} nodes={flowNodes} edges={flowEdges} nodeTypes={nodeTypes} viewport={viewport}
@@ -466,63 +530,41 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
           minZoom={0.08} maxZoom={4} preventScrolling nodeOrigin={[0, 0]}
           noDragClassName="nodrag" noPanClassName="nopan" noWheelClassName="nowheel"
           elevateNodesOnSelect={false} elevateEdgesOnSelect={false}>
-          <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="var(--dsw-alias-border-l2)" />
+          <Background variant={BackgroundVariant.Lines} gap={20} lineWidth={0.4} color="var(--dsw-alias-border-l2)" />
           {minimap ? <MiniMap aria-label={t('canvas.minimap')} pannable zoomable nodeColor={node => node.type === 'group' ? 'var(--dsw-alias-bg-module-platform)' : 'var(--dsw-alias-button-info-fill)'} maskColor="color-mix(in srgb, var(--dsw-alias-bg-base) 75%, transparent)" /> : null}
-          <Panel position="bottom-right"><div className={css.boardStatus}>{t('canvas.keyboardHint')}</div></Panel>
+
         </ReactFlow>}
-      {manifest?.nodes.length === 0 ? <div className={css.boardEmpty}><h2>{t('canvas.emptyBoard')}</h2><p>{t('canvas.emptyBoardHint')}</p><div className={css.actionRow}>
-        <Button variant="primary" disabled={!editable || addingBench} onClick={addBench}>{t('canvas.newBench')}</Button>
-        <Button variant="outline" disabled={!editable} onClick={() => { actions.setLibraryOpen(true) }}>{t('canvas.addExperiment')}</Button>
-        <Button variant="outline" disabled={!editable} onClick={addNote}>{t('canvas.addNote')}</Button>
-      </div></div> : null}
-    </div>
-    <div className={css.dockShelf}>
-      <div className={css.toolDock} role="toolbar" aria-label={t('canvas.title')}>
-        <div className={css.navigationControls}>
-          <div className={css.toolGroup}>
-            <Button size="sm" variant={view.tool === 'hand' ? 'primary' : 'toolbar'} aria-pressed={view.tool === 'hand'} onClick={() => { actions.setTool('hand') }}>{t('canvas.hand')}</Button>
-            <Button size="sm" variant={view.tool === 'select' ? 'primary' : 'toolbar'} aria-pressed={view.tool === 'select'} onClick={() => { actions.setTool('select') }}>{t('canvas.select')}</Button>
-            <Button size="sm" variant="toolbar" onClick={() => { setLocateOpen(true) }}>{t('canvas.locate')}</Button>
-          </div>
-          <div className={css.historyGroup}>
-            <Tooltip label={t('canvas.undo')} portal><Button size="sm" variant="toolbar" disabled={!editable || document?.canUndo !== true} aria-label={t('canvas.undo')} onClick={() => { void run(() => canvasCommands.undo(canvasId)) }}>{t('canvas.undo')}</Button></Tooltip>
-            <Tooltip label={t('canvas.redo')} portal><Button size="sm" variant="toolbar" disabled={!editable || document?.canRedo !== true} aria-label={t('canvas.redo')} onClick={() => { void run(() => canvasCommands.redo(canvasId)) }}>{t('canvas.redo')}</Button></Tooltip>
-          </div>
-          <div className={css.boardControls}>
+      <CanvasAnnotations document={document} viewport={viewport} tool={view.tool} active={editable && !spacePan} commands={canvasCommands} toWorld={toWorld} candidate={candidate} onError={annotationError} onSuggestion={setShapeSuggestion} />
+          <div className={`${css.boardControls} ${css.zoomShelf}`}>
             <Tooltip label={t('canvas.zoomOut')} portal><Button size="sm" variant="toolbar" aria-label={t('canvas.zoomOut')} onClick={() => { zoom(-1) }}>−</Button></Tooltip>
             <span className={css.zoomValue}>{String(Math.round(viewport.zoom * 100))}%</span>
             <Tooltip label={t('canvas.zoomIn')} portal><Button size="sm" variant="toolbar" aria-label={t('canvas.zoomIn')} onClick={() => { zoom(1) }}>+</Button></Tooltip>
             <Button size="sm" variant="toolbar" onClick={() => { fit() }}>{t('canvas.fit')}</Button>
             <Button size="sm" variant={minimap ? 'primary' : 'toolbar'} aria-pressed={minimap} onClick={() => { setMinimap(!minimap) }}>{t('canvas.minimap')}</Button>
           </div>
-        </div>
-        <div className={css.toolbarActions}>
-          <Button size="sm" variant="primary" className={css.dockPrimary} disabled={!editable || addingBench} onClick={addBench}>{t('canvas.newBench')}</Button>
-          {editInstanceId === undefined ? null : <Button size="sm" variant="outline" className={css.mobileEdit} data-testid="canvas-edit-experiment"
-            onClick={() => { actions.focus(props.canvasInstanceKey(canvasId, editInstanceId)) }}>{t('canvas.editExperiment')}</Button>}
-          <Button size="sm" variant="outline" disabled={!editable} onClick={() => { actions.setLibraryOpen(true) }}>{t('canvas.addExperiment')}</Button>
-          <Button size="sm" variant="outline" disabled={!editable} onClick={addNote}>{t('canvas.addNote')}</Button>
-          <Button size="sm" variant="outline" disabled={!editable || (manifest?.snapshots.length ?? 0) < 2} onClick={createComparison}>{t('canvas.compare')}</Button>
-          <Button size="sm" variant="outline" disabled={!editable || document?.status === 'syncing'} onClick={() => { void run(async () => { await canvasCommands.flush(canvasId); await canvasCommands.sync(canvasId) }) }}>{t('canvas.save')}</Button>
-          <Menu open={menuOpen} portal autoFocus side="top" align="end" listClassName={css.dockMenu} onClose={() => { setMenuOpen(false) }}
-            anchor={<Button size="sm" variant="toolbar" aria-label={t('canvas.more')} onClick={() => { setMenuOpen(!menuOpen) }}><IconEllipsisOutlineRegular size={14} /></Button>}
-            items={[
-              { id: 'rename', label: t('canvas.rename'), disabled: !editable },
-              { id: 'copy', label: t('canvas.copy'), disabled: !editable },
-              { id: 'copy-selection', label: t('canvas.node.copySelection'), disabled: view.selected.length === 0 },
-              { id: 'paste', label: t('canvas.node.paste'), disabled: !editable },
-              { id: 'lock', label: t('canvas.node.lock'), disabled: !editable || view.selected.length === 0 },
-              { id: 'unlock', label: t('canvas.node.unlock'), disabled: !editable || view.selected.length === 0 },
-              { id: 'group', label: t('canvas.node.group'), disabled: !editable || view.selected.length < 2 },
-              { id: 'ungroup', label: t('canvas.node.ungroup'), disabled: !editable || groups.length === 0 },
-              { id: 'front', label: t('canvas.node.front'), disabled: !editable || unlocked.length === 0 },
-              { id: 'back', label: t('canvas.node.back'), disabled: !editable || unlocked.length === 0 },
-              { id: 'forward', label: t('canvas.node.forward'), disabled: !editable || unlocked.length === 0 },
-              { id: 'backward', label: t('canvas.node.backward'), disabled: !editable || unlocked.length === 0 },
-              { id: 'export', label: t('canvas.export'), disabled: manifest === undefined },
-              { id: 'import', label: t('canvas.import') },
-              { id: 'remove', label: t('canvas.node.delete'), danger: true, disabled: !editable || unlocked.length === 0 },
-            ]} onSelect={actionMenu} />
+      {shapeSuggestion ? <div className={css.shapeSuggestion} role="status"><span>{t('canvas.shapeSuggestion')}</span><Button size="sm" onClick={acceptShape}>{t('canvas.shapeAccept')}</Button><Button size="sm" variant="ghost" onClick={() => setShapeSuggestion(undefined)}>{t('canvas.shapeKeep')}</Button></div> : null}
+      {manifest?.nodes.length === 0 && annotations.primitives.length === 0 && view.tool !== 'pen' && view.tool !== 'line' && view.tool !== 'rectangle' && view.tool !== 'ellipse' ? <div className={css.boardEmpty}><h2>{t('canvas.emptyBoard')}</h2><p>{t('canvas.emptyBoardHint')}</p><div className={css.actionRow}>
+        <Button variant="primary" disabled={!editable || addingBench} onClick={addBench}>{t('canvas.newBench')}</Button>
+        <Button variant="outline" disabled={!editable} onClick={() => { actions.setLibraryOpen(true) }}>{t('canvas.addExperiment')}</Button>
+        <Button variant="outline" disabled={!editable} onClick={addNote}>{t('canvas.addNote')}</Button>
+      </div></div> : null}
+    </div>
+    {agentOpen ? <CanvasAssistantPanel canvasId={canvasId} document={document} commands={canvasCommands} selectedNodeIds={view.selected} viewport={{ ...viewport, width: board.current?.clientWidth ?? 800, height: board.current?.clientHeight ?? 600 }} getViewport={() => ({ ...(flow.current?.getViewport() ?? viewport), width: board.current?.clientWidth || 800, height: board.current?.clientHeight || 600 })} t={t} onClose={() => { setAgentOpen(false); setCandidate(undefined) }} onCandidate={setCandidate} /> : null}
+    </div>
+    <div className={css.dockShelf}>
+      <div className={css.toolDock} role="toolbar" aria-label={t('canvas.title')}>
+        <div className={css.navigationControls}>
+          <div className={css.toolGroup}>
+            <Button size="sm" variant={view.tool === 'hand' ? 'primary' : 'toolbar'} aria-label={t('canvas.hand')} title={t('canvas.hand')} aria-pressed={view.tool === 'hand'} onClick={() => { actions.setTool('hand') }}><span aria-hidden="true">✥</span></Button>
+            <Button size="sm" variant={view.tool === 'select' ? 'primary' : 'toolbar'} aria-label={t('canvas.select')} title={t('canvas.select')} aria-pressed={view.tool === 'select'} onClick={() => { actions.setTool('select') }}><span aria-hidden="true">↖</span></Button>
+            {(['pen', 'line', 'rectangle', 'ellipse', 'eraser'] as const).map(tool => <Button key={tool} size="sm" variant={view.tool === tool ? 'primary' : 'toolbar'} aria-label={t(`canvas.${tool}`)} title={t(`canvas.${tool}`)} aria-pressed={view.tool === tool} disabled={!editable} onClick={() => { actions.setTool(tool) }}><span aria-hidden="true">{({ pen: '✎', line: '╱', rectangle: '▭', ellipse: '○', eraser: '⌫' } as const)[tool]}</span></Button>)}
+            <Button size="sm" variant="toolbar" onClick={() => { setLocateOpen(true) }}>{t('canvas.locate')}</Button>
+          </div>
+          <div className={css.historyGroup}>
+            <Tooltip label={t('canvas.undo')} portal><Button size="sm" variant="toolbar" disabled={!editable || document?.canUndo !== true} aria-label={t('canvas.undo')} onClick={() => { void run(() => canvasCommands.undo(canvasId)) }}><span aria-hidden="true">↶</span></Button></Tooltip>
+            <Tooltip label={t('canvas.redo')} portal><Button size="sm" variant="toolbar" disabled={!editable || document?.canRedo !== true} aria-label={t('canvas.redo')} onClick={() => { void run(() => canvasCommands.redo(canvasId)) }}><span aria-hidden="true">↷</span></Button></Tooltip>
+          </div>
+
         </div>
         {view.selected.length === 0 ? null : <div className={css.selectionTools}>
           <span className={css.selectionCount}>{String(view.selected.length)}</span>

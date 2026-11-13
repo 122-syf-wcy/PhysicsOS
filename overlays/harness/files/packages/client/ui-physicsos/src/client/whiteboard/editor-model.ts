@@ -1,4 +1,5 @@
 import type { JsonObject, WhiteboardScene } from '@physicsos/physics-whiteboard'
+import { inkOutline } from './ink.ts'
 export interface Bounds { readonly x: number; readonly y: number; readonly width: number; readonly height: number }
 export const numeric = (element: JsonObject, key: string, fallback = 0): number => typeof element[key] === 'number' ? element[key] : fallback
 export const pointsOf = (element: JsonObject): readonly (readonly [number, number])[] => Array.isArray(element.points) ? element.points as readonly (readonly [number, number])[] : []
@@ -44,13 +45,5 @@ export function hitElement(elements: readonly JsonObject[], x: number, y: number
 /** Pressure changes remain in the outline even when successive coordinates coincide. */
 export function pressurePath(element: JsonObject): string {
   const points = pointsOf(element); const pressures = Array.isArray(element.pressures) ? element.pressures : []
-  const left: string[] = []; const right: string[] = []; const width = numeric(element, 'strokeWidth', 3)
-  for (let index = 0; index < points.length; index++) {
-    const point = points[index]!; const before = points[Math.max(0, index - 1)]!; const after = points[Math.min(points.length - 1, index + 1)]!
-    const length = Math.hypot(after[0] - before[0], after[1] - before[1]) || 1
-    const radius = width * (element.simulatePressure ? .5 : .15 + Number(pressures[index] ?? .5) * .85)
-    const nx = -(after[1] - before[1]) / length * radius; const ny = (after[0] - before[0]) / length * radius
-    left.push(`${point[0] + nx},${point[1] + ny}`); right.push(`${point[0] - nx},${point[1] - ny}`)
-  }
-  return left.length ? `M${left.join(' L')} L${right.reverse().join(' L')} Z` : ''
+  return inkOutline(points, points.map((_, index) => element.simulatePressure ? 1 : Number(pressures[index] ?? 0.5)), numeric(element, 'strokeWidth', 3))
 }

@@ -1,4 +1,60 @@
 import type { CanvasLayout, CanvasNode } from '@physicsos/physics-workbench/types'
+import type { CanvasInkSample, CanvasAnnotationPrimitive } from '@physicsos/physics-whiteboard'
+
+export interface CanvasInkPointer { readonly clientX: number; readonly clientY: number; readonly pressure: number; readonly timeStamp: number }
+export interface CanvasInkStroke { readonly points: readonly (readonly [number, number])[]; readonly samples: readonly CanvasInkSample[] }
+/** One active buffer, one animation-frame preview, one durable pointer-up operation. */
+export function createInkGesture(options: {
+  readonly toWorld: (sample: CanvasInkPointer) => { readonly x: number; readonly y: number }
+  readonly requestFrame: (callback: () => void) => number
+  readonly cancelFrame: (handle: number) => void
+  readonly onPreview: (stroke?: CanvasInkStroke) => void
+  readonly onCommit: (stroke: CanvasInkStroke) => void
+}) {
+  let pointer: number | undefined; let samples: CanvasInkSample[] = []; let frame: number | undefined
+  const snapshot = (): CanvasInkStroke => ({ points: samples.map(sample => [sample.x, sample.y]), samples: samples.map(sample => ({ ...sample })) })
+  const add = (point: CanvasInkPointer): void => {
+    const world = options.toWorld(point)
+    samples.push({ x: world.x, y: world.y, pressure: point.pressure, time: point.timeStamp })
+  }
+  const preview = (): void => { if (frame === undefined) frame = options.requestFrame(() => { frame = undefined; if (pointer !== undefined) options.onPreview(snapshot()) }) }
+  const cancel = (): void => { if (frame !== undefined) options.cancelFrame(frame); frame = undefined; pointer = undefined; samples = []; options.onPreview(undefined) }
+  return {
+    begin(id: number, point: CanvasInkPointer): void { if (pointer !== undefined) return; pointer = id; samples = []; add(point); preview() },
+    append(id: number, points: readonly CanvasInkPointer[]): void { if (pointer !== id) return; points.forEach(add); preview() },
+    finish(id: number, point: CanvasInkPointer): void {
+      if (pointer !== id) return
+      add(point); const completed = snapshot(); cancel(); options.onCommit(completed)
+    },
+    cancel,
+  }
+}
+export function shapeFromStroke(stroke: CanvasInkStroke, type: 'line' | 'rectangle' | 'ellipse', id: string): CanvasAnnotationPrimitive {
+  const first = stroke.points[0]!; const last = stroke.points.at(-1)!
+  if (type === 'line') return { id, type, points: [first, last] }
+  const x = Math.min(first[0], last[0]); const y = Math.min(first[1], last[1])
+  return { id, type, x, y, width: Math.max(0.001, Math.abs(last[0] - first[0])), height: Math.max(0.001, Math.abs(last[1] - first[1])) }
+}
+/** Conservative conversions are proposals; raw ink is never overwritten automatically. */
+export function suggestInkShape(stroke: CanvasInkStroke, id: string): CanvasAnnotationPrimitive | undefined {
+  if (stroke.points.length < 8) return undefined
+  const points = stroke.points; const first = points[0]!; const last = points.at(-1)!
+  const minX = Math.min(...points.map(point => point[0])); const minY = Math.min(...points.map(point => point[1]))
+  const width = Math.max(...points.map(point => point[0])) - minX; const height = Math.max(...points.map(point => point[1])) - minY
+  const distance = Math.hypot(last[0] - first[0], last[1] - first[1]); const scale = Math.hypot(width, height)
+  if (scale < 24) return undefined
+  if (distance > scale * 0.8) {
+    const deviation = points.reduce((sum, p) => sum + Math.abs((last[0] - first[0]) * (first[1] - p[1]) - (first[0] - p[0]) * (last[1] - first[1])) / distance, 0) / points.length
+    if (deviation < scale * 0.035) return { id, type: 'line', points: [first, last] }
+    return undefined
+  }
+  if (distance > scale * 0.18 || width < 16 || height < 16) return undefined
+  const cx = minX + width / 2; const cy = minY + height / 2
+  const radialError = points.reduce((sum, p) => sum + Math.abs(Math.hypot((p[0] - cx) / (width / 2), (p[1] - cy) / (height / 2)) - 1), 0) / points.length
+  if (radialError < 0.12) return { id, type: 'ellipse', x: minX, y: minY, width, height }
+  const edgeError = points.reduce((sum, p) => sum + Math.min(Math.abs(p[0] - minX), Math.abs(p[0] - minX - width), Math.abs(p[1] - minY), Math.abs(p[1] - minY - height)), 0) / points.length
+  return edgeError < Math.min(width, height) * 0.055 ? { id, type: 'rectangle', x: minX, y: minY, width, height } : undefined
+}
 
 export type CanvasAlignment = 'left' | 'right' | 'top' | 'bottom' | 'horizontal-center' | 'vertical-center'
 export type CanvasDistribution = 'horizontal' | 'vertical'

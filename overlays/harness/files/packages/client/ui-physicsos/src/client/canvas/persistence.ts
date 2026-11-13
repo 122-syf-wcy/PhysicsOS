@@ -46,7 +46,14 @@ export interface CanvasEntityPatch {
     readonly after?: JsonValue
   }[]
 }
+export interface CanvasAnnotationPatch {
+  readonly schemaVersion: 2
+  readonly beforePresent: boolean
+  readonly afterPresent: boolean
+  readonly changes: readonly { readonly id: string; readonly before?: import('@physicsos/physics-whiteboard').CanvasAnnotationPrimitive; readonly beforeIndex?: number; readonly after?: import('@physicsos/physics-whiteboard').CanvasAnnotationPrimitive; readonly afterIndex?: number }[]
+}
 export interface CanvasDocumentPatch {
+  readonly annotations?: CanvasAnnotationPatch
   readonly label: string
   readonly entities: readonly CanvasEntityPatch[]
   readonly title?: { readonly before: string; readonly after: string }

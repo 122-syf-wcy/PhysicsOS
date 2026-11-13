@@ -6,7 +6,7 @@ export interface CanvasViewState {
   canvasId: string | undefined
   selected: string[]
   focusedInstanceKey: string | undefined
-  tool: 'select' | 'hand'
+  tool: 'select' | 'hand' | 'pen' | 'line' | 'rectangle' | 'ellipse' | 'eraser'
   sidebar: 'parameters' | 'objects' | 'results'
   libraryOpen: boolean
   pendingSourceKey: string | undefined

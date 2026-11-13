@@ -7,6 +7,7 @@ import type {
   CanvasResourcePolicy,
 } from '@physicsos/physics-workbench/protocol'
 import type { CanvasManifest, CanvasStoredValue, JsonObject, MergeConflict, WorkbenchObject } from '@physicsos/physics-workbench/types'
+import { parseCanvasAnnotations, type CanvasAnnotationScene } from '@physicsos/physics-whiteboard'
 import { parseManifest, parseObject, parseStoredValue } from '@physicsos/physics-workbench/codec'
 import {
   boolean, canonicalStringify, digest, exactKeys, integer, isoDate, jsonObject, list, oneOf,
@@ -30,6 +31,48 @@ export interface CanvasVerificationResponse {
   readonly receipt: CanvasVerificationReceipt
   /** A server result is not implicitly a snapshot or an alias. */
   readonly resultDigest?: string
+}
+export interface CanvasAssistantJob {
+  readonly id: string; readonly canvasId: string; readonly mode: 'check' | 'draw'
+  readonly status: 'queued' | 'reading' | 'thinking' | 'validating' | 'ready' | 'error' | 'cancelled'
+  readonly binding: { readonly canvasId: string; readonly namespace: string; readonly editSequence: number; readonly head: { readonly version: number; readonly generation: number; readonly manifestDigest: string } }
+  readonly createdAt: string; readonly updatedAt: string
+  readonly result?: { readonly summary: string; readonly findings: readonly { readonly severity: 'info' | 'warning'; readonly message: string; readonly nodeIds: readonly string[] }[]; readonly scene: CanvasAnnotationScene }
+  readonly error?: string
+  readonly usage?: Readonly<Record<string, number>>
+}
+export interface CanvasAssistantRequest {
+  readonly operationId: string; readonly mode: 'check' | 'draw'; readonly prompt: string
+  readonly expectedVersion: number; readonly expectedGeneration: number; readonly manifestDigest: string
+  readonly namespace: string; readonly editSequence: number
+  readonly viewport: { readonly x: number; readonly y: number; readonly zoom: number; readonly width: number; readonly height: number }
+  readonly selectedNodeIds: readonly string[]
+  readonly image?: { readonly mimeType: 'image/png' | 'image/jpeg' | 'image/webp'; readonly base64: string }
+}
+export function readCanvasAssistantJob(value: unknown): CanvasAssistantJob {
+  const input = record(value, ''); const rawBinding = record(input.binding, '/binding'); const head = record(rawBinding.head, '/binding/head')
+  const canvasId = text(input.canvasId, '/canvasId', true)
+  const binding = { canvasId: text(rawBinding.canvasId, '/binding/canvasId', true), namespace: text(rawBinding.namespace, '/binding/namespace', true), editSequence: integer(rawBinding.editSequence, '/binding/editSequence'),
+    head: { version: integer(head.version, '/binding/head/version', 1), generation: integer(head.generation, '/binding/head/generation', 1), manifestDigest: digest(head.manifestDigest, '/binding/head/manifestDigest') } }
+  if (binding.canvasId !== canvasId) throw new Error('Canvas assistant binding belongs to another canvas')
+  const result = optional(input.result, '/result', (value, at) => {
+    const result = record(value, at)
+    return { summary: text(result.summary, `${at}/summary`), findings: list(result.findings, `${at}/findings`, (value, at) => {
+      const finding = record(value, at)
+      return { severity: oneOf(finding.severity, ['info', 'warning'], `${at}/severity`), message: text(finding.message, `${at}/message`, true), nodeIds: list(finding.nodeIds, `${at}/nodeIds`, (value, at) => text(value, at, true)) }
+    }), scene: parseCanvasAnnotations(result.scene) }
+  })
+  const error = optional(input.error, '/error', text)
+  const usage = optional(input.usage, '/usage', (value, at) => {
+    const usage = record(value, at); const parsed: Record<string, number> = {}
+    exactKeys(usage, ['inputTokens', 'outputTokens', 'totalTokens', 'cacheReadTokens', 'cacheWriteTokens', 'reasoningTokens'], at)
+    for (const [key, count] of Object.entries(usage)) parsed[key] = integer(count, `${at}/${key}`)
+    return parsed
+  })
+  const status = oneOf(input.status, ['queued', 'reading', 'thinking', 'validating', 'ready', 'error', 'cancelled'], '/status')
+  if (status === 'ready' && !result) throw new Error('Ready canvas assistant job has no validated result')
+  return { id: text(input.id, '/id', true), canvasId, mode: oneOf(input.mode, ['check', 'draw'], '/mode'), status, binding,
+    createdAt: isoDate(input.createdAt, '/createdAt'), updatedAt: isoDate(input.updatedAt, '/updatedAt'), ...(result ? { result } : {}), ...(error === undefined ? {} : { error }), ...(usage ? { usage } : {}) }
 }
 /** Only complete, validated policies are cached or used for offline graph reads. */
 export const readCanvasResourcePolicy = (value: unknown): CanvasResourcePolicy => {
@@ -97,6 +140,9 @@ const committed = (value: unknown): CanvasCommitResponse => {
 }
 
 export interface CanvasApi {
+  startAssistant(id: string, request: CanvasAssistantRequest, signal?: AbortSignal): Promise<CanvasAssistantJob>
+  assistantJob(id: string, jobId: string, signal?: AbortSignal): Promise<CanvasAssistantJob>
+  cancelAssistant(id: string, jobId: string, operationId: string, signal?: AbortSignal): Promise<CanvasAssistantJob>
   /** Pins account identity for every request, including GETs and late retries. */
   forOwner(owner: CanvasRequestOwner): CanvasApi
   resourcePolicy(signal?: AbortSignal): Promise<CanvasResourcePolicy>
@@ -187,6 +233,21 @@ export function createCanvasApi(
     }
   }
   return {
+    startAssistant: (id, body, signal) => parseResponse(() => request(`${path(id)}/assistant/jobs`, 'POST', body, signal), value => {
+      const job = readCanvasAssistantJob(value)
+      if (job.canvasId !== id || job.binding.namespace !== body.namespace || job.binding.editSequence !== body.editSequence || job.binding.head.version !== body.expectedVersion || job.binding.head.generation !== body.expectedGeneration || job.binding.head.manifestDigest !== body.manifestDigest) throw new Error('Canvas assistant returned a foreign or stale job')
+      return job
+    }),
+    assistantJob: (id, jobId, signal) => parseResponse(() => request(`${path(id)}/assistant/jobs/${encodeURIComponent(jobId)}`, 'GET', undefined, signal), value => {
+      const job = readCanvasAssistantJob(value)
+      if (job.canvasId !== id || job.id !== jobId) throw new Error('Canvas assistant returned another job')
+      return job
+    }),
+    cancelAssistant: (id, jobId, operationId, signal) => parseResponse(() => request(`${path(id)}/assistant/jobs/${encodeURIComponent(jobId)}/cancel`, 'POST', { operationId }, signal), value => {
+      const job = readCanvasAssistantJob(value)
+      if (job.canvasId !== id || job.id !== jobId) throw new Error('Canvas assistant cancelled another job')
+      return job
+    }),
     forOwner: expected => createCanvasApi(fetcher, expected),
     resourcePolicy: signal => parseResponse(() => request(`${base}/policy`, 'GET', undefined, signal), readCanvasResourcePolicy),
     list: (query = {}, signal) => parseResponse(async () => {

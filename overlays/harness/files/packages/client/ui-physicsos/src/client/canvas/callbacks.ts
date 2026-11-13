@@ -9,6 +9,12 @@ import { canvasId } from './digest.ts'
 /** Only command callbacks cross into presentation; observable registries remain private. */
 export function canvasCallbacks(controller: CanvasController): CanvasCommands {
   return {
+    appendAnnotations: controller.appendAnnotations,
+    startAssistant: controller.startAssistant,
+    assistantJob: controller.assistantJob,
+    cancelAssistant: controller.cancelAssistant,
+    replaceAnnotations: controller.replaceAnnotations,
+    removeAnnotations: controller.removeAnnotations,
     create: controller.create,
     open: controller.open,
     list: controller.list,

@@ -26,6 +26,8 @@ export type CanvasBoundViewActions = FactoryInjectParams<'physicsos.canvas.workb
 
 /** The rendering layer receives commands, not the model or its runtime registry. */
 export type CanvasCommands = Pick<CanvasController,
+  | 'appendAnnotations' | 'replaceAnnotations' | 'removeAnnotations'
+  | 'startAssistant' | 'assistantJob' | 'cancelAssistant'
   | 'create' | 'open' | 'list' | 'rename' | 'duplicate' | 'remove' | 'restore'
   | 'sync' | 'retry' | 'resolveConflict' | 'useRemote' | 'keepLocalCopy' | 'exportGraph' | 'importGraph'
   | 'exportDatasetCsv' | 'addExperiment' | 'duplicateInstance' | 'removeNodes'
