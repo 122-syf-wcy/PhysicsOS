@@ -322,6 +322,7 @@ export class CanvasAssistantService {
         // precisely instead of blaming the whole channel for a retryable answer.
         await update(current => { current.error = output.error === 'MODEL_VISION_UNAVAILABLE' ? '当前模型通道未启用图像输入，请联系管理员检查配置。'
           : output.error === 'MODEL_INCOMPLETE' || output.error === 'MODEL_ARTIFACT_MISSING' ? '助手本次未给出完整建议，请重试或缩小选择范围。'
+            : output.error === 'MODEL_OUTPUT_LIMIT' ? '助手本次建议过长被截断，请重试或减少选择范围。'
             : '当前助手模型暂不可用，请稍后重试。' })
         throw new Error('Model failed')
       }

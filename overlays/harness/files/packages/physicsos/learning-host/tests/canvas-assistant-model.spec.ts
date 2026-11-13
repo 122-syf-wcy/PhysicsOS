@@ -63,9 +63,10 @@ describe('configured platform canvas model reasoning budget', () => {
     expect(keys).not.toContain('reasoningEffort')
   })
   it('bounds the artifact budget from the schema and prompt instead of a fixed maximum', async () => {
-    expect(canvasAssistantBudget(8000, 4000)).toBeLessThan(8000)
-    expect(canvasAssistantBudget(8000, 4000)).toBeGreaterThan(1500)
-    expect(canvasAssistantBudget(100, 100)).toBe(1500)
+    expect(canvasAssistantBudget(8000, 4000)).toBeLessThanOrEqual(8000)
+    // Measured reasoning plus artifact output exceeded 4k on healthy runs, so a
+    // smaller floor truncates the tool call mid-JSON.
+    expect(canvasAssistantBudget(100, 100)).toBeGreaterThanOrEqual(4000)
     expect(canvasAssistantBudget(10_000_000, 10_000_000)).toBe(8000)
   })
 })

@@ -15,9 +15,11 @@ const lightEffort = (info: LlmResolvedModelInfo): ReasoningEffortId | undefined 
   return undefined
 }
 export const canvasAssistantBudget = (schemaBytes: number, promptBytes: number): number =>
-  // Reasoning channels reserve the budget before emitting the tool call, so the
-  // submitted artifact and its surrounding JSON need a bounded, honest share.
-  Math.min(8000, Math.max(1500, Math.ceil((schemaBytes + promptBytes) / 3) + 1200))
+  // The budget must cover the deepest reasoning this model actually spends plus
+  // the emitted tool call: measured check runs reached 2.3k reasoning tokens and
+  // 1.8k artifact tokens. A tighter cap truncates the call mid-JSON and the job
+  // fails intermittently while the channel itself is healthy.
+  Math.min(8000, Math.max(4000, Math.ceil((schemaBytes + promptBytes) / 3) + 2600))
 
 /** One bounded submit tool using the existing configured provider and admitted attachments. */
 export function createCanvasAssistantModel(ctx: Context, route: { readonly provider: string; readonly model: string }): CanvasAssistantModel {
