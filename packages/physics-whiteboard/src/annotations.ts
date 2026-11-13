@@ -36,7 +36,15 @@ export function parseCanvasAnnotations(input: unknown): CanvasAnnotationScene {
     keys(p, ['id', 'type', 'style', ...specific])
     if (p.style !== undefined) {
       const style = object(p.style); keys(style, ['strokeColor', 'backgroundColor', 'strokeWidth', 'strokeStyle'])
-      for (const key of ['strokeColor', 'backgroundColor']) if (style[key] !== undefined && !/^(#[0-9a-f]{3,8}|transparent|black|white|red|blue|green)$/i.test(text(style[key]))) fail('invalid color')
+      // Accept the literal syntaxes models and SVG both produce: hex or name,
+      // and rgb()/rgba() with numeric channels. No url(), var() or expression
+      // syntax can pass this pattern, so no executable value reaches the renderer.
+      for (const key of ['strokeColor', 'backgroundColor']) {
+        if (style[key] === undefined) continue
+        const color = text(style[key])
+        if (/^(#[0-9a-f]{3,8}|transparent|black|white|red|blue|green|rgba?\(\s*-?[\d.]+\s*,\s*-?[\d.]+\s*,\s*-?[\d.]+\s*(,\s*-?[\d.]+\s*)?\))$/i.test(color)) continue
+        fail('invalid color')
+      }
       if (style.strokeWidth !== undefined) number(style.strokeWidth, 0.1, 100)
       if (style.strokeStyle !== undefined && !['solid', 'dashed', 'dotted'].includes(String(style.strokeStyle))) fail('invalid stroke style')
     }

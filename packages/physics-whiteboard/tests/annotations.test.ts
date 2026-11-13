@@ -20,6 +20,13 @@ describe('canvas annotation metadata', () => {
     expect(() => codec.parseCanvasAnnotations?.({ schemaVersion: 1, primitives: [{ id: 'x', type: 'image', url: 'https://example.org/x' }] })).toThrow()
     expect(() => codec.parseCanvasAnnotations?.({ ...scene, primitives: [{ ...scene.primitives[0], link: 'javascript:alert(1)' }] })).toThrow()
   })
+  it('accepts literal rgb/rgba colours but still rejects executable colour syntax', () => {
+    const shape = { id: 'shape', type: 'rectangle', x: 1, y: 2, width: 3, height: 4 }
+    expect(codec.parseCanvasAnnotations({ schemaVersion: 1, primitives: [{ ...shape, style: { backgroundColor: 'rgba(0,0,0,0)', strokeColor: 'rgb(39, 59, 73)' } }] }).primitives).toHaveLength(1)
+    for (const color of ['url(https://attacker.invalid/x)', 'var(--x)', 'expression(alert(1))', 'rgba(0,0,0,0);background:url(x)']) {
+      expect(() => codec.parseCanvasAnnotations({ schemaVersion: 1, primitives: [{ ...shape, style: { strokeColor: color } }] })).toThrow()
+    }
+  })
   it('rejects duplicate IDs, mismatched samples and non-finite geometry', () => {
     expect(codec.parseCanvasAnnotations).toBeTypeOf('function')
     for (const input of [{ ...scene, primitives: [...scene.primitives, ...scene.primitives] },
