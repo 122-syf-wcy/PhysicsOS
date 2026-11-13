@@ -181,6 +181,16 @@ describe('owned saved-canvas assistant jobs', () => {
     await expect(f.assistant.create(a, 'lesson', body)).rejects.toMatchObject({ status: 410, code: 'ASSISTANT_EXPIRED' })
     expect(f.calls).toBe(2); expect(f.receipts).toHaveLength(2)
   })
+  it('requests a bounded artifact budget and compact schema from the configured model', async () => {
+    let observed: { maxTokens: number; schema: { properties: { scene: { properties: { primitives: { minItems?: number } } } } } } | undefined
+    const f = await fixture({ run: async (request, _signal, admission) => { await admission?.(); observed = request as never; return { proposal } } })
+    const body = await input(f); const job = await f.assistant.create(a, 'lesson', body); await settled(f.assistant, job.id)
+    expect(observed).toBeDefined()
+    // A reasoning channel otherwise spends the whole budget thinking; the
+    // artifact budget must stay well inside the channel's own ceiling.
+    expect(observed!.maxTokens).toBeGreaterThan(0); expect(observed!.maxTokens).toBeLessThanOrEqual(8000)
+    expect(observed!.schema.properties.scene.properties.primitives.minItems).toBe(1)
+  })
   it('allows new cancellation operations on a long-lived account beyond the full-job retention count', async () => {
     const f = await fixture({}, { maxJobs: 1 }); const body = await input(f)
     const job = await f.assistant.create(a, 'lesson', body); await settled(f.assistant, job.id)

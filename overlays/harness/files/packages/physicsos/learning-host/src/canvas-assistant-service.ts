@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { AsyncResource } from 'node:async_hooks'
 import type { TokenUsage } from '@deepseek-ai/dsh-llm'
 import { z } from 'zod'
-import { canvasAnnotationsJsonSchema, parseCanvasAnnotations, readCanvasAnnotations, type JsonObject } from '@physicsos/physics-whiteboard'
+import { parseCanvasAnnotations, readCanvasAnnotations, type JsonObject } from '@physicsos/physics-whiteboard'
 import type { CanvasHead } from '@physicsos/physics-workbench/protocol'
 import { canonicalStringify } from '@physicsos/physics-workbench/json'
 import type { CanvasService } from './canvas-service.ts'
@@ -52,21 +52,30 @@ export const CANVAS_ASSISTANT_POLICY = `你是 PhysicsOS 中学物理画布的�
 annotations.geometryOnly 是供模型阅读的几何近似；其抽样和省略数量有明确标记，不代表全部原始笔迹，不将近似线条用作测量或引擎证据。
 结果只含 summary、findings 和 scene。findings 的 nodeIds 必须来自服务器提供的节点；draw 模式至少给出一个图元，check 可无图元。不输出 HTML、SVG、Markdown 代码块、图片地址、程序或秘密。`
 
-/** Tool schema and runtime quotas are independent of the editable document's larger capacity. */
+/**
+ * Tool schema and runtime quotas are independent of the editable document's larger capacity.
+ * The model reads a compact union of primitive fields; `parseCanvasAnnotations`
+ * still enforces the authoritative per-variant limits on the submitted scene,
+ * so a wrong guess fails validation rather than reaching the canvas.
+ */
 function proposalSchema(mode: CanvasAssistantMode): JsonObject {
-  const scene = JSON.parse(JSON.stringify(canvasAnnotationsJsonSchema())) as Record<string, any>
-  scene.properties.primitives.maxItems = 200
-  scene.properties.primitives.minItems = mode === 'draw' ? 1 : 0
-  for (const variant of scene.properties.primitives.items.anyOf) {
-    if (variant.properties.type.const === 'polyline') {
-      variant.properties.points.maxItems = 10000
-      variant.properties.samples.maxItems = 10000
-    }
-  }
   return { type: 'object', additionalProperties: false, required: ['summary', 'findings', 'scene'], properties: {
     summary: { type: 'string', minLength: 1, maxLength: 4000 },
     findings: { type: 'array', maxItems: 30, items: { type: 'object', additionalProperties: false, required: ['severity', 'message', 'nodeIds'], properties: { severity: { enum: ['info', 'warning'] }, message: { type: 'string', minLength: 1, maxLength: 2000 }, nodeIds: { type: 'array', maxItems: 20, uniqueItems: true, items: { type: 'string', minLength: 1, maxLength: 128 } } } } },
-    scene: scene as JsonObject,
+    scene: { type: 'object', additionalProperties: false, required: ['schemaVersion', 'primitives'], properties: {
+      schemaVersion: { const: 1 },
+      primitives: { type: 'array', minItems: mode === 'draw' ? 1 : 0, maxItems: 200, items: { type: 'object', additionalProperties: false, required: ['id', 'type'], properties: {
+        id: { type: 'string', minLength: 1, maxLength: 200 },
+        type: { enum: ['line', 'arrow', 'polyline', 'rectangle', 'ellipse', 'arc', 'text'] },
+        points: { type: 'array', items: { type: 'array', items: { type: 'number' } } },
+        closed: { type: 'boolean' },
+        x: { type: 'number' }, y: { type: 'number' }, width: { type: 'number' }, height: { type: 'number' },
+        cx: { type: 'number' }, cy: { type: 'number' }, radius: { type: 'number' },
+        startAngle: { type: 'number' }, endAngle: { type: 'number' },
+        text: { type: 'string' }, fontSize: { type: 'number' }, textAlign: { enum: ['left', 'center', 'right'] },
+        style: { type: 'object', additionalProperties: false, properties: { strokeColor: { type: 'string' }, backgroundColor: { type: 'string' }, strokeWidth: { type: 'number' }, strokeStyle: { enum: ['solid', 'dashed', 'dotted'] } } },
+      } } },
+    } },
   } }
 }
 
