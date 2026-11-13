@@ -47,6 +47,8 @@ export interface CanvasAssistantModel {
 export interface CanvasAssistantServiceOptions {
   readonly model: CanvasAssistantModel
   readonly recordUsage: (input: UsageModelReceiptInput) => Promise<void>
+  /** Server-side diagnostic for a failed model attempt; never shown to the user. */
+  readonly onModelError?: (failure: { readonly canvasId: string; readonly jobId: string; readonly mode: CanvasAssistantMode; readonly error: string }) => void
   readonly now?: () => Date
   readonly maxJobs?: number
   readonly maxConcurrentJobs?: number

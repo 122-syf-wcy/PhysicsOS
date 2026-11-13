@@ -318,12 +318,17 @@ export class CanvasAssistantService {
       if (!active(job)) return
       controller.signal.throwIfAborted()
       if (output.error) {
+        // The user-facing text stays friendly, while the adapter's fixed failure
+        // code is reported server-side so an operator can tell a timeout, a rate
+        // limit and an unusable route apart. Codes are a closed vocabulary and
+        // carry no prompt, token or canvas content.
+        this.options.onModelError?.({ canvasId: job.canvasId, jobId: id, mode: job.mode, error: output.error })
         // Artifact problems mean this attempt produced nothing usable; say so
         // precisely instead of blaming the whole channel for a retryable answer.
         await update(current => { current.error = output.error === 'MODEL_VISION_UNAVAILABLE' ? '当前模型通道未启用图像输入，请联系管理员检查配置。'
           : output.error === 'MODEL_INCOMPLETE' || output.error === 'MODEL_ARTIFACT_MISSING' ? '助手本次未给出完整建议，请重试或缩小选择范围。'
             : output.error === 'MODEL_OUTPUT_LIMIT' ? '助手本次建议过长被截断，请重试或减少选择范围。'
-            : '当前助手模型暂不可用，请稍后重试。' })
+              : '当前助手模型暂不可用，请稍后重试。' })
         throw new Error('Model failed')
       }
       await update(current => { if (active(current)) current.status = 'validating' })

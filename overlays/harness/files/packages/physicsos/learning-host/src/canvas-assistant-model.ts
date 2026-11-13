@@ -65,8 +65,15 @@ export function createCanvasAssistantModel(ctx: Context, route: { readonly provi
         if (calls.length !== 1 || calls[0]!.name !== tool) return { error: 'MODEL_ARTIFACT_MISSING', ...usage }
         if (Buffer.byteLength(calls[0]!.arguments) > 128 * 1024) return { error: 'MODEL_OUTPUT_LIMIT', ...usage }
         return { proposal: JSON.parse(calls[0]!.arguments) as unknown, ...usage }
-      } catch {
-        return { error: signal.aborted ? 'MODEL_ABORTED' : 'MODEL_FAILED', ...(assembler.usage ? { usage: assembler.usage } : {}) }
+      } catch (error) {
+        // Keep the adapter's own failure code so an operator can tell a stream
+        // error, an unsupported effort and an empty completion apart. The code
+        // is a fixed vocabulary, never the error text or any provider payload.
+        const raw = error instanceof Error ? (error as unknown as { code?: unknown }).code : undefined
+        const code = error instanceof Error && error.name === 'LlmError' && typeof raw === 'string'
+          ? `MODEL_FAILED:${raw.replace(/[^A-Z_]/g, '').slice(0, 40)}`
+          : 'MODEL_FAILED'
+        return { error: signal.aborted ? 'MODEL_ABORTED' : code, ...(assembler.usage ? { usage: assembler.usage } : {}) }
       }
     },
   }

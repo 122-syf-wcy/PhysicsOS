@@ -94,6 +94,10 @@ export async function apply(ctx: Context, config: Config = {}): Promise<() => Pr
     const assistant = new CanvasAssistantService(assistantDomain, canvas, {
       model: createCanvasAssistantModel(ctx, { provider: config.whiteboardProvider ?? 'physicsos-pool', model: config.whiteboardModel ?? 'deepseek-v4.1-flash' }),
       recordUsage: input => usage.recordModelReceipt(input),
+      // Fixed adapter code plus identifiers only: no prompt, tokens or canvas data.
+      onModelError: failure => ctx.logger.warn(
+        `canvas assistant model failed: canvas=${failure.canvasId} job=${failure.jobId} mode=${failure.mode} code=${failure.error}`,
+      ),
     })
     yield () => assistant.dispose()
     await assistant.initialize()
