@@ -8,5 +8,5 @@ Spec: `docs/superpowers/specs/2026-11-12-canvas-loading-agent-design.md`.
 - [x] Add the smooth active-gesture preview and shared pressure-aware render geometry; preserve raw samples, cancellation and undo.
 - [x] Add real authenticated model assistant jobs with bounded tools, usage, cancellation and revision-bound candidate results.
 - [x] Apply the reference canvas layout, drawing tools, optional Agent panel and explicit proposal acceptance.
-- [ ] Review and run focused server-Docker tests and desktop/mobile candidate browser journeys.
-- [ ] Commit, verify remote main/current image, build candidate and publish with paired backup; record actual live validation and limitations.
+- [x] Review and run focused server-Docker tests and desktop/mobile candidate browser journeys.
+- [x] Commit, verify remote main/current image, build candidate and publish with paired backup; record actual live validation and limitations.
