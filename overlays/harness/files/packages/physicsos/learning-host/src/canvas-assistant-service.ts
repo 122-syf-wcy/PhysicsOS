@@ -52,6 +52,9 @@ export const CANVAS_ASSISTANT_POLICY = `你是 PhysicsOS 中学物理画布的�
 annotations.geometryOnly 是供模型阅读的几何近似；其抽样和省略数量有明确标记，不代表全部原始笔迹，不将近似线条用作测量或引擎证据。
 结果只含 summary、findings 和 scene。findings 的 nodeIds 必须来自服务器提供的节点；draw 模式至少给出一个图元，check 可无图元。不输出 HTML、SVG、Markdown 代码块、图片地址、程序或秘密。`
 
+/** Required fields per primitive type, stated once instead of in a 7 KB anyOf union. */
+const PRIMITIVE_FIELDS = 'Required per type: line/arrow points[[x,y],...]; polyline points (samples optional); rectangle/ellipse x,y,width,height; arc cx,cy,radius,startAngle,endAngle; text x,y,text,fontSize. Coordinates are canvas world units.'
+
 /**
  * Tool schema and runtime quotas are independent of the editable document's larger capacity.
  * The model reads a compact union of primitive fields; `parseCanvasAnnotations`
@@ -64,7 +67,7 @@ function proposalSchema(mode: CanvasAssistantMode): JsonObject {
     findings: { type: 'array', maxItems: 30, items: { type: 'object', additionalProperties: false, required: ['severity', 'message', 'nodeIds'], properties: { severity: { enum: ['info', 'warning'] }, message: { type: 'string', minLength: 1, maxLength: 2000 }, nodeIds: { type: 'array', maxItems: 20, uniqueItems: true, items: { type: 'string', minLength: 1, maxLength: 128 } } } } },
     scene: { type: 'object', additionalProperties: false, required: ['schemaVersion', 'primitives'], properties: {
       schemaVersion: { const: 1 },
-      primitives: { type: 'array', minItems: mode === 'draw' ? 1 : 0, maxItems: 200, items: { type: 'object', additionalProperties: false, required: ['id', 'type'], properties: {
+      primitives: { type: 'array', minItems: mode === 'draw' ? 1 : 0, maxItems: 200, items: { type: 'object', additionalProperties: false, required: ['id', 'type'], description: PRIMITIVE_FIELDS, properties: {
         id: { type: 'string', minLength: 1, maxLength: 200 },
         type: { enum: ['line', 'arrow', 'polyline', 'rectangle', 'ellipse', 'arc', 'text'] },
         points: { type: 'array', items: { type: 'array', items: { type: 'number' } } },
