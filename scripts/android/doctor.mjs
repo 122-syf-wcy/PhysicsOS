@@ -112,8 +112,6 @@ if (scope === 'all') {
   for (const relative of [
     'overlays/harness/files/packages/physicsos/mobile-host/package.json',
     'overlays/harness/files/packages/physicsos/mobile-host/src/index.ts',
-    'overlays/harness/files/packages/physicsos/account-erasure-host/package.json',
-    'overlays/harness/files/packages/physicsos/account-erasure-host/src/index.ts',
   ]) required(relative)
   warnings.push('Server plugin registration, credential scopes, signed manifests, and migrations require separate Docker integration verification.')
 }
