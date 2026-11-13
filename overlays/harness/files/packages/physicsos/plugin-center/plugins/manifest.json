@@ -105,8 +105,8 @@
       ],
       "entry": "packages/physicsos/learning-host/src/index.ts",
       "publisher": "PhysicsOS",
-      "sha256": "44dcaf7465e57e1ded87d4057cfe670d55e487c1e7e0cd34d315d625f81947e7",
-      "signature": "ed25519:lPKr/cwxbqFUJFS1vhq/7reZNredqabsHkqY2Inp2VvJ6ZL25ksI8w+M01201TIQEaw5OHUeDmDRZlWJWXn1Cg==",
+      "sha256": "85f0c17b87e4263c3786bc9052c21fd72bb9cf60c4cac67cfbfdfd50e523fe33",
+      "signature": "ed25519:ADWJaQBMO+OeveTrJilq1azSk9zbjP79BxBFz5xv0lwd0Hrvf9b0i2A28BgKfl3JhpgZYUdrojykW2x381b+BA==",
       "description": "Account-scoped attempts and saved-scene synchronization."
     },
     {
