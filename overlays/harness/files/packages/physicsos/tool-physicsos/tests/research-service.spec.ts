@@ -59,4 +59,22 @@ describe('research service', () => {
       vi.unstubAllGlobals()
     }
   })
+
+  it('returns lossless JSON: an absent snippet or excerpt is omitted, not undefined', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(
+      '<rss><channel><item><title>洛伦兹力</title><link>https://example.com/a</link><description>F=qvB</description></item></channel></rss>',
+    )))
+    try {
+      const value = await createResearchService({}).present('洛伦兹力')
+      // The host rejects a tool result that does not survive a JSON round-trip;
+      // an `undefined` field was exactly the bug seen in the chat UI.
+      const roundTrip = JSON.parse(JSON.stringify(value)) as { sources: Record<string, unknown>[] }
+      expect(roundTrip).toEqual(value)
+      for (const source of roundTrip.sources) {
+        for (const item of Object.values(source)) expect(item).not.toBeUndefined()
+      }
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
 })
