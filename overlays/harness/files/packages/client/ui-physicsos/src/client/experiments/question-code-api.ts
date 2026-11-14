@@ -41,6 +41,18 @@ export async function questionCodeSceneSha256(scene: PhysicsScene): Promise<stri
   const hash = await crypto.subtle.digest('SHA-256', bytes)
   return Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, '0')).join('')
 }
+/** Browser-safe job progress; mirrors the host's /jobs/:id projection. */
+export interface QuestionCodeJobView {
+  readonly jobId: string
+  readonly status: 'queued' | 'running' | 'candidate' | 'validating' | 'ready' | 'failed' | 'cancelled' | 'superseded'
+  readonly sceneId: string
+  readonly sceneRevision: number
+  readonly code?: string
+  readonly message?: string
+  readonly attempts: readonly { readonly index: number; readonly status: string }[]
+  readonly validation?: { readonly passed: boolean; readonly checks: readonly { readonly name: string; readonly passed: boolean }[] }
+  readonly updatedAt: string
+}
 async function request<T>(ref: CodeExperimentRef, endpoint: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`/physicsos/question-code/artifacts/${encodeURIComponent(ref.artifactId)}/${endpoint}?sha256=${encodeURIComponent(ref.sha256)}`, {
     credentials: 'same-origin', cache: 'no-store', ...(signal === undefined ? {} : { signal }),
@@ -53,4 +65,15 @@ async function request<T>(ref: CodeExperimentRef, endpoint: string, signal?: Abo
 export const questionCodeApi = {
   preview: (ref: CodeExperimentRef, signal?: AbortSignal): Promise<{ entryUrl: string; expiresAt: number }> => request(ref, 'preview', signal),
   source: (ref: CodeExperimentRef, signal?: AbortSignal): Promise<{ source: CodeVisualizationSource; ref: CodeExperimentRef }> => request(ref, 'source', signal),
+  /** Follow a durable job by the id already shown in the generating marker. */
+  job: async (jobId: string, signal?: AbortSignal): Promise<QuestionCodeJobView | undefined> => {
+    const response = await fetch(`/physicsos/question-code/jobs/${encodeURIComponent(jobId)}`, {
+      credentials: 'same-origin', cache: 'no-store', ...(signal === undefined ? {} : { signal }),
+    })
+    // A 404 is normal while an older deployment has not recorded jobs yet.
+    if (response.status === 404) return undefined
+    if (!response.ok) throw new Error('暂时无法读取实验生成进度。')
+    const body = await response.json() as { job?: QuestionCodeJobView }
+    return body.job
+  },
 }

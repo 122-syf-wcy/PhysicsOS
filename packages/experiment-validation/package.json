@@ -1,0 +1,26 @@
+{
+  "name": "@physicsos/experiment-validation",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Isolated browser acceptance for generated question-code experiments: runtime checks, multi-time geometry, parameter changes and mobile layout, with pure verdict logic",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./driver": "./src/driver.ts",
+    "./server": "./src/server.ts",
+    "./page": "./src/page.ts",
+    "./wrapper": "./src/wrapper.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/server.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1"
+  },
+  "build": "tsc -p tsconfig.build.json",
+  "start": "node dist/server.js"
+}

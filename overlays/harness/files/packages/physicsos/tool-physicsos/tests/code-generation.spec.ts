@@ -195,6 +195,17 @@ describe('parent question code generation', () => {
     expect(h.start).toHaveBeenCalledTimes(1)
     expect(h.create).toHaveBeenCalledTimes(1)
   })
+  it('reuses a pre-persisted durable job id for the generating marker and artifact', async () => {
+    const h = dependencies()
+    h.deps.jobId = 'gen_durable_1'
+    const work = generateQuestionCode(h.deps)
+    await vi.waitFor(() => expect(h.start).toHaveBeenCalledTimes(1))
+    expect(h.states.find(state => state.visualization?.status === 'generating')?.visualization)
+      .toMatchObject({ status: 'generating', jobId: 'gen_durable_1' })
+    const state = await work
+    expect(state.status).toBe('ready')
+    expect(h.create.mock.calls[0]?.[0]).toMatchObject({ generationId: 'gen_durable_1' })
+  })
   it('settles a timed-out owned marker while child disposal is still waiting', async () => {
     vi.useFakeTimers()
     const h = dependencies(), cleanup = Promise.withResolvers<void>()

@@ -45,6 +45,8 @@ export interface CodeGenerationDependencies {
   experimentId: string
   instructions?: string
   timeoutMs?: number
+  /** Pre-persisted durable job id; the generating marker reuses it. */
+  jobId?: string
   context(experimentId: string): Promise<CodeStyleContext>
   start(request: Pick<
     SubagentStartRequest, 'prompt' | 'signal' | 'outputSchema' | 'maxDepth' | 'toolFilter' | 'label' | 'agentOptions'
@@ -180,15 +182,17 @@ export function generateQuestionCode(deps: CodeGenerationDependencies): Promise<
   const current = deps.current(), pending = activeRequests.get(requestSha256)
   if (pending !== undefined && current !== undefined
     && isQuestionCodeGenerationActive(deps.ownerSessionId, current, requestSha256)) return pending
-  const operation = runGeneration(deps, requestSha256)
+  const operation = runGeneration(deps, requestSha256, deps.jobId)
   activeRequests.set(requestSha256, operation)
   const release = (): void => { if (activeRequests.get(requestSha256) === operation) activeRequests.delete(requestSha256) }
   void operation.then(release, release)
   return operation
 }
 
-async function runGeneration(deps: CodeGenerationDependencies, requestSha256: string): Promise<CodeVisualizationState> {
-  const jobId = randomUUID()
+async function runGeneration(deps: CodeGenerationDependencies, requestSha256: string, requestedJobId?: string): Promise<CodeVisualizationState> {
+  /* A caller that already persisted a job reuses its id, so the durable row
+     and the chat's generating marker name the same generation. */
+  const jobId = requestedJobId ?? randomUUID()
   const original = deps.snapshot
   const expectedHash = sceneHash(original.scene)
   const clock = new GenerationClock(deps.signal, deps.timeoutMs ?? CODE_TIMEOUT_MS)

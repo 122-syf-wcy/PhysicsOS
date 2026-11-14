@@ -118,6 +118,21 @@ services:
       PHYSICSOS_PANDOC: ${PHYSICSOS_PANDOC:-/usr/bin/pandoc}
       PHYSICSOS_SOFFICE: ${PHYSICSOS_SOFFICE:-/usr/bin/soffice}
       PHYSICSOS_DATABASE_SSL: ${PHYSICSOS_DATABASE_SSL:-false}
+      # Research: only set when the self-hosted SearXNG profile is running.
+      # Unset leaves the keyless RSS fallback as the only source; no paid
+      # provider is ever enabled by default.
+      PHYSICSOS_RESEARCH_SEARXNG_URL: ${PHYSICSOS_RESEARCH_SEARXNG_URL:-}
+      PHYSICSOS_RESEARCH_SEARXNG_KEY_FILE: ${PHYSICSOS_RESEARCH_SEARXNG_KEY_FILE:-}
+      # Validation worker endpoint seen from the app container (profiles:
+      # validation). Unset disables isolated acceptance.
+      # `validation-worker` is a sibling on the compose network. It is NOT a
+      # hard dependency: if the worker is down, generations stay `candidate`
+      # (fail closed) instead of taking the chat down with it.
+      PHYSICSOS_VALIDATION_URL: ${PHYSICSOS_VALIDATION_URL:-http://validation-worker:8099}
+      PHYSICSOS_VALIDATION_TOKEN: ${PHYSICSOS_VALIDATION_TOKEN:-}
+      # Origin the worker uses to fetch the frozen candidate wrapper. It must be
+      # reachable from the worker container (the compose service name).
+      PHYSICSOS_VALIDATION_PUBLIC_ORIGIN: ${PHYSICSOS_VALIDATION_PUBLIC_ORIGIN:-http://app:3080}
     secrets:
       - source: database_url
         target: database_url
@@ -225,6 +240,75 @@ services:
       options:
         max-size: 20m
         max-file: '5'
+
+  # Isolated browser acceptance for generated experiments. Previously gated by
+  # a `--profile validation`; it is now a normal service because the app only
+  # releases a candidate after this worker passes it. It has no published port,
+  # no app data volume and no secret except its own bearer token.
+  validation-worker:
+    image: ${PHYSICSOS_VALIDATION_IMAGE:-physicsos-validation:local}
+    build:
+      context: .
+      dockerfile: scripts/deploy/validation-worker.Dockerfile
+      args:
+        NODE_IMAGE: ${NODE_IMAGE:-node:24.7.0-bookworm-slim}
+        PLAYWRIGHT_IMAGE: ${PLAYWRIGHT_IMAGE:-mcr.microsoft.com/playwright:v1.62.1-noble}
+    restart: unless-stopped
+    environment:
+      PHYSICSOS_VALIDATION_PORT: '8099'
+      PHYSICSOS_VALIDATION_TOKEN: ${PHYSICSOS_VALIDATION_TOKEN:?set PHYSICSOS_VALIDATION_TOKEN (>=24 chars) in .env}
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+      # Chromium's sandbox needs user namespaces; this is the documented
+      # Playwright profile, not a blanket relaxation.
+      - seccomp=./scripts/deploy/validation-seccomp.json
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:8099/healthz',{headers:{authorization:'Bearer '+process.env.PHYSICSOS_VALIDATION_TOKEN}}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: '3'
+
+  # Self-hosted metasearch used by the research tool. It aggregates upstream
+  # engines; it does not own a web index. Disabled by default and only wired
+  # to the app when PHYSICSOS_RESEARCH_SEARXNG_URL is set.
+  searxng:
+    profiles: ['research']
+    image: ${PHYSICSOS_SEARXNG_IMAGE:-searxng/searxng:latest}
+    restart: unless-stopped
+    environment:
+      SEARXNG_BASE_URL: http://searxng:8080/
+      SEARXNG_SECRET: ${PHYSICSOS_SEARXNG_SECRET:-}
+    volumes:
+      - ./scripts/deploy/searxng-settings.yml:/etc/searxng/settings.yml:ro
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '2'
 
 volumes:
   app_data:

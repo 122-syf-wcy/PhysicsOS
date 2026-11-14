@@ -1,0 +1,16 @@
+{
+  "name": "@physicsos/agent-jobs",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Harness-independent durable agent task store: persisted tasks, immutable attempts, leases, cancellation and idempotent outbox delivery",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.json --noEmit"
+  }
+}

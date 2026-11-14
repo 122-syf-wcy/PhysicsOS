@@ -1,0 +1,53 @@
+# SearXNG settings for the PhysicsOS research tool.
+#
+# Private instance: no public access, JSON output enabled for the app only.
+# The JSON API is what `@physicsos/web-research`'s adapter calls; without
+# `formats: [html, json]` SearXNG answers 403 for format=json.
+#
+# Engines are intentionally a small, explicit set. They are upstream sources
+# SearXNG aggregates; this instance owns no web index, and upstream engines can
+# rate-limit or change, which the adapter reports honestly instead of turning
+# into "no results".
+use_default_settings: true
+
+general:
+  instance_name: 'PhysicsOS Research'
+  enable_metrics: false
+
+server:
+  bind_address: '0.0.0.0'
+  port: 8080
+  limiter: false
+  public_instance: false
+  secret_key: 'change-in-deployment'
+  image_proxy: false
+
+search:
+  safe_search: 1
+  autocomplete: ''
+  default_lang: 'zh-CN'
+  formats:
+    - html
+    - json
+
+ui:
+  static_use_hash: true
+
+# Keep only engines that answer without an API key and are suitable for
+# educational lookups. Anything requiring credentials stays off; a deployment
+# that adds one documents it here rather than enabling it silently.
+engines:
+  - name: wikipedia
+    disabled: false
+  - name: wikidata
+    disabled: false
+  - name: duckduckgo
+    disabled: false
+  - name: bing
+    disabled: false
+  - name: baidu
+    disabled: false
+  - name: google
+    disabled: true
+  - name: brave
+    disabled: true

@@ -32,6 +32,8 @@
     "../../packages/physics-workbench/src/**/*.ts",
     "../../packages/physics-whiteboard/src/**/*.ts",
     "../../packages/model-usage-outbox/src/**/*.ts",
+    "../../packages/experiment-validation/src/wrapper.ts",
+    "../../packages/experiment-validation/src/page.ts",
     "../../packages/physics-electric-core/src/**/*.ts",
     "../../packages/physics-math/src/**/*.ts",
     "../../packages/physics-observation/src/**/*.ts",

@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-experiment-host",
-  "description": "PhysicsOS 实验贡献 host plugin: community experiment package intake (ZIP upload, server-side validation, immutable storage) and the /physicsos/experiments REST surface",
+  "description": "PhysicsOS \u5b9e\u9a8c\u8d21\u732e host plugin: community experiment package intake (ZIP upload, server-side validation, immutable storage) and the /physicsos/experiments REST surface",
   "version": "0.1.0-rc.5",
   "private": true,
   "repository": {
@@ -45,7 +45,8 @@
     "@physicsos/engine-optics": "link:../../../../../packages/engine-optics",
     "@physicsos/agent-tools": "link:../../../../../packages/agent-tools",
     "@physicsos/physics-scene": "link:../../../../../packages/physics-scene",
-    "@physicsos/physics-runtime": "link:../../../../../packages/physics-runtime"
+    "@physicsos/physics-runtime": "link:../../../../../packages/physics-runtime",
+    "@physicsos/experiment-validation": "link:../../../../../packages/experiment-validation"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^",

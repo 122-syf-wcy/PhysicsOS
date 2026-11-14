@@ -1138,6 +1138,42 @@ document.addEventListener('physicsos-experiment-intent', event => {
       source: { title: row.title, summary: row.summary, rendererJs, stylesheet },
     }
   }
+  /**
+   * Serve one candidate package to the isolated validator, addressed by its
+   * ticket and digest instead of an account. The ticket is redeemed by the
+   * caller (jobs service) before this runs; this method only maps the frozen
+   * files an independent artifact already stores, plus the shell files the
+   * generator froze alongside them.
+   */
+  /** The frozen entry path for a candidate digest, if it exists. */
+  validatorEntry(candidateSha256: string): string | undefined {
+    for (const [, raw] of this.domain.table('artifacts').entries()) {
+      try {
+        const row = questionCodeRecordSchema.parse(raw)
+        if (row.sha256 === candidateSha256 && row.rendererKind === 'independent') return 'dist/index.html'
+      } catch { continue }
+    }
+    return undefined
+  }
+
+  async validatorPackage(
+    candidateSha256: string,
+    path: string,
+  ): Promise<{ readonly bytes: Buffer; readonly contentType: string } | undefined> {
+    this.requireReady()
+    if (!safeArchivePath(path)) return undefined
+    for (const [id, raw] of this.domain.table('artifacts').entries()) {
+      let row: QuestionCodeRecord
+      try { row = questionCodeRecordSchema.parse(raw) } catch { continue }
+      if (row.sha256 !== candidateSha256 || row.rendererKind !== 'independent') continue
+      const file = row.files.find(item => item.name === path)
+      if (file === undefined) return undefined
+      void id
+      return { bytes: await verifiedFile(join(this.root, 'blobs', file.sha256), file), contentType: file.contentType }
+    }
+    return undefined
+  }
+
   async asset(url: URL): Promise<Asset | undefined> {
     this.requireReady()
     const match =

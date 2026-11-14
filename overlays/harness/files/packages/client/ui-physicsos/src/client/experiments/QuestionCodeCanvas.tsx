@@ -3,7 +3,7 @@ import type { PhysicsScene } from '@physicsos/physics-scene'
 import type { CodeVisualizationSource, CodeVisualizationState } from '@deepseek-ai/dsh-tool-physicsos/types'
 import { CommunityExperimentFrame, type CommunityFrameStatus } from './CommunityExperimentFrame.tsx'
 import type { ExperimentSession } from './experiment-session.ts'
-import { questionCodeApi, questionCodeRefMatches, questionCodeSceneIdentity, questionCodeSceneSha256, sameQuestionCodeRef, type QuestionCodeRegenerate } from './question-code-api.ts'
+import { questionCodeApi, questionCodeRefMatches, questionCodeSceneIdentity, questionCodeSceneSha256, sameQuestionCodeRef, type QuestionCodeJobView, type QuestionCodeRegenerate } from './question-code-api.ts'
 import { useQuestionCodeOwner, type QuestionCodeOwnerStore } from './question-code-context.ts'
 import css from '../SceneChatCard.module.css'
 
@@ -25,6 +25,10 @@ export function QuestionCodeCanvas({ visualization, scene, session, regenerateQu
   const [regenerating, setRegenerating] = useState(false)
   const [frameStatus, setFrameStatus] = useState<CommunityFrameStatus>('loading')
   const [now, setNow] = useState(Date.now)
+  /* Durable progress for the live generation. Absent on deployments without
+     the jobs table, in which case the existing marker-only copy stays. */
+  const [job, setJob] = useState<QuestionCodeJobView>()
+  const generatingJobId = visualization?.status === 'generating' ? visualization.jobId : undefined
   const deadlineAt = visualization?.status === 'generating' ? visualization.deadlineAt : undefined
   useEffect(() => {
     setNow(Date.now())
@@ -32,6 +36,24 @@ export function QuestionCodeCanvas({ visualization, scene, session, regenerateQu
     const timer = setTimeout(() => { setNow(Date.now()) }, Math.min(2_147_483_647, deadlineAt - Date.now() + 1))
     return () => { clearTimeout(timer) }
   }, [visualization?.status, deadlineAt])
+  useEffect(() => {
+    if (generatingJobId === undefined) { setJob(undefined); return }
+    const abort = new AbortController()
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const poll = (): void => {
+      void questionCodeApi.job(generatingJobId, abort.signal).then((next) => {
+        if (abort.signal.aborted || next === undefined) return
+        setJob(next)
+        if (next.status === 'queued' || next.status === 'running' || next.status === 'candidate' || next.status === 'validating') {
+          timer = setTimeout(poll, 1500)
+        }
+      }).catch(() => { if (!abort.signal.aborted) timer = setTimeout(poll, 4000) })
+    }
+    // First look after a short delay: a generation that fails inside the same
+    // turn ends before this fires, so closed-turn semantics stay unchanged.
+    timer = setTimeout(poll, 800)
+    return () => { abort.abort(); if (timer !== undefined) clearTimeout(timer) }
+  }, [generatingJobId])
   const ref = visualization?.status === 'ready' ? visualization : undefined
   const independent = ref?.rendererKind === 'independent'
   const bound = visualization === undefined || questionCodeRefMatches(visualization, scene, owner)
@@ -105,7 +127,11 @@ export function QuestionCodeCanvas({ visualization, scene, session, regenerateQu
     </div> : <div className={css.codeStatus} role={error || status === 'failed' ? 'alert' : 'status'}>
       <span className={css.codeMark} aria-hidden="true">{'</>'}</span><strong>{title}</strong>
       <p>{status === 'failed' && visualization?.status === 'failed' ? visualization.message
-        : status === 'generating' ? '正在制作本题场景素材与实验画面，完成后即可探索条件变化。'
+        : status === 'generating' ? job?.status === 'validating'
+          ? '正在真实浏览器中检查画面、运动与改参效果，通过后才展示。'
+          : job?.status === 'candidate' ? '实验代码已生成，等待隔离验收。'
+            : job !== undefined && job.attempts.length > 1 ? '第一次未通过，正在按诊断修复；完成后会自动验收。'
+              : '正在制作本题场景素材与实验画面，完成后即可探索条件变化。'
           : status === 'upgrade-required' ? '点击升级，为这道题生成完整的独立实验。原题条件和已验证答案会继续保留。'
             : hasVerifiedSolution === false ? '已保存的场景条件已保留。' : '本题的条件、解题步骤和物理验证已保留。'}</p>
       {error && bound && independent ? <button type="button" onClick={() => { setAttempt(value => value + 1) }}>重新载入本题实验</button> : null}
