@@ -42,7 +42,12 @@ function dependencies() {
   const states: PhysicsSceneSnapshot[] = []
   const dispose = vi.fn(async () => {})
   const create = vi.fn(async () => ({ status: 'ready' as const, rendererKind: 'independent' as const, artifactId: 'private-1', ownerSessionId: 'parent', sceneId: original.sceneId, sceneRevision: 2, sceneSha256: 'a'.repeat(64), experimentId: 'magnetic-circular', sha256: 'b'.repeat(64), title: '本题轨迹', childSessionId: 'child', createdAt: '2026-11-04T00:00:00Z' }))
-  const start = vi.fn(async (_request: Parameters<CodeGenerationDependencies['start']>[0]) => ({ id: 'child', result: Promise.resolve({ stopReason: 'completed', structured: source, output: [] }), dispose }))
+  /* Tests swap in hung, aborted, partial and max-tokens runs, so the mock is
+     typed loosely inside the fixture; `deps` is asserted to the real contract
+     below, which is where the shape actually matters. */
+  type TestChildRun = { id: string; result: Promise<unknown>; dispose: () => Promise<void> }
+  const start = vi.fn<(_request: Parameters<CodeGenerationDependencies['start']>[0]) => Promise<TestChildRun>>(
+    async () => ({ id: 'child', result: Promise.resolve({ stopReason: 'completed', structured: source, output: [] }), dispose }))
   const deps = { ownerSessionId: 'parent', snapshot: original, signal: new AbortController().signal, experimentId: 'magnetic-circular',
     context: async () => ({ experimentId: 'magnetic-circular', developerPrompt: 'latest V3 prompt', publishedBody: 'current published body', styleVersion: 'V3', renderContract: 'snapshot.view.bodies[].at 是引擎位置；snapshot.clock.time 是平台时间。', allowedAssetPaths: [] }),
     start, create, current: () => latest, publish: (value: PhysicsSceneSnapshot) => { latest = value; states.push(value) },
@@ -204,7 +209,8 @@ describe('parent question code generation', () => {
       .toMatchObject({ status: 'generating', jobId: 'gen_durable_1' })
     const state = await work
     expect(state.status).toBe('ready')
-    expect(h.create.mock.calls[0]?.[0]).toMatchObject({ generationId: 'gen_durable_1' })
+    const created = h.create.mock.calls.at(0)?.at(0) as unknown
+    expect(created).toMatchObject({ generationId: 'gen_durable_1' })
   })
   it('settles a timed-out owned marker while child disposal is still waiting', async () => {
     vi.useFakeTimers()
@@ -724,7 +730,7 @@ describe('the real code child provider', () => {
     const { ctx, parent } = await presentationHost(adapter)
     const run = await new PhysicsCodeProvider(ctx).start({
       parent, signal: new AbortController().signal, prompt: [{ type: 'text', text: '仅绘制题目快照。' }],
-      outputSchema: { type: 'object', properties: Object.fromEntries(Object.keys(source).map(key => [key, { type: 'string' }])), required: Object.keys(source) },
+      outputSchema: { type: 'object' as const, properties: Object.fromEntries(Object.keys(source).map(key => [key, { type: 'string' as const }])), required: Object.keys(source) } as const,
       maxDepth: 1, descriptor: snapshotSubagentDescriptor({ mode: 'one-shot', provider: CODE_PROVIDER_NAME }),
     })
     try {
@@ -778,7 +784,7 @@ describe('the real code child provider', () => {
     const metadata = await ctx.llm.resolveModelInfo('mock', 'presentation-test')
     const delayed = Promise.withResolvers<typeof metadata>()
     const lookup = vi.spyOn(ctx.llm, 'resolveModelInfo').mockImplementationOnce(() => delayed.promise)
-    const request = { parent, signal: new AbortController().signal, prompt: [{ type: 'text' as const, text: 'Render the old question.' }], outputSchema: { type: 'object' as const, properties: Object.fromEntries(Object.keys(source).map(key => [key, { type: 'string' }])), required: Object.keys(source) }, maxDepth: 1, descriptor: snapshotSubagentDescriptor({ mode: 'one-shot', provider: CODE_PROVIDER_NAME }) }
+    const request = { parent, signal: new AbortController().signal, label: 'render old question', prompt: [{ type: 'text' as const, text: 'Render the old question.' }], outputSchema: { type: 'object' as const, properties: Object.fromEntries(Object.keys(source).map(key => [key, { type: 'string' as const }])), required: Object.keys(source) } as const, maxDepth: 1, descriptor: snapshotSubagentDescriptor({ mode: 'one-shot', provider: CODE_PROVIDER_NAME }) }
     const starting = provider.start(request).then(async (run) => {
       await run.dispose()
       return { code: 'UNEXPECTED_CHILD_CREATED' }
@@ -817,7 +823,7 @@ describe('the real code child provider', () => {
     const resolve = vi.spyOn(ctx.agentPresets, 'resolve').mockImplementationOnce(() => delayed.promise)
     const starting = new PhysicsCodeProvider(ctx).start({
       parent, signal: new AbortController().signal, prompt: [{ type: 'text', text: 'Render the old question.' }],
-      outputSchema: { type: 'object', properties: Object.fromEntries(Object.keys(source).map(key => [key, { type: 'string' }])), required: Object.keys(source) },
+      outputSchema: { type: 'object' as const, properties: Object.fromEntries(Object.keys(source).map(key => [key, { type: 'string' as const }])), required: Object.keys(source) } as const,
       maxDepth: 1, descriptor: snapshotSubagentDescriptor({ mode: 'one-shot', provider: CODE_PROVIDER_NAME }),
     }).then(async (run) => { await run.dispose(); return { code: 'UNEXPECTED_CHILD_CREATED' } }, (error: unknown) => error)
     await vi.waitFor(() => { expect(resolve).toHaveBeenCalledTimes(1) })
@@ -876,7 +882,7 @@ describe('the real code child provider', () => {
     artifacts.generateAsset = async () => ({})
     artifacts.assetManifest = () => [{ path: './assets/generated/existing.png' }]
     const provider = new PhysicsCodeProvider(ctx), controller = new AbortController()
-    const request = { parent, signal: controller.signal, prompt: [{ type: 'text' as const, text: 'Complete the exact question.' }], outputSchema: { type: 'object' as const, properties: Object.fromEntries(Object.keys(source).map(key => [key, { type: 'string' }])), required: Object.keys(source) }, maxDepth: 1, descriptor: snapshotSubagentDescriptor({ mode: 'one-shot', provider: CODE_PROVIDER_NAME }) }
+    const request = { parent, signal: controller.signal, label: 'complete question', prompt: [{ type: 'text' as const, text: 'Complete the exact question.' }], outputSchema: { type: 'object' as const, properties: Object.fromEntries(Object.keys(source).map(key => [key, { type: 'string' as const }])), required: Object.keys(source) } as const, maxDepth: 1, descriptor: snapshotSubagentDescriptor({ mode: 'one-shot', provider: CODE_PROVIDER_NAME }) }
     const first = await provider.start(request)
     await first.result; await first.dispose()
     const second = await provider.start(request)
@@ -904,7 +910,7 @@ describe('the real code child provider', () => {
     artifacts.generateAsset = vi.fn(async () => ({}))
     artifacts.assetManifest = () => [{ path: './assets/generated/abcdef.png' }]
     const provider = new PhysicsCodeProvider(ctx)
-    const request = { parent, signal: new AbortController().signal, label: 'resume', prompt: [{ type: 'text' as const, text: 'Complete the exact question.' }], outputSchema: { type: 'object' as const, properties: Object.fromEntries(Object.keys(source).map(key => [key, { type: 'string' }])), required: Object.keys(source) }, maxDepth: 1, descriptor: snapshotSubagentDescriptor({ mode: 'one-shot', provider: CODE_PROVIDER_NAME, label: 'resume' }) }
+    const request = { parent, signal: new AbortController().signal, label: 'resume', prompt: [{ type: 'text' as const, text: 'Complete the exact question.' }], outputSchema: { type: 'object' as const, properties: Object.fromEntries(Object.keys(source).map(key => [key, { type: 'string' as const }])), required: Object.keys(source) } as const, maxDepth: 1, descriptor: snapshotSubagentDescriptor({ mode: 'one-shot', provider: CODE_PROVIDER_NAME, label: 'resume' }) }
     const first = await provider.start(request)
     expect((await first.result).stopReason).toBe('error')
     await first.dispose()
@@ -931,7 +937,7 @@ describe('the real code child provider', () => {
     parent.session.append('physics/scene', { ...original, visualization: { status: 'generating', jobId: 'owned-job', ownerSessionId: 'parent', sceneId: original.sceneId, sceneRevision: original.revision, deadlineAt: Date.now() + 600000 } })
     const before = { ...parent.options }
     const provider = new PhysicsCodeProvider(ctx)
-    const run = await provider.start({ parent, signal: new AbortController().signal, label: 'image child', prompt: [{ type: 'text', text: 'Generate a scene material then code.' }], outputSchema: { type: 'object', properties: Object.fromEntries(Object.keys(source).map(key => [key, { type: 'string' }])), required: Object.keys(source) }, maxDepth: 1, descriptor: snapshotSubagentDescriptor({ mode: 'one-shot', provider: CODE_PROVIDER_NAME, label: 'image child' }) })
+    const run = await provider.start({ parent, signal: new AbortController().signal, label: 'image child', prompt: [{ type: 'text', text: 'Generate a scene material then code.' }], outputSchema: { type: 'object' as const, properties: Object.fromEntries(Object.keys(source).map(key => [key, { type: 'string' as const }])), required: Object.keys(source) } as const, maxDepth: 1, descriptor: snapshotSubagentDescriptor({ mode: 'one-shot', provider: CODE_PROVIDER_NAME, label: 'image child' }) })
     try {
       expect((await run.result).structured).toEqual(source)
       expect(generateAsset).toHaveBeenCalledWith(expect.objectContaining({ ownerSessionId: 'parent', generationId: 'owned-job', scene: original.scene, kind: 'environment' }))
@@ -963,7 +969,7 @@ describe('the real code child provider', () => {
     artifacts.generateAsset = vi.fn(async () => ({}))
     artifacts.assetManifest = () => [{ path: './assets/generated/abcdef.png' }]
     const provider = new PhysicsCodeProvider(ctx)
-    const run = await provider.start({ parent, signal: new AbortController().signal, label: 'code after image', prompt: [{ type: 'text', text: 'Submit code using existing asset.' }], outputSchema: { type: 'object', properties: Object.fromEntries(Object.keys(source).map(key => [key, { type: 'string' }])), required: Object.keys(source) }, maxDepth: 1, descriptor: snapshotSubagentDescriptor({ mode: 'one-shot', provider: CODE_PROVIDER_NAME, label: 'code after image' }) })
+    const run = await provider.start({ parent, signal: new AbortController().signal, label: 'code after image', prompt: [{ type: 'text', text: 'Submit code using existing asset.' }], outputSchema: { type: 'object' as const, properties: Object.fromEntries(Object.keys(source).map(key => [key, { type: 'string' as const }])), required: Object.keys(source) } as const, maxDepth: 1, descriptor: snapshotSubagentDescriptor({ mode: 'one-shot', provider: CODE_PROVIDER_NAME, label: 'code after image' }) })
     try {
       expect((await run.result).structured).toEqual({ ...source, rendererJs: source.rendererJs + '\n// authored ending' })
       expect(adapter.requests[0]?.tools?.map(tool => tool.name).sort()).toEqual(['physics_write_experiment_code', 'structured_output'])
@@ -982,7 +988,7 @@ describe('the real code child provider', () => {
     const adapter = new MockAdapter([toolCallResponse('oversized', 'structured_output', { ...source, title: 'x'.repeat(121) }), toolCallResponse('unexported', 'structured_output', { ...source, rendererJs: source.rendererJs.replace('export function', 'function') }), toolCallResponse('result', 'structured_output', source)])
     ctx.llm.registerAdapter(['mock'], adapter)
     const provider = new PhysicsCodeProvider(ctx)
-    const request = { label: 'question code', parent, signal: new AbortController().signal, prompt: [{ type: 'text' as const, text: 'Render the exact question.' }], outputSchema: { type: 'object' as const, properties: Object.fromEntries(Object.keys(source).map(key => [key, { type: 'string' }])), required: Object.keys(source), additionalProperties: false }, toolFilter: { allow: [] }, maxDepth: 1, descriptor: snapshotSubagentDescriptor({ mode: 'one-shot', provider: CODE_PROVIDER_NAME, label: 'question code' }) }
+    const request = { label: 'question code', parent, signal: new AbortController().signal, prompt: [{ type: 'text' as const, text: 'Render the exact question.' }], outputSchema: { type: 'object' as const, properties: Object.fromEntries(Object.keys(source).map(key => [key, { type: 'string' as const }])), required: Object.keys(source), additionalProperties: false } as const, toolFilter: { allow: [] }, maxDepth: 1, descriptor: snapshotSubagentDescriptor({ mode: 'one-shot', provider: CODE_PROVIDER_NAME, label: 'question code' }) }
     const run = await provider.start(request)
     try {
       expect((await run.result).structured).toEqual(source)
@@ -990,7 +996,7 @@ describe('the real code child provider', () => {
       expect(adapter.requests.at(-1)?.tools?.map(t => t.name)).toEqual(['structured_output'])
       expect(ctx.tools.schemas(run.localAgent).map(t => t.name)).toEqual(['structured_output'])
       expect(run.localAgent?.session.snapshotEvents().some(e => e.type === 'agent-preset/selected' && e.data.agentPreset === 'physics-code-only')).toBe(true)
-      const denied = await ctx.tools.execute({ name: 'ask_user_question', arguments: {}, signal: request.signal, callId: 'denied' as never, agent: run.localAgent })
+      const denied = await ctx.tools.execute({ name: 'ask_user_question', arguments: {}, signal: request.signal, callId: 'denied' as never, agent: run.localAgent! })
       expect(denied.isError).toBe(true)
     } finally { await run.dispose() }
     expect(ctx.agents.get(run.id as never)).toBeUndefined()
@@ -1011,7 +1017,7 @@ describe('the real code child provider', () => {
     h.deps.timeoutMs = 100
     let childId: string | undefined
     h.deps.start = async (request) => {
-      const run = await provider.start({ ...request, parent: handle.agent, descriptor: snapshotSubagentDescriptor({ mode: 'one-shot', provider: CODE_PROVIDER_NAME, label: request.label }) })
+      const run = await provider.start({ ...request, parent: handle.agent, descriptor: snapshotSubagentDescriptor({ mode: 'one-shot', provider: CODE_PROVIDER_NAME, label: request.label ?? 'question code' }) })
       childId = String(run.id)
       return run
     }

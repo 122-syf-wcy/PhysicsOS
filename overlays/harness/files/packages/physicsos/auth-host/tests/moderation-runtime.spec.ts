@@ -1,3 +1,4 @@
+import type { ModerationReview } from '../src/moderation/types.ts'
 import { Context } from '@deepseek-ai/cordis'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
@@ -21,7 +22,7 @@ import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-a
 import { AccountRuns, ModerationRuntime } from '../src/moderation/runtime.ts'
 import { school, user } from './security-fixture.ts'
 const admin = { userKey: 's:root', schoolId: 's', username: 'root', role: 'SUPER_ADMIN' as const }
-const allow = { risk: 'allow', category: 'none', severity: 'none', confidence: 1, reason: 'education', evidence: [] } as const
+const allow: ModerationReview = { risk: 'allow', category: 'none', severity: 'none', confidence: 1, reason: 'education', evidence: [] }
 const cleanups: (() => Promise<unknown>)[] = []
 afterEach(async () => { for (const fn of cleanups.splice(0).reverse()) await fn(); vi.useRealTimers() })
 async function harness(review = async (_input: any, _signal: AbortSignal): Promise<any> => allow, beforeRuntime?: (ctx: Context, auth: AuthService) => Promise<void>) {

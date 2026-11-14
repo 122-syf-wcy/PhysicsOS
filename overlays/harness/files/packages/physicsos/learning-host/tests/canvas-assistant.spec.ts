@@ -33,7 +33,7 @@ async function fixture(overrides: Partial<CanvasAssistantModel> = {}, settings: 
     canvas = new CanvasService(await openCanvasDomain(ctx), new CanvasBlobStore(config.root), config); await canvas.initialize()
     assistant = new CanvasAssistantService(await openCanvasAssistantDomain(ctx), canvas, { model, recordUsage: async input => { receipts.push(input) }, ...settings }); await assistant.initialize()
   }
-  const close = async () => { await assistant?.dispose(); await assistant?.domain.close(); await canvas?.dispose(); await canvas?.domain.close(); await backend?.close(); await ctx?.fiber.dispose() }
+  const close = async () => { await assistant?.dispose(); await assistant?.domain.close(); await canvas?.dispose(); await backend?.close(); await ctx?.fiber.dispose() }
   onTestFinished(async () => { await close(); await rm(root, { recursive: true, force: true }) })
   await open()
   return { get canvas() { return canvas }, get assistant() { return assistant }, get calls() { return calls }, receipts, restart: async () => { await close(); await open() } }

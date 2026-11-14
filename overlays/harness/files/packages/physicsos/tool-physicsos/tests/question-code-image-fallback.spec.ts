@@ -23,6 +23,11 @@ import { PhysicsCodeProvider, CODE_PROVIDER_NAME } from '../src/code-provider.ts
 import { questionCodePrompt } from '../src/question-code-prompt.ts'
 import type { PhysicsSceneSnapshot } from '../src/types.ts'
 
+/* The physics/scene event payload is plain JSON. PhysicsScene is structurally
+   JSON but its interface declares no index signature, so assert at this seam. */
+const appendScene = (value: unknown) => value as never
+
+
 const disposals: (() => Promise<void>)[] = []
 afterEach(async () => { for (const dispose of disposals.splice(0).reverse()) await dispose() })
 const source = { title: '原生题目画面', summary: '仅绘制引擎几何', stylesheet: '',
@@ -59,8 +64,8 @@ async function setup(adapter: MockAdapter, fetchImpl: typeof fetch) {
     setup: async agentCtx => { await ctx.agentPresets.mount(agentCtx, 'student') } })).agent
   const scene = createConvexLensScene({ sceneId: 'exact-child-question', focalLength: 23, objectDistance: 62, now: '2026-11-08T00:00:00.000Z' })
   const snapshot: PhysicsSceneSnapshot = { sceneId: scene.id, revision: scene.revision, domain: 'optics', engineId: 'engine-optics',
-    title: '本题透镜', cause: 'solved', turn: 1, scene }
-  parent.session.append('physics/scene', { ...snapshot, visualization: { status: 'generating', jobId: 'image-job', ownerSessionId: 'parent',
+    title: '本题透镜', cause: 'solved', turn: 1, scene: appendScene(scene) }
+  parent.session.append('physics/scene', { ...snapshot, scene: appendScene(scene), visualization: { status: 'generating', jobId: 'image-job', ownerSessionId: 'parent',
     sceneId: scene.id, sceneRevision: scene.revision, deadlineAt: Date.now() + 600_000 } })
   const start = () => new PhysicsCodeProvider(ctx).start({ parent, signal: new AbortController().signal,
     label: 'native image fallback', prompt: [{ type: 'text', text: '仅绘制本题引擎几何。' }], maxDepth: 1,
@@ -106,7 +111,7 @@ it('offers only code submission when this exact generation already has trusted n
 })
 it('gives a runnable native entry example without waiting for an unavailable image', async () => {
   const scene = createConvexLensScene(), snapshot: PhysicsSceneSnapshot = { sceneId: scene.id, revision: scene.revision,
-    domain: 'optics', engineId: 'engine-optics', title: '本题', cause: 'solved', turn: 1, scene }
+    domain: 'optics', engineId: 'engine-optics', title: '本题', cause: 'solved', turn: 1, scene: appendScene(scene) }
   const prompt = questionCodePrompt({ experimentId: 'convex-lens', developerPrompt: '', publishedBody: '', styleVersion: 'test',
     renderContract: 'snapshot.view is read-only', allowedAssetPaths: [] }, snapshot, undefined, undefined, [])
   const entry = prompt.slice(prompt.indexOf('export async function renderFrame'), prompt.indexOf('只读snapshot.view'))

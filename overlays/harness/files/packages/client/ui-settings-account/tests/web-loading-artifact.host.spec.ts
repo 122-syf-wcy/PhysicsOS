@@ -4,7 +4,9 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
-import { desktopAccountFingerprint } from '../tsdown.config.ts'
+/* The fingerprint is duplicated beside this spec on purpose: a host-side test
+   must not import the Client aggregate's build config. */
+import { desktopAccountFingerprint } from './desktop-account-fingerprint.ts'
 
 const PLUGIN_ID = '@deepseek-ai/dsh-client-ui-settings-account'
 const source = () => readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')

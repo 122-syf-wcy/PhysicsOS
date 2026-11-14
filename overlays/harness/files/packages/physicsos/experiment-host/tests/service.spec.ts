@@ -72,11 +72,12 @@ describe('immutable upload, review and release service', () => {
       data: name === 'experiment.json' ? JSON.stringify({ ...manifest, version: '1.1.0' }) : data,
     }))
     const second = await service.upload(contributor, uploadBody(zip(entries)))
-    const [a, b] = await Promise.all(
+    const reviewed = await Promise.all(
       [first, second].map(item =>
         service.review(admin, item.id, { action: 'approve', expectedSha256: item.sha256 }),
       ),
     )
+    const [a, b] = reviewed as [typeof first, typeof second]
     expect(service.list(contributor).active?.id).toBe(b.id)
     await expect(
       service.rollback(admin, { packageId: a.id, expectedActiveId: a.id }),

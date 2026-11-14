@@ -49,10 +49,11 @@ export async function researchQuestion(query: string, dependencies: ResearchDepe
     let contentSha256: string | undefined
     if (index < readLimit) {
       try {
-        const document = await dependencies.reader.read(hit.url, {
-          timeoutMs: options.timeoutMs,
+        const readOptions: import('./types.ts').ReadOptions = {
+          ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
           ...(options.signal === undefined ? {} : { signal: options.signal }),
-        })
+        }
+        const document = await dependencies.reader.read(hit.url, readOptions)
         url = document.url
         title = document.title === '' ? hit.title : document.title
         depth = 'full-text'

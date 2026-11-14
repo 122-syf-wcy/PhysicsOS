@@ -254,7 +254,7 @@ describe('private question code artifacts', () => {
     const templateDigests = (files: Map<string, Buffer>) => [...files].map(([name, bytes]) => [name, createHash('sha256').update(bytes).digest('hex')])
     expect(templateDigests(experimentTemplateFiles('convex-lens'))).toEqual(templateDigests(trusted))
   })
-  it.each([
+  it.each<[string, () => string]>([
     ['old template', () => experimentTemplateFiles('convex-lens').get('src/renderer.js')!.toString('utf8')],
     ['old alias import', () => "import { renderFrame as old } from './platform-renderer.js'; export function renderFrame(snapshot) { old(snapshot) }"],
     ['old reexport', () => "export { renderFrame } from './platform-renderer.js'"],

@@ -58,7 +58,9 @@ async function host(adapter: MockAdapter): Promise<{ ctx: Context; parent: Agent
   } as never)
   const created: unknown[] = []
   ctx.provide('questionCodeArtifacts', {
-    context: (experimentId: string) => Promise.resolve(questionCodeContext(experimentId, { current: () => PROMPT_SEED })),
+    /* `current()` hands back a published PromptDocument; the seed is only its body,
+       and the context builder reads nothing else. Assert at this fixture seam. */
+    context: (experimentId: string) => Promise.resolve(questionCodeContext(experimentId, { current: () => PROMPT_SEED as never })),
     create: async (input: Parameters<CodeGenerationDependencies['create']>[0]) => {
       created.push(input)
       const scene = input.scene as PhysicsScene
