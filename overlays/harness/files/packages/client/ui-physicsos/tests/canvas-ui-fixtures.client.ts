@@ -300,7 +300,8 @@ export function createCanvasNodeTestProps<K extends CanvasFlowKind>(kind: K, opt
     requestCanvasSource: unusedSeat, requestSceneInCanvas: unusedSeat,
     addPendingCanvasSource: unusedSeat, addPendingToNewCanvas: unusedSeat,
     cancelPendingCanvasSource: unusedSeat, openCanvasInstanceInLab: unusedSeat,
-    renderFactorySlot: vi.fn<CanvasNodeProps<K>['renderFactorySlot']>(() => null),
+    /* These node fixtures render one local Component directly and mount no child Factory. */
+    renderFactorySlot: vi.fn(((name: string) => { void name; return null }) as CanvasNodeProps<K>['renderFactorySlot']),
     t: (key: Parameters<CanvasNodeProps<K>['t']>[0], params?: Record<string, unknown>): string => {
       if (!(key in en)) throw new Error(`This canvas test requested an unrelated locale key: ${key}`)
       const text = Object.entries(en).find(([entry]) => entry === key)?.[1]
@@ -309,6 +310,8 @@ export function createCanvasNodeTestProps<K extends CanvasFlowKind>(kind: K, opt
         params !== undefined && Object.prototype.hasOwnProperty.call(params, name) ? String(params[name]) : token)
     },
     ...options.overrides,
-  } satisfies CanvasNodeProps<K>
-  return { props, document, view, commands }
+  } satisfies CanvasNodeProps
+  /* The seat shape is kind-independent apart from the local Component's own `type`
+     literal; the caller's K only selects which local Component is being rendered. */
+  return { props: props as unknown as CanvasNodeProps<K>, document, view, commands }
 }

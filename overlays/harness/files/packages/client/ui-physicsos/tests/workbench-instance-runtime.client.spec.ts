@@ -110,7 +110,8 @@ const own = (options: CreateWorkbenchInstanceOptions): WorkbenchInstanceRuntime 
   return owner
 }
 const keepDuplicate = (owner: WorkbenchInstanceRuntime): WorkbenchInstanceRuntime => {
-  const duplicate = owner.duplicate({ onCommitted: undefined, onPersist: undefined })
+  /* No options duplicates the owner without carrying its commit/persist callbacks. */
+  const duplicate = owner.duplicate()
   owners.add(duplicate)
   return duplicate
 }
@@ -132,14 +133,15 @@ const reopen = (saved: WorkbenchCommittedState): WorkbenchInstanceRuntime => own
   instanceKey: saved.instanceKey,
   sceneId: String(saved.scene.id),
   scene: saved.scene,
-  originScene: saved.originScene,
-  templateId: saved.templateId,
+  /* The committed state keeps these optional; the options type must not receive an explicit undefined. */
+  ...(saved.originScene === undefined ? {} : { originScene: saved.originScene }),
+  ...(saved.templateId === undefined ? {} : { templateId: saved.templateId }),
   source: saved.source,
   buildMode: saved.buildMode,
   clock: saved.clock,
   instanceEditRevision: saved.instanceEditRevision,
   persistedHistory: saved.history,
-  persistedDraft: saved.draft,
+  ...(saved.draft === undefined ? {} : { persistedDraft: saved.draft }),
 })
 const resultOf = (raw: CapturedResult): SimulationResult => {
   if (raw.result === undefined) throw new Error('The actual owner lost its real engine result')

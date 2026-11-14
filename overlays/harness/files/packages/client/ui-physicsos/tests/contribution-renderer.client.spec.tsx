@@ -4,7 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { createConvexLensScene } from '@physicsos/physics-scene'
 import { createOpticsWorkspaceRuntime } from '../src/client/physics/optics-workspace-runtime.ts'
 import { contributionSnapshot } from '../src/client/experiments/contribution-protocol.ts'
-import { mountLens } from '../../../../../../developer-kit/experiment-template/src/lens-renderer.ts'
+import { mountLens } from './fixtures/developer-template/lens-renderer.ts'
 
 // Keep real geometry/materials/scene transforms; only replace unavailable jsdom WebGL.
 const captured = vi.hoisted(() => ({ scene: undefined as THREE.Scene | undefined }))

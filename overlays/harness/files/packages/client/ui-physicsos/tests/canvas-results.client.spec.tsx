@@ -254,7 +254,7 @@ describe('CanvasResults immutable snapshots', () => {
     const owned = await ownedComparisonDocument()
     const frozen = owned.source.getSnapshot().objects[owned.alias.snapshot.digest]
     render(<CanvasResults {...owned.props} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Delete snapshot', exact: true }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete snapshot' }))
     const dialog = screen.getByRole('dialog', { name: 'Delete snapshot' })
     expect(owned.source.getSnapshot().manifest!.snapshots.some(alias => alias.id === owned.alias.id)).toBe(true)
     fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }))
@@ -576,7 +576,8 @@ describe('CanvasComparisonResults native comparison', () => {
     const data = comparisonFixture()
     const fixture = createCanvasNodeTestProps('comparison', { document: data.document })
     const { container } = render(<CanvasComparisonResults {...fixture.props} />)
-    const chart = screen.getAllByRole<SVGSVGElement>('group', { name: fixture.props.t('canvas.view.chart') })[0]!
+    /* The a11y query types every role match as HTMLElement; the chart root is the SVG group. */
+    const chart = screen.getAllByRole('group', { name: fixture.props.t('canvas.view.chart') })[0] as unknown as SVGSVGElement
     const hit = container.querySelector('[data-native-row-id="right-native-1"] [class*="chartHit"]')!
     const x = Number(hit.getAttribute('cx'))
     const y = Number(hit.getAttribute('cy'))

@@ -1,9 +1,9 @@
 import { clientBundle } from '../tsdown.client.ts'
 import type { UserConfig } from 'tsdown'
-import { readFile } from 'node:fs/promises'
-import { basename, join } from 'node:path'
 import { createHash } from 'node:crypto'
 import { readFileSync, readdirSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
+import { basename, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const PLUGIN_ID = '@deepseek-ai/dsh-client-ui-settings-account'
@@ -28,8 +28,6 @@ export function desktopAccountFingerprint(root: string): string {
   }
   return hash.digest('hex')
 }
-
-
 
 const withAssets = (config: UserConfig): UserConfig => ({
   ...config,

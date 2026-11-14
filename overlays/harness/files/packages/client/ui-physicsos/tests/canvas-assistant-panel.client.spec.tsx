@@ -33,7 +33,7 @@ describe('explicit canvas assistant proposal handling', () => {
     await act(async () => { rejectPoll(new Error('Temporary poll failure')) })
     expect(screen.getByRole('alert').textContent).toContain('Temporary poll failure')
     await act(async () => { completeCancel({ ...pending, status: 'cancelled' }) })
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Draw with AI' }).disabled).toBe(false)
+    expect((screen.getByRole('button', { name: 'Draw with AI' }) as HTMLButtonElement).disabled).toBe(false)
   })
   it('ignores an old cancellation response after switching canvas and starting a new task', async () => {
     const f = fixture(); const { result: _result, ...pending } = f.candidate
@@ -61,7 +61,7 @@ describe('explicit canvas assistant proposal handling', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Draw with AI' }))
     await screen.findByText('Thinking and drawing')
     view.rerender(<CanvasAssistantPanel {...f.props} document={{ ...f.props.document, editSequence: 3, acknowledgedSequence: 3 }} />)
-    await waitFor(() => expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Draw with AI' }).disabled).toBe(false))
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Draw with AI' }) as HTMLButtonElement).disabled).toBe(false))
     expect(f.commands.cancelAssistant).toHaveBeenCalledWith(f.props.canvasId, 'job-1', 'account|school')
   })
   it('previews a real candidate and accepts all drawing primitives in one bound command', async () => {
@@ -75,7 +75,7 @@ describe('explicit canvas assistant proposal handling', () => {
     await waitFor(() => expect(f.commands.appendAnnotations).toHaveBeenCalledOnce())
     expect(f.commands.appendAnnotations.mock.calls[0]).toEqual([f.props.canvasId, { schemaVersion: 1, primitives: [{ id: 'agent:job-1:0', type: 'arrow', points: [[0, 0], [30, 0]] }] }, { namespace: 'account|school', editSequence: 2, head: f.candidate.binding.head }])
     await waitFor(() => expect(screen.queryByText('Proposed force arrow')).toBeNull())
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Draw with AI' }).disabled).toBe(false)
+    expect((screen.getByRole('button', { name: 'Draw with AI' }) as HTMLButtonElement).disabled).toBe(false)
   })
   it('removes the preview and prevents acceptance after a new document revision', async () => {
     const f = fixture(); f.commands.startAssistant.mockResolvedValue(f.candidate)

@@ -14,7 +14,7 @@ it('offers width and height resizing with tablet dimensions and persists them',a
  fireEvent.change(view.getByRole('spinbutton',{name:'Window height'}),{target:{value:'640'}})
  fireEvent.click(view.getByRole('button',{name:'Confirm'}))
  await waitFor(()=>expect(f.commands.updateLayout).toHaveBeenCalled())
- expect(f.commands.updateLayout.mock.calls[0][1][0].layout).toMatchObject({width:760,height:640})
+ expect(f.commands.updateLayout.mock.calls[0]![1][0]!.layout).toMatchObject({width:760,height:640})
 })
 it('keeps an authentication-paused card read-only',()=>{
  const f=createCanvasNodeTestProps('experiment',{document:{...canvasTestDocument(),status:'auth-required'}})

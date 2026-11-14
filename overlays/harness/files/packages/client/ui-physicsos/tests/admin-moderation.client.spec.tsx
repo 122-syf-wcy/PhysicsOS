@@ -47,7 +47,7 @@ function fixture(rows: ModerationCase[] = [item()]) {
   }
   return { api, rows }
 }
-const button = (name: string) => screen.getByRole<HTMLButtonElement>('button', { name })
+const button = (name: string) => screen.getByRole('button', { name }) as HTMLButtonElement
 const selectFirst = async () => {
   fireEvent.click(await screen.findByRole('button', { name: '查看 mc_a' }))
   return screen.findByTestId('moderation-detail')
@@ -160,7 +160,7 @@ describe('human moderation page', () => {
     fireEvent.click(button('确认封禁'))
     expect((await screen.findByRole('alert')).textContent).toContain('VERSION_CONFLICT')
     await screen.findByText('版本 7')
-    expect(screen.getByLabelText<HTMLTextAreaElement>('人工审核理由').value).toBe('保留待核对的理由')
+    expect((screen.getByLabelText('人工审核理由') as HTMLTextAreaElement).value).toBe('保留待核对的理由')
     expect(screen.queryByRole('alertdialog')).toBeNull()
     expect(screen.getByText('账号已停用')).not.toBeNull()
   })

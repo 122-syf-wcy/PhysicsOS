@@ -8,6 +8,12 @@ import { createWorkbenchInstanceRuntime } from '../src/client/physics/workbench-
 import { createMechanicsWorkspaceRuntime } from '../src/client/physics/mechanics-workspace-runtime.ts'
 import { createCanvasNodeTestProps, keyedSelectorHook } from './canvas-ui-fixtures.client.ts'
 
+/* The instance view resolves its node factory through the slot hook; these
+   tests render the view directly and mount no flow node. */
+const useUnrenderedFactorySlot = (): (() => null) => () => null
+const useFactorySlot = (() => useUnrenderedFactorySlot()) as CanvasInstanceProps['useFactorySlot']
+
+
 afterEach(cleanup)
 
 const horizontalScene = () => createMechanicsScene({
@@ -26,6 +32,7 @@ describe('motion principles in the experiment card', () => {
     } })
     const props = { ...base.props, canvasId: base.props.data.canvasId, instanceId: 'projectile-formulas',
       instanceKey: runtime.instanceKey, presentation: 'card', renderSlot: () => <div data-experiment-frame />,
+      useFactorySlot,
     } satisfies CanvasInstanceProps
     runtime.setRunning(true)
     runtime.seek(0.5)

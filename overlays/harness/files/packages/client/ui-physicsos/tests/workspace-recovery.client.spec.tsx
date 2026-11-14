@@ -37,7 +37,7 @@ it('persists a real inspector edit without rebuilding runtime, then resumes and 
   act(() => { controller.openExperimentPicker() })
   expect(screen.getByText('返回当前实验')).toBeTruthy()
   act(() => { controller.open('lab') })
-  expect(screen.getByRole<HTMLInputElement>('textbox', { name: '质量' }).value).toBe('2')
+  expect((screen.getByRole('textbox', { name: '质量' }) as HTMLInputElement).value).toBe('2')
   expect(container.querySelector('[data-scene-revision="1"]')).toBeTruthy()
   expect(createPhysicsSurfaceController(local).recent.getSnapshot().items[0]?.scene.bodies[0]?.mass.value).toBe(2)
 })

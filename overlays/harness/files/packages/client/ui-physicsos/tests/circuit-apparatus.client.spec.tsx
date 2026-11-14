@@ -57,7 +57,7 @@ describe('inline apparatus palette', () => {
     expect(screen.queryByTestId('builder-inspector-r1')).toBeNull()
     await act(async () => { release?.() })
     expect(await screen.findByTestId('builder-inspector-r1')).toBeTruthy()
-    expect(screen.getByTestId<HTMLInputElement>('builder-resistance-r1').value).toBe('20')
+    expect((screen.getByTestId('builder-resistance-r1') as HTMLInputElement).value).toBe('20')
   })
 
   it('puts a catalog id in the apparatus drag payload', () => {

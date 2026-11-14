@@ -46,7 +46,7 @@ describe('apparatus edit rejection feedback', () => {
     const owner = ownerOf()
     const before = owner.serialize()
     const view = render(<Panel owner={owner} />)
-    const field = screen.getByTestId<HTMLInputElement>('builder-resistance-r0')
+    const field = screen.getByTestId('builder-resistance-r0') as HTMLInputElement
     fireEvent.change(field, { target: { value: '-1' } })
     fireEvent.blur(field)
     expect(field.value).toBe('10')
@@ -60,7 +60,7 @@ describe('apparatus edit rejection feedback', () => {
   it('clears local rejection feedback after a valid correction', () => {
     const owner = ownerOf()
     render(<Panel owner={owner} />)
-    const field = screen.getByTestId<HTMLInputElement>('builder-resistance-r0')
+    const field = screen.getByTestId('builder-resistance-r0') as HTMLInputElement
     fireEvent.change(field, { target: { value: '-1' } })
     fireEvent.blur(field)
     expect(screen.getByRole('alert')).toBeTruthy()
@@ -77,7 +77,7 @@ describe('apparatus edit rejection feedback', () => {
     let reject: (() => void) | undefined
     const pending = new Promise<void>((_resolve, failure) => { reject = () => { failure(new Error('The edit was rejected.')) } })
     const view = render(<Panel owner={owner} apply={() => pending} />)
-    const field = screen.getByTestId<HTMLInputElement>('builder-resistance-r0')
+    const field = screen.getByTestId('builder-resistance-r0') as HTMLInputElement
     fireEvent.change(field, { target: { value: '20' } })
     fireEvent.keyDown(field, { key: 'Enter' })
     await act(async () => { reject?.(); await pending.catch(() => {}) })
@@ -91,7 +91,7 @@ describe('apparatus edit rejection feedback', () => {
     let reject: (() => void) | undefined
     const pending = new Promise<void>((_resolve, failure) => { reject = () => { failure(new Error('The edit was rejected.')) } })
     render(<Panel owner={owner} apply={() => pending} />)
-    const field = screen.getByTestId<HTMLInputElement>('builder-resistance-r0')
+    const field = screen.getByTestId('builder-resistance-r0') as HTMLInputElement
     fireEvent.change(field, { target: { value: '20' } })
     fireEvent.keyDown(field, { key: 'Enter' })
     act(() => { owner.setComponentParams('r0', { resistance: 15 }) })
@@ -111,7 +111,7 @@ describe('apparatus edit rejection feedback', () => {
       owner.applyDraftEdit(edit)
     }
     render(<Panel owner={owner} apply={apply} />)
-    const field = screen.getByTestId<HTMLInputElement>('builder-resistance-r0')
+    const field = screen.getByTestId('builder-resistance-r0') as HTMLInputElement
     fireEvent.change(field, { target: { value: '20' } })
     fireEvent.keyDown(field, { key: 'Enter' })
     fireEvent.change(field, { target: { value: '30' } })
@@ -129,7 +129,7 @@ describe('apparatus edit rejection feedback', () => {
     const owner = ownerOf()
     const delayed = delayFirstEdit(owner)
     render(<Panel owner={owner} apply={delayed.apply} />)
-    const field = screen.getByTestId<HTMLInputElement>('builder-resistance-r0')
+    const field = screen.getByTestId('builder-resistance-r0') as HTMLInputElement
     fireEvent.change(field, { target: { value: '20' } })
     fireEvent.keyDown(field, { key: 'Enter' })
     fireEvent.change(field, { target: { value: '30' } })
@@ -144,7 +144,7 @@ describe('apparatus edit rejection feedback', () => {
     const owner = ownerOf()
     const delayed = delayFirstEdit(owner)
     render(<Panel owner={owner} apply={delayed.apply} />)
-    const field = screen.getByTestId<HTMLInputElement>('builder-resistance-r0')
+    const field = screen.getByTestId('builder-resistance-r0') as HTMLInputElement
     fireEvent.change(field, { target: { value: '20' } })
     fireEvent.keyDown(field, { key: 'Enter' })
     fireEvent.change(field, { target: { value: '30' } })

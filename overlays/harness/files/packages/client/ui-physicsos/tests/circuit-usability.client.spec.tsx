@@ -32,7 +32,7 @@ describe('apparatus numeric drafts', () => {
     const owner = ownerOf()
     const before = owner.serialize()
     render(<Panel owner={owner} />)
-    const field = screen.getByTestId<HTMLInputElement>('builder-resistance-r0')
+    const field = screen.getByTestId('builder-resistance-r0') as HTMLInputElement
     fireEvent.change(field, { target: { value: '' } })
     fireEvent.blur(field)
     expect(field.value).toBe('10')
@@ -46,7 +46,7 @@ describe('apparatus numeric drafts', () => {
     const owner = ownerOf()
     const before = owner.serialize()
     render(<Panel owner={owner} selected="bat" />)
-    const field = screen.getByTestId<HTMLInputElement>('builder-voltage-bat')
+    const field = screen.getByTestId('builder-voltage-bat') as HTMLInputElement
     fireEvent.change(field, { target: { value: '0' } })
     fireEvent.blur(field)
     expect(owner.serialize().draft!.components.find(part => part.id === 'bat')!.params.voltage).toBe(0)
@@ -59,7 +59,7 @@ describe('apparatus numeric drafts', () => {
     const view = render(<Panel owner={owner} selected="r0" />)
     fireEvent.change(screen.getByTestId('builder-resistance-r0'), { target: { value: '25' } })
     view.rerender(<Panel owner={owner} selected="r1" />)
-    const next = screen.getByTestId<HTMLInputElement>('builder-resistance-r1')
+    const next = screen.getByTestId('builder-resistance-r1') as HTMLInputElement
     expect(next.value).toBe('10')
     fireEvent.blur(next)
     expect(owner.serialize().draft!.components.filter(item => item.type === 'resistor').map(item => item.params.resistance))

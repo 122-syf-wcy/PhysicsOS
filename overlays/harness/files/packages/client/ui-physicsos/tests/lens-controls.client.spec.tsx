@@ -26,7 +26,7 @@ it('Escape cancels the focused numeric draft without changing engine, revision o
   }
   render(<Controls />)
   const original = runtime.getScene()
-  const input = screen.getByRole('textbox', { name: '物距', exact: true })
+  const input = screen.getByRole('textbox', { name: '物距' })
   input.focus()
   fireEvent.change(input, { target: { value: '20' } })
   fireEvent.keyDown(input, { key: 'Escape' })

@@ -85,18 +85,18 @@ function deferred<T>() {
   return { promise, resolve, reject }
 }
 function button(name: string): HTMLButtonElement {
-  const element = screen.getByRole('button', { name, exact: true })
+  const element = screen.getByRole('button', { name })
   if (!(element instanceof HTMLButtonElement)) throw new Error('Expected a native button.')
   return element
 }
 function editor(): HTMLTextAreaElement {
-  const element = screen.getByRole('textbox', { name: en['canvas.note'], exact: true })
+  const element = screen.getByRole('textbox', { name: en['canvas.note'] })
   if (!(element instanceof HTMLTextAreaElement)) throw new Error('Expected the real note textarea.')
   return element
 }
 function chooseMenuItem(name: string): void {
   fireEvent.click(button(en['canvas.more']))
-  fireEvent.click(screen.getByRole('menuitem', { name, exact: true }))
+  fireEvent.click(screen.getByRole('menuitem', { name }))
 }
 
 const renderers = [
@@ -205,9 +205,9 @@ describe('canvas node identity and chrome', () => {
     fireEvent.click(button(en['lab.run']))
     expect(activate).toHaveBeenCalledTimes(1)
     fireEvent.click(button(en['canvas.more']))
-    const front = screen.getByRole('menuitem', { name: en['canvas.node.front'], exact: true })
+    const front = screen.getByRole('menuitem', { name: en['canvas.node.front'] })
     expect(front instanceof HTMLButtonElement && front.disabled).toBe(true)
-    fireEvent.click(screen.getByRole('menuitem', { name: en['canvas.node.unlock'], exact: true }))
+    fireEvent.click(screen.getByRole('menuitem', { name: en['canvas.node.unlock'] }))
     await waitFor(() => { expect(screen.getByRole('button', { name: 'Resize node' })).toBeTruthy() })
     expect(b.commands.setLocked).toHaveBeenLastCalledWith(b.props.data.canvasId, [b.props.data.nodeId], false)
     expect(screen.queryByLabelText(en['canvas.node.lock'])).toBeNull()
@@ -220,7 +220,7 @@ describe('canvas node identity and chrome', () => {
     fixture.commands.removeNodes.mockResolvedValue(undefined)
     render(<CanvasExperimentNode {...fixture.props} />)
     fireEvent.click(button(en['canvas.more']))
-    const remove = screen.getByRole<HTMLButtonElement>('menuitem', { name: en['canvas.node.delete'], exact: true })
+    const remove = screen.getByRole('menuitem', { name: en['canvas.node.delete'] }) as HTMLButtonElement
     expect(remove.disabled).toBe(true)
     fireEvent.click(remove)
     expect(fixture.commands.removeNodes).not.toHaveBeenCalled()
@@ -451,7 +451,7 @@ describe('canvas note content and drafts', () => {
     expect(await note.savedBody()).toEqual({ body: original, format: 'plain' })
     begin()
     expect(editor().value).toBe(original)
-    expect(screen.getByRole<HTMLInputElement>('checkbox', { name: en['canvas.noteMarkdown'] }).checked).toBe(false)
+    expect((screen.getByRole('checkbox', { name: en['canvas.noteMarkdown'] }) as HTMLInputElement).checked).toBe(false)
     expect(button(en['canvas.save']).disabled).toBe(true)
   })
 
@@ -468,7 +468,7 @@ describe('canvas note content and drafts', () => {
     act(() => { note.readonly(state) })
     expect(editor().value).toBe(draft)
     expect(editor().disabled).toBe(true)
-    expect(screen.getByRole<HTMLInputElement>('checkbox', { name: en['canvas.noteMarkdown'] }).disabled).toBe(true)
+    expect((screen.getByRole('checkbox', { name: en['canvas.noteMarkdown'] }) as HTMLInputElement).disabled).toBe(true)
     expect(button(en['canvas.save']).disabled).toBe(true)
     fireEvent.keyDown(editor(), { key: 'Enter', ctrlKey: true })
     expect(await note.savedBody()).toEqual({ body: original, format: 'plain' })
@@ -711,7 +711,7 @@ describe('canvas node resize gestures', () => {
     expect(screen.queryByRole('textbox', { name: en['canvas.note'] })).toBeNull()
     fireEvent.click(button(en['canvas.more']))
     for (const name of [en['canvas.node.rename'], en['canvas.node.copy'], en['canvas.node.lock'], en['canvas.node.delete']]) {
-      const item = screen.getByRole('menuitem', { name, exact: true })
+      const item = screen.getByRole('menuitem', { name })
       expect(item instanceof HTMLButtonElement && item.disabled).toBe(true)
     }
     expect(b.commands.updateLayout).not.toHaveBeenCalled()

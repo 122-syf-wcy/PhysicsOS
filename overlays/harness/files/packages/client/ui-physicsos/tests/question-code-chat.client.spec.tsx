@@ -4,13 +4,14 @@ import { webcrypto } from 'node:crypto'
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createMechanicsScene } from '@physicsos/physics-scene'
+import { asQuestionId } from '@physicsos/shared'
 import type { CodeExperimentRef } from '@deepseek-ai/dsh-tool-physicsos/types'
 import { PhysicsWorkspace } from '../src/client/PhysicsWorkspace.tsx'
 import { PhysicsSurface, type PhysicsSurfaceProps } from '../src/client/LabWorkspace.tsx'
 import { createPhysicsSurfaceController } from '../src/client/surface-store.ts'
 import { buildWorkspaceRuntime } from '../src/client/physics/build-workspace-runtime.ts'
 import { SceneCardBody } from '../src/client/SceneChatCard.tsx'
-import { SceneTurnCard } from '../src/client/SceneTurnCard.tsx'
+import { SceneTurnCard, type SceneTurnCardProps } from '../src/client/SceneTurnCard.tsx'
 import { questionCodeSceneSha256, withQuestionCodeVisualization } from '../src/client/experiments/question-code-api.ts'
 import { createQuestionCodeOwnerStore } from '../src/client/experiments/question-code-context.ts'
 import { isUniversalSnapshot, type UniversalExperimentSnapshot } from '../src/client/experiments/universal-contract.ts'
@@ -21,9 +22,23 @@ import { sceneTurnData, sceneTurnHook } from './scene-turn-data-fixture.client.t
 beforeEach(() => { vi.stubGlobal('crypto', webcrypto) })
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers() })
 const t = (key: string): string => (zh as Record<string, string>)[key] ?? key
+/* SceneTurnCard is a session-scoped tail; this file mounts it directly and it reads
+   only its own Turn data, so the session kit is present but never invoked. */
+const unusedSeat = (): never => { throw new Error('The turn-tail test does not use the session kit.') }
+const sessionSeats = {
+  useSession: unusedSeat, sessionId: 'turn-tail-test' as SceneTurnCardProps['sessionId'],
+  useProjection: unusedSeat, useConversation: unusedSeat, useInput: unusedSeat,
+  /* SceneTurnCard renders the card body only; the editor actions stay unreachable. */
+  inputActions: undefined as unknown as SceneTurnCardProps['inputActions'],
+  useChat: unusedSeat, useTrajectory: unusedSeat,
+  useSessions: unusedSeat, useSessionStatus: unusedSeat, useSessionRetainInfo: unusedSeat,
+  useWorkspaces: unusedSeat, usePanelInfo: unusedSeat, useResource: unusedSeat,
+} satisfies Pick<SceneTurnCardProps,
+  'useSession' | 'sessionId' | 'useProjection' | 'useConversation' | 'useInput' | 'inputActions' | 'useChat' | 'useTrajectory'
+  | 'useSessions' | 'useSessionStatus' | 'useSessionRetainInfo' | 'useWorkspaces' | 'usePanelInfo' | 'useResource'>
 it('labels a scene without a verified solution as a demonstration rather than a solved question', () => {
   const data = solvedCardData('mech-01-uniform-acceleration')
-  const { solve: _solve, ...sceneOnly } = data
+  const sceneOnly = { ...data, solve: undefined }
   const view = render(<SceneCardBody data={sceneOnly} openSceneInLab={vi.fn()} t={t} />)
   expect(view.getByText('当前场景演示')).toBeTruthy()
   expect(view.getByText('展示已保存的条件与运动过程，尚未包含整道题的求解验证。')).toBeTruthy()
@@ -83,7 +98,7 @@ it('lets the user check and recover a generation before a restored future deadli
 })
 const authoredScene = createMechanicsScene({ sceneId: 'exact-question', revision: 0, model: 'projectile_motion',
   title: '20 米高处水平抛出', position: { x: 0, y: 20, z: 0 }, velocity: { x: 20, y: 0, z: 0 } })
-const scene = { ...authoredScene, metadata: { ...authoredScene.metadata, sourceQuestionId: 'exact-question' } }
+const scene = { ...authoredScene, metadata: { ...authoredScene.metadata, sourceQuestionId: asQuestionId('exact-question') } }
 async function fixture(ttl = 60_000) {
   const ref: CodeExperimentRef & { rendererKind: 'independent' } = { status: 'ready', rendererKind: 'independent', artifactId: 'qcode_' + 'a'.repeat(32), ownerSessionId: 'owner-chat',
     childSessionId: 'renderer-child', sceneId: scene.id, sceneRevision: scene.revision, sceneSha256: await questionCodeSceneSha256(scene),
@@ -91,7 +106,9 @@ async function fixture(ttl = 60_000) {
   const questionCodeOwner = createQuestionCodeOwnerStore()
   questionCodeOwner.set(ref.ownerSessionId)
   let previews = 0
-  const fetch = vi.fn(async (input: string) => ({ ok: true, json: async () => input.includes('/preview?')
+  /* The API only reads `ok` and `json()`; typing the body as unknown lets later
+     tests serve the legacy payloads this suite guards against. */
+  const fetch = vi.fn<(input: string) => Promise<{ ok: boolean; json: () => Promise<unknown> }>>(async (input: string) => ({ ok: true, json: async () => input.includes('/preview?')
     ? { entryUrl: `/physicsos/experiment-assets/embed/question/private-${++previews}/dist/index.html`, expiresAt: Date.now() + ttl }
     : { ref, source: { title: ref.title, summary: '本题 20 米高处水平抛出', rendererJs: 'export function render(snapshot) { /* exact question */ }', stylesheet: '' } } }))
   vi.stubGlobal('fetch', fetch)
@@ -144,7 +161,7 @@ it.each(['failed', 'ready'] as const)('renders a late %s generation from the sam
     ownerSessionId: f.ref.ownerSessionId, sceneId: scene.id, sceneRevision: scene.revision, deadlineAt: Date.now() + 600_000 } })
   const turn = store.turn
   const view = render(<SceneTurnCard turn={turn} seq={1} openFile={vi.fn()} t={t} usePhysicsSceneTurn={sceneTurnHook(turn)}
-    questionCodeOwner={f.questionCodeOwner} openSceneInLab={f.openSceneInLab} />)
+    questionCodeOwner={f.questionCodeOwner} openSceneInLab={f.openSceneInLab} {...sessionSeats} />)
   await waitFor(() => { expect(view.container.querySelector('[data-question-code-status="generating"]')).not.toBeNull() })
   // Only the Harness key changes and notifies; no props rerender or new Turn.
   act(() => { store.publish({ ...f.data, visualization: status === 'ready' ? f.ref : {

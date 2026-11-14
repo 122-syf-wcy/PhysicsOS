@@ -76,7 +76,7 @@ describe('React-free workbench frame source', () => {
 
   it('keeps the last frame when an upstream read fails', () => {
     let fail = false
-    let callback = () => undefined
+    let callback: () => void = () => undefined
     const errors = vi.fn()
     const source = adaptFrameSource({
       getSnapshot: () => { if (fail) throw new Error('not ready'); return 10 },

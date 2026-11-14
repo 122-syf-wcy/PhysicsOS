@@ -4,6 +4,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { deleteDB } from 'idb'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeAll, describe, expect, it, onTestFinished, vi } from 'vitest'
+import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ClientContext } from '../src/client/runtime-compat.ts'
 import { RemoteMock } from '@deepseek-ai/dsh-remote-mock'
 import { ClientRoster, TestClient, remoteDefaultResponses, webApp } from '@deepseek-ai/dsh-client-test-runtime/src/assembly/index.ts'
@@ -34,7 +35,9 @@ const hash = async (value: unknown): Promise<string> => createHash('sha256').upd
 const controllers: CanvasController[] = []
 const assembledClients: TestClient[] = []
 const databaseNames = new Set<string>()
-const t = (key: keyof typeof en): string => en[key]
+/* The injected seat is a namespace translate: its key domain also carries the shared
+   common vocabulary, which this dictionary has no row for. */
+const t: TranslateNS<'physicsos'> = key => (en as Record<string, string>)[key] ?? key
 const productName = '@deepseek-ai/dsh-client-ui-physicsos-canvas-entry-test'
 const entryOwners: ReturnType<typeof createCanvasEntryController>[] = []
 const offline = () => {

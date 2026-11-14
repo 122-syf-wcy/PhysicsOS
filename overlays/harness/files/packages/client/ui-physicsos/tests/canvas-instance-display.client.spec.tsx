@@ -18,6 +18,11 @@ import { createWorkbenchInstanceRuntime, type WorkbenchInstanceSummary } from '.
 import { createExperimentSceneRef, findExperimentTemplate } from '../src/client/physics/experiment-templates.ts'
 import type { WorkspaceFrame } from '../src/client/physics/workspace-runtime.ts'
 import { createCanvasNodeTestProps, keyedSelectorHook } from './canvas-ui-fixtures.client.ts'
+/* The instance view resolves its node factory through the slot hook. These
+   display tests render the stage directly, so an unrendered factory is the
+   honest stand-in: nothing here mounts a flow node. */
+const useUnrenderedFactorySlot = (): (() => null) => () => null
+const useFactorySlot: CanvasInstanceProps['useFactorySlot'] = () => useUnrenderedFactorySlot()
 
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
 async function displays(kind: 'circuit' | 'lens' | 'magnetic' = 'circuit') {
@@ -104,7 +109,7 @@ describe('native apparatus keyboard edits in a real canvas instance', () => {
     await owned.controller.instanceAction(owned.instanceKey, 'setHighlight', ['r1'])
     const before = owned.summary()
     const renderSlot: CanvasInstanceProps['renderSlot'] = (_position, values) => <CanvasFrameStage {...owned.frame('card')} {...values} />
-    const view = render(<CanvasInstanceView {...owned.frame('card')} presentation="card" renderSlot={renderSlot} />)
+    const view = render(<CanvasInstanceView {...owned.frame('card')} presentation="card" renderSlot={renderSlot} useFactorySlot={useFactorySlot} />)
     const body = view.container.querySelector<SVGGElement>('[data-component-id="r1"]')!
     body.focus()
     await act(async () => {
@@ -134,7 +139,7 @@ describe('native apparatus keyboard edits in a real canvas instance', () => {
     const revision = owned.summary().instanceEditRevision
     const past = owned.summary().history.past.length
     const renderSlot: CanvasInstanceProps['renderSlot'] = (_position, values) => <CanvasFrameStage {...owned.frame('card')} {...values} />
-    const view = render(<CanvasInstanceView {...owned.frame('card')} presentation="card" renderSlot={renderSlot} />)
+    const view = render(<CanvasInstanceView {...owned.frame('card')} presentation="card" renderSlot={renderSlot} useFactorySlot={useFactorySlot} />)
     const body = view.container.querySelector<SVGGElement>('[data-component-id="r1"]')!
     body.focus()
     fireEvent.keyDown(body, { key: 'd', ctrlKey: shortcut.ctrlKey, metaKey: shortcut.metaKey })
@@ -164,7 +169,7 @@ describe('native apparatus keyboard edits in a real canvas instance', () => {
     const before = owned.summary().draft!
     const past = owned.summary().history.past.length
     const renderSlot: CanvasInstanceProps['renderSlot'] = (_position, values) => <CanvasFrameStage {...owned.frame('card')} {...values} />
-    const view = render(<CanvasInstanceView {...owned.frame('card')} presentation="card" renderSlot={renderSlot} />)
+    const view = render(<CanvasInstanceView {...owned.frame('card')} presentation="card" renderSlot={renderSlot} useFactorySlot={useFactorySlot} />)
     const body = view.container.querySelector<SVGGElement>('[data-component-id="r1"]')!
     fireEvent.click(body)
     await waitFor(() => expect(owned.summary().workspace.view.highlighted).toEqual(['r1']))
@@ -277,7 +282,7 @@ describe('native apparatus keyboard edits in a real canvas instance', () => {
     const owned = await displays()
     await owned.controller.instanceAction(owned.instanceKey, 'enterBuilder')
     const renderSlot: CanvasInstanceProps['renderSlot'] = (_position, values) => <CanvasFrameStage {...owned.frame('card')} {...values} />
-    const view = render(<CanvasInstanceView {...owned.frame('card')} presentation="card" renderSlot={renderSlot} />)
+    const view = render(<CanvasInstanceView {...owned.frame('card')} presentation="card" renderSlot={renderSlot} useFactorySlot={useFactorySlot} />)
     const count = owned.summary().draft!.components.length
     fireEvent.click(view.getByTestId('builder-add-rheostat-20'))
     await waitFor(() => expect(owned.summary().draft!.components).toHaveLength(count + 1))
@@ -318,9 +323,9 @@ describe('native instance preview display ownership', () => {
     const original = component.params.resistance!
     const revision = owned.summary().instanceEditRevision
     const renderSlot: CanvasInstanceProps['renderSlot'] = (_position, values) => <CanvasFrameStage {...owned.frame('card')} {...values} />
-    const view = render(<CanvasInstanceView {...owned.frame('card')} presentation="card" renderSlot={renderSlot} />)
+    const view = render(<CanvasInstanceView {...owned.frame('card')} presentation="card" renderSlot={renderSlot} useFactorySlot={useFactorySlot} />)
     fireEvent.click(view.getByTestId(`builder-row-${component.id}`))
-    const field = await view.findByTestId<HTMLInputElement>(`builder-resistance-${component.id}`)
+    const field = await view.findByTestId(`builder-resistance-${component.id}`) as HTMLInputElement
     fireEvent.change(field, { target: { value: '-1' } })
     fireEvent.blur(field)
     await waitFor(() => expect(field.value).toBe(String(original)))
@@ -375,7 +380,7 @@ describe('native instance preview display ownership', () => {
     const source = { getSnapshot: () => document, subscribe: () => () => {} }
     const useCanvasDocument = keyedSelectorHook<CanvasDocumentState>(key => key === base.canvasId ? source : undefined)
     const renderSlot: CanvasInstanceProps['renderSlot'] = (_position, values) => <CanvasFrameStage {...base} {...values} useCanvasDocument={useCanvasDocument} />
-    const view = render(<CanvasInstanceView {...base} presentation="card" useCanvasDocument={useCanvasDocument} renderSlot={renderSlot} />)
+    const view = render(<CanvasInstanceView {...base} presentation="card" useCanvasDocument={useCanvasDocument} renderSlot={renderSlot} useFactorySlot={useFactorySlot} />)
     expect(view.getByTestId('builder-add-resistor-20').matches(':disabled')).toBe(true)
     expect(view.getByText('Back to inspection').matches(':disabled')).toBe(true)
   })
@@ -384,7 +389,7 @@ describe('native instance preview display ownership', () => {
     const owned = await displays()
     await owned.controller.instanceAction(owned.instanceKey, 'enterBuilder')
     const renderSlot: CanvasInstanceProps['renderSlot'] = (_position, values) => <CanvasFrameStage {...owned.frame('card')} {...values} />
-    const view = render(<CanvasInstanceView {...owned.frame('card')} presentation="card" renderSlot={renderSlot} />)
+    const view = render(<CanvasInstanceView {...owned.frame('card')} presentation="card" renderSlot={renderSlot} useFactorySlot={useFactorySlot} />)
     const count = owned.summary().draft!.components.length
     fireEvent.click(view.getByTestId('builder-add-resistor-20'))
     await waitFor(() => expect(owned.summary().draft!.components).toHaveLength(count + 1))
@@ -403,7 +408,7 @@ describe('native instance preview display ownership', () => {
   it('enters apparatus construction from an ordinary circuit card without a modal', async () => {
     const owned = await displays()
     const renderSlot: CanvasInstanceProps['renderSlot'] = (_position, values) => <CanvasFrameStage {...owned.frame('card')} {...values} />
-    const view = render(<CanvasInstanceView {...owned.frame('card')} presentation="card" renderSlot={renderSlot} />)
+    const view = render(<CanvasInstanceView {...owned.frame('card')} presentation="card" renderSlot={renderSlot} useFactorySlot={useFactorySlot} />)
     fireEvent.click(view.getByText('Build with apparatus'))
     expect(await view.findByTestId('circuit-builder')).toBeTruthy()
     expect(owned.summary().buildMode).toBe('construct')
@@ -413,9 +418,9 @@ describe('native instance preview display ownership', () => {
   it('offers deployed slow playback and applies its rate to the same card and focused owner', async () => {
     const owned = await displays('magnetic')
     const renderSlot: CanvasInstanceProps['renderSlot'] = (_position, values) => <CanvasFrameStage {...owned.frame('card')} {...values} />
-    const view = render(<><CanvasInstanceView {...owned.frame('card')} presentation="card" renderSlot={renderSlot} />
-      <CanvasInstanceView {...owned.frame('focus')} presentation="focus" renderSlot={renderSlot} /></>)
-    const rates = view.getAllByRole<HTMLSelectElement>('combobox', { name: 'Playback rate' })
+    const view = render(<><CanvasInstanceView {...owned.frame('card')} presentation="card" renderSlot={renderSlot} useFactorySlot={useFactorySlot} />
+      <CanvasInstanceView {...owned.frame('focus')} presentation="focus" renderSlot={renderSlot} useFactorySlot={useFactorySlot} /></>)
+    const rates = view.getAllByRole('combobox', { name: 'Playback rate' }) as HTMLSelectElement[]
     expect(within(rates[0]!).getByRole('option', { name: '0.01×' }).getAttribute('value')).toBe('0.01')
     fireEvent.change(rates[0]!, { target: { value: '0.01' } })
     await waitFor(() => expect(owned.summary().clock.rate).toBe(0.01))
@@ -450,7 +455,8 @@ describe('native instance preview display ownership', () => {
     const view = render(<><div data-display="card"><CanvasFrameStage {...owned.frame('card')} /></div><div data-display="focus"><CanvasFrameStage {...owned.frame('focus')} /></div></>)
     const focus = view.container.querySelector<HTMLElement>('[data-display="focus"]')!
     fireEvent.click(within(focus).getByRole('button', { name: '2D lens bench' }))
-    const object = within(focus).getByRole<SVGGElement>('slider', { name: '拖动物体' })
+    /* The a11y query widens SVG slidables to HTMLElement; this handle is a native SVG group. */
+    const object = within(focus).getByRole('slider', { name: '拖动物体' }) as unknown as SVGGElement
     const svg = object.ownerSVGElement!
     Object.defineProperty(svg, 'setPointerCapture', { value: () => undefined })
     vi.spyOn(svg, 'getBoundingClientRect').mockReturnValue({ x: 0, y: 0, left: 0, top: 0,
@@ -475,7 +481,8 @@ describe('native instance preview display ownership', () => {
     const view = render(<><div data-display="card"><CanvasFrameStage {...owned.frame('card')} /></div><div data-display="focus"><CanvasFrameStage {...owned.frame('focus')} /></div></>)
     const focus = view.container.querySelector<HTMLElement>('[data-display="focus"]')!
     fireEvent.click(within(focus).getByRole('button', { name: '2D lens bench' }))
-    const screenHandle = within(focus).getByRole<SVGGElement>('slider', { name: '拖动光屏' })
+    /* The a11y query widens SVG slidables to HTMLElement; this handle is a native SVG group. */
+    const screenHandle = within(focus).getByRole('slider', { name: '拖动光屏' }) as unknown as SVGGElement
     const svg = screenHandle.ownerSVGElement!
     Object.defineProperty(svg, 'setPointerCapture', { value: () => undefined })
     vi.spyOn(svg, 'getBoundingClientRect').mockReturnValue({ x: 0, y: 0, left: 0, top: 0,

@@ -144,6 +144,6 @@ describe('account-owned renderer resources and typed physics intents', () => {
     expect(owner.getScene()).toEqual(before)
     expect(await manager.applyIntent('instance', 'card', { type: 'parameter/commit', protocolVersion: 3, id: 'q', value: 2e-6 })).toBe(true)
     expect(owner.getScene().revision).toBeGreaterThan(before.revision)
-    expect(owner.getScene().particles[0]?.charge.value).toBe(2e-6)
+    expect(owner.getScene().particles[0]?.charge?.value).toBe(2e-6)
   })
 })

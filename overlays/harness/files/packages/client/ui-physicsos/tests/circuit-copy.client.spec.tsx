@@ -105,7 +105,7 @@ describe('copy apparatus controls', () => {
     const gate = new Promise<void>((resolve) => { release = resolve })
     const apply: BuilderEditing['apply'] = edit => gate.then(() => { owner.applyDraftEdit(edit) })
     render(<CopyPanel owner={owner} apply={apply} />)
-    const button = screen.getByTestId<HTMLButtonElement>('builder-copy-r0')
+    const button = screen.getByTestId('builder-copy-r0') as HTMLButtonElement
     fireEvent.click(button)
     expect(button.disabled).toBe(true)
     expect(owner.serialize().draft!.components).toHaveLength(3)
@@ -180,7 +180,7 @@ describe('copy apparatus controls', () => {
   it('disables source copying without introducing a second supply', () => {
     const owner = ownerOf('bat')
     render(<CopyPanel owner={owner} />)
-    const button = screen.getByTestId<HTMLButtonElement>('builder-copy-bat')
+    const button = screen.getByTestId('builder-copy-bat') as HTMLButtonElement
     expect(button.disabled).toBe(true)
     fireEvent.click(button)
     expect(owner.serialize().draft!.components.filter(component => component.type === 'voltage_source')).toHaveLength(1)

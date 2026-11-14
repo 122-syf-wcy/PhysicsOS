@@ -152,7 +152,9 @@ const derivedQuantity = (capture: CapturedResult, key: string) => {
   return value
 }
 
-const failedResult = (actual: SimulationResult): SimulationResult => ({
+/* Keep the engine's own result shape: the lever result narrows `metadata` with
+   `numericalIterationCount`, and the spy must still satisfy its simulate signature. */
+const failedResult = <R extends SimulationResult>(actual: R): R => ({
   ...actual,
   verification: {
     ...actual.verification,

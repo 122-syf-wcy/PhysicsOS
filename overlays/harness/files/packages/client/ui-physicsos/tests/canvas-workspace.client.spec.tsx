@@ -209,7 +209,7 @@ describe('controlled experiment canvas workspace', () => {
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Submit local version' })).toBeNull())
     act(() => { fixture.document.set({ ...original, namespace: 'new-account' }) })
     fireEvent.click(screen.getByRole('button', { name: 'Submit local version' }))
-    expect(within(screen.getByRole('dialog', { name: 'Submit local version' })).getByRole<HTMLButtonElement>('button', { name: 'Confirm' }).disabled).toBe(false)
+    expect((within(screen.getByRole('dialog', { name: 'Submit local version' })).getByRole('button', { name: 'Confirm' }) as HTMLButtonElement).disabled).toBe(false)
   })
 
   it('confirms the retained local version and submits the current working manifest before syncing', async () => {
