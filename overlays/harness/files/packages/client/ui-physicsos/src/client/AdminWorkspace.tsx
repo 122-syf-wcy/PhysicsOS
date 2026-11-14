@@ -322,80 +322,80 @@ function RequestsTab({ api, t }: { api: AdminApi; t: (key: PhysicsosKey) => stri
         </section>
         {data.filter(request => request.id === selectedId).map((request: SchoolRequestRow) => (
           <AdminCard key={request.id} className={css.detailPane}>
-          <AdminCardHead>
-            <div>
-              <AdminCardTitle>{request.schoolName}</AdminCardTitle>
-              <AdminCardMeta>
-                {t('admin.contact')}: {request.contact} · {fmtTime(request.createdAt)}
-                {' · '}{t('admin.requestedBy')}: {request.requestedBy === null
-                  ? t('admin.anonymous') : request.requestedBy}
+            <AdminCardHead>
+              <div>
+                <AdminCardTitle>{request.schoolName}</AdminCardTitle>
+                <AdminCardMeta>
+                  {t('admin.contact')}: {request.contact} · {fmtTime(request.createdAt)}
+                  {' · '}{t('admin.requestedBy')}: {request.requestedBy === null
+                    ? t('admin.anonymous') : request.requestedBy}
+                </AdminCardMeta>
+              </div>
+              <AdminCardActions>
+                <button
+                  type="button" className={css.primary}
+                  disabled={busy === request.id}
+                  data-testid="approve-school-request"
+                  onClick={() => { void approve(request, false) }}
+                >
+                  {t('admin.requests.approve')}
+                </button>
+                <button
+                  type="button" className={css.ghost}
+                  disabled={busy === request.id}
+                  onClick={() => { setExpanded(expanded === request.id ? undefined : request.id) }}
+                >
+                  {t('admin.requests.advanced')}
+                </button>
+                <button
+                  type="button" className={css.ghost}
+                  disabled={busy === request.id}
+                  onClick={() => { void act(request.id, () => api.rejectSchoolRequest(request.id, form[`reason:${request.id}`])) }}
+                >
+                  {t('admin.requests.reject')}
+                </button>
+              </AdminCardActions>
+            </AdminCardHead>
+            {request.applicants.length > 0 && (
+              <AdminCardMeta data-testid="school-request-applicants">
+                {t('admin.requests.waiting').replace('{n}', String(request.pendingCount))}
+                {': '}
+                {request.applicants.map(row => `${row.displayName}(${row.username})`).join('、')}
               </AdminCardMeta>
-            </div>
-            <AdminCardActions>
-              <button
-                type="button" className={css.primary}
-                disabled={busy === request.id}
-                data-testid="approve-school-request"
-                onClick={() => { void approve(request, false) }}
-              >
-                {t('admin.requests.approve')}
-              </button>
-              <button
-                type="button" className={css.ghost}
-                disabled={busy === request.id}
-                onClick={() => { setExpanded(expanded === request.id ? undefined : request.id) }}
-              >
-                {t('admin.requests.advanced')}
-              </button>
-              <button
-                type="button" className={css.ghost}
-                disabled={busy === request.id}
-                onClick={() => { void act(request.id, () => api.rejectSchoolRequest(request.id, form[`reason:${request.id}`])) }}
-              >
-                {t('admin.requests.reject')}
-              </button>
-            </AdminCardActions>
-          </AdminCardHead>
-          {request.applicants.length > 0 && (
-            <AdminCardMeta data-testid="school-request-applicants">
-              {t('admin.requests.waiting').replace('{n}', String(request.pendingCount))}
-              {': '}
-              {request.applicants.map(row => `${row.displayName}(${row.username})`).join('、')}
-            </AdminCardMeta>
-          )}
-          {expanded === request.id && (
-            <div className={css.form}>
-              <Field label={t('admin.requests.field.schoolId')}>
-                <input className={css.input} value={form.schoolId ?? ''} placeholder="GUIZHOU-XX"
-                  onChange={(e) => { setForm(f => ({ ...f, schoolId: e.target.value })) }} />
-              </Field>
-              <Field label={t('admin.requests.field.shortName')}>
-                <input className={css.input} value={form.shortName ?? ''}
-                  onChange={(e) => { setForm(f => ({ ...f, shortName: e.target.value })) }} />
-              </Field>
-              <Field label={t('admin.requests.field.adminUsername')}>
-                <input className={css.input} value={form.adminUsername ?? ''}
-                  onChange={(e) => { setForm(f => ({ ...f, adminUsername: e.target.value })) }} />
-              </Field>
-              <Field label={t('admin.requests.field.adminDisplayName')}>
-                <input className={css.input} value={form.adminDisplayName ?? ''}
-                  onChange={(e) => { setForm(f => ({ ...f, adminDisplayName: e.target.value })) }} />
-              </Field>
-              <Field label={t('admin.requests.field.adminPassword')}>
-                <input className={css.input} type="password" value={form.adminPassword ?? ''}
-                  onChange={(e) => { setForm(f => ({ ...f, adminPassword: e.target.value })) }} />
-              </Field>
-              <button
-                type="button" className={css.primary}
-                disabled={busy === request.id}
-                onClick={() => { void approve(request, true) }}
-              >
-                {t('admin.confirm.submit')}
-              </button>
-            </div>
-          )}
-        </AdminCard>
-      ))}
+            )}
+            {expanded === request.id && (
+              <div className={css.form}>
+                <Field label={t('admin.requests.field.schoolId')}>
+                  <input className={css.input} value={form.schoolId ?? ''} placeholder="GUIZHOU-XX"
+                    onChange={(e) => { setForm(f => ({ ...f, schoolId: e.target.value })) }} />
+                </Field>
+                <Field label={t('admin.requests.field.shortName')}>
+                  <input className={css.input} value={form.shortName ?? ''}
+                    onChange={(e) => { setForm(f => ({ ...f, shortName: e.target.value })) }} />
+                </Field>
+                <Field label={t('admin.requests.field.adminUsername')}>
+                  <input className={css.input} value={form.adminUsername ?? ''}
+                    onChange={(e) => { setForm(f => ({ ...f, adminUsername: e.target.value })) }} />
+                </Field>
+                <Field label={t('admin.requests.field.adminDisplayName')}>
+                  <input className={css.input} value={form.adminDisplayName ?? ''}
+                    onChange={(e) => { setForm(f => ({ ...f, adminDisplayName: e.target.value })) }} />
+                </Field>
+                <Field label={t('admin.requests.field.adminPassword')}>
+                  <input className={css.input} type="password" value={form.adminPassword ?? ''}
+                    onChange={(e) => { setForm(f => ({ ...f, adminPassword: e.target.value })) }} />
+                </Field>
+                <button
+                  type="button" className={css.primary}
+                  disabled={busy === request.id}
+                  onClick={() => { void approve(request, true) }}
+                >
+                  {t('admin.confirm.submit')}
+                </button>
+              </div>
+            )}
+          </AdminCard>
+        ))}
       </div>
     </>
   )

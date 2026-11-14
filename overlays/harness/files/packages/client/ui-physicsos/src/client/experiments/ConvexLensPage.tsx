@@ -381,79 +381,79 @@ export function ConvexLensPage({
         </section>
         {controlsOpen ? <WorkbenchFloatPanel title={t('lab.inspectorPanel')} closeLabel={t('lab.closeInspector')} onClose={() => { setControlsOpen(false) }} placement="bottom-right" width={310} height={370} expanded desktopDefault={false}>
           <aside ref={controls} className={`${css.controlCard} ${lensCss.controls}`} aria-label={t('lab.inspectorPanel')}>
-          <div className={css.sectionHeading}>
-            <div>
-              <span className={css.eyebrow}>CONTROLS</span>
-              <h2>调节装置</h2>
-            </div>
-            <button
-              type="button"
-              aria-label="检查器"
-              className={css.subtleButton}
-              onClick={() => {
-                controls.current?.querySelector('input')?.focus()
-              }}
-            >
+            <div className={css.sectionHeading}>
+              <div>
+                <span className={css.eyebrow}>CONTROLS</span>
+                <h2>调节装置</h2>
+              </div>
+              <button
+                type="button"
+                aria-label="检查器"
+                className={css.subtleButton}
+                onClick={() => {
+                  controls.current?.querySelector('input')?.focus()
+                }}
+              >
               参数
-            </button>
-          </div>
-          <LensControls {...benchProps} />
-          <div className={css.layers}>
-            <label>
-              <input
-                type="checkbox"
-                checked={snapshot.view.visible.rays === true}
-                onChange={(event) => {
-                  session.cancelPreview()
-                  commit(runtime.setObservable('rays', event.target.checked))
-                }}
-              />
+              </button>
+            </div>
+            <LensControls {...benchProps} />
+            <div className={css.layers}>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={snapshot.view.visible.rays === true}
+                  onChange={(event) => {
+                    session.cancelPreview()
+                    commit(runtime.setObservable('rays', event.target.checked))
+                  }}
+                />
               主光线光路
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={snapshot.view.visible.image === true}
-                onChange={(event) => {
-                  session.cancelPreview()
-                  commit(runtime.setObservable('image', event.target.checked))
-                }}
-              />
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={snapshot.view.visible.image === true}
+                  onChange={(event) => {
+                    session.cancelPreview()
+                    commit(runtime.setObservable('image', event.target.checked))
+                  }}
+                />
               显示像的位置
-            </label>
-          </div>
-          <div className={css.law}>
-            <span>薄透镜成像公式</span>
-            <strong>1/u + 1/v = 1/f</strong>
-            <p>理想薄透镜模型 · 忽略像差</p>
-          </div>
+              </label>
+            </div>
+            <div className={css.law}>
+              <span>薄透镜成像公式</span>
+              <strong>1/u + 1/v = 1/f</strong>
+              <p>理想薄透镜模型 · 忽略像差</p>
+            </div>
           </aside></WorkbenchFloatPanel> : null}
       </div>
       {notebookOpen ? <WorkbenchFloatPanel title={t('lab.tab.data')} closeLabel={t('lab.collapse')} onClose={() => { setNotebookOpen(false) }} placement="top-right" width={380} height={480} expanded desktopDefault={false}><div className={lensCss.notebook}>
         <section className={`${css.presets} ${lensCss.presets}`} aria-label="典型成像条件">
-        <div className={css.presetHeading}>
-          <h2>从五种条件中发现规律</h2>
-          <span>保持焦距不变，只改变物距</span>
-        </div>
+          <div className={css.presetHeading}>
+            <h2>从五种条件中发现规律</h2>
+            <span>保持焦距不变，只改变物距</span>
+          </div>
           <div className={`${css.zoneGrid} ${lensCss.zoneGrid}`}>
-          {ZONES.map(zone => (
-            <button
-              type="button"
-              key={zone.factor}
-              className={Math.abs(u / f - zone.factor) < 0.001 ? css.zoneActive : css.zone}
-              onClick={() => {
-                session.commitParameter('object-distance', f * zone.factor)
-                setTask(1)
-              }}
-            >
-              <span>{zone.title}</span>
-              <strong>{zone.condition}</strong>
-              <small>{zone.hint}</small>
-            </button>
-          ))}
-        </div>
-      </section>
-      <ExperimentNotebook session={session} />
+            {ZONES.map(zone => (
+              <button
+                type="button"
+                key={zone.factor}
+                className={Math.abs(u / f - zone.factor) < 0.001 ? css.zoneActive : css.zone}
+                onClick={() => {
+                  session.commitParameter('object-distance', f * zone.factor)
+                  setTask(1)
+                }}
+              >
+                <span>{zone.title}</span>
+                <strong>{zone.condition}</strong>
+                <small>{zone.hint}</small>
+              </button>
+            ))}
+          </div>
+        </section>
+        <ExperimentNotebook session={session} />
       </div></WorkbenchFloatPanel> : null}
 
       {contributing ? (
@@ -485,15 +485,15 @@ export function ConvexLensPage({
       ) : null}
       {panel === 'agent' ? (
         <WorkbenchFloatPanel title={t('lab.agent')} closeLabel={t('lab.collapse')} onClose={() => { setPanel(undefined) }} placement="bottom-right" width={350} height={430} expanded desktopDefault={false}><div className={lensCss.agent}>
-        <AgentDrawer
-          snapshot={snapshot}
-          runtime={runtime}
-          onSnapshot={commit}
-          t={t}
-          onClose={() => {
-            setPanel(undefined)
-          }}
-          {...(recordAttempt === undefined ? {} : { recordAttempt })}
+          <AgentDrawer
+            snapshot={snapshot}
+            runtime={runtime}
+            onSnapshot={commit}
+            t={t}
+            onClose={() => {
+              setPanel(undefined)
+            }}
+            {...(recordAttempt === undefined ? {} : { recordAttempt })}
           /></div></WorkbenchFloatPanel>
       ) : null}
     </div>

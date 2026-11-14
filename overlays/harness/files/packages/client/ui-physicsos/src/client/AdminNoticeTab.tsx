@@ -106,40 +106,40 @@ export function AdminNoticeTab({ api, t }: AdminNoticeTabProps) {
         </section>
         {visible.filter(row => row.id === selectedId).map(row => (
           <AdminCard key={row.id} className={css.detailPane} data-feedback={row.id}>
-          <AdminCardMeta>
-              {fmtTime(row.createdAt)} · {t(`notice.kind.${row.kind}`)} · {row.authorKey}
-            {row.context === undefined ? '' : ` · ${row.context}`}
-          </AdminCardMeta>
-          <p className={css.cardText}>{row.body}</p>
-          {row.reply !== undefined && (
             <AdminCardMeta>
-              {t('admin.notice.repliedBy')} {row.repliedBy} · {row.reply}
+              {fmtTime(row.createdAt)} · {t(`notice.kind.${row.kind}`)} · {row.authorKey}
+              {row.context === undefined ? '' : ` · ${row.context}`}
             </AdminCardMeta>
-          )}
-          <div className={css.formRow}>
-            <input
-              className={css.input}
-              placeholder={t('admin.notice.replyPlaceholder')}
-              value={drafts[row.id] ?? ''}
-              onChange={(event) => {
-                setDrafts(current => ({ ...current, [row.id]: event.target.value }))
-              }}
-            />
-            <button
-              type="button" className={css.primary}
-              disabled={busy || (drafts[row.id] ?? '').trim() === ''}
-              onClick={() => {
-                const text = (drafts[row.id] ?? '').trim()
-                if (text === '') return
-                run(() => api.replyFeedback(row.id, text)
-                  .then(() => { setDrafts(current => ({ ...current, [row.id]: '' })) }))
-              }}
-            >
-              {t('admin.notice.reply')}
-            </button>
-          </div>
-        </AdminCard>
-      ))}
+            <p className={css.cardText}>{row.body}</p>
+            {row.reply !== undefined && (
+              <AdminCardMeta>
+                {t('admin.notice.repliedBy')} {row.repliedBy} · {row.reply}
+              </AdminCardMeta>
+            )}
+            <div className={css.formRow}>
+              <input
+                className={css.input}
+                placeholder={t('admin.notice.replyPlaceholder')}
+                value={drafts[row.id] ?? ''}
+                onChange={(event) => {
+                  setDrafts(current => ({ ...current, [row.id]: event.target.value }))
+                }}
+              />
+              <button
+                type="button" className={css.primary}
+                disabled={busy || (drafts[row.id] ?? '').trim() === ''}
+                onClick={() => {
+                  const text = (drafts[row.id] ?? '').trim()
+                  if (text === '') return
+                  run(() => api.replyFeedback(row.id, text)
+                    .then(() => { setDrafts(current => ({ ...current, [row.id]: '' })) }))
+                }}
+              >
+                {t('admin.notice.reply')}
+              </button>
+            </div>
+          </AdminCard>
+        ))}
       </div>
     </>
   )

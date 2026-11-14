@@ -56,7 +56,6 @@ describe('workbench floating controls', () => {
     const rect = (left: number, top: number, width: number, height: number): DOMRect => ({
       x: left, y: top, left, top, width, height, right: left + width, bottom: top + height, toJSON: () => ({}),
     })
-    // oxlint-disable-next-line typescript/unbound-method -- Rebound explicitly with original.call(this) in the geometry spy.
     const boxes = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
       if (this.matches('[data-physicsos-surface="lab"]')) return rect(80, 58, 1200, 710)
       if (this.matches('[data-workbench-toolbar]')) return rect(98, 64, 1164, toolbarHeight)

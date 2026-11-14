@@ -92,16 +92,16 @@ export function NoticeBoard({ api, context, t }: NoticeBoardProps) {
         {tab === 'new' ? <div className={css.columns}>
           <form className={css.pane} data-testid="notice-feedback" onSubmit={(event) => { event.preventDefault(); if (!busy && body.trim()) submit() }}>
             <h2 className={css.paneTitle}>{t('notice.kindLabel')}</h2>
-          <div className={css.kinds}>
+            <div className={css.kinds}>
               {KINDS.map((value) => {
                 const Icon = icons[value]
                 return <button key={value} type="button"
-                className={value === kind ? css.kindActive : css.kind}
+                  className={value === kind ? css.kindActive : css.kind}
                   aria-pressed={value === kind} onClick={() => { setKind(value) }}>
                   <Icon size={20} />{t(`notice.kind.${value}`)}
-              </button>
+                </button>
               })}
-          </div>
+            </div>
             <label className={css.field}>
               <span>{t('notice.description')}</span>
               <textarea className={css.textarea} rows={5} data-testid="feedback-body"
@@ -113,13 +113,13 @@ export function NoticeBoard({ api, context, t }: NoticeBoardProps) {
               <input className={css.input} placeholder={t('notice.contact')} value={contact}
                 onChange={(event) => { setContact(event.target.value) }} />
             </label>
-          <div className={css.actions}>
+            <div className={css.actions}>
               <button type="submit" className={css.primary} disabled={busy || body.trim() === ''}>
-              {busy ? t('notice.sending') : t('notice.send')}
-            </button>
+                {busy ? t('notice.sending') : t('notice.send')}
+              </button>
               {sent && <span className={css.ok} role="status">{t('notice.sent')}</span>}
               {error !== undefined && <span className={css.error} role="alert">{error}</span>}
-          </div>
+            </div>
           </form>
           <aside className={css.guide} aria-label={t('notice.guideLabel')}>
             <IconChatBubble size={38} />

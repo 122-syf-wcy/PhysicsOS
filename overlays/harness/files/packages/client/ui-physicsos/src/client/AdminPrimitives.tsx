@@ -71,7 +71,7 @@ export function AdminPage<T extends string>({
               aria-controls={`${pageId}-content`}
                 aria-selected={activeTab === tab.id}
               tabIndex={activeTab === tab.id ? 0 : -1}
-                className={clsx(css.pageTab, activeTab === tab.id && css.pageTabActive)}
+              className={clsx(css.pageTab, activeTab === tab.id && css.pageTabActive)}
                 onClick={() => { onTabChange(tab.id) }}
               onKeyDown={(event) => {
                 if (event.defaultPrevented || event.nativeEvent.isComposing || event.altKey || event.ctrlKey || event.metaKey) return
@@ -94,7 +94,7 @@ export function AdminPage<T extends string>({
         <h1 className={css.pageTitle}>{title}</h1>
       </header>
       <div className={css.pageContent} data-admin-page-content="" role="tabpanel" id={`${pageId}-content`} aria-labelledby={`${pageId}-${activeTab}`}>
-          {children}
+        {children}
         </div>
     </div>
   )

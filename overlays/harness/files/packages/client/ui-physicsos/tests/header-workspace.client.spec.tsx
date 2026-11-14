@@ -28,7 +28,7 @@ function mount(empty = false) {
     })}
     useSessions={selector => selector({
       ids: empty ? [] : [sid('session-one')],
-      byId: empty ? {} : { 'session-one': {
+      byId: empty ? {} : { [sid('session-one')]: {
         id: sid('session-one'), displayTitle: '练习', blank: true, running: false, updatedAt: 0, retainedBy: { mainView: 1 },
       } },
       phase: 'ready', projectionsBySession: {},

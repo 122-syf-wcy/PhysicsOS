@@ -1254,33 +1254,33 @@ function FinalPanel({ jobs, exports_, api, t }: {
           </div>
           <div className={css.finalRows}>
             {rows.map((job) => {
-            const bundle = exports_.find(e => e.paperId === job.id)
-            /* Bind the download names to consts: the `!== undefined` checks
+              const bundle = exports_.find(e => e.paperId === job.id)
+              /* Bind the download names to consts: the `!== undefined` checks
                below sit inside JSX closures, where narrowing on a property
                access does not survive — on a const it does. */
-            const paperPdf = bundle?.files.paperPdf
-            const answerPdf = bundle?.files.answerPdf
-            return (
+              const paperPdf = bundle?.files.paperPdf
+              const answerPdf = bundle?.files.answerPdf
+              return (
                 <div key={job.id} className={css.finalRow}>
-                <span className={css.jobTitle}>{job.document?.title ?? job.id}</span>
-                <span className={css.jobMeta}><StatusChip status={job.status} /> v{job.versions.at(-1)?.version ?? '-'} · {jobRating(job)}</span>
-                <div className={css.fileLinks}>
-                  {paperPdf !== undefined && (
+                  <span className={css.jobTitle}>{job.document?.title ?? job.id}</span>
+                  <span className={css.jobMeta}><StatusChip status={job.status} /> v{job.versions.at(-1)?.version ?? '-'} · {jobRating(job)}</span>
+                  <div className={css.fileLinks}>
+                    {paperPdf !== undefined && (
                       <><button type="button" onClick={() => { setPreview({ jobId: job.id, name: paperPdf }) }}>试卷.pdf</button><a className={css.primary} href={api.fileUrl(job.id, paperPdf)} download>{t('paper.final.download')}</a></>
-                  )}
-                  {answerPdf !== undefined && (
-                    <button type="button" onClick={() => { setPreview({ jobId: job.id, name: answerPdf }) }}>答案解析.pdf</button>
-                  )}
-                  {bundle?.files.paperDocx !== undefined && (
-                    <a href={api.fileUrl(job.id, bundle.files.paperDocx)} download>试卷.docx</a>
-                  )}
-                  {bundle?.files.answerDocx !== undefined && (
-                    <a href={api.fileUrl(job.id, bundle.files.answerDocx)} download>答案解析.docx</a>
-                  )}
+                    )}
+                    {answerPdf !== undefined && (
+                      <button type="button" onClick={() => { setPreview({ jobId: job.id, name: answerPdf }) }}>答案解析.pdf</button>
+                    )}
+                    {bundle?.files.paperDocx !== undefined && (
+                      <a href={api.fileUrl(job.id, bundle.files.paperDocx)} download>试卷.docx</a>
+                    )}
+                    {bundle?.files.answerDocx !== undefined && (
+                      <a href={api.fileUrl(job.id, bundle.files.answerDocx)} download>答案解析.docx</a>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )
-          })}
+              )
+            })}
           </div>
           {jobs.length > 0 && rows.length === 0 && <p className={css.empty}>{t('paper.final.filteredEmpty')}</p>}
         </div>

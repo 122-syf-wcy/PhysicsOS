@@ -246,46 +246,46 @@ export function AdminWebsiteTab({ api, t }: { api: WebsiteApi; t: Translate }): 
           </AdminTable>
         </div>
         <div className={css.entryEditor}>
-        {section === 'testimonials' ? draft.testimonials.map((entry, index) => {
+          {section === 'testimonials' ? draft.testimonials.map((entry, index) => {
             if (entry.id !== activeEntryId) return null
-          const update = (patch: Partial<WebsiteTestimonial>): void => { change(value => ({ ...value, testimonials: value.testimonials.map(item => item.id === entry.id ? { ...item, ...patch } : item) })) }
-          return <AdminCard key={entry.id}>
-            <AdminCardHead><AdminCardTitle>{t('admin.website.testimonialItem').replace('{number}', String(index + 1))}</AdminCardTitle><span className={css.tag}>{t(entry.enabled ? 'admin.website.visible' : 'admin.website.hidden')}</span></AdminCardHead>
-            <div className={css.fields}>
-              <TextField label={t('admin.website.name')} value={entry.name} maxLength={40} required onChange={name => { update({ name }) }} />
-              <TextField label={t('admin.website.role')} value={entry.role} maxLength={60} onChange={role => { update({ role }) }} />
-            </div>
-            <TextField label={t('admin.website.quote')} value={entry.quote} maxLength={280} multiline required onChange={quote => { update({ quote }) }} />
-            <TextField label={t('admin.website.topic')} value={entry.topic} maxLength={32} onChange={topic => { update({ topic }) }} />
-            <EntryControls entry={entry} index={index} total={draft.testimonials.length} t={t} onChange={update}
+            const update = (patch: Partial<WebsiteTestimonial>): void => { change(value => ({ ...value, testimonials: value.testimonials.map(item => item.id === entry.id ? { ...item, ...patch } : item) })) }
+            return <AdminCard key={entry.id}>
+              <AdminCardHead><AdminCardTitle>{t('admin.website.testimonialItem').replace('{number}', String(index + 1))}</AdminCardTitle><span className={css.tag}>{t(entry.enabled ? 'admin.website.visible' : 'admin.website.hidden')}</span></AdminCardHead>
+              <div className={css.fields}>
+                <TextField label={t('admin.website.name')} value={entry.name} maxLength={40} required onChange={name => { update({ name }) }} />
+                <TextField label={t('admin.website.role')} value={entry.role} maxLength={60} onChange={role => { update({ role }) }} />
+              </div>
+              <TextField label={t('admin.website.quote')} value={entry.quote} maxLength={280} multiline required onChange={quote => { update({ quote }) }} />
+              <TextField label={t('admin.website.topic')} value={entry.topic} maxLength={32} onChange={topic => { update({ topic }) }} />
+              <EntryControls entry={entry} index={index} total={draft.testimonials.length} t={t} onChange={update}
                 onMove={(direction) => {
                   setSelectedEntry(entry.id)
                   change(value => ({ ...value, testimonials: reorder(value.testimonials, index, direction) }))
                 }}
-              onRemove={() => { change(value => ({ ...value, testimonials: value.testimonials.filter(item => item.id !== entry.id) })) }} />
-          </AdminCard>
-        }) : draft.contributors.map((entry, index) => {
+                onRemove={() => { change(value => ({ ...value, testimonials: value.testimonials.filter(item => item.id !== entry.id) })) }} />
+            </AdminCard>
+          }) : draft.contributors.map((entry, index) => {
             if (entry.id !== activeEntryId) return null
-          const update = (patch: Partial<WebsiteContributor>): void => { change(value => ({ ...value, contributors: value.contributors.map(item => item.id === entry.id ? { ...item, ...patch } : item) })) }
-          return <AdminCard key={entry.id}>
-            <AdminCardHead><AdminCardTitle>{t('admin.website.contributorItem').replace('{number}', String(index + 1))}</AdminCardTitle><span className={css.tag}>{t(entry.enabled ? 'admin.website.visible' : 'admin.website.hidden')}</span></AdminCardHead>
-            <div className={css.fields}>
-              <TextField label={t('admin.website.name')} value={entry.name} maxLength={40} required onChange={name => { update({ name }) }} />
-              <TextField label={t('admin.website.role')} value={entry.role} maxLength={60} onChange={role => { update({ role }) }} />
-              <TextField label={t('admin.website.avatar')} value={entry.avatar} maxLength={2048} type="url" onChange={avatar => { update({ avatar }) }} />
-              <TextField label={t('admin.website.project')} value={entry.project} maxLength={70} required onChange={project => { update({ project }) }} />
-            </div>
-            <TextField label={t('admin.website.description')} value={entry.description} maxLength={220} multiline onChange={description => { update({ description }) }} />
-            <TextField label={t('admin.website.url')} value={entry.url} maxLength={2048} type="url" onChange={url => { update({ url }) }} />
-            <p className={css.hint}>{t('admin.website.urlHint')}</p>
-            <EntryControls entry={entry} index={index} total={draft.contributors.length} t={t} onChange={update}
+            const update = (patch: Partial<WebsiteContributor>): void => { change(value => ({ ...value, contributors: value.contributors.map(item => item.id === entry.id ? { ...item, ...patch } : item) })) }
+            return <AdminCard key={entry.id}>
+              <AdminCardHead><AdminCardTitle>{t('admin.website.contributorItem').replace('{number}', String(index + 1))}</AdminCardTitle><span className={css.tag}>{t(entry.enabled ? 'admin.website.visible' : 'admin.website.hidden')}</span></AdminCardHead>
+              <div className={css.fields}>
+                <TextField label={t('admin.website.name')} value={entry.name} maxLength={40} required onChange={name => { update({ name }) }} />
+                <TextField label={t('admin.website.role')} value={entry.role} maxLength={60} onChange={role => { update({ role }) }} />
+                <TextField label={t('admin.website.avatar')} value={entry.avatar} maxLength={2048} type="url" onChange={avatar => { update({ avatar }) }} />
+                <TextField label={t('admin.website.project')} value={entry.project} maxLength={70} required onChange={project => { update({ project }) }} />
+              </div>
+              <TextField label={t('admin.website.description')} value={entry.description} maxLength={220} multiline onChange={description => { update({ description }) }} />
+              <TextField label={t('admin.website.url')} value={entry.url} maxLength={2048} type="url" onChange={url => { update({ url }) }} />
+              <p className={css.hint}>{t('admin.website.urlHint')}</p>
+              <EntryControls entry={entry} index={index} total={draft.contributors.length} t={t} onChange={update}
                 onMove={(direction) => {
                   setSelectedEntry(entry.id)
                   change(value => ({ ...value, contributors: reorder(value.contributors, index, direction) }))
                 }}
-              onRemove={() => { change(value => ({ ...value, contributors: value.contributors.filter(item => item.id !== entry.id) })) }} />
-          </AdminCard>
-        })}
+                onRemove={() => { change(value => ({ ...value, contributors: value.contributors.filter(item => item.id !== entry.id) })) }} />
+            </AdminCard>
+          })}
         </div>
       </fieldset>
       <PublicPreview content={draft} section={section} t={t} />
@@ -358,39 +358,39 @@ function FeedbackInbox({ api, t, onConvert, canConvert, sources }: {
           </AdminTable>
         </div>
         <div className={css.entryEditor}>
-      {data.feedback.map(row => {
+          {data.feedback.map(row => {
             if (row.id !== selectedId) return null
-        const value = replies[row.id] ?? ''
-        const valid = value.trim().length > 0 && value.trim().length <= 2000
-        return <AdminCard key={row.id} data-website-feedback={row.id}>
-          <AdminCardHead><AdminCardTitle>{t(`notice.kind.${row.kind}`)}</AdminCardTitle><span className={css.tag}>{t(`admin.notice.status.${row.status}`)}</span></AdminCardHead>
-          <AdminCardMeta>{fmtTime(row.createdAt)}</AdminCardMeta>
-          <p className={css.body}>{row.body}</p>
-          {(row.contact || row.context) && <dl className={css.details}>
-            {row.contact && <><dt>{t('admin.website.contact')}</dt><dd>{row.contact}</dd></>}
-            {row.context && <><dt>{t('admin.website.context')}</dt><dd>{row.context}</dd></>}
-          </dl>}
-          {row.images.length > 0 && <div className={css.images}>
-            {row.images.map(image => {
-              const protectedPath = `/physicsos/notice/website-feedback/${encodeURIComponent(row.id)}/images/${encodeURIComponent(image.id)}`
-              if (image.url !== protectedPath) return null
-              return <a href={protectedPath} key={image.id} target="_blank" rel="noopener noreferrer" className={css.imageLink}>
-                <img src={protectedPath} alt={image.name || t('admin.website.screenshot')} loading="lazy" referrerPolicy="no-referrer" />
-                <span>{image.name || t('admin.website.screenshot')}</span>
-              </a>
-            })}
-          </div>}
-          {row.reply && <div className={css.previousReply}><p className={css.body}>{row.reply}</p><small>{row.repliedBy || '—'} · {fmtTime(row.repliedAt ?? '')}</small></div>}
-          <fieldset className={css.replyForm} disabled={busy !== undefined}>
-            <TextField label={t('admin.website.reply')} value={value} maxLength={2000} multiline onChange={next => { setReplies(current => ({ ...current, [row.id]: next })) }} />
-            <AdminCardActions>
-              <button type="button" className={shared.primary} disabled={!valid} onClick={() => { void reply(row, 'answered') }}>{busy === row.id ? t('admin.website.saving') : t('admin.website.replySend')}</button>
-              <button type="button" className={shared.ghost} disabled={!valid} onClick={() => { void reply(row, 'closed') }}>{t('admin.website.replyClose')}</button>
-              <button type="button" className={shared.ghost} disabled={!canConvert || sources.includes(row.id)} onClick={() => { onConvert(row) }}>{t(sources.includes(row.id) ? 'admin.website.alreadyConverted' : 'admin.website.convert')}</button>
-            </AdminCardActions>
-          </fieldset>
-        </AdminCard>
-      })}
+            const value = replies[row.id] ?? ''
+            const valid = value.trim().length > 0 && value.trim().length <= 2000
+            return <AdminCard key={row.id} data-website-feedback={row.id}>
+              <AdminCardHead><AdminCardTitle>{t(`notice.kind.${row.kind}`)}</AdminCardTitle><span className={css.tag}>{t(`admin.notice.status.${row.status}`)}</span></AdminCardHead>
+              <AdminCardMeta>{fmtTime(row.createdAt)}</AdminCardMeta>
+              <p className={css.body}>{row.body}</p>
+              {(row.contact || row.context) && <dl className={css.details}>
+                {row.contact && <><dt>{t('admin.website.contact')}</dt><dd>{row.contact}</dd></>}
+                {row.context && <><dt>{t('admin.website.context')}</dt><dd>{row.context}</dd></>}
+              </dl>}
+              {row.images.length > 0 && <div className={css.images}>
+                {row.images.map(image => {
+                  const protectedPath = `/physicsos/notice/website-feedback/${encodeURIComponent(row.id)}/images/${encodeURIComponent(image.id)}`
+                  if (image.url !== protectedPath) return null
+                  return <a href={protectedPath} key={image.id} target="_blank" rel="noopener noreferrer" className={css.imageLink}>
+                    <img src={protectedPath} alt={image.name || t('admin.website.screenshot')} loading="lazy" referrerPolicy="no-referrer" />
+                    <span>{image.name || t('admin.website.screenshot')}</span>
+                  </a>
+                })}
+              </div>}
+              {row.reply && <div className={css.previousReply}><p className={css.body}>{row.reply}</p><small>{row.repliedBy || '—'} · {fmtTime(row.repliedAt ?? '')}</small></div>}
+              <fieldset className={css.replyForm} disabled={busy !== undefined}>
+                <TextField label={t('admin.website.reply')} value={value} maxLength={2000} multiline onChange={next => { setReplies(current => ({ ...current, [row.id]: next })) }} />
+                <AdminCardActions>
+                  <button type="button" className={shared.primary} disabled={!valid} onClick={() => { void reply(row, 'answered') }}>{busy === row.id ? t('admin.website.saving') : t('admin.website.replySend')}</button>
+                  <button type="button" className={shared.ghost} disabled={!valid} onClick={() => { void reply(row, 'closed') }}>{t('admin.website.replyClose')}</button>
+                  <button type="button" className={shared.ghost} disabled={!canConvert || sources.includes(row.id)} onClick={() => { onConvert(row) }}>{t(sources.includes(row.id) ? 'admin.website.alreadyConverted' : 'admin.website.convert')}</button>
+                </AdminCardActions>
+              </fieldset>
+            </AdminCard>
+          })}
         </div>
       </div>
       <AdminToolbar className={css.pagination}>

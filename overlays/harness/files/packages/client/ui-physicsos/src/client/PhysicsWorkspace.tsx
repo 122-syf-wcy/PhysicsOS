@@ -998,48 +998,47 @@ export function PhysicsWorkspace({
               expanded={dataOpen} desktopDefault={false}>
               <section className={sceneCss.floatData}>
                 <div className={clsx(css.dataHead, sceneCss.dataHead)}>
-                {(
-                  [
-                    ['summary', t('lab.tab.summary')],
-                    ['data', t('lab.tab.data')],
-                    ['charts', t('lab.tab.charts')],
-                    ['derivation', t('lab.tab.derivation')],
-                    ['events', t('lab.tab.events')],
-                  ] as const
-                ).map(([id, label]) => (
-                  <button
-                    key={id}
-                    type="button"
+                  {(
+                    [
+                      ['summary', t('lab.tab.summary')],
+                      ['data', t('lab.tab.data')],
+                      ['charts', t('lab.tab.charts')],
+                      ['derivation', t('lab.tab.derivation')],
+                      ['events', t('lab.tab.events')],
+                    ] as const
+                  ).map(([id, label]) => (
+                    <button
+                      key={id}
+                      type="button"
                       className={clsx(
-                      css.tab, sceneCss.tab,
-                      dataTab === id && css.tabActive,
-                      dataTab === id && sceneCss.tabActive,
-                    )}
-                    onClick={() => {
-                      setDataTab(id)
-                      setDataOpen(true)
-                    }}
-                  >
-                    {label}
-                  </button>
-                ))}
-                <span className={css.dataSpacer} />
-                {dataTab === 'data' && snapshot.table.rows.length > 0 ? (
-                  <button
-                    type="button"
-                    className={css.tab}
-                    onClick={() => {
-                      exportTableCsv(snapshot.title, snapshot.table)
-                    }}
-                  >
-                    <IconDownloadOutlineMedium size={12} />
-                    {t('lab.exportCsv')}
-                  </button>
-                ) : null}
+                        css.tab, sceneCss.tab,
+                        dataTab === id && css.tabActive,
+                        dataTab === id && sceneCss.tabActive,
+                      )}
+                      onClick={() => {
+                        setDataTab(id)
+                        setDataOpen(true)
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                  <span className={css.dataSpacer} />
+                  {dataTab === 'data' && snapshot.table.rows.length > 0 ? (
+                    <button
+                      type="button"
+                      className={css.tab}
+                      onClick={() => {
+                        exportTableCsv(snapshot.title, snapshot.table)
+                      }}
+                    >
+                      <IconDownloadOutlineMedium size={12} />
+                      {t('lab.exportCsv')}
+                    </button>
+                  ) : null}
 
-              </div>
-              {dataOpen ? (
-                  <div className={clsx(css.dataBody, sceneCss.dataBody)}>
+                </div>
+                <div className={clsx(css.dataBody, sceneCss.dataBody)}>
                   <DataPanelBody
                     tab={dataTab}
                     table={snapshot.table}
@@ -1059,8 +1058,7 @@ export function PhysicsWorkspace({
                     onSeek={seek}
                   />
                 </div>
-              ) : null}
-            </section>
+              </section>
             </WorkbenchFloatPanel> : null}
           </div>
 
@@ -1071,12 +1069,12 @@ export function PhysicsWorkspace({
             <WorkbenchFloatPanel title={t('lab.agent')} closeLabel={t('lab.collapse')} onClose={closeAgent}
               placement="bottom-right" width={350} height={430} expanded desktopDefault={false}>
               <div className={sceneCss.floatAgent}><AgentDrawer
-              snapshot={snapshot}
-              runtime={runtime}
-              onSnapshot={commit}
-              onClose={closeAgent}
-              t={t}
-              {...(recordAttempt === undefined ? {} : { recordAttempt })}
+                snapshot={snapshot}
+                runtime={runtime}
+                onSnapshot={commit}
+                onClose={closeAgent}
+                t={t}
+                {...(recordAttempt === undefined ? {} : { recordAttempt })}
               /></div></WorkbenchFloatPanel>
           ) : focused || inspectorCollapsed ? null : (
             <ResponsiveInspector
