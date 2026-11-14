@@ -63,6 +63,7 @@ export function AdminNoticeTab({ api, t }: AdminNoticeTabProps) {
   if (items === undefined) return <AdminEmpty>{t('admin.loading')}</AdminEmpty>
 
   const visible = status === '' ? items : items.filter(row => row.status === status)
+  const selectedId = visible.find(item => item.id === selected)?.id ?? visible[0]?.id
 
   return (
     <>
@@ -96,17 +97,17 @@ export function AdminNoticeTab({ api, t }: AdminNoticeTabProps) {
         <section className={css.detailList}>
           <AdminTable minWidth={430}>
             <thead><tr><th>{t('admin.audit.time')}</th><th>{t('notice.kindLabel')}</th><th>{t('notice.description')}</th><th>{t('admin.users.status')}</th></tr></thead>
-            <tbody>{visible.map(row => <tr key={row.id} data-selected={row.id === (visible.find(item => item.id === selected)?.id ?? visible[0]?.id) || undefined}>
+            <tbody>{visible.map(row => <tr key={row.id} data-selected={row.id === selectedId || undefined}>
               <td className={css.timeCell}>{fmtTime(row.createdAt)}</td><td>{t(`notice.kind.${row.kind}`)}</td>
               <td><button type="button" className={css.tableLink} onClick={() => { setSelected(row.id) }}>{row.body.length > 80 ? `${row.body.slice(0, 80)}…` : row.body}</button></td>
               <td><button type="button" className={css.ghost} onClick={() => { setSelected(row.id) }}>{t(`admin.notice.status.${row.status}`)}</button></td>
             </tr>)}</tbody>
           </AdminTable>
         </section>
-      {visible.filter(row => row.id === (visible.find(item => item.id === selected)?.id ?? visible[0]?.id)).map(row => (
-        <AdminCard key={row.id} className={css.detailPane} data-feedback={row.id}>
+        {visible.filter(row => row.id === selectedId).map(row => (
+          <AdminCard key={row.id} className={css.detailPane} data-feedback={row.id}>
           <AdminCardMeta>
-            {fmtTime(row.createdAt)} · {t(`notice.kind.${row.kind}`)} · {row.authorKey}
+              {fmtTime(row.createdAt)} · {t(`notice.kind.${row.kind}`)} · {row.authorKey}
             {row.context === undefined ? '' : ` · ${row.context}`}
           </AdminCardMeta>
           <p className={css.cardText}>{row.body}</p>

@@ -62,7 +62,9 @@ export function WorkbenchFloatPanel({ id, title, closeLabel, collapseLabel, onCl
     requestedSize.current = { width, height }
     const measure = () => {
       const measured = owner.getBoundingClientRect()
-      const box = measured.width > 0 && measured.height > 0 ? measured : { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight, width: window.innerWidth }
+      const box = measured.width > 0 && measured.height > 0 ? measured : {
+        left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight, width: window.innerWidth,
+      }
       const headerBox = header?.getBoundingClientRect()
       const headerBottom = headerBox !== undefined && headerBox.width > 0 && headerBox.height > 0
         && headerBox.bottom > box.top && headerBox.top < box.bottom ? headerBox.bottom : undefined
@@ -136,7 +138,10 @@ export function WorkbenchFloatPanel({ id, title, closeLabel, collapseLabel, onCl
     focusTab: raisePanel, focusPane: raisePanel, splitPane: noChange, addTab: noChange,
     closeTab: close, duplicateTab: noChange, floatTab: noChange, unfloatPane: collapse,
     placeTab: noChange, dropTab: noChange, resizeSplit: noChange,
-    moveFloat: (_id, x, y) => { raisePanel(); setRect(previous => previous === undefined ? previous : fitWorkbenchFloat({ ...previous, x, y }, bounds.current)) },
+    moveFloat: (_id, x, y) => {
+      raisePanel()
+      setRect(previous => previous === undefined ? previous : fitWorkbenchFloat({ ...previous, x, y }, bounds.current))
+    },
     resizeFloat: (_id, next) => { raisePanel(); setRect(fitWorkbenchFloat(next, bounds.current)) },
   }
   const labels: DockLabels = {
@@ -148,15 +153,17 @@ export function WorkbenchFloatPanel({ id, title, closeLabel, collapseLabel, onCl
     <span ref={anchor} className={css.anchor} aria-hidden="true" />
     {portal !== null && state !== undefined && (expanded || (desktopDefault && wide)) ? createPortal(
       <div ref={layer} id={id} role={role} aria-label={title} className={`${css.layer} ${className ?? ''}`} data-workbench-float={placement} data-workbench-float-owner={ownerGroup.current}
-        onPointerDownCapture={event => { if (event.target instanceof Node && layer.current?.contains(event.target)) raisePanel() }}
-        onFocusCapture={event => { if (event.target instanceof Node && layer.current?.contains(event.target)) raisePanel() }}
-        data-can-collapse={onCollapse !== undefined && collapseLabel !== closeLabel} onKeyDown={event => {
-        if (event.key === 'Escape' && !event.defaultPrevented && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229
-          && !event.ctrlKey && !event.altKey && !event.metaKey
-          && event.target instanceof Node && layer.current?.contains(event.target)) {
-          event.preventDefault(); event.stopPropagation(); close()
-        }
-      }}>
+        onPointerDownCapture={(event) => { if (event.target instanceof Node && layer.current?.contains(event.target)) raisePanel() }}
+        onFocusCapture={(event) => { if (event.target instanceof Node && layer.current?.contains(event.target)) raisePanel() }}
+        data-can-collapse={onCollapse !== undefined && collapseLabel !== closeLabel} onKeyDown={(event) => {
+          // oxlint-disable-next-line typescript/no-deprecated -- Legacy IME 229 remains necessary on engines without isComposing.
+          const composing = event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229
+          if (event.key === 'Escape' && !event.defaultPrevented && !composing
+            && !event.ctrlKey && !event.altKey && !event.metaKey
+            && event.target instanceof Node && layer.current?.contains(event.target)) {
+            event.preventDefault(); event.stopPropagation(); close()
+          }
+        }}>
         <FloatLayer state={state} intents={intents} labels={labels} renderTab={() => <div className={css.content}>{children}</div>} />
       </div>, portal,
     ) : null}

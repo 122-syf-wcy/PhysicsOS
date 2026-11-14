@@ -500,7 +500,7 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
       </div>
     </div> : null}
     <div className={`${css.canvasBody} ${stageCss.body}`}>
-    <div ref={board} className={`${css.board} ${stageCss.board}`}>
+      <div ref={board} className={`${css.board} ${stageCss.board}`}>
       {manifest === undefined && document?.loading !== false ? <div className={css.loading}><LoadingState inline>{t('canvas.sync.loading')}</LoadingState></div> :
         <ReactFlow<CanvasFlowNode, Edge> className={css.flow} nodes={flowNodes} edges={flowEdges} nodeTypes={nodeTypes} viewport={viewport}
           onInit={(instance: ReactFlowInstance<CanvasFlowNode, Edge>) => { flow.current = instance }}
@@ -533,12 +533,12 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
           minZoom={0.08} maxZoom={4} preventScrolling nodeOrigin={[0, 0]}
           noDragClassName="nodrag" noPanClassName="nopan" noWheelClassName="nowheel"
           elevateNodesOnSelect={false} elevateEdgesOnSelect={false}>
-          <Background variant={BackgroundVariant.Dots} gap={24} size={0.7} color="var(--dsw-alias-border-l2)" />
+            <Background variant={BackgroundVariant.Dots} gap={24} size={0.7} color="var(--dsw-alias-border-l2)" />
           {minimap ? <MiniMap aria-label={t('canvas.minimap')} pannable zoomable nodeColor={node => node.type === 'group' ? 'var(--dsw-alias-bg-module-platform)' : 'var(--dsw-alias-button-info-fill)'} maskColor="color-mix(in srgb, var(--dsw-alias-bg-base) 75%, transparent)" /> : null}
 
         </ReactFlow>}
       <CanvasAnnotations document={document} viewport={viewport} tool={view.tool} active={editable && !spacePan} commands={canvasCommands} toWorld={toWorld} candidate={candidate} onError={annotationError} onSuggestion={setShapeSuggestion} />
-          <div className={`${css.boardControls} ${css.zoomShelf} ${stageCss.zoomShelf}`}>
+        <div className={`${css.boardControls} ${css.zoomShelf} ${stageCss.zoomShelf}`}>
             <Tooltip label={t('canvas.zoomOut')} portal><Button size="sm" variant="toolbar" aria-label={t('canvas.zoomOut')} onClick={() => { zoom(-1) }}>−</Button></Tooltip>
             <span className={css.zoomValue}>{String(Math.round(viewport.zoom * 100))}%</span>
             <Tooltip label={t('canvas.zoomIn')} portal><Button size="sm" variant="toolbar" aria-label={t('canvas.zoomIn')} onClick={() => { zoom(1) }}>+</Button></Tooltip>
@@ -552,7 +552,7 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
         <Button variant="outline" disabled={!editable} onClick={addNote}>{t('canvas.addNote')}</Button>
       </div></div> : null}
     </div>
-    {agentOpen ? <WorkbenchFloatPanel title={t('canvas.agentPanel')} closeLabel={t('canvas.close')} onClose={() => { setAgentOpen(false); setCandidate(undefined) }} placement="bottom-right" width={340} height={420} expanded desktopDefault={false}><div className={stageCss.floatAgent}><CanvasAssistantPanel canvasId={canvasId} document={document} commands={canvasCommands} selectedNodeIds={view.selected} viewport={{ ...viewport, width: board.current?.clientWidth ?? 800, height: board.current?.clientHeight ?? 600 }} getViewport={() => ({ ...(flow.current?.getViewport() ?? viewport), width: board.current?.clientWidth || 800, height: board.current?.clientHeight || 600 })} t={t} onClose={() => { setAgentOpen(false); setCandidate(undefined) }} onCandidate={setCandidate} /></div></WorkbenchFloatPanel> : null}
+      {agentOpen ? <WorkbenchFloatPanel title={t('canvas.agentPanel')} closeLabel={t('canvas.close')} onClose={() => { setAgentOpen(false); setCandidate(undefined) }} placement="bottom-right" width={340} height={420} expanded desktopDefault={false}><div className={stageCss.floatAgent}><CanvasAssistantPanel canvasId={canvasId} document={document} commands={canvasCommands} selectedNodeIds={view.selected} viewport={{ ...viewport, width: board.current?.clientWidth ?? 800, height: board.current?.clientHeight ?? 600 }} getViewport={() => ({ ...(flow.current?.getViewport() ?? viewport), width: board.current?.clientWidth || 800, height: board.current?.clientHeight || 600 })} t={t} onClose={() => { setAgentOpen(false); setCandidate(undefined) }} onCandidate={setCandidate} /></div></WorkbenchFloatPanel> : null}
     </div>
     <div className={`${css.dockShelf} ${stageCss.dockShelf}`}>
       <div className={`${css.toolDock} ${stageCss.toolDock}`} role="toolbar" aria-label={t('canvas.title')}>

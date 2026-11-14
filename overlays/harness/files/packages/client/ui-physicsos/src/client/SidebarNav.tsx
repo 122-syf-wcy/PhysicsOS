@@ -89,16 +89,16 @@ export function SidebarNav({ panels = [], selectPanel, openSurface, usePhysicsSu
     glyph: ReactNode,
   ): ReactNode => (
     <Tooltip key={id} label={t(label)} side="right" portal>
-    <button
-      type="button"
-      className={clsx(css.item, surface === id && css.active)}
-      aria-label={t(label)}
-      aria-current={surface === id ? 'page' : undefined}
-      title={t(label)}
-      onClick={() => { openSurface(id) }}
-    >
-      {glyph}
-    </button>
+      <button
+        type="button"
+        className={clsx(css.item, surface === id && css.active)}
+        aria-label={t(label)}
+        aria-current={surface === id ? 'page' : undefined}
+        title={t(label)}
+        onClick={() => { openSurface(id) }}
+      >
+        {glyph}
+      </button>
     </Tooltip>
   )
 
@@ -112,7 +112,7 @@ export function SidebarNav({ panels = [], selectPanel, openSurface, usePhysicsSu
       {teaching && item('paper', 'nav.paper', <IconQuestionSheet size={iconSize} />)}
       <Menu open={moreOpen} items={moreItems} portal side="right" align="end"
         onClose={() => { setMoreOpen(false) }}
-        onSelect={id => {
+        onSelect={(id) => {
           setMoreOpen(false)
           const panel = panels.find(item => `panel:${item.id}` === id)
           if (panel !== undefined) selectPanel?.(panel.id)

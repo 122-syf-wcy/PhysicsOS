@@ -538,7 +538,8 @@ export function PhysicsWorkspace({
   if (questionCodeVisualization !== undefined && questionCodeScene !== undefined) {
     const independent = questionCodeVisualization.status === 'ready' && questionCodeVisualization.rendererKind === 'independent'
     const title = independent ? questionCodeVisualization.title : questionCodeScene.metadata.title ?? snapshot.title
-    return <div ref={coverRef} className={clsx(css.cover, codeCss.labCover, sceneCss.questionWorkspace)} data-private-question-code-workspace
+    return <div ref={coverRef}
+      className={clsx(css.cover, codeCss.labCover, sceneCss.questionWorkspace)} data-private-question-code-workspace
       data-physicsos-surface="lab" data-physicsos-domain={snapshot.domain} data-physicsos-running={running ? 'true' : 'false'}
       data-scene-revision={snapshot.sceneRevision} data-verification-status={displayedStatus}>
       <div className={clsx(codeCss.labContent, sceneCss.questionContent)}>
@@ -553,11 +554,11 @@ export function PhysicsWorkspace({
             <h1 className={codeCss.title}>{title}</h1>
           </div>
           <div className={codeCss.labHeaderActions}>
-          <button type="button" className={codeCss.open} aria-pressed={!inspectorCollapsed} onClick={() => {
-            if (inspectorCollapsed) { setInspectorCollapsed(false); inspector.reveal(); return }
-            if (inspector.open || (coverRef.current?.clientWidth ?? 0) >= 1080) { setInspectorCollapsed(true); inspector.close() }
-            else inspector.reveal()
-          }}>{t('lab.inspectorPanel')}</button>
+            <button type="button" className={codeCss.open} aria-pressed={!inspectorCollapsed} onClick={() => {
+              if (inspectorCollapsed) { setInspectorCollapsed(false); inspector.reveal(); return }
+              if (inspector.open || (coverRef.current?.clientWidth ?? 0) >= 1080) { setInspectorCollapsed(true); inspector.close() }
+              else inspector.reveal()
+            }}>{t('lab.inspectorPanel')}</button>
           {onAddToCanvas === undefined ? null : <WorkbenchAction label={t('canvas.addToCanvas')} onClick={onAddToCanvas} />}
           {onReturnToChat === undefined ? null : <button type="button" className={codeCss.open} onClick={onReturnToChat}>
             <IconChatBubble size={14} />{t('lab.backToChat')}
@@ -995,8 +996,8 @@ export function PhysicsWorkspace({
             {dataOpen && !focused ? <WorkbenchFloatPanel title={t('lab.tab.charts')} closeLabel={t('lab.collapse')}
               collapseLabel={t('lab.collapse')} onClose={() => { setDataOpen(false) }} placement="top-right" width={400} height={310}
               expanded={dataOpen} desktopDefault={false}>
-            <section className={sceneCss.floatData}>
-              <div className={clsx(css.dataHead, sceneCss.dataHead)}>
+              <section className={sceneCss.floatData}>
+                <div className={clsx(css.dataHead, sceneCss.dataHead)}>
                 {(
                   [
                     ['summary', t('lab.tab.summary')],
@@ -1009,7 +1010,11 @@ export function PhysicsWorkspace({
                   <button
                     key={id}
                     type="button"
-                    className={clsx(css.tab, sceneCss.tab, dataOpen && dataTab === id && css.tabActive, dataOpen && dataTab === id && sceneCss.tabActive)}
+                      className={clsx(
+                      css.tab, sceneCss.tab,
+                      dataTab === id && css.tabActive,
+                      dataTab === id && sceneCss.tabActive,
+                    )}
                     onClick={() => {
                       setDataTab(id)
                       setDataOpen(true)
@@ -1034,7 +1039,7 @@ export function PhysicsWorkspace({
 
               </div>
               {dataOpen ? (
-                <div className={clsx(css.dataBody, sceneCss.dataBody)}>
+                  <div className={clsx(css.dataBody, sceneCss.dataBody)}>
                   <DataPanelBody
                     tab={dataTab}
                     table={snapshot.table}
@@ -1065,14 +1070,14 @@ export function PhysicsWorkspace({
                overlay the inspector drawer uses. One element, both modes. */
             <WorkbenchFloatPanel title={t('lab.agent')} closeLabel={t('lab.collapse')} onClose={closeAgent}
               placement="bottom-right" width={350} height={430} expanded desktopDefault={false}>
-            <div className={sceneCss.floatAgent}><AgentDrawer
+              <div className={sceneCss.floatAgent}><AgentDrawer
               snapshot={snapshot}
               runtime={runtime}
               onSnapshot={commit}
               onClose={closeAgent}
               t={t}
               {...(recordAttempt === undefined ? {} : { recordAttempt })}
-            /></div></WorkbenchFloatPanel>
+              /></div></WorkbenchFloatPanel>
           ) : focused || inspectorCollapsed ? null : (
             <ResponsiveInspector
               controller={inspector}
@@ -1101,7 +1106,9 @@ export function PhysicsWorkspace({
                 }}
                 onHighlight={highlight}
               /> : <div className={sceneCss.quickParameters}>{quickParameters.map(parameter => <QuantityField key={parameter.id}
-                parameter={parameter} onCommit={value => { commit(runtime.editParameter(parameter.id, value)) }} onFocusChange={highlight} />)}</div>}
+                parameter={parameter}
+                onCommit={(value) => { commit(runtime.editParameter(parameter.id, value)) }}
+                onFocusChange={highlight} />)}</div>}
               {quickParameters.length > 0 ? <button type="button" className={sceneCss.moreParameters} onClick={() => { setInspectorDetailed(value => !value) }}>
                 {t(inspectorDetailed ? 'lab.fewerParameters' : 'lab.moreParameters')}
               </button> : null}

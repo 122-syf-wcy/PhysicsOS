@@ -56,6 +56,7 @@ import { PHYSICS_SCENE_TURN_KEY, physicsSceneCardDefinition, physicsSceneTurnDef
 import { SidebarBrandMark, SidebarBrandName } from './SidebarBrand.tsx'
 import { SidebarFooter } from './SidebarFooter.tsx'
 import { SidebarNav } from './SidebarNav.tsx'
+import { HeaderWorkspace } from './HeaderWorkspace.tsx'
 import { createPaperApi } from './paper-api.ts'
 import {
   PHYSICS_PANEL_IDS, createPhysicsSurfaceController,
@@ -449,18 +450,29 @@ export function apply(ctx: ClientContext): void {
      action returns through the seat's `onPick`/`onClose`. The upstream occupant
      is displaced on purpose — its add action is the route into the host
      directory picker, and no student should browse server folders. */
+  const accountWorkspaceActions = {
+    createWorkspace: createAccountWorkspace,
+    renameWorkspace: async (id: string, name: string): Promise<void> => {
+      await ctx.workspaces.rename(id as WorkspaceId, name)
+    },
+  }
   ctx.slots.inject('conversation.hero.workspace', () => ctx.slots.register({
     name: 'conversation.hero.workspace',
     priority: -1,
     locale: NS,
-    inject: () => ({
-      hooks: { workspaces: ctx.workspaces.list },
-      createWorkspace: createAccountWorkspace,
-      renameWorkspace: async (id: string, name: string) => {
-        await ctx.workspaces.rename(id as WorkspaceId, name)
-      },
-    }),
+    inject: () => ({ ...accountWorkspaceActions, hooks: { workspaces: ctx.workspaces.list } }),
   }, WorkspacePanel))
+  // The product header must share account actions with the hero; directory
+  // adoption is an upstream-only capability, never a student-facing fallback.
+  ctx.slots.inject('sidebar.workspacePicker', () => ctx.slots.register({
+    name: 'sidebar.workspacePicker',
+    priority: -1,
+    locale: NS,
+    inject: () => ({
+      ...accountWorkspaceActions,
+      selectWorkspace: (workspaceId: WorkspaceId) => ctx.uiWorkspace.openWorkspace(workspaceId),
+    }),
+  }, HeaderWorkspace))
 
   /* The auth gate: one root-scoped overlay entry that covers the shell while
      the session is unresolved, and holds the login/register/forgot flow for

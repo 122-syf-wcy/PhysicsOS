@@ -13976,88 +13976,6 @@ index f004aba1e9..af397aa2c7 100644
          const imageAttachments = attachments.filter(attachment => attachment.kind === 'image')
          if (imageAttachments.length + images.length > imageLimits.maxImagesPerMessage) {
            return t('image.tooMany', { count: imageLimits.maxImagesPerMessage })
-diff --git a/packages/client/ui-directory-picker-browse/src/client/index.ts b/packages/client/ui-directory-picker-browse/src/client/index.ts
-index 9e7b2833ea..047bf86be8 100644
---- a/packages/client/ui-directory-picker-browse/src/client/index.ts
-+++ b/packages/client/ui-directory-picker-browse/src/client/index.ts
-@@ -92,4 +92,9 @@ export function apply(ctx: ClientContext): void {
-         name: 'sidebar.workspaces.directoryFlow', inject: injected,
-       }, BrowseDirectoryFlow)
-     }))
-+  // An optional header surface owns its own declaration lifetime. Its absence
-+  // must never withdraw the existing browser/hero directory flows.
-+  ctx.slots.inject('sidebar.workspacePicker.directoryFlow', () => ctx.slots.register({
-+    name: 'sidebar.workspacePicker.directoryFlow', inject: injected,
-+  }, BrowseDirectoryFlow))
- }
-diff --git a/packages/client/ui-directory-picker-browse/tests/client-flow.client.spec.tsx b/packages/client/ui-directory-picker-browse/tests/client-flow.client.spec.tsx
-index 782ae4d533..f22e34ef84 100644
---- a/packages/client/ui-directory-picker-browse/tests/client-flow.client.spec.tsx
-+++ b/packages/client/ui-directory-picker-browse/tests/client-flow.client.spec.tsx
-@@ -38,7 +38,7 @@ async function bench() {
-   const slots = ctx.get('slots') as SlotRegistry
-   const declare = () => slots.register({
-     name: 'root',
--    children: Object.fromEntries(HOLES.map(name => [name, { kind: 'single', scope: 'root' }])),
-+    children: Object.fromEntries([...HOLES, 'sidebar.workspacePicker.directoryFlow'].map(name => [name, { kind: 'single', scope: 'root' }])),
-   } as never, () => null)
-   return { ctx, slots, listDirectory, createDirectory, declare }
- }
-@@ -228,3 +228,13 @@ describe('directory-picker-browse node half', () => {
-     expect(() => { nodeApply() }).not.toThrow()
-   })
- })
-+
-+it('fills and disposes the optional header directory flow independently of the legacy pair', async () => {
-+  const b = await bench()
-+  b.declare()
-+  const fiber = b.ctx.plugin({ inject: [...inject], apply })
-+  await fiber.await()
-+  expect(b.slots.entries('sidebar.workspacePicker.directoryFlow')).toHaveLength(1)
-+  await fiber.dispose()
-+  expect(b.slots.entries('sidebar.workspacePicker.directoryFlow')).toHaveLength(0)
-+})
-diff --git a/packages/client/ui-directory-picker-native/src/client/index.ts b/packages/client/ui-directory-picker-native/src/client/index.ts
-index efec56fc49..801bb1cbc1 100644
---- a/packages/client/ui-directory-picker-native/src/client/index.ts
-+++ b/packages/client/ui-directory-picker-native/src/client/index.ts
-@@ -35,4 +35,9 @@ export function apply(ctx: ClientContext): void {
-         name: 'sidebar.workspaces.directoryFlow', inject: injected,
-       }, NativeDirectoryFlow)
-     }))
-+  // An optional header surface owns its own declaration lifetime. Its absence
-+  // must never withdraw the existing browser/hero directory flows.
-+  ctx.slots.inject('sidebar.workspacePicker.directoryFlow', () => ctx.slots.register({
-+    name: 'sidebar.workspacePicker.directoryFlow', inject: injected,
-+  }, NativeDirectoryFlow))
- }
-diff --git a/packages/client/ui-directory-picker-native/tests/client-flow.client.spec.tsx b/packages/client/ui-directory-picker-native/tests/client-flow.client.spec.tsx
-index ed033999aa..b17dedf771 100644
---- a/packages/client/ui-directory-picker-native/tests/client-flow.client.spec.tsx
-+++ b/packages/client/ui-directory-picker-native/tests/client-flow.client.spec.tsx
-@@ -37,7 +37,7 @@ async function bench() {
-   const slots = ctx.get('slots') as SlotRegistry
-   const declare = () => slots.register({
-     name: 'root',
--    children: Object.fromEntries(HOLES.map(name => [name, { kind: 'single', scope: 'root' }])),
-+    children: Object.fromEntries([...HOLES, 'sidebar.workspacePicker.directoryFlow'].map(name => [name, { kind: 'single', scope: 'root' }])),
-   } as never, () => null)
-   return { ctx, slots, pickDirectory, declare }
- }
-@@ -293,3 +293,13 @@ describe('directory-picker-native node half', () => {
-     expect(() => { nodeApply() }).not.toThrow()
-   })
- })
-+
-+it('fills and disposes the optional header directory flow independently of the legacy pair', async () => {
-+  const b = await bench()
-+  b.declare()
-+  const fiber = b.ctx.plugin({ inject: [...inject], apply })
-+  await fiber.await()
-+  expect(b.slots.entries('sidebar.workspacePicker.directoryFlow')).toHaveLength(1)
-+  await fiber.dispose()
-+  expect(b.slots.entries('sidebar.workspacePicker.directoryFlow')).toHaveLength(0)
-+})
 diff --git a/packages/client/ui-layout/src/client/AppFrame.module.css b/packages/client/ui-layout/src/client/AppFrame.module.css
 index 4f450df3c9..b417d55183 100644
 --- a/packages/client/ui-layout/src/client/AppFrame.module.css
@@ -14095,7 +14013,7 @@ index 4f450df3c9..b417d55183 100644
 +:global(html[data-windows-titlebar]) .frame[data-product-shell] { padding-top: calc(var(--dsh-windows-titlebar-height) + 58px); }
 +:global(html[data-windows-titlebar]) .frame[data-product-shell] .handle { top: calc(var(--dsh-windows-titlebar-height) + 58px); }
 diff --git a/packages/client/ui-layout/src/client/AppFrame.tsx b/packages/client/ui-layout/src/client/AppFrame.tsx
-index 841f9f72aa..7fc23d2b4b 100644
+index 841f9f72aa..61e6534cff 100644
 --- a/packages/client/ui-layout/src/client/AppFrame.tsx
 +++ b/packages/client/ui-layout/src/client/AppFrame.tsx
 @@ -157,6 +157,8 @@ export function AppFrame({
@@ -14131,7 +14049,7 @@ index 841f9f72aa..7fc23d2b4b 100644
    const main = useMemo(() => (
      <MainPanel usePanelInfo={usePanelInfo} renderSlot={renderSlot} />
    ), [usePanelInfo, renderSlot])
-@@ -253,17 +255,18 @@ export function AppFrame({
+@@ -253,19 +255,20 @@ export function AppFrame({
    // row (ui-sidebar). AppFrame.module.css publishes the matching
    // --dsh-frame-leading-clearance under the same collapsed condition.
    const leading = useMemo(() => renderSlot('shell.leading', {}), [renderSlot])
@@ -14150,8 +14068,11 @@ index 841f9f72aa..7fc23d2b4b 100644
 -          `${cols.sidebar}px minmax(${cols.rightbar === 0 ? 0 : CENTER_MIN}px, 1fr) minmax(0px, ${rightbarMax}px)`,
 +          `${cols.sidebar}px minmax(${cols.rightbar === 0 ? 0 : CENTER_MIN + productInset}px, 1fr) minmax(0px, ${rightbarMax}px)`,
        }}
-       data-sidebar-collapsed={sidebarCollapsed || undefined}
+-      data-sidebar-collapsed={sidebarCollapsed || undefined}
++      data-sidebar-collapsed={(!productShell && sidebarCollapsed) || undefined}
        data-rightbar-collapsed={cols.rightbar === 0 || undefined}
+       data-rightbar-fullscreen={layoutInfo.rightbarFullscreen || undefined}
+       data-rightbar-instant={layoutInfo.rightbarInstant || undefined}
 @@ -295,7 +298,7 @@ export function AppFrame({
          </div>
        )}
@@ -15122,7 +15043,7 @@ index ac1116f04c..c9870fb203 100644
 +.productHeaderActions { gap: 6px; }
 +@media(max-width:600px) { .productHeaderActions .historyButton span { display: none; } }
 diff --git a/packages/client/ui-sidebar/src/client/SidebarRoot.tsx b/packages/client/ui-sidebar/src/client/SidebarRoot.tsx
-index fed580320c..37486036a1 100644
+index fed580320c..f007eee8f8 100644
 --- a/packages/client/ui-sidebar/src/client/SidebarRoot.tsx
 +++ b/packages/client/ui-sidebar/src/client/SidebarRoot.tsx
 @@ -19,7 +19,7 @@
@@ -15149,7 +15070,7 @@ index fed580320c..37486036a1 100644
 +  if (document.documentElement.hasAttribute('data-physicsos-ui')) {
 +    return (
 +      <>
-+        <header className={css.productHeader}>
++        <header className={css.productHeader} data-window-drag>
 +          <button type="button" className={css.productBrand} aria-label={t('session.new.label')} onClick={() => { startSession() }}>
 +            {renderSlot('sidebar.brand.mark', { size: 25 }, { fallback: <FishLogo size={25} /> })}
 +            {renderSlot('sidebar.brand.name', {}, { fallback: <span>{t('brand.localBuild')}</span> })}
@@ -15421,7 +15342,7 @@ index b0ee9383a0..781767df66 100644
    })
  })
 diff --git a/packages/client/ui-sidebar/tests/sidebar-root.client.spec.tsx b/packages/client/ui-sidebar/tests/sidebar-root.client.spec.tsx
-index f2407246f8..3deaec2163 100644
+index f2407246f8..bbc9533374 100644
 --- a/packages/client/ui-sidebar/tests/sidebar-root.client.spec.tsx
 +++ b/packages/client/ui-sidebar/tests/sidebar-root.client.spec.tsx
 @@ -23,6 +23,7 @@ const t: SidebarRootComponentProps['t'] = makeTranslate({ ...commonEn, ...en })
@@ -15437,7 +15358,7 @@ index f2407246f8..3deaec2163 100644
          if (key === 'sidebar.brand.mark') return brandMark
          if (key === 'sidebar.brand.name') return brandName
 -        if (key === 'sidebar.toggle.badge') return null
-+        if (key === 'sidebar.toggle.badge' || key === 'sidebar.nav') return null
++        if (key === 'sidebar.toggle.badge' || key === 'sidebar.nav' || key === 'sidebar.workspacePicker') return null
          if (key === 'sidebar.settings') {
            settingsOwner = owner
            return <div data-testid="settings-seat" data-wide={owner.wide} />
@@ -15479,327 +15400,6 @@ index 45d5410a37..e648afed7a 100644
      expect(declarations('.brandName')?.get('line-height')).toBe('24px')
      expect(declarations('.brandName')?.get('font-size')).toBe('18px')
      expect(declarations('.fallbackBrandName')?.get('font-size')).toBe('17px')
-diff --git a/packages/client/ui-workspace/src/client/WorkspaceHeaderPicker.module.css b/packages/client/ui-workspace/src/client/WorkspaceHeaderPicker.module.css
-new file mode 100644
-index 0000000000..a6df35ff2c
---- /dev/null
-+++ b/packages/client/ui-workspace/src/client/WorkspaceHeaderPicker.module.css
-@@ -0,0 +1,8 @@
-+.root { position: relative; min-width: 0; }
-+.trigger { display: inline-flex; align-items: center; gap: 7px; max-width: 280px; padding: 7px 10px; border: 0; border-radius: 8px; color: var(--dsw-alias-label-secondary); background: transparent; font: inherit; font-size: 12px; cursor: pointer; }
-+.trigger > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-+.trigger > svg { flex: none; }
-+.trigger:hover:not(:disabled) { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-hover); }
-+.trigger:disabled { opacity: .6; cursor: progress; }
-+.error { position: absolute; top: 100%; left: 0; z-index: 1; width: max-content; max-width: min(300px, calc(100vw - 28px)); padding: 8px 10px; border-radius: 8px; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-layer-2); box-shadow: var(--dsw-elevation-prominent); font-size: 12px; }
-+@media (max-width: 600px) { .root { flex: none; } .trigger { width: 32px; max-width: 32px; justify-content: center; gap: 0; padding: 7px; } .trigger > span, .trigger > svg:last-child { display: none; } }
-diff --git a/packages/client/ui-workspace/src/client/WorkspaceHeaderPicker.tsx b/packages/client/ui-workspace/src/client/WorkspaceHeaderPicker.tsx
-new file mode 100644
-index 0000000000..519bc4c877
---- /dev/null
-+++ b/packages/client/ui-workspace/src/client/WorkspaceHeaderPicker.tsx
-@@ -0,0 +1,43 @@
-+/** The header reuses the pick/adopt flow instead of maintaining a second Workspace list. */
-+import { useRef, useState } from 'react'
-+import { IconChevronDownOutlineMedium, IconFolderOpenOutlineMedium, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
-+import { workspaceDisplayTitle } from '@deepseek-ai/dsh-api-workspace-controller/default-workspace'
-+import type { WorkspaceHeaderPickerProps } from './contract/slots.ts'
-+import { WorkspacePickFlow } from './WorkspacePicker.tsx'
-+import css from './WorkspaceHeaderPicker.module.css'
-+
-+/** Selection is a real Host-backed navigation; failed selections retain the current session. */
-+export function WorkspaceHeaderPicker({ useWorkspaces, useSessions, useDirectoryFlow, createWorkspace,
-+  selectWorkspace, renderSlot, t,
-+}: WorkspaceHeaderPickerProps) {
-+  const [open, setOpen] = useState(false)
-+  const [selecting, setSelecting] = useState(false)
-+  const [flowBusy, setFlowBusy] = useState(false)
-+  const [failed, setFailed] = useState(false)
-+  const anchor = useRef<HTMLButtonElement>(null)
-+  const workspaceSnapshot = useWorkspaces(snapshot => snapshot)
-+  const sessionId = useSessions(snapshot => snapshot.ids.find(id => (snapshot.byId[id]?.retainedBy.mainView ?? 0) > 0))
-+  const selected = sessionId === undefined ? undefined : workspaceSnapshot.items.find(workspace => workspace.sessionIds.includes(sessionId))
-+  const title = selected === undefined ? t('header.workspace.pick') : workspaceDisplayTitle(selected.title, t('workspace.defaultName'))
-+  const busy = selecting || flowBusy
-+  return <div className={css.root}>
-+    <Tooltip label={title} side="bottom" portal delayMs={500}>
-+    <button ref={anchor} type="button" className={css.trigger} disabled={busy} aria-busy={busy}
-+      aria-label={selected === undefined ? t('header.workspace.pick') : `${t('header.workspace.pick')} · ${title}`} aria-haspopup="menu" aria-expanded={open} title={title}
-+      onClick={() => { setFailed(false); setOpen(value => !value) }}>
-+      <IconFolderOpenOutlineMedium size={15} /><span>{title}</span><IconChevronDownOutlineMedium size={12} />
-+    </button>
-+    </Tooltip>
-+    <WorkspacePickFlow t={t} open={open} anchorRef={anchor} useWorkspaces={useWorkspaces}
-+      createWorkspace={createWorkspace} useDirectoryFlow={useDirectoryFlow}
-+      renderDirectoryFlow={owner => renderSlot('sidebar.workspacePicker.directoryFlow', owner)}
-+      selectedId={selected?.workspaceId} onBusyChange={setFlowBusy} onClose={() => { setOpen(false) }}
-+      onPick={workspaceId => {
-+        setOpen(false)
-+        setSelecting(true)
-+        setFailed(false)
-+        void selectWorkspace(workspaceId).catch(() => { setFailed(true) }).finally(() => { setSelecting(false) })
-+      }} />
-+    {failed ? <span className={css.error} role="alert">{t('header.workspace.failed')}</span> : null}
-+  </div>
-+}
-diff --git a/packages/client/ui-workspace/src/client/contract/slots.ts b/packages/client/ui-workspace/src/client/contract/slots.ts
-index 830cc3570a..3fee9d7590 100644
---- a/packages/client/ui-workspace/src/client/contract/slots.ts
-+++ b/packages/client/ui-workspace/src/client/contract/slots.ts
-@@ -117,6 +117,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
-     'conversation.hero.workspace.directoryFlow': { kind: 'single'; scope: 'root'; owner: DirectoryFlowOwnerProps }
-     /** Directory-flow hole under the sidebar browsing region (declared by the WorkspaceBrowser entry). */
-     'sidebar.workspaces.directoryFlow': { kind: 'single'; scope: 'root'; owner: DirectoryFlowOwnerProps }
-+    /** Directory adoption under the product header's independent Workspace picker. */
-+    'sidebar.workspacePicker.directoryFlow': { kind: 'single'; scope: 'root'; owner: DirectoryFlowOwnerProps }
-     /**
-      * Leading decoration of one Session row, in the 16px cell before the title
-      * that the row's own state dot otherwise occupies. A higher-priority state
-@@ -185,10 +187,11 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
-   }
- }
-
--/** The two directory-flow holes; a flow package's client half registers its one component into both. */
-+/** Independent directory-flow surfaces share one owner currency and one composed flow implementation. */
- export type DirectoryFlowSlotName =
-   | 'conversation.hero.workspace.directoryFlow'
-   | 'sidebar.workspaces.directoryFlow'
-+  | 'sidebar.workspacePicker.directoryFlow'
-
- /**
-  * Directory-picking share both trigger surfaces consume. Occupancy rides the
-@@ -486,3 +489,16 @@ export type WorkspacePickerProps =
-   & Omit<WorkspacePickerInjected, 'hooks'>
-   & PropsHooks<WorkspacePickerInjected['hooks']>
-   & PropsLocale<'workspace'>
-+
-+/** Creation stays in the shared pick flow; selection uses the existing navigation service. */
-+export type WorkspaceHeaderPickerInjected = WorkspacePickerInjected & {
-+  /** Open the selected Workspace through the same authoritative Session navigation. */
-+  selectWorkspace: (workspaceId: WorkspaceId) => Promise<void>
-+}
-+
-+/** Root framework hooks supply live workspace and active-session facts. */
-+export type WorkspaceHeaderPickerProps =
-+  PropsRuntime<'sidebar.workspacePicker'>
-+  & PropsRenderSlots<'sidebar.workspacePicker.directoryFlow'>
-+  & InjectFace<WorkspaceHeaderPickerInjected>
-+  & PropsLocale<'workspace'>
-diff --git a/packages/client/ui-workspace/src/client/index.ts b/packages/client/ui-workspace/src/client/index.ts
-index 98ff858e35..c68c5f21de 100644
---- a/packages/client/ui-workspace/src/client/index.ts
-+++ b/packages/client/ui-workspace/src/client/index.ts
-@@ -38,7 +38,7 @@ import {
-   type ArchiveSessionInjected, type ForkSessionInjected, menuOpenStateFactory, type PinSessionInjected,
-   type SessionArchiveConfirmInjected, type SessionArchiveConfirmRequest,
-   type RenameSessionInjected, type RowToast, type RowToastInjected, type RowToastState, type SessionRenameDialogInjected,
--  type WorkspaceBrowserInjected, type WorkspacePickerInjected,
-+  type WorkspaceBrowserInjected, type WorkspacePickerInjected, type DirectoryFlowSlotName, type WorkspaceHeaderPickerInjected,
- } from './contract/slots.ts'
- import { createWorkspaceShortcutControls, installWorkspaceShortcuts } from './shortcuts.ts'
- import { UiWorkspaceService } from './navigation.ts'
-@@ -51,6 +51,7 @@ import { PinSessionMenuItem, PinSessionRowButton } from './session-actions/PinSe
- import { RenameSessionMenuItem, SessionRenameDialog } from './session-actions/RenameSession.tsx'
- import { RowActionToast } from './session-actions/RowActionToast.tsx'
- import { WorkspacePicker } from './WorkspacePicker.tsx'
-+import { WorkspaceHeaderPicker } from './WorkspaceHeaderPicker.tsx'
- import { en, zh, type WorkspaceKey } from './locales.ts'
-
- export type { UiWorkspace } from './navigation.ts'
-@@ -59,7 +60,7 @@ export type {
-   MenuOpenState, RowToast, SessionRenameTarget, SessionRowOwnerProps, UseMenuOpenState, WorkspaceBrowserInjected,
-   SessionRowScheduleOwnerProps,
-   WorkspaceBrowserProps,
--  WorkspacePickerInjected, WorkspacePickerProps,
-+  WorkspacePickerInjected, WorkspacePickerProps, WorkspaceHeaderPickerInjected, WorkspaceHeaderPickerProps,
- } from './contract/slots.ts'
- export type { WorkspaceKey } from './locales.ts'
-
-@@ -129,7 +130,7 @@ export function apply(ctx: Context): void {
-
-   // Stable per-surface occupancy sources (the renderer's hook cache keys by
-   // source identity): true while the surface's directory-flow hole is filled.
--  const flowSource = (hole: 'sidebar.workspaces.directoryFlow' | 'conversation.hero.workspace.directoryFlow'): HostObservable<boolean> => ({
-+  const flowSource = (hole: DirectoryFlowSlotName): HostObservable<boolean> => ({
-     getSnapshot: () => ctx.slots.entries(hole).length > 0,
-     subscribe: listener => ctx.slots.subscribe(hole, listener),
-   })
-@@ -139,6 +140,7 @@ export function apply(ctx: Context): void {
-     subscribe: listener => ctx.on('connection/reset', listener),
-   }
-   const pickerFlowSource = flowSource('conversation.hero.workspace.directoryFlow')
-+  const headerPickerFlowSource = flowSource('sidebar.workspacePicker.directoryFlow')
-   const openSession: WorkspaceBrowserInjected['open'] = (sessionId) => {
-     uiWorkspace.openSession(sessionId)
-   }
-@@ -252,6 +254,18 @@ export function apply(ctx: Context): void {
-     createWorkspace: input => workspaces.create(input),
-     hooks: { directoryFlow: pickerFlowSource },
-   })
-+  const headerPickerInjected = (): WorkspaceHeaderPickerInjected => ({
-+    ...pickerInjected(),
-+    hooks: { directoryFlow: headerPickerFlowSource },
-+    selectWorkspace: workspaceId => uiWorkspace.openWorkspace(workspaceId),
-+  })
-+  ctx.slots.inject('sidebar.workspacePicker', () => ctx.slots.register({
-+    name: 'sidebar.workspacePicker',
-+    children: { 'sidebar.workspacePicker.directoryFlow': { kind: 'single', scope: 'root' } },
-+    inject: headerPickerInjected,
-+    locale: NS,
-+  }, WorkspaceHeaderPicker))
-+
-   // Each registration declares its owned children in the same call; slot
-   // injection follows both the owner and declaration HMR lifetimes.
-   ctx.slots.inject('sidebar.workspaces', () => ctx.slots.register(
-diff --git a/packages/client/ui-workspace/src/client/locales.ts b/packages/client/ui-workspace/src/client/locales.ts
-index 5a615c5509..befd5e43e4 100644
---- a/packages/client/ui-workspace/src/client/locales.ts
-+++ b/packages/client/ui-workspace/src/client/locales.ts
-@@ -44,6 +44,8 @@ export const zh = {
-   'search.hasMore': '仅显示前 {n} 条结果，请缩小搜索范围。',
-   'menu.addWorkspace': '添加工作区…',
-   'picker.loading': '正在加载工作区…',
-+  'header.workspace.pick': '选择工作区',
-+  'header.workspace.failed': '暂时无法打开工作区，请重试',
-   'conflict.named': '已存在名为“{name}”的工作区。',
-   'folderError.title': '无法打开文件夹',
-   'folderError.retry': '重新选择',
-@@ -162,6 +164,8 @@ export const en = {
-   'search.hasMore': 'Showing the first {n} results. Narrow your search.',
-   'menu.addWorkspace': 'Add workspace…',
-   'picker.loading': 'Loading workspaces…',
-+  'header.workspace.pick': 'Choose workspace',
-+  'header.workspace.failed': 'Unable to open this workspace. Try again.',
-   'conflict.named': 'A workspace named “{name}” already exists.',
-   'folderError.title': 'Couldn’t open folder',
-   'folderError.retry': 'Choose again',
-diff --git a/packages/client/ui-workspace/tests/apply.client.spec.ts b/packages/client/ui-workspace/tests/apply.client.spec.ts
-index daea79d72c..b58fd29af2 100644
---- a/packages/client/ui-workspace/tests/apply.client.spec.ts
-+++ b/packages/client/ui-workspace/tests/apply.client.spec.ts
-@@ -11,7 +11,7 @@ import type { StoredEntry } from '@deepseek-ai/dsh-client-ui-slots'
- import { RemoteError, TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
- import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
- import { apply, inject } from '@deepseek-ai/dsh-client-ui-workspace/client'
--import type { WorkspaceBrowserInjected, WorkspacePickerInjected } from '@deepseek-ai/dsh-client-ui-workspace/client'
-+import type { WorkspaceBrowserInjected, WorkspacePickerInjected, WorkspaceHeaderPickerInjected } from '@deepseek-ai/dsh-client-ui-workspace/client'
- import {
-   type ArchiveSessionInjected, type ForkSessionInjected, menuOpenStateFactory, type PinSessionInjected,
-   type RenameSessionInjected, type RowToastInjected, type SessionArchiveConfirmInjected, type SessionRenameDialogInjected,
-@@ -140,7 +140,7 @@ async function bench() {
-   }
- }
-
--type HoleName = 'sidebar.workspaces' | 'conversation.hero.workspace' | 'conversation.empty.workspace' | 'shell.overlay'
-+type HoleName = 'sidebar.workspacePicker' | 'sidebar.workspaces' | 'conversation.hero.workspace' | 'conversation.empty.workspace' | 'shell.overlay'
-
- const MENU_ITEM = 'sidebar.workspaces.session.menu.item'
- const ROW_ACTION = 'sidebar.workspaces.session.row.action'
-@@ -610,3 +610,21 @@ describe('ui-workspace apply', () => {
-     expect(b.slots.entries('shell.overlay')).toHaveLength(0)
-   })
- })
-+
-+it('registers the independent header picker and reuses Workspace navigation and creation', async () => {
-+  const b = await bench()
-+  declare(b.slots, 'sidebar.workspacePicker')
-+  await b.ctx.plugin({ inject: [...inject], apply }).await()
-+  expect(b.slots.spec('sidebar.workspacePicker.directoryFlow')).toMatchObject({ kind: 'single' })
-+  const header = faceOf(b.slots.entries('sidebar.workspacePicker')[0]!) as WorkspaceHeaderPickerInjected
-+  const openWorkspace = vi.spyOn(b.ctx.uiWorkspace, 'openWorkspace').mockResolvedValue(undefined)
-+  await header.selectWorkspace('ws' as WorkspaceId)
-+  expect(openWorkspace).toHaveBeenCalledWith('ws')
-+  await header.createWorkspace({ path: '/projects/header' })
-+  expect(b.create).toHaveBeenCalledWith({ path: '/projects/header' })
-+  expect(header.hooks.directoryFlow.getSnapshot()).toBe(false)
-+  const dispose = b.slots.register({ name: 'sidebar.workspacePicker.directoryFlow' } as never, () => null)
-+  expect(header.hooks.directoryFlow.getSnapshot()).toBe(true)
-+  dispose()
-+  expect(header.hooks.directoryFlow.getSnapshot()).toBe(false)
-+})
-diff --git a/packages/client/ui-workspace/tests/workspace-header-picker.client.spec.tsx b/packages/client/ui-workspace/tests/workspace-header-picker.client.spec.tsx
-new file mode 100644
-index 0000000000..c7aa016f65
---- /dev/null
-+++ b/packages/client/ui-workspace/tests/workspace-header-picker.client.spec.tsx
-@@ -0,0 +1,77 @@
-+// @vitest-environment jsdom
-+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-+import { afterEach, describe, expect, it, vi } from 'vitest'
-+import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-+import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
-+import type { SessionListState, SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
-+import type { SessionId } from '@deepseek-ai/dsh-session/types'
-+import type { WorkspaceId, WorkspaceSnapshot, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
-+import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
-+import type { DirectoryFlowOwnerProps, WorkspaceHeaderPickerProps } from '../src/client/contract/slots.ts'
-+import { WorkspaceHeaderPicker } from '../src/client/WorkspaceHeaderPicker.tsx'
-+import { zh } from '../src/client/locales.ts'
-+
-+afterEach(cleanup)
-+const t: WorkspaceHeaderPickerProps['t'] = makeTranslate(zh, commonZh)
-+const sid = (id: string) => id as SessionId
-+const wid = (id: string) => id as WorkspaceId
-+const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined, reload: () => {} })) as GlobalStandardProps['useResource']
-+const row = (id: string): SessionSummary => ({ id: sid(id), displayTitle: id, blank: true, running: false, updatedAt: 0, retainedBy: { mainView: 1 } })
-+const workspace = (id: string, sessionIds: readonly string[] = []): WorkspaceView => ({
-+  workspaceId: wid(id), title: id, path: `/projects/${id}`, sessionIds: sessionIds.map(sid),
-+  createdAt: '2026-11-14T00:00:00.000Z', updatedAt: '2026-11-14T00:00:00.000Z',
-+})
-+const state = (items: readonly WorkspaceView[]): WorkspaceSnapshot => ({ items, phase: 'ready', state: 'idle', error: null, pinnedSessionIds: [], archivedSessionIds: [] })
-+const sessions = (active?: string): SessionListState => ({ ids: active === undefined ? [] : [sid(active)], byId: active === undefined ? {} : { [active]: row(active) }, phase: 'ready', projectionsBySession: {} })
-+function hook<T>(snapshot: T) { return <S,>(selector: (snapshot: T) => S): S => selector(snapshot) }
-+function fixture(items: readonly WorkspaceView[], active?: string) {
-+  const selectWorkspace = vi.fn(async (_workspaceId: WorkspaceId) => {})
-+  const createWorkspace = vi.fn(async (_input: { path: string }): Promise<WorkspaceView> => workspace('New'))
-+  let flow: DirectoryFlowOwnerProps | undefined
-+  const renderSlot = ((_name: string, owner: DirectoryFlowOwnerProps) => {
-+    flow = owner
-+    return owner.open ? <button type="button" onClick={() => { owner.onPicked('/projects/New') }}>Pick directory</button> : null
-+  }) as WorkspaceHeaderPickerProps['renderSlot']
-+  const element = (nextItems = items, nextActive = active) => <WorkspaceHeaderPicker t={t} useWorkspaces={hook(state(nextItems))}
-+    useSessions={hook(sessions(nextActive))} useDirectoryFlow={hook(true)} createWorkspace={createWorkspace}
-+    selectWorkspace={selectWorkspace} renderSlot={renderSlot} usePanelInfo={selector => selector({ activePanelId: null })}
-+    useSessionStatus={hook(new Map())} useSessionRetainInfo={() => undefined} useResource={useResource} />
-+  return { selectWorkspace, createWorkspace, element, get flow() { return flow } }
-+}
-+
-+describe('header Workspace selection', () => {
-+  it('shows the active Workspace and dispatches a real selection without opening history', async () => {
-+    const f = fixture([workspace('Alpha', ['one']), workspace('Beta', ['two'])], 'one')
-+    const view = render(f.element())
-+    expect(screen.getByText('Alpha')).toBeTruthy()
-+    fireEvent.click(screen.getByRole('button', { name: /选择工作区/ }))
-+    fireEvent.click(screen.getByRole('menuitem', { name: 'Beta' }))
-+    await waitFor(() => { expect(f.selectWorkspace).toHaveBeenCalledWith(wid('Beta')) })
-+    expect(screen.queryByRole('menu')).toBeNull()
-+    view.rerender(f.element([workspace('Alpha', ['one']), workspace('Beta', ['two'])], 'two'))
-+    expect(screen.getByText('Beta')).toBeTruthy()
-+  })
-+
-+  it('allows a cold start to adopt a directory then navigate to its created Workspace', async () => {
-+    const f = fixture([])
-+    render(f.element())
-+    fireEvent.click(screen.getByRole('button', { name: /选择工作区/ }))
-+    await waitFor(() => { expect(f.flow?.open).toBe(true) })
-+    fireEvent.click(screen.getByRole('button', { name: 'Pick directory' }))
-+    await waitFor(() => { expect(f.createWorkspace).toHaveBeenCalledWith({ path: '/projects/New' }) })
-+    await waitFor(() => { expect(f.selectWorkspace).toHaveBeenCalledWith(wid('New')) })
-+  })
-+
-+  it('keeps the current Workspace on a refused selection and provides a retryable notice', async () => {
-+    const f = fixture([workspace('Alpha', ['one']), workspace('Beta')], 'one')
-+    f.selectWorkspace.mockRejectedValueOnce(new Error('refused'))
-+    render(f.element())
-+    fireEvent.click(screen.getByRole('button', { name: /选择工作区/ }))
-+    fireEvent.click(screen.getByRole('menuitem', { name: 'Beta' }))
-+    await waitFor(() => { expect(screen.getByRole('alert').textContent).toBe(zh['header.workspace.failed']) })
-+    expect(screen.getByText('Alpha')).toBeTruthy()
-+    fireEvent.click(screen.getByRole('button', { name: /选择工作区/ }))
-+    expect(screen.queryByRole('alert')).toBeNull()
-+    expect(screen.getByRole('menuitem', { name: 'Beta' })).toBeTruthy()
-+  })
-+})
 diff --git a/packages/client/web/src/boot-page.module.css b/packages/client/web/src/boot-page.module.css
 index f154c42761..6540713fc1 100644
 --- a/packages/client/web/src/boot-page.module.css
@@ -16918,6 +16518,99 @@ index 0000000000..27f5ebbd14
 +  expect([...expected.keys()].sort()).toEqual([...names].sort())
 +  expect(actual).toEqual(expected)
 +})
+diff --git a/packages/test-support/client-runtime/src/assembly/bundle-roster.ts b/packages/test-support/client-runtime/src/assembly/bundle-roster.ts
+index 6b362b187d..32cb79445a 100644
+--- a/packages/test-support/client-runtime/src/assembly/bundle-roster.ts
++++ b/packages/test-support/client-runtime/src/assembly/bundle-roster.ts
+@@ -15,7 +15,7 @@
+  */
+ import { existsSync, readFileSync, realpathSync } from 'node:fs'
+ import { createRequire } from 'node:module'
+-import { dirname, join } from 'node:path'
++import { basename, dirname, join } from 'node:path'
+ import { fileURLToPath } from 'node:url'
+ import { evaluate, isJsExpr, type EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
+ import { applyEntryPatches, entryListSchema, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
+@@ -132,6 +132,14 @@ function readManifest(path: string): PackageManifest {
+
+ /** Resolve package manifests to real paths so linked bundles use their own dependency directories. */
+ function locateManifest(anchors: readonly string[], name: string): string | undefined {
++  // Linked bundles resolve from their real package directory. Like Node's
++  // package self-reference, their own manifest precedes node_modules lookup;
++  // no self-link is required. The initial caller anchor can be a .ts file.
++  for (const anchor of anchors) {
++    if (basename(anchor) === 'package.json' && existsSync(anchor) && readManifest(anchor).name === name) {
++      return realpathSync(anchor)
++    }
++  }
+   const paths = anchors.map(anchor => createRequire(anchor).resolve.paths(name) ?? [])
+   for (let depth = 0; depth < Math.max(...paths.map(search => search.length)); depth++) {
+     for (const search of paths) {
+diff --git a/packages/test-support/client-runtime/tests/assembly-bundle-roster.client.spec.ts b/packages/test-support/client-runtime/tests/assembly-bundle-roster.client.spec.ts
+index f9f86c125b..b6dcfef5a9 100644
+--- a/packages/test-support/client-runtime/tests/assembly-bundle-roster.client.spec.ts
++++ b/packages/test-support/client-runtime/tests/assembly-bundle-roster.client.spec.ts
+@@ -1,5 +1,6 @@
+ /** bundleRoster: the real web profile read from its bundles, and every reader decision on a scratch installation. */
+-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
++import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
++import { createRequire } from 'node:module'
+ import { tmpdir } from 'node:os'
+ import { join } from 'node:path'
+ import { getStaticModules } from '@deepseek-ai/dsh-client-web/src/seed.ts'
+@@ -74,6 +75,52 @@ describe('bundleRoster on a scratch installation', () => {
+   const scratch = new Scratch()
+   afterAll(() => { rmSync(scratch.root, { recursive: true, force: true }) })
+
++  it('discovers a linked bundle self-reference without a self-link before filtering its Host-only row', () => {
++    const linked = new Scratch()
++    onTestFinished(() => { rmSync(linked.root, { recursive: true, force: true }) })
++    const bundle = join(linked.root, 'workspace', 'host-bundle')
++    const dependency = join(bundle, 'node_modules', '@t', 'browser')
++    mkdirSync(dependency, { recursive: true })
++    const manifest = join(bundle, 'package.json')
++    writeFileSync(manifest, JSON.stringify({
++      name: '@t/self-host', exports: { './package.json': './package.json' },
++      dsh: { bundle: { patch: './cordis.patch.yml' } },
++    }))
++    writeFileSync(join(bundle, 'cordis.patch.yml'), `
++- insert:
++    - id: host
++      name: '@t/self-host'
++    - id: browser
++      name: '@t/browser'
++`)
++    writeFileSync(join(dependency, 'package.json'), JSON.stringify({
++      name: '@t/browser', dsh: { client: { platform: 'web' } },
++    }))
++    mkdirSync(join(linked.root, 'app', 'node_modules', '@t'), { recursive: true })
++    symlinkSync(bundle, join(linked.root, 'app', 'node_modules', '@t', 'self-host'), 'junction')
++    expect(existsSync(join(bundle, 'node_modules', '@t', 'self-host', 'package.json'))).toBe(false)
++    expect(createRequire(manifest).resolve('@t/self-host/package.json')).toBe(manifest)
++    expect(linked.roster(['@t/self-host'])).toEqual(['@t/browser'])
++  })
++
++  it('retains a linked bundle own browser declaration instead of skipping self rows', () => {
++    const linked = new Scratch()
++    onTestFinished(() => { rmSync(linked.root, { recursive: true, force: true }) })
++    const bundle = join(linked.root, 'workspace', 'browser-bundle')
++    mkdirSync(bundle, { recursive: true })
++    writeFileSync(join(bundle, 'package.json'), JSON.stringify({
++      name: '@t/self-web', exports: { './package.json': './package.json' },
++      dsh: { bundle: { patch: './cordis.patch.yml' }, client: { platform: 'web', immediately: true } },
++    }))
++    writeFileSync(join(bundle, 'cordis.patch.yml'), "- insert:\n    - id: browser\n      name: '@t/self-web'\n")
++    mkdirSync(join(linked.root, 'app', 'node_modules', '@t'), { recursive: true })
++    symlinkSync(bundle, join(linked.root, 'app', 'node_modules', '@t', 'self-web'), 'junction')
++    expect(existsSync(join(bundle, 'node_modules', '@t', 'self-web', 'package.json'))).toBe(false)
++    expect(bundleRoster(['@t/self-web'], linked.anchor).rows).toEqual([
++      { name: '@t/self-web', inject: [], immediately: true },
++    ])
++  })
++
+   it('resolves a linked bundle dependency before an unrelated ancestor package', () => {
+     const linked = new Scratch()
+     onTestFinished(() => { rmSync(linked.root, { recursive: true, force: true }) })
 diff --git a/packages/typert/protocol/src/types.ts b/packages/typert/protocol/src/types.ts
 index ec2a88c4f9..56b1958102 100644
 --- a/packages/typert/protocol/src/types.ts

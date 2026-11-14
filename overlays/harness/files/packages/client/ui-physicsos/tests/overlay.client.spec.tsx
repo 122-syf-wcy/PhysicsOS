@@ -687,6 +687,9 @@ describe('PhysicsOS overlay presentation', () => {
 
     expect(lab?.getAttribute('data-scene-revision')).toBe('1')
     expect(lab?.getAttribute('data-verification-status')).toBe('verified')
+    // Narrow workbenches give the inspector and tree one visible control surface.
+    // Reopen the real tree before reading its updated magnetic-field row.
+    fireEvent.click(screen.getByRole('button', { name: '图层' }))
     expect(screen.getByRole('button', { name: /1.00 T/ })).toBeTruthy()
   })
 

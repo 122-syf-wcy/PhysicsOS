@@ -42,7 +42,7 @@ export type WorkspacePanelProps =
 
 const OPAQUE_TITLE = /^[a-f0-9]{16,}$/i
 
-const humanName = (title: string | undefined, t: (key: PhysicsosKey) => string): string => {
+export const accountWorkspaceName = (title: string | undefined, t: (key: PhysicsosKey) => string): string => {
   if (title === undefined || title.trim() === '' || OPAQUE_TITLE.test(title.trim())) {
     return t('workspacePanel.defaultName')
   }
@@ -137,7 +137,7 @@ export function WorkspacePanel({
         ) : (
           <div className={css.list}>
             {list.items.map((workspace) => {
-              const displayName = humanName(workspace.title, t)
+              const displayName = accountWorkspaceName(workspace.title, t)
               const current = workspace.workspaceId === selectedId
               if (renaming === workspace.workspaceId) {
                 return (

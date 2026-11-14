@@ -61,39 +61,39 @@ export function AdminPage<T extends string>({
   return (
     <div className={clsx(css.page, css.pageSplit)} data-admin-page="">
       <header className={css.pageHeader} data-admin-page-header="">
-          <nav className={css.pageTabs} role="tablist" aria-label={typeof title === 'string' ? title : undefined}>
-            {orderedTabs.map((tab, index) => (
+        <nav className={css.pageTabs} role="tablist" aria-label={typeof title === 'string' ? title : undefined}>
+          {orderedTabs.map((tab, index) => (
               <button
                 key={tab.id}
                 type="button"
                 role="tab"
-                id={`${pageId}-${tab.id}`}
-                aria-controls={`${pageId}-content`}
+              id={`${pageId}-${tab.id}`}
+              aria-controls={`${pageId}-content`}
                 aria-selected={activeTab === tab.id}
-                tabIndex={activeTab === tab.id ? 0 : -1}
+              tabIndex={activeTab === tab.id ? 0 : -1}
                 className={clsx(css.pageTab, activeTab === tab.id && css.pageTabActive)}
                 onClick={() => { onTabChange(tab.id) }}
-                onKeyDown={event => {
-                  if (event.defaultPrevented || event.nativeEvent.isComposing || event.altKey || event.ctrlKey || event.metaKey) return
-                  const next = event.key === 'ArrowRight' ? (index + 1) % orderedTabs.length
-                    : event.key === 'ArrowLeft' ? (index + orderedTabs.length - 1) % orderedTabs.length
-                      : event.key === 'Home' ? 0 : event.key === 'End' ? orderedTabs.length - 1 : undefined
-                  if (next === undefined) return
-                  const target = orderedTabs[next]
-                  if (target === undefined) return
-                  event.preventDefault()
-                  onTabChange(target.id)
-                  event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus()
-                }}
+              onKeyDown={(event) => {
+                if (event.defaultPrevented || event.nativeEvent.isComposing || event.altKey || event.ctrlKey || event.metaKey) return
+                const next = event.key === 'ArrowRight' ? (index + 1) % orderedTabs.length
+                  : event.key === 'ArrowLeft' ? (index + orderedTabs.length - 1) % orderedTabs.length
+                    : event.key === 'Home' ? 0 : event.key === 'End' ? orderedTabs.length - 1 : undefined
+                if (next === undefined) return
+                const target = orderedTabs[next]
+                if (target === undefined) return
+                event.preventDefault()
+                onTabChange(target.id)
+                event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus()
+              }}
               >
-                {tab.icon}
+              {tab.icon}
                 {tab.label}
               </button>
             ))}
           </nav>
         <h1 className={css.pageTitle}>{title}</h1>
       </header>
-        <div className={css.pageContent} data-admin-page-content="" role="tabpanel" id={`${pageId}-content`} aria-labelledby={`${pageId}-${activeTab}`}>
+      <div className={css.pageContent} data-admin-page-content="" role="tabpanel" id={`${pageId}-content`} aria-labelledby={`${pageId}-${activeTab}`}>
           {children}
         </div>
     </div>

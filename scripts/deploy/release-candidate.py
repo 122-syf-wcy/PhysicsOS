@@ -48,9 +48,20 @@ def load(file):
             raise ValueError('Invalid validation port')
     if value['httpPort'] == value['modelPoolPort'] or value['schema'] == 'physicsos':
         raise ValueError('Validation must use separate ports/schema')
+    if value.get('requireIsolatedNetwork') and not value.get('network'):
+        raise ValueError('An explicit isolated network is required')
+    if value.get('network'):
+        if not re.fullmatch(r'physicsos-[A-Za-z0-9_.-]{1,80}', value['network']) or value['databaseOwner'] != value['task']:
+            raise ValueError('Isolated validation network/database ownership differs')
+        if not value.get('databaseDataRoot'):
+            raise ValueError('An owned isolated database data path is required')
     root = Path(value['root'])
     if not root.is_absolute() or root.is_symlink() or ',' in str(root) or root == Path('/'):
         raise ValueError('Invalid validation directory')
+    if value.get('network'):
+        data = Path(value['databaseDataRoot'])
+        if not data.is_absolute() or data.is_symlink() or data == root or root not in data.parents:
+            raise ValueError('Isolated database path must be a private child of candidate root')
     return value
 
 
@@ -112,6 +123,132 @@ def settle_mutations():
         for number, handler in previous.items(): signal.signal(number, handler)
 
 
+
+def production_services():
+    return [source for name in ['physicsos-app-1', 'physicsos-postgres-1', 'physicsos-redis-1']
+            for source in [metadata('container', name)] if source]
+
+
+def container_networks(container):
+    return container.get('NetworkSettings', {}).get('Networks', {})
+
+
+def require_task_container(config, container, role):
+    labels = container.get('Config', {}).get('Labels') or {}
+    if labels.get('io.physicsos.task') != config['task'] or labels.get('io.physicsos.role') != role:
+        raise RuntimeError('Isolated network endpoint belongs to another task or role')
+
+
+def ensure_isolated_network(config, production, create=False):
+    name = config['network']
+    protected_names = {name for source in production for name in container_networks(source)}
+    protected_ids = {value.get('NetworkID') for source in production for value in container_networks(source).values()}
+    if name in protected_names:
+        raise RuntimeError('Validation cannot join a production network')
+    network = metadata('network', name)
+    if network is None and create:
+        subprocess.run(['docker', 'network', 'create', '--driver', 'bridge', '--label', 'io.physicsos.task=' + config['task'],
+                        '--label', 'io.physicsos.role=validation-network', name], check=True, stdout=subprocess.DEVNULL)
+        network = metadata('network', name)
+    labels = (network or {}).get('Labels') or {}
+    if not network or network.get('Driver') != 'bridge' or network.get('Scope', 'local') != 'local' or network.get('Id') in protected_ids or labels.get('io.physicsos.task') != config['task'] or labels.get('io.physicsos.role') != 'validation-network':
+        raise RuntimeError('Isolated validation network ownership/driver differs')
+    allowed = {config['databaseContainer']: 'validation-database', 'physicsos-validation-' + config['task']: 'validation'}
+    protected_containers = {source.get('Id') for source in production}
+    for endpoint_id, endpoint in (network.get('Containers') or {}).items():
+        if endpoint_id in protected_containers or endpoint.get('Name') not in allowed:
+            raise RuntimeError('Isolated network contains a production or foreign endpoint')
+        source = metadata('container', endpoint_id)
+        if not source or source.get('Id') != endpoint_id or source.get('Name', '').lstrip('/') != endpoint['Name']:
+            raise RuntimeError('Isolated network endpoint identity changed')
+        require_task_container(config, source, allowed[endpoint['Name']])
+    return network
+
+
+def validate_isolated_database(config, pg, production, network, connect=False):
+    require_task_container(config, pg, 'validation-database')
+    if pg.get('Id') in {source.get('Id') for source in production}:
+        raise RuntimeError('Validation cannot use a production database')
+    if pg.get('HostConfig', {}).get('NetworkMode') in ['host', 'container:physicsos-app-1']:
+        raise RuntimeError('Isolated database cannot share a host or production namespace')
+    names = set(container_networks(pg))
+    if names - {config['network']}:
+        raise RuntimeError('Isolated database already belongs to another network')
+    protected = [mount for source in production for mount in source.get('Mounts', [])]
+    data_root = Path(config['databaseDataRoot'])
+    owned_path(Path(config['root']), data_root, protected)
+    data_mounts = [mount for mount in pg.get('Mounts', []) if mount.get('Destination', '').startswith('/var/lib/postgresql')]
+    if not data_mounts or any(not mount.get('RW', True) or Path(mount.get('Source', '')).resolve() != data_root.resolve() for mount in data_mounts):
+        raise RuntimeError('Isolated database data is not the task-owned data path')
+    if any(same_data(a, b) for a in pg.get('Mounts', []) for b in protected):
+        raise RuntimeError('Isolated database mounts production data')
+    if config['network'] not in names:
+        if not connect:
+            raise RuntimeError('Isolated database is not attached to its task network')
+        subprocess.run(['docker', 'network', 'connect', config['network'], pg['Id']], check=True, stdout=subprocess.DEVNULL)
+        pg = metadata('container', config['databaseContainer'])
+    if not pg or set(container_networks(pg)) != {config['network']} or container_networks(pg)[config['network']].get('NetworkID') != network['Id']:
+        raise RuntimeError('Isolated database network identity changed')
+    return pg
+
+
+def check_isolated_resources(config, details=None, current=None, create=False, connect=False):
+    production = production_services()
+    if len(production) != 3:
+        raise RuntimeError('Production protection metadata is incomplete')
+    network = ensure_isolated_network(config, production, create=create)
+    if details and (details.get('network') != config['network'] or details.get('networkId') != network['Id'] or details.get('isolatedNetwork') is not True):
+        raise RuntimeError('Candidate isolated network receipt changed')
+    pg = metadata('container', config['databaseContainer'])
+    if not pg:
+        raise RuntimeError('Task-owned isolated database is unavailable')
+    pg = validate_isolated_database(config, pg, production, network, connect=connect)
+    if current:
+        require_task_container(config, current, 'validation')
+        if set(container_networks(current)) != {config['network']} or container_networks(current)[config['network']].get('NetworkID') != network['Id']:
+            raise RuntimeError('Candidate joined another network')
+        if current.get('HostConfig', {}).get('NetworkMode') == 'host':
+            raise RuntimeError('Candidate shares the host network')
+        protected = [mount for source in production for mount in source.get('Mounts', [])]
+        if any(same_data(a, b) for a in current.get('Mounts', []) if a.get('RW', True) for b in protected):
+            raise RuntimeError('Candidate has writable production mounts')
+        environment = dict(entry.split('=', 1) for entry in current.get('Config', {}).get('Env', []) if '=' in entry)
+        if environment.get('DEEPSEEK_BASE_URL') != f"http://127.0.0.1:{config['modelPoolPort']}/v1" or environment.get('DATABASE_URL_FILE') != '/run/secrets/database_url':
+            raise RuntimeError('Candidate private database/model route identity changed')
+        app = next((source for source in production if source.get('Name') == '/physicsos-app-1'), production[0])
+        live_env = dict(entry.split('=', 1) for entry in app.get('Config', {}).get('Env', []) if '=' in entry)
+        old_port = int(live_env.get('PHYSICSOS_MODEL_POOL_PORT', '3972'))
+        reject_production_model_routes(config, environment.values(), production, network, old_port)
+    return ensure_isolated_network(config, production), pg
+
+
+def reject_production_model_routes(config, values, production, network, old_pool_port):
+    # Cross-network container routes and Docker host gateways are never model
+    # upstreams. External provider HTTPS remains available for real validation.
+    hosts = {'host.docker.internal', 'gateway.docker.internal', 'host-gateway'}
+    for source in production:
+        if source.get('Name'): hosts.add(source['Name'].lstrip('/'))
+        for endpoint in container_networks(source).values():
+            hosts.update(filter(None, [endpoint.get('IPAddress'), endpoint.get('GlobalIPv6Address')]))
+    for row in network.get('IPAM', {}).get('Config', []):
+        if row.get('Gateway'): hosts.add(row['Gateway'])
+    for value in values:
+        for url in re.findall(r'https?://[^\s\'"<>]+', value):
+            parsed = urllib.parse.urlsplit(url.rstrip('),;'))
+            if parsed.hostname in hosts or parsed.hostname in ['127.0.0.1', 'localhost', '::1'] and parsed.port == old_pool_port and old_pool_port != config['modelPoolPort']:
+                raise RuntimeError('Candidate configuration routes to production or a host model proxy')
+
+
+def prepare_network(config):
+    if not config.get('network'):
+        raise ValueError('Network preparation requires an explicit isolated network')
+    with lifecycle(Path(config['root'])):
+        production = production_services()
+        if len(production) != 3:
+            raise RuntimeError('Production protection metadata is incomplete')
+        network = ensure_isolated_network(config, production, create=True)
+        return {'network': config['network'], 'networkId': network['Id'], 'task': config['task'], 'databaseStarted': False, 'candidateStarted': False}
+
 def prepare(config, image_name):
     app = metadata('container', 'physicsos-app-1')
     pg = metadata('container', config['databaseContainer'])
@@ -130,6 +267,9 @@ def prepare(config, image_name):
     for path in [root, *(root / name for name in writable), *(root / 'home/profiles/web' / name for name in ['cordis.yml', 'cordis.patch.yml', 'package.json', 'pnpm-workspace.yaml'])]: owned_path(root, path, protected)
     if root.exists() and not (root / 'owner').exists() and any(root.iterdir()):
         raise RuntimeError('Validation directory is not an owned empty directory')
+    isolated = None
+    if config.get('network'):
+        isolated, pg = check_isolated_resources(config, create=True, connect=True)
     if not pg['State']['Running']:
         subprocess.run(['docker', 'start', pg['Id']], check=True, stdout=subprocess.DEVNULL)
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -169,10 +309,15 @@ def prepare(config, image_name):
     keyPrefix: {config['task']}
 ''')
     os.chown(patch, 999, 999); patch.chmod(0o600)
-    network = next(iter(app['NetworkSettings']['Networks']))
-    if network not in pg['NetworkSettings']['Networks']:
-        subprocess.run(['docker', 'network', 'connect', network, pg['Id']], check=True)
-        pg = metadata('container', config['databaseContainer'])
+    if isolated:
+        isolated, pg = check_isolated_resources(config)
+        network = config['network']
+    else:
+        # Compatibility only for existing legacy candidates without network.
+        network = next(iter(app['NetworkSettings']['Networks']))
+        if network not in pg['NetworkSettings']['Networks']:
+            subprocess.run(['docker', 'network', 'connect', network, pg['Id']], check=True)
+            pg = metadata('container', config['databaseContainer'])
     pg_ip = pg['NetworkSettings']['Networks'][network]['IPAddress']
     password = Path(config['databasePasswordFile']).read_text().strip()
     database = f"postgresql://{config['databaseUser']}:{urllib.parse.quote(password, safe='')}@{pg_ip}:5432/{config['databaseName']}"
@@ -204,6 +349,8 @@ def prepare(config, image_name):
     environment = {name: redirect_pool(value, old_pool_port, config['modelPoolPort']) for name, value in environment.items()}
     environment['REDIS_URL_FILE'] = ''
     environment.update({'DSH_HOME': '/var/lib/physicsos', 'DSH_TELEMETRY_DISABLED': '1', 'PHYSICSOS_STORAGE_BACKEND': 'postgres', 'PHYSICSOS_STORAGE_SCHEMA': config['schema'], 'DATABASE_URL_FILE': '/run/secrets/database_url', 'DEEPSEEK_BASE_URL': f"http://127.0.0.1:{config['modelPoolPort']}/v1", 'PHYSICSOS_ADMIN_PASSWORD_FILE': '/run/secrets/admin_password', 'PHYSICSOS_ADMIN_USERNAME': config['username'], 'PHYSICSOS_SHARED_STATE_BACKEND': 'memory', 'PHYSICSOS_MODEL_POOL_PORT': str(config['modelPoolPort']), 'PHYSICOS_TRUSTED_HOSTS': f'physicsos-validation.invalid:{port}', 'PHYSICOS_TRUSTED_PROXIES': '', 'PHYSICSOS_SESSIONS_ROOT': '/var/lib/physicsos/sessions', 'PHYSICSOS_REGISTRATION_MODE': 'open', 'PHYSICSOS_SMTP_USER_FILE': '', 'PHYSICSOS_SMTP_PASSWORD_FILE': ''})
+    if isolated:
+        reject_production_model_routes(config, [*environment.values(), *(p.read_text() for p in profile.glob('*.yml'))], production_services(), isolated, old_pool_port)
     mounts = [{'Source': str(paths['home']), 'Destination': '/var/lib/physicsos', 'ReadOnly': False}, {'Source': str(paths['tools']), 'Destination': '/run/physicsos-validation-tools', 'ReadOnly': True}]
     if (profile_source / 'node_modules').is_dir(): mounts.append({'Source': str(profile_source / 'node_modules'), 'Destination': '/var/lib/physicsos/profiles/web/node_modules', 'ReadOnly': True})
     private_values = [password, database, (paths['secrets'] / 'admin_password').read_text().strip()]
@@ -215,6 +362,8 @@ def prepare(config, image_name):
         if source.is_file(): private_values.append(source.read_text().strip())
     name = 'physicsos-validation-' + config['task']
     details = {'task': config['task'], 'container': name, 'image': image['Id'], 'productionImage': app['Image'], 'port': port, 'schema': config['schema'], 'home': str(paths['home']), 'root': str(root), 'username': config['username'], 'productionDataWritable': False, 'nativePreload': False}
+    if isolated:
+        details.update({'network': network, 'networkId': isolated['Id'], 'isolatedNetwork': True})
     spec = {'metadata': details, 'command': rewritten, 'environment': environment, 'mounts': mounts, 'network': network}
     private_json(root / 'metadata.json', details); private_json(paths['state'] / 'launch-spec.json', spec)
     return paths, spec, private_values
@@ -250,6 +399,7 @@ def start(config, image):
                 actual = metadata('container', name)
                 if cancelled[0] or not actual or not actual['State']['Running'] or actual['Image'] != spec['metadata']['image']:
                     raise RuntimeError('Candidate did not acknowledge startup')
+                if config.get('network'): check_isolated_resources(config, spec['metadata'], actual)
             except BaseException:
                 remove_owned(config)
                 raise
@@ -280,6 +430,7 @@ def check_owned(config):
     get('/physicsos/admin/dashboard')
     current = metadata('container', details['container'])
     if not current or current['Image'] != details['image'] or not current['State']['Running']: raise RuntimeError('Candidate identity changed')
+    if config.get('network'): check_isolated_resources(config, details, current)
     result = {'verified': True, 'image': details['image'], 'readyJson': True, 'login': True, 'accountScope': True, 'protectedRead': True, 'port': config['httpPort']}
     protected = [mount for name in ['physicsos-app-1', 'physicsos-postgres-1', 'physicsos-redis-1'] for source in [metadata('container', name)] if source for mount in source['Mounts'] if mount.get('Destination', '').startswith(('/var/lib/physicsos', '/var/lib/postgresql', '/data'))]
     owned_path(root, root / 'state/acceptance.json', protected)
@@ -297,15 +448,17 @@ def check(config):
         bindings = current['NetworkSettings'].get('Ports', {}).get(f"{config['httpPort']}/tcp") or [] if current else []
         if not current or not current['State']['Running'] or current['Image'] != details['image'] or labels.get('io.physicsos.task') != config['task'] or labels.get('io.physicsos.role') != 'validation' or not any(binding.get('HostIp') == '127.0.0.1' and binding.get('HostPort') == str(config['httpPort']) for binding in bindings):
             raise RuntimeError('Owned candidate endpoint identity must match before authentication')
+        if config.get('network'): check_isolated_resources(config, details, current)
         return check_owned(config)
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('action', choices=['start', 'stop', 'check'])
+    parser.add_argument('action', choices=['network', 'start', 'stop', 'check'])
     parser.add_argument('--config', required=True); parser.add_argument('--image')
     args = parser.parse_args(); config = load(args.config)
-    if args.action == 'stop': result = stop(config)
+    if args.action == 'network': result = prepare_network(config)
+    elif args.action == 'stop': result = stop(config)
     elif args.action == 'check': result = check(config)
     else:
         if not args.image: raise ValueError('Candidate image is required')

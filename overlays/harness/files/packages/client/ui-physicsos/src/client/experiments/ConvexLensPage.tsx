@@ -380,7 +380,7 @@ export function ConvexLensPage({
           </div>
         </section>
         {controlsOpen ? <WorkbenchFloatPanel title={t('lab.inspectorPanel')} closeLabel={t('lab.closeInspector')} onClose={() => { setControlsOpen(false) }} placement="bottom-right" width={310} height={370} expanded desktopDefault={false}>
-        <aside ref={controls} className={`${css.controlCard} ${lensCss.controls}`} aria-label={t('lab.inspectorPanel')}>
+          <aside ref={controls} className={`${css.controlCard} ${lensCss.controls}`} aria-label={t('lab.inspectorPanel')}>
           <div className={css.sectionHeading}>
             <div>
               <span className={css.eyebrow}>CONTROLS</span>
@@ -427,15 +427,15 @@ export function ConvexLensPage({
             <strong>1/u + 1/v = 1/f</strong>
             <p>理想薄透镜模型 · 忽略像差</p>
           </div>
-        </aside></WorkbenchFloatPanel> : null}
+          </aside></WorkbenchFloatPanel> : null}
       </div>
       {notebookOpen ? <WorkbenchFloatPanel title={t('lab.tab.data')} closeLabel={t('lab.collapse')} onClose={() => { setNotebookOpen(false) }} placement="top-right" width={380} height={480} expanded desktopDefault={false}><div className={lensCss.notebook}>
-      <section className={`${css.presets} ${lensCss.presets}`} aria-label="典型成像条件">
+        <section className={`${css.presets} ${lensCss.presets}`} aria-label="典型成像条件">
         <div className={css.presetHeading}>
           <h2>从五种条件中发现规律</h2>
           <span>保持焦距不变，只改变物距</span>
         </div>
-        <div className={`${css.zoneGrid} ${lensCss.zoneGrid}`}>
+          <div className={`${css.zoneGrid} ${lensCss.zoneGrid}`}>
           {ZONES.map(zone => (
             <button
               type="button"
@@ -494,7 +494,7 @@ export function ConvexLensPage({
             setPanel(undefined)
           }}
           {...(recordAttempt === undefined ? {} : { recordAttempt })}
-        /></div></WorkbenchFloatPanel>
+          /></div></WorkbenchFloatPanel>
       ) : null}
     </div>
   )

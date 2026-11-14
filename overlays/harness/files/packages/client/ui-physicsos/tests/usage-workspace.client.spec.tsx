@@ -6,7 +6,9 @@ import { zh, type PhysicsosKey } from '../src/client/locales.ts'
 import type { UsageSummary } from '../src/client/usage-api.ts'
 
 const t = (key: PhysicsosKey): string => zh[key]
-const tokens = (totalTokens: number) => ({ inputTokens: totalTokens, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0, totalTokens })
+const tokens = (totalTokens: number) => ({
+  inputTokens: totalTokens, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0, totalTokens,
+})
 const summary: UsageSummary = {
   scope: 'account', timezone: 'Asia/Shanghai', from: '2026-11-01', to: '2026-11-02',
   visits: 12, uses: 7, activeDays: 2, tokens: tokens(500), coverage: { reportedCalls: 7, missingCalls: 0 },

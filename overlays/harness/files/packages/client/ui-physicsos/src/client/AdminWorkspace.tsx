@@ -304,6 +304,8 @@ function RequestsTab({ api, t }: { api: AdminApi; t: (key: PhysicsosKey) => stri
   if (data === undefined) return <AdminEmpty>{t('admin.loading')}</AdminEmpty>
   if (data.length === 0) return <AdminEmpty>{t('admin.empty')}</AdminEmpty>
 
+  const selectedId = data.find(item => item.id === selectedRequest)?.id ?? data[0]?.id
+
   return (
     <>
       {note !== undefined && <p className={css.error}>{note}</p>}
@@ -312,14 +314,14 @@ function RequestsTab({ api, t }: { api: AdminApi; t: (key: PhysicsosKey) => stri
         <section className={css.detailList}>
           <AdminTable minWidth={520}>
             <thead><tr><th>{t('admin.schools.field.name')}</th><th>{t('admin.contact')}</th><th>{t('admin.requestedBy')}</th><th>{t('admin.audit.time')}</th><th>{t('admin.users.actions')}</th></tr></thead>
-            <tbody>{data.map(request => <tr key={request.id} data-selected={request.id === (data.find(item => item.id === selectedRequest)?.id ?? data[0]?.id) || undefined}>
+            <tbody>{data.map(request => <tr key={request.id} data-selected={request.id === selectedId || undefined}>
               <td><button type="button" className={css.tableLink} onClick={() => { setSelectedRequest(request.id); setExpanded(undefined) }}>{request.schoolName}</button></td><td>{request.contact}</td><td>{request.requestedBy ?? t('admin.anonymous')}</td><td className={css.timeCell}>{fmtTime(request.createdAt)}</td>
               <td><button type="button" className={css.ghost} onClick={() => { setSelectedRequest(request.id); setExpanded(undefined) }}>{t('admin.users.select')}</button></td>
             </tr>)}</tbody>
           </AdminTable>
         </section>
-      {data.filter(request => request.id === (data.find(item => item.id === selectedRequest)?.id ?? data[0]?.id)).map((request: SchoolRequestRow) => (
-        <AdminCard key={request.id} className={css.detailPane}>
+        {data.filter(request => request.id === selectedId).map((request: SchoolRequestRow) => (
+          <AdminCard key={request.id} className={css.detailPane}>
           <AdminCardHead>
             <div>
               <AdminCardTitle>{request.schoolName}</AdminCardTitle>
@@ -490,13 +492,13 @@ function UsersTab({ api, t, isSuper }: { api: AdminApi; t: (key: PhysicsosKey) =
     <details className={css.createDisclosure}>
       <summary>{t('admin.users.create')}</summary>
       <div className={css.formRow}>
-        {isSuper && <input className={css.input} aria-label={t('admin.schools.field.id')} placeholder={t('admin.schools.field.id')} value={form.schoolId} onChange={e => { setForm(f => ({ ...f, schoolId: e.target.value })) }} />}
-        <input className={css.input} aria-label={t('admin.users.field.username')} placeholder={t('admin.users.field.username')} value={form.username} onChange={e => { setForm(f => ({ ...f, username: e.target.value })) }} />
-        <input className={css.input} aria-label={t('admin.users.field.displayName')} placeholder={t('admin.users.field.displayName')} value={form.displayName} onChange={e => { setForm(f => ({ ...f, displayName: e.target.value })) }} />
-        <input className={css.input} type="password" autoComplete="new-password" aria-label={t('admin.users.field.password')} placeholder={t('admin.users.field.password')} value={form.password} onChange={e => { setForm(f => ({ ...f, password: e.target.value })) }} />
+        {isSuper && <input className={css.input} aria-label={t('admin.schools.field.id')} placeholder={t('admin.schools.field.id')} value={form.schoolId} onChange={(e) => { setForm(f => ({ ...f, schoolId: e.target.value })) }} />}
+        <input className={css.input} aria-label={t('admin.users.field.username')} placeholder={t('admin.users.field.username')} value={form.username} onChange={(e) => { setForm(f => ({ ...f, username: e.target.value })) }} />
+        <input className={css.input} aria-label={t('admin.users.field.displayName')} placeholder={t('admin.users.field.displayName')} value={form.displayName} onChange={(e) => { setForm(f => ({ ...f, displayName: e.target.value })) }} />
+        <input className={css.input} type="password" autoComplete="new-password" aria-label={t('admin.users.field.password')} placeholder={t('admin.users.field.password')} value={form.password} onChange={(e) => { setForm(f => ({ ...f, password: e.target.value })) }} />
         <GlassSelect className={css.select} value={form.role} ariaLabel={t('admin.users.field.role')} testId="user-role"
           options={[{ value: 'STUDENT', label: t('role.STUDENT') }, { value: 'TEACHER', label: t('role.TEACHER') }, ...isSuper ? [{ value: 'SCHOOL_ADMIN', label: t('role.SCHOOL_ADMIN') }] : []]}
-          onChange={role => { setForm(f => ({ ...f, role })) }} />
+          onChange={(role) => { setForm(f => ({ ...f, role })) }} />
         <button type="button" className={css.primary} disabled={busy} onClick={() => {
           run(() => api.createUser({ ...(form.schoolId === '' ? {} : { schoolId: form.schoolId }), username: form.username, displayName: form.displayName, password: form.password, role: form.role as 'STUDENT' | 'TEACHER' | 'SCHOOL_ADMIN' }).then(() => { setForm(f => ({ ...f, username: '', displayName: '', password: '' })) }))
         }}>{t('admin.confirm.submit')}</button>
@@ -505,13 +507,14 @@ function UsersTab({ api, t, isSuper }: { api: AdminApi; t: (key: PhysicsosKey) =
     <div className={css.detailLayout}>
       <section className={css.detailList}>
         <AdminToolbar>
-          <input className={css.input} aria-label={t('admin.users.search')} placeholder={t('admin.users.search')} value={q} onChange={e => { setQ(e.target.value) }} />
+          <input className={css.input} aria-label={t('admin.users.search')} placeholder={t('admin.users.search')} value={q} onChange={(e) => { setQ(e.target.value) }} />
           <GlassSelect className={css.select} value={roleFilter} ariaLabel={t('admin.users.role.all')} testId="role-filter"
             options={[{ value: '', label: t('admin.users.role.all') }, { value: 'STUDENT', label: t('role.STUDENT') }, { value: 'TEACHER', label: t('role.TEACHER') }, { value: 'SCHOOL_ADMIN', label: t('role.SCHOOL_ADMIN') }, ...isSuper ? [{ value: 'SUPER_ADMIN', label: t('role.SUPER_ADMIN') }] : []]} onChange={setRoleFilter} />
         </AdminToolbar>
         {data === undefined ? <AdminEmpty>{t('admin.loading')}</AdminEmpty> : data.length === 0 ? <AdminEmpty>{t('admin.empty')}</AdminEmpty> : <AdminTable minWidth={560}>
           <thead><tr><th>{t('admin.users.field.username')}</th><th>{t('admin.users.field.displayName')}</th><th>{t('admin.schools.field.name')}</th><th>{t('admin.users.field.role')}</th><th>{t('admin.users.status')}</th><th>{t('admin.users.actions')}</th></tr></thead>
-          <tbody>{data.map(user => <tr key={userKey(user)} data-selected={current !== undefined && userKey(current) === userKey(user) || undefined}>
+          <tbody>{data.map(user => <tr key={userKey(user)}
+            data-selected={current !== undefined && userKey(current) === userKey(user) || undefined}>
             <td><button type="button" className={css.tableLink} onClick={() => { setSelected(userKey(user)); setResetFor(undefined); setNewPassword('') }}>{user.username}</button></td>
             <td>{user.displayName}</td><td>{user.schoolName}</td><td><span className={css.action}>{t(`role.${user.role}`)}</span></td>
             <td><span className={user.status === 'active' ? css.badgeActive : css.badgeRevoked}>{t(user.status === 'active' ? 'admin.schools.status.active' : 'admin.schools.status.disabled')}</span></td>
@@ -536,7 +539,7 @@ function UsersTab({ api, t, isSuper }: { api: AdminApi; t: (key: PhysicsosKey) =
             <button type="button" className={css.ghost} disabled={busy} onClick={() => { run(() => api.revokeUserSessions(current.schoolId, current.username)) }}>{t('admin.users.revoke')}</button>
           </AdminCardActions>
           {resetFor === userKey(current) && <div className={css.formRow}>
-            <input className={css.input} type="password" autoComplete="new-password" aria-label={t('admin.users.field.newPassword')} placeholder={t('admin.users.field.newPassword')} value={newPassword} onChange={e => { setNewPassword(e.target.value) }} />
+            <input className={css.input} type="password" autoComplete="new-password" aria-label={t('admin.users.field.newPassword')} placeholder={t('admin.users.field.newPassword')} value={newPassword} onChange={(e) => { setNewPassword(e.target.value) }} />
             <button type="button" className={css.primary} disabled={busy || newPassword === ''} onClick={() => { run(() => api.resetUserPassword(current.schoolId, current.username, newPassword).then(() => { setResetFor(undefined); setNewPassword('') })) }}>{t('admin.confirm.submit')}</button>
           </div>}
         </>}
@@ -554,11 +557,12 @@ function AuditTab({ api, t }: { api: AdminApi; t: (key: PhysicsosKey) => string 
   if (data === undefined) return <AdminEmpty>{t('admin.loading')}</AdminEmpty>
   const rows = data.filter(event => `${event.actorKey} ${event.action} ${event.target} ${event.schoolId}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))
   return <>
-    <AdminToolbar><input className={css.input} type="search" aria-label={t('admin.audit.search')} placeholder={t('admin.audit.search')} value={query} onChange={event => { setQuery(event.target.value) }} /></AdminToolbar>
+    <AdminToolbar><input className={css.input} type="search" aria-label={t('admin.audit.search')} placeholder={t('admin.audit.search')} value={query} onChange={(event) => { setQuery(event.target.value) }} /></AdminToolbar>
     {rows.length === 0 ? <AdminEmpty>{t('admin.empty')}</AdminEmpty> : <AdminTable minWidth={680}>
       <thead><tr><th>{t('admin.audit.time')}</th><th>{t('admin.audit.actor')}</th><th>{t('admin.audit.action')}</th><th>{t('admin.audit.target')}</th><th>{t('admin.schools.field.name')}</th><th>{t('admin.audit.detail')}</th></tr></thead>
       <tbody>{rows.map((event: AuditEventRow) => <tr key={event.id}>
-        <td className={css.timeCell}>{fmtTime(event.createdAt)}</td><td>{event.actorKey}</td><td><code className={css.action}>{event.action}</code></td><td>{event.target}</td><td>{event.schoolId}</td>
+        <td className={css.timeCell}>{fmtTime(event.createdAt)}</td><td>{event.actorKey}</td>
+        <td><code className={css.action}>{event.action}</code></td><td>{event.target}</td><td>{event.schoolId}</td>
         <td>{event.detail === undefined ? '—' : <details className={css.auditDetail}><summary>{t('admin.audit.detail')}</summary><pre>{JSON.stringify(event.detail, null, 2)}</pre></details>}</td>
       </tr>)}</tbody>
     </AdminTable>}

@@ -135,7 +135,7 @@ export function UsageWorkspace({ api, admin = false, t }: UsageWorkspaceProps) {
             <div className={css.trendPlot}>
               <Chart series={{ id: `usage-${metric}`, title: metricLabel, xLabel: t('usage.date'), yLabel: metricLabel, role: 'trajectory', points: days.map((day, index) => ({ t: index, value: valueOf(day) })) }}
                 width={720} height={180} zeroBased time={hoverIndex ?? 0} total={hoverIndex === null ? 0 : days.length - 1}
-                onHoverTime={value => { setHoverIndex(value === null ? null : Math.round(value)) }} />
+                onHoverTime={(value) => { setHoverIndex(value === null ? null : Math.round(value)) }} />
             </div>
           </section>}
           <h2>{t('usage.history')}</h2>

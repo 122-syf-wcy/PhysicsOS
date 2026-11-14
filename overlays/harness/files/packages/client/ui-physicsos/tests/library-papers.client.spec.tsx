@@ -173,7 +173,7 @@ describe('LibraryWorkspace 真题卷库', () => {
     await vi.waitFor(() => { expect(practiceQuestion).toHaveBeenCalledWith('01-proton-basic') })
     fireEvent.click(screen.getByRole('button', { name: zh['library.detail.close'] }))
     expect(screen.getByRole('searchbox')).toBeTruthy()
-    expect((screen.getByRole('searchbox') as HTMLInputElement).value).toBe('质子垂直进入匀强磁场')
+    expect(screen.getByRole<HTMLInputElement>('searchbox').value).toBe('质子垂直进入匀强磁场')
   })
 
 })

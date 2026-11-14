@@ -247,7 +247,7 @@ export function AdminWebsiteTab({ api, t }: { api: WebsiteApi; t: Translate }): 
         </div>
         <div className={css.entryEditor}>
         {section === 'testimonials' ? draft.testimonials.map((entry, index) => {
-          if (entry.id !== activeEntryId) return null
+            if (entry.id !== activeEntryId) return null
           const update = (patch: Partial<WebsiteTestimonial>): void => { change(value => ({ ...value, testimonials: value.testimonials.map(item => item.id === entry.id ? { ...item, ...patch } : item) })) }
           return <AdminCard key={entry.id}>
             <AdminCardHead><AdminCardTitle>{t('admin.website.testimonialItem').replace('{number}', String(index + 1))}</AdminCardTitle><span className={css.tag}>{t(entry.enabled ? 'admin.website.visible' : 'admin.website.hidden')}</span></AdminCardHead>
@@ -258,11 +258,14 @@ export function AdminWebsiteTab({ api, t }: { api: WebsiteApi; t: Translate }): 
             <TextField label={t('admin.website.quote')} value={entry.quote} maxLength={280} multiline required onChange={quote => { update({ quote }) }} />
             <TextField label={t('admin.website.topic')} value={entry.topic} maxLength={32} onChange={topic => { update({ topic }) }} />
             <EntryControls entry={entry} index={index} total={draft.testimonials.length} t={t} onChange={update}
-              onMove={direction => { setSelectedEntry(entry.id); change(value => ({ ...value, testimonials: reorder(value.testimonials, index, direction) })) }}
+                onMove={(direction) => {
+                  setSelectedEntry(entry.id)
+                  change(value => ({ ...value, testimonials: reorder(value.testimonials, index, direction) }))
+                }}
               onRemove={() => { change(value => ({ ...value, testimonials: value.testimonials.filter(item => item.id !== entry.id) })) }} />
           </AdminCard>
         }) : draft.contributors.map((entry, index) => {
-          if (entry.id !== activeEntryId) return null
+            if (entry.id !== activeEntryId) return null
           const update = (patch: Partial<WebsiteContributor>): void => { change(value => ({ ...value, contributors: value.contributors.map(item => item.id === entry.id ? { ...item, ...patch } : item) })) }
           return <AdminCard key={entry.id}>
             <AdminCardHead><AdminCardTitle>{t('admin.website.contributorItem').replace('{number}', String(index + 1))}</AdminCardTitle><span className={css.tag}>{t(entry.enabled ? 'admin.website.visible' : 'admin.website.hidden')}</span></AdminCardHead>
@@ -276,7 +279,10 @@ export function AdminWebsiteTab({ api, t }: { api: WebsiteApi; t: Translate }): 
             <TextField label={t('admin.website.url')} value={entry.url} maxLength={2048} type="url" onChange={url => { update({ url }) }} />
             <p className={css.hint}>{t('admin.website.urlHint')}</p>
             <EntryControls entry={entry} index={index} total={draft.contributors.length} t={t} onChange={update}
-              onMove={direction => { setSelectedEntry(entry.id); change(value => ({ ...value, contributors: reorder(value.contributors, index, direction) })) }}
+                onMove={(direction) => {
+                  setSelectedEntry(entry.id)
+                  change(value => ({ ...value, contributors: reorder(value.contributors, index, direction) }))
+                }}
               onRemove={() => { change(value => ({ ...value, contributors: value.contributors.filter(item => item.id !== entry.id) })) }} />
           </AdminCard>
         })}
@@ -326,6 +332,8 @@ function FeedbackInbox({ api, t, onConvert, canConvert, sources }: {
     finally { setBusy(undefined) }
   }
 
+  const selectedId = data?.feedback.find(item => item.id === selected)?.id ?? data?.feedback[0]?.id
+
   return <div className={css.inbox}>
     <AdminToolbar>
       <GlassSelect value={status} ariaLabel={t('admin.website.status')} disabled={busy !== undefined}
@@ -342,7 +350,7 @@ function FeedbackInbox({ api, t, onConvert, canConvert, sources }: {
         <div className={css.collectionList}>
           <AdminTable minWidth={430}>
             <thead><tr><th>{t('admin.audit.time')}</th><th>{t('notice.kindLabel')}</th><th>{t('notice.description')}</th><th>{t('admin.website.status')}</th></tr></thead>
-            <tbody>{data.feedback.map(row => <tr key={row.id} data-selected={row.id === (data.feedback.find(item => item.id === selected)?.id ?? data.feedback[0]?.id) || undefined}>
+            <tbody>{data.feedback.map(row => <tr key={row.id} data-selected={row.id === selectedId || undefined}>
               <td className={shared.timeCell}>{fmtTime(row.createdAt)}</td><td>{t(`notice.kind.${row.kind}`)}</td>
               <td className={css.entrySummary}><button type="button" className={shared.tableLink} onClick={() => { setSelected(row.id) }}>{row.body}</button></td>
               <td><button type="button" className={shared.ghost} onClick={() => { setSelected(row.id) }}>{t(`admin.notice.status.${row.status}`)}</button></td>
@@ -351,7 +359,7 @@ function FeedbackInbox({ api, t, onConvert, canConvert, sources }: {
         </div>
         <div className={css.entryEditor}>
       {data.feedback.map(row => {
-        if (row.id !== (data.feedback.find(item => item.id === selected)?.id ?? data.feedback[0]?.id)) return null
+            if (row.id !== selectedId) return null
         const value = replies[row.id] ?? ''
         const valid = value.trim().length > 0 && value.trim().length <= 2000
         return <AdminCard key={row.id} data-website-feedback={row.id}>

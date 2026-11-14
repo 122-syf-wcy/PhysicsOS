@@ -1,0 +1,8 @@
+.root { position: relative; min-width: 0; }
+.trigger { display: inline-flex; align-items: center; gap: 7px; max-width: 280px; padding: 7px 10px; border: 0; border-radius: 8px; color: var(--dsw-alias-label-secondary); background: transparent; font: inherit; font-size: 12px; cursor: pointer; }
+.trigger > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trigger > svg { flex: none; }
+.trigger:hover:not(:disabled) { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-hover); }
+.trigger:disabled { opacity: .6; cursor: progress; }
+.error { position: absolute; top: 100%; left: 0; z-index: 1; width: max-content; max-width: min(300px, calc(100vw - 28px)); padding: 8px 10px; border-radius: 8px; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-layer-2); box-shadow: var(--dsw-elevation-prominent); font-size: 12px; }
+@media (max-width: 600px) { .root { flex: none; } .trigger { width: 32px; max-width: 32px; justify-content: center; gap: 0; padding: 7px; } .trigger > span, .trigger > svg:last-child { display: none; } }

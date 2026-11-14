@@ -533,7 +533,7 @@ export function Chart({
       viewBox={`0 0 ${width} ${height}`}
       role="img"
       aria-label={`${series.title}（${series.xLabel} / ${series.yLabel}）`}
-      onMouseMove={event => {
+      onMouseMove={(event) => {
         const box = event.currentTarget.getBoundingClientRect()
         if (box.width <= 0) return
         const viewX = ((event.clientX - box.left) / box.width) * width
@@ -580,7 +580,9 @@ export function Chart({
         <rect className={css.chartTooltip} x={tooltipX} y={pad.top} width={tooltipWidth} height={20} rx={5} />
         <text className={css.chartTooltipText} x={tooltipX + 8} y={pad.top + 13}>{tooltipText}</text>
       </g>}
-      {total > 0 || hoverTime !== null ? <line className={css.chartCursor} x1={cursorX} y1={pad.top} x2={cursorX} y2={pad.top + plotH} /> : null}
+      {total > 0 || hoverTime !== null ? (
+        <line className={css.chartCursor} x1={cursorX} y1={pad.top} x2={cursorX} y2={pad.top + plotH} />
+      ) : null}
     </svg>
   )
 }

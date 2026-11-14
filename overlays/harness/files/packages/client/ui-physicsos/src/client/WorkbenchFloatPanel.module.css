@@ -1,5 +1,18 @@
 .anchor { display: none; }
 /* The active workbench layer is raised to 13 inline; shared modal layers stay above it. */
+/* Portals leave the workspace's custom-property scope. Rebind its local
+   surface aliases to live document tokens, including after a theme switch. */
+.layer {
+  --lab-panel-border: color-mix(in srgb, var(--dsw-alias-border-l2) 84%, var(--dsw-alias-bg-base));
+  --lab-panel-shadow: 0 2px 8px -4px color-mix(in srgb, var(--dsw-alias-label-primary) 14%, transparent);
+  --canvas-border: var(--lab-panel-border);
+  --canvas-shadow: var(--lab-panel-shadow);
+  --ep-ink: var(--physics-ink-strong);
+  --ep-muted: var(--physics-ink-muted);
+  --ep-paper: var(--dsw-alias-bg-base);
+  --ep-line: var(--physics-glass-border-soft);
+  --ep-blue: var(--physics-accent);
+}
 .layer { position: fixed; inset: 0; z-index: 12; pointer-events: none; color: var(--physics-ink); }
 .layer :global([data-dockkit-float]) {
   border: 1px solid var(--physics-glass-border); border-radius: 22px;

@@ -1249,11 +1249,11 @@ function FinalPanel({ jobs, exports_, api, t }: {
       <div className={css.finalSplit}>
         <div className={css.finalList}>
           <div className={css.finalFilters}>
-            <input type="search" aria-label={t('paper.final.search')} placeholder={t('paper.final.search')} value={query} onChange={event => { setQuery(event.target.value) }} />
+            <input type="search" aria-label={t('paper.final.search')} placeholder={t('paper.final.search')} value={query} onChange={(event) => { setQuery(event.target.value) }} />
             <GlassSelect value={subject} ariaLabel={t('paper.final.subjects')} options={[{ value: 'all', label: t('paper.final.allSubjects') }, { value: 'physics', label: '物理' }, { value: 'chemistry', label: '化学' }]} onChange={setSubject} />
           </div>
           <div className={css.finalRows}>
-          {rows.map((job) => {
+            {rows.map((job) => {
             const bundle = exports_.find(e => e.paperId === job.id)
             /* Bind the download names to consts: the `!== undefined` checks
                below sit inside JSX closures, where narrowing on a property
@@ -1261,12 +1261,12 @@ function FinalPanel({ jobs, exports_, api, t }: {
             const paperPdf = bundle?.files.paperPdf
             const answerPdf = bundle?.files.answerPdf
             return (
-              <div key={job.id} className={css.finalRow}>
+                <div key={job.id} className={css.finalRow}>
                 <span className={css.jobTitle}>{job.document?.title ?? job.id}</span>
                 <span className={css.jobMeta}><StatusChip status={job.status} /> v{job.versions.at(-1)?.version ?? '-'} · {jobRating(job)}</span>
                 <div className={css.fileLinks}>
                   {paperPdf !== undefined && (
-                    <><button type="button" onClick={() => { setPreview({ jobId: job.id, name: paperPdf }) }}>试卷.pdf</button><a className={css.primary} href={api.fileUrl(job.id, paperPdf)} download>{t('paper.final.download')}</a></>
+                      <><button type="button" onClick={() => { setPreview({ jobId: job.id, name: paperPdf }) }}>试卷.pdf</button><a className={css.primary} href={api.fileUrl(job.id, paperPdf)} download>{t('paper.final.download')}</a></>
                   )}
                   {answerPdf !== undefined && (
                     <button type="button" onClick={() => { setPreview({ jobId: job.id, name: answerPdf }) }}>答案解析.pdf</button>

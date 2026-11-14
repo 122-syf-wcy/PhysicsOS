@@ -776,7 +776,9 @@ export function LibraryWorkspace({
           <p className={css.detailStem}>{questionDetail.text}</p>
           <section className={css.detailKnowledge}>
             <h2>{t('library.detail.knowledge')}</h2>
-            <div className={css.nodeChips}>{QUESTION_NODES(questionDetail.id).map(label => <span key={label} className={css.nodeChip}>{label}</span>)}</div>
+            <div className={css.nodeChips}>{QUESTION_NODES(questionDetail.id).map(label => (
+              <span key={label} className={css.nodeChip}>{label}</span>
+            ))}</div>
           </section>
         </article>
         <aside className={css.detailTutor}>
@@ -815,19 +817,19 @@ export function LibraryWorkspace({
         />
       </header>
 
-        <div className={css.searchField}>
-          <IconSearchOutlineMedium size={16} />
-          <input
-            type="search"
-            className={css.search}
-            placeholder={t('library.search')}
-            aria-label={t('library.search')}
-            value={query}
-            onChange={(event) => {
-              setQuery(event.target.value)
-            }}
-          />
-        </div>
+      <div className={css.searchField}>
+        <IconSearchOutlineMedium size={16} />
+        <input
+          type="search"
+          className={css.search}
+          placeholder={t('library.search')}
+          aria-label={t('library.search')}
+          value={query}
+          onChange={(event) => {
+            setQuery(event.target.value)
+          }}
+        />
+      </div>
 
       <div className={css.toolbarRow}>
         <div className={css.orgTabs} role="tablist" aria-label={t('library.orgLabel')}>

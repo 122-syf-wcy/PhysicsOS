@@ -123,4 +123,105 @@ class CandidateSafety(unittest.TestCase):
             self.assertFalse(root.exists())
 
 
+
+
+
+class IsolatedCandidateNetwork(unittest.TestCase):
+    def fixture(self, root):
+        task, name = 'ui-test', 'physicsos-ui-test'
+        config = {'task': task, 'root': str(root), 'network': name, 'databaseOwner': task,
+                  'databaseContainer': 'physicsos-ui-test-pg', 'databaseDataRoot': str(root / 'database-data'), 'modelPoolPort': 3198}
+        production = [{'Id': role, 'Name': '/physicsos-' + role + '-1', 'Mounts': [{'Source': '/production/' + role}],
+                       'NetworkSettings': {'Networks': {'physicsos_default': {'NetworkID': 'prod-network', 'IPAddress': '172.22.0.' + str(i + 2)}}}}
+                      for i, role in enumerate(['app', 'postgres', 'redis'])]
+        labels = {'io.physicsos.task': task, 'io.physicsos.role': 'validation-network'}
+        network = {'Id': 'private-network', 'Name': name, 'Driver': 'bridge', 'Scope': 'local', 'Labels': labels, 'Containers': {},
+                   'IPAM': {'Config': [{'Gateway': '172.30.0.1'}]}}
+        pg = {'Id': 'test-pg', 'Name': '/' + config['databaseContainer'], 'Config': {'Labels': {'io.physicsos.task': task, 'io.physicsos.role': 'validation-database'}},
+              'Mounts': [{'Source': config['databaseDataRoot'], 'Destination': '/var/lib/postgresql/data', 'RW': True}],
+              'NetworkSettings': {'Networks': {name: {'NetworkID': 'private-network', 'IPAddress': '172.30.0.2'}}}}
+        return config, production, network, pg
+
+    def test_explicit_network_load_requires_owned_name_database_owner_and_private_data_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / 'private'
+            config = CandidateSafety().config(root)
+            config.update({'network': 'physicsos-ui-test', 'databaseOwner': config['task'], 'databaseDataRoot': str(root / 'database-data')})
+            file = Path(tmp) / 'config.json'
+            file.write_text(json.dumps(config)); self.assertEqual(candidate.load(file)['network'], 'physicsos-ui-test')
+            for extra in [{'network': 'bridge'}, {'databaseOwner': 'other'}, {'databaseDataRoot': '/production/pg'}, {'network': '', 'requireIsolatedNetwork': True}]:
+                file.write_text(json.dumps({**config, **extra}))
+                with self.assertRaises(ValueError): candidate.load(file)
+
+    def test_network_create_labels_only_new_task_resources_and_never_connects_production(self):
+        config, production, network, _ = self.fixture(Path('/candidate'))
+        with patch.object(candidate, 'metadata', side_effect=[None, network]), patch.object(candidate.subprocess, 'run') as run:
+            self.assertEqual(candidate.ensure_isolated_network(config, production, create=True)['Id'], 'private-network')
+        args = run.call_args.args[0]
+        self.assertEqual(args[:3], ['docker', 'network', 'create'])
+        self.assertIn('io.physicsos.task=ui-test', args)
+        self.assertIn('io.physicsos.role=validation-network', args)
+        self.assertNotIn('physicsos_default', args)
+
+    def test_reuses_owned_bridge_but_rejects_foreign_owner_production_network_and_endpoints(self):
+        config, production, network, pg = self.fixture(Path('/candidate'))
+        with patch.object(candidate, 'metadata', return_value=network), patch.object(candidate.subprocess, 'run') as run:
+            candidate.ensure_isolated_network(config, production, create=True); run.assert_not_called()
+        for changed in [{**network, 'Labels': {}}, {**network, 'Id': 'prod-network'},
+                        {**network, 'Containers': {'app': {'Name': 'physicsos-app-1'}}},
+                        {**network, 'Containers': {'foreign': {'Name': 'unknown-candidate'}}}]:
+            with patch.object(candidate, 'metadata', return_value=changed), patch.object(candidate.subprocess, 'run') as run:
+                with self.assertRaises(RuntimeError): candidate.ensure_isolated_network(config, production, create=True)
+                run.assert_not_called()
+        with patch.object(candidate, 'metadata') as inspect:
+            with self.assertRaises(RuntimeError): candidate.ensure_isolated_network({**config, 'network': 'physicsos_default'}, production)
+            inspect.assert_not_called()
+
+    def test_only_matching_database_endpoint_may_join_an_owned_network(self):
+        config, production, network, pg = self.fixture(Path('/candidate'))
+        network['Containers'] = {pg['Id']: {'Name': config['databaseContainer']}}
+        with patch.object(candidate, 'metadata', side_effect=lambda kind, name: network if kind == 'network' else pg):
+            candidate.ensure_isolated_network(config, production)
+        pg['Config']['Labels']['io.physicsos.task'] = 'other-task'
+        with patch.object(candidate, 'metadata', side_effect=lambda kind, name: network if kind == 'network' else pg):
+            with self.assertRaisesRegex(RuntimeError, 'another task'): candidate.ensure_isolated_network(config, production)
+
+    def test_isolated_database_cannot_share_another_network_or_production_data(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config, production, network, pg = self.fixture(Path(tmp) / 'candidate')
+            candidate.validate_isolated_database(config, pg, production, network)
+            pg['NetworkSettings']['Networks']['physicsos_default'] = {'NetworkID': 'prod-network'}
+            with patch.object(candidate.subprocess, 'run') as run:
+                with self.assertRaisesRegex(RuntimeError, 'another network'): candidate.validate_isolated_database(config, pg, production, network, connect=True)
+                run.assert_not_called()
+            del pg['NetworkSettings']['Networks']['physicsos_default']
+            pg['Mounts'][0]['Source'] = '/production/postgres'
+            with self.assertRaisesRegex(RuntimeError, 'task-owned'): candidate.validate_isolated_database(config, pg, production, network)
+
+    def test_private_model_route_rejects_production_ip_name_host_gateway_and_old_loopback_pool(self):
+        config, production, network, _ = self.fixture(Path('/candidate'))
+        candidate.reject_production_model_routes(config, ['https://api.provider.example/v1', 'http://127.0.0.1:3198/v1'], production, network, 3972)
+        for url in ['http://172.22.0.2:3972/v1', 'http://physicsos-app-1:3972/v1', 'http://host.docker.internal:3972/v1', 'http://172.30.0.1:3972/v1', 'http://127.0.0.1:3972/v1']:
+            with self.subTest(url=url), self.assertRaisesRegex(RuntimeError, 'production'):
+                candidate.reject_production_model_routes(config, [url], production, network, 3972)
+
+    def test_check_revalidates_isolation_before_http_authentication(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / 'candidate'; root.mkdir()
+            config = CandidateSafety().config(root)
+            config.update({'network': 'physicsos-ui-test', 'databaseOwner': config['task'], 'databaseDataRoot': str(root / 'database-data')})
+            (root / 'metadata.json').write_text(json.dumps({'container': 'candidate', 'image': 'candidate-image'}))
+            current = {'State': {'Running': True}, 'Image': 'candidate-image', 'Config': {'Labels': {'io.physicsos.task': config['task'], 'io.physicsos.role': 'validation'}},
+                       'NetworkSettings': {'Ports': {'13188/tcp': [{'HostIp': '127.0.0.1', 'HostPort': '13188'}]}}}
+            with patch.object(candidate, 'lifecycle', return_value=contextlib.nullcontext()), patch.object(candidate, 'metadata', return_value=current), patch.object(candidate, 'check_isolated_resources', side_effect=RuntimeError('foreign network')), patch.object(candidate, 'check_owned') as http:
+                with self.assertRaisesRegex(RuntimeError, 'foreign network'): candidate.check(config)
+                http.assert_not_called()
+
+    def test_network_only_preparation_cannot_start_candidate_or_database(self):
+        config, production, network, _ = self.fixture(Path('/candidate'))
+        with patch.object(candidate, 'lifecycle', return_value=contextlib.nullcontext()), patch.object(candidate, 'production_services', return_value=production), patch.object(candidate, 'ensure_isolated_network', return_value=network), patch.object(candidate.subprocess, 'run') as run:
+            result = candidate.prepare_network(config)
+            self.assertFalse(result['candidateStarted']); self.assertFalse(result['databaseStarted']); run.assert_not_called()
+
+
 if __name__ == '__main__': unittest.main()

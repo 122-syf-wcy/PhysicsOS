@@ -27,17 +27,22 @@ ARG PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright:v1.62.1-noble
 FROM ${NODE_IMAGE} AS build
 WORKDIR /build
 COPY packages ./packages
-COPY tools/validation-worker ./worker
-COPY viewport ./viewport
+COPY tools/validation-worker ./tools/validation-worker
+# Reuse the actual Lab adapters and their relative module graph. There is no
+# separate repository-root viewport implementation.
+COPY overlays/harness/files/packages/client/ui-physicsos/src/client/physics ./viewport
+# Give NodeNext the same ESM context as the source worker and Lab package.
+COPY tools/validation-worker/package.json ./package.json
 COPY scripts/deploy/build-validation-workspace.mjs ./build-workspace.mjs
-COPY worker/tsconfig.worker.json ./tsconfig.worker.json
+COPY tools/validation-worker/tsconfig.worker.json ./tsconfig.worker.json
 RUN npm install --no-audit --no-fund --ignore-scripts --save-exact \
-      typescript@6.0.3 @types/node@24 @playwright/test@1.62.1 playwright-core@1.62.1 \
+      typescript@6.0.3 @types/node@24.10.0 @playwright/test@1.62.1 playwright-core@1.62.1 \
     && npx tsc -p tsconfig.worker.json \
     && node build-workspace.mjs --root /build \
     && node -e "const v=require('playwright-core/package.json').version; if(v!=='1.62.1'){console.error('playwright-core drift: '+v);process.exit(1)}" \
     && test -f dist/tools/validation-worker/src/server.js \
-    && test -f dist/node_modules/@physicsos/physics-scene/src/index.js
+    && test -f dist/node_modules/@physicsos/physics-scene/src/index.js \
+    && node --input-type=module -e "const m=await import('./dist/viewport/mechanics-workspace-runtime.js'); if(typeof m.createMechanicsWorkspaceRuntime!=='function')throw Error('Lab mechanics viewport export missing'); const r=await import('./dist/node_modules/@physicsos/physics-runtime/src/index.js'); if(typeof r.pickEngine!=='function'||typeof r.domainOfEngine!=='function')throw Error('Shared runtime dispatcher missing'); console.log('canonical Lab viewport imports verified')"
 
 FROM ${PLAYWRIGHT_IMAGE} AS runtime
 WORKDIR /app

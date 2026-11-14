@@ -2,11 +2,11 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { PaperWorkspace } from '../src/client/PaperWorkspace.tsx'
+import { PaperWorkspace, type PaperWorkspaceProps } from '../src/client/PaperWorkspace.tsx'
 import type { PaperApi, PaperJobWire } from '../src/client/paper-api.ts'
 import type { AuthUser } from '../src/client/auth-api.ts'
 import type { AuthState } from '../src/client/auth-store.ts'
-import { zh, type PhysicsosKey } from '../src/client/locales.ts'
+import { zh } from '../src/client/locales.ts'
 
 const job = (over: Partial<PaperJobWire> = {}): PaperJobWire => ({
   id: 'paper-1',
@@ -43,7 +43,8 @@ const neverHook = (() => {
   throw new Error('unused hook')
 }) as never
 /* The redesigned header and controls use the actual typed product dictionary. */
-const t = (key: PhysicsosKey): string => zh[key] ?? key
+const translations: Readonly<Record<string, string>> = zh
+const t: PaperWorkspaceProps['t'] = key => translations[key] ?? key
 
 const stubApi = (jobs: PaperJobWire[] = []): PaperApi => ({
   listSources: vi.fn().mockResolvedValue([]),

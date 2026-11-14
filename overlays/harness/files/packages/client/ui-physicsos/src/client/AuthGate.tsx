@@ -107,10 +107,10 @@ function GateChrome({ t, children, heading = 'auth.login.title' }: { t: (key: Ph
       </header>
       <main className={css.stage}>
         <section className={css.authCard}>
-        <PhysicsOSMark size={52} className={css.heroMark} />
-        <h1 className={css.tagline}>{t(heading)}</h1>
-        <p className={css.support}>{t(heading === 'auth.login.title' ? 'auth.login.support' : 'auth.support')}</p>
-        {children}
+          <PhysicsOSMark size={52} className={css.heroMark} />
+          <h1 className={css.tagline}>{t(heading)}</h1>
+          <p className={css.support}>{t(heading === 'auth.login.title' ? 'auth.login.support' : 'auth.support')}</p>
+          {children}
         </section>
       </main>
       <footer className={css.footer}>

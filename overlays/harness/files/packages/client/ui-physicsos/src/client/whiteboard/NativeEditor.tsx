@@ -136,9 +136,9 @@ export function NativeEditor({ scene, history, onUndo, onRedo, onChange, images,
   const styleSelected = (key: string, value: string | number) => { if (selection.length) commit({ ...current.current, elements: current.current.elements.map(element => selection.includes(String(element.id)) ? { ...element, [key]: value } : element) }) }
   const displayed = draft ?? scene
   return <div className={`${css.editor} ${stageCss.editor}`} data-history-revision={history.undo.length + history.redo.length}>
-      <div className={`${css.viewportControls} ${stageCss.zoom}`}>
-        <button type="button" onClick={() => zoom(1 / 1.2)} aria-label={t('whiteboard.zoomOut')}>−</button><span>{Math.round(view.zoom * 100)}%</span><button type="button" onClick={() => zoom(1.2)} aria-label={t('whiteboard.zoomIn')}>＋</button><button type="button" onClick={fit}>{t('whiteboard.fit')}</button>
-      </div>
+    <div className={`${css.viewportControls} ${stageCss.zoom}`}>
+      <button type="button" onClick={() => { zoom(1 / 1.2) }} aria-label={t('whiteboard.zoomOut')}>−</button><span>{Math.round(view.zoom * 100)}%</span><button type="button" onClick={() => { zoom(1.2) }} aria-label={t('whiteboard.zoomIn')}>＋</button><button type="button" onClick={fit}>{t('whiteboard.fit')}</button>
+    </div>
     <div className={`${css.dockShelf} ${stageCss.dock}`} data-whiteboard-dock="true">
       <div className={`${css.tools} ${stageCss.tools}`} role="toolbar" aria-label={t('whiteboard.dock')}>
         <div className={css.drawingControls}>
