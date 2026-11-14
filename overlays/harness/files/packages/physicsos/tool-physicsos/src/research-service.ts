@@ -73,6 +73,8 @@ export function createResearchService(config: ResearchServiceConfig = {}): Resea
     },
     async present(query, signal) {
       const result = await this.research(query, signal)
+      /* Tool results are strictly serialised as lossless JSON, so an absent
+         value must be omitted, never sent as `undefined`. */
       return {
         query: result.query,
         provider: result.provider,
@@ -85,8 +87,8 @@ export function createResearchService(config: ResearchServiceConfig = {}): Resea
           title: source.title,
           url: source.url,
           depth: source.depth,
-          snippet: source.depth === 'snippet' ? source.snippet : undefined,
-          excerpt: source.excerpt,
+          ...(source.depth === 'snippet' && source.snippet !== '' ? { snippet: source.snippet } : {}),
+          ...(source.excerpt === undefined ? {} : { excerpt: source.excerpt }),
         })),
         guidance: result.readCount === 0
           ? '本轮只取得搜索摘要，没有读取网页全文；引用时说明这一点，不要声称读过原文。'
