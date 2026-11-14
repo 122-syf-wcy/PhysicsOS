@@ -96,7 +96,11 @@ describe('the physics-student agent preset', () => {
 
     const assembly = await ctx.systemPrompt.assemble({ scope: key })
     const persona = assembly.sections.find(section => section.name === PERSONA_PREFIX_SECTION)?.text ?? ''
-    expect(persona).toContain('物理宪法')
+    /* The persona is the student composition: it must name the product role
+       and keep the engine-only rule, and it must not be the generic coding
+       agent. Asserting a retired heading made this fail on wording edits. */
+    expect(persona).toContain('PhysicsOS 的物理助教')
+    expect(persona).toContain('物理结果只能来自 PhysicsOS 引擎')
     expect(persona).not.toContain('coding agent')
 
     const scoped = ctx.tools.schemas(key).map(schema => schema.name).filter(name => name.startsWith('physics_'))
