@@ -106,6 +106,9 @@ importers:
       '@physicsos/engine-mechanics':
         specifier: file:../engine-mechanics
         version: link:../engine-mechanics
+      '@physicsos/engine-modern':
+        specifier: file:../engine-modern
+        version: link:../engine-modern
       '@physicsos/engine-optics':
         specifier: file:../engine-optics
         version: link:../engine-optics

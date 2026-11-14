@@ -92,7 +92,7 @@ describe('circular orbit physical scene commands', () => {
 
   it('rejects an orbit-shaped observable in a competing spring model rather than editing an ignored parameter', () => {
     const scene = sceneOf()
-    scene.constraints.push({ id: 'spring', type: 'spring', objectIds: [scene.bodies[0]!.id], parameters: { stiffness: 10, naturalLength: 1, axis: 'horizontal' } })
+    scene.constraints.push({ id: 'spring', type: 'spring', targets: [scene.bodies[0]!.id], parameters: { stiffness: 10, naturalLength: 1, axis: 'horizontal' } })
     const runtime = new SceneRuntime(scene, { now: () => now })
     const before = runtime.peekScene()
     expect(execute(runtime, 'SetOrbitRadius', { observableId: orbitOf(runtime).id, radius: quantity(8, 'm', 'length') }).ok).toBe(false)

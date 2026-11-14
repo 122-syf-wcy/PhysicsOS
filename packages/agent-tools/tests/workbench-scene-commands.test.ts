@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { SceneRuntime, createMechanicsScene, createPhotoelectricEffectScene, createSceneCommand, type SceneCommand, type SceneCommandType } from '@physicsos/physics-scene'
+import { SceneRuntime, createMechanicsScene, createPhotoelectricEffectScene, createSceneCommand, type SceneCommand, type SceneCommandInput, type SceneCommandPayloadMap, type SceneCommandType } from '@physicsos/physics-scene'
 import { derivedScalar } from '@physicsos/physics-core'
 import { ModernPhysicsEngine, createModernSimulationRequest } from '@physicsos/engine-modern'
 import { MechanicsEngine, createMechanicsSimulationRequest } from '@physicsos/engine-mechanics'
@@ -12,10 +12,17 @@ const types = [
 
 const execute = (runtime: SceneRuntime, type: SceneCommandType, payload: Record<string, unknown>) => {
   const scene = runtime.getScene()
-  return runtime.execute(createSceneCommand({
+  /* The test drives heterogeneous commands through one helper; the envelope
+     is asserted at this boundary, which is exactly where the runtime proves
+     the payload. */
+  const input: SceneCommandInput<SceneCommandType> = {
     commandId: `tool-${type}-${scene.revision}`, sceneId: String(scene.id), expectedRevision: scene.revision,
-    type, payload, traceId: `tool-trace-${scene.revision}`,
-  }) as SceneCommand)
+    type, payload: payload as SceneCommandPayloadMap[SceneCommandType], traceId: `tool-trace-${scene.revision}`,
+  }
+  /* `execute` narrows on a discriminated union, which a runtime-selected
+     command type cannot satisfy statically. The helper asserts the envelope
+     here; every call site still proves the payload through execution. */
+  return runtime.execute(createSceneCommand(input) as Parameters<SceneRuntime['execute']>[0])
 }
 
 describe('workbench fact commands remain discoverable and exhaustively typed', () => {
@@ -27,12 +34,12 @@ describe('workbench fact commands remain discoverable and exhaustively typed', (
       expect(Object.values(COMMAND_SPECS[type].fields).every(field => field.description.length > 0)).toBe(true)
     }
     expect(COMMAND_SPECS.SetOrbitRadius.fields.radius).toMatchObject({ kind: 'quantity', dimension: 'length' })
-    expect(COMMAND_SPECS.SetOrbitalGravitationalParameter.fields.gravitationalParameter.description).toContain('m³/s²')
+    expect(COMMAND_SPECS.SetOrbitalGravitationalParameter.fields.gravitationalParameter!.description).toContain('m³/s²')
     expect(COMMAND_SPECS.SetPhotoelectricWorkFunction.fields.workFunction).toMatchObject({ kind: 'quantity', dimension: 'energy' })
     expect(COMMAND_SPECS.SetPhotonWavelength.fields.wavelength).toMatchObject({ kind: 'quantity', dimension: 'length' })
     expect(COMMAND_SPECS.SetLightIntensity.fields.intensity).toMatchObject({ kind: 'quantity', dimension: 'intensity' })
     expect(COMMAND_SPECS.SetCathodeArea.fields.area).toMatchObject({ kind: 'quantity', dimension: 'area' })
-    expect(COMMAND_SPECS.SetQuantumEfficiency.fields.efficiency.description).toContain('0 ≤ η ≤ 1')
+    expect(COMMAND_SPECS.SetQuantumEfficiency.fields.efficiency!.description).toContain('0 ≤ η ≤ 1')
   })
 
   it('normalizes optical material units then recomputes through the real engine', () => {

@@ -796,7 +796,7 @@ describe.each(pressureFixtures)('$name static pressure planning', (fixture) => {
       })
     }
     expect(result.verification.checks.map((check) => check.id)).toEqual(
-      expect.arrayContaining(fixture.checkIds),
+      expect.arrayContaining([...fixture.checkIds]),
     )
     expect(result.events).toEqual([])
   })
