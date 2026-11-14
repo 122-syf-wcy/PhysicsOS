@@ -54,6 +54,8 @@ export function WorkbenchFloatPanel({ id, title, closeLabel, collapseLabel, onCl
 
   useLayoutEffect(() => {
     const owner = anchor.current?.closest<HTMLElement>('[data-physicsos-surface], [data-physicsos-canvas-workspace], [data-physicsos-whiteboard-workspace]') ?? document.documentElement
+    const header = owner === document.documentElement ? null
+      : owner.querySelector<HTMLElement>(':scope > header') ?? owner.querySelector<HTMLElement>('header')
     ownerGroup.current = owner.dataset.workbenchFloatScope ?? identity
     owner.dataset.workbenchFloatScope = ownerGroup.current
     let sizeChanged = requestedSize.current.width !== width || requestedSize.current.height !== height
@@ -61,10 +63,14 @@ export function WorkbenchFloatPanel({ id, title, closeLabel, collapseLabel, onCl
     const measure = () => {
       const measured = owner.getBoundingClientRect()
       const box = measured.width > 0 && measured.height > 0 ? measured : { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight, width: window.innerWidth }
+      const headerBox = header?.getBoundingClientRect()
+      const headerBottom = headerBox !== undefined && headerBox.width > 0 && headerBox.height > 0
+        && headerBox.bottom > box.top && headerBox.top < box.bottom ? headerBox.bottom : undefined
+      const top = Math.max(66, box.top + 12, headerBottom === undefined ? 0 : headerBottom + 12)
       const available = {
-        x: Math.max(8, box.left + 12), y: Math.max(66, box.top + 12),
+        x: Math.max(8, box.left + 12), y: top,
         width: Math.max(0, Math.min(window.innerWidth - 8, box.right - 12) - Math.max(8, box.left + 12)),
-        height: Math.max(0, Math.min(window.innerHeight - 16, box.bottom - 86) - Math.max(66, box.top + 12)),
+        height: Math.max(0, Math.min(window.innerHeight - 16, box.bottom - 86) - top),
       }
       bounds.current = available
       setWide(box.width >= 1080)
@@ -75,13 +81,16 @@ export function WorkbenchFloatPanel({ id, title, closeLabel, collapseLabel, onCl
       sizeChanged = false
       setRect(previous => fitWorkbenchFloat(previous === undefined ? {
         x: placement === 'top-left' ? available.x : available.x + available.width - width,
-        y: placement === 'bottom-right' ? available.y + available.height - height : available.y + (placement === 'top-left' ? 72 : 0),
+        y: placement === 'bottom-right' ? available.y + available.height - height : available.y + (placement === 'top-left' && headerBottom === undefined ? 72 : 0),
         width, height,
       } : applySize ? { ...previous, width, height } : previous, available))
     }
     measure()
     const observer = new ResizeObserver(measure)
     observer.observe(owner)
+    // Toolbar wrapping can change the protected band without changing the
+    // workbench's own box. Observe that band as well as the full workspace.
+    if (header !== null) observer.observe(header)
     window.addEventListener('resize', measure)
     document.addEventListener('fullscreenchange', measure)
     return () => {

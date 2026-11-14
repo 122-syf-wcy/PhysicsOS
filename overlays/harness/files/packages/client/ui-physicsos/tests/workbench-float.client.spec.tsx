@@ -1,10 +1,9 @@
 // @vitest-environment jsdom
 import { useState } from 'react'
 import { Modal } from '@deepseek-ai/dsh-client-ui-primitives'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WorkbenchFloatPanel, fitWorkbenchFloat } from '../src/client/WorkbenchFloatPanel.tsx'
-import { Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import { ResponsiveInspector, useResponsiveInspector } from '../src/client/ResponsiveInspector.tsx'
 import { Chart } from '../src/client/workspace-parts.tsx'
 
@@ -50,6 +49,43 @@ describe('workbench floating controls', () => {
     expect(Number.parseFloat(panel.style.top) + Number.parseFloat(panel.style.height)).toBeLessThanOrEqual(814)
     expect(screen.getByRole('textbox', { name: 'Mass' })).toBe(input)
     expect(input.value).toBe('2.5')
+  })
+
+  it('keeps floating controls below a measurable toolbar, including after the toolbar wraps', () => {
+    let toolbarHeight = 64
+    const rect = (left: number, top: number, width: number, height: number): DOMRect => ({
+      x: left, y: top, left, top, width, height, right: left + width, bottom: top + height, toJSON: () => ({}),
+    })
+    const original = HTMLElement.prototype.getBoundingClientRect
+    const boxes = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.matches('[data-physicsos-surface="lab"]')) return rect(80, 58, 1200, 710)
+      if (this.matches('[data-workbench-toolbar]')) return rect(98, 64, 1164, toolbarHeight)
+      return original.call(this)
+    })
+    const observers: { callback: ResizeObserverCallback; targets: Set<Element> }[] = []
+    class Observer {
+      readonly targets = new Set<Element>()
+      constructor(readonly callback: ResizeObserverCallback) { observers.push(this) }
+      observe(target: Element): void { this.targets.add(target) }
+      unobserve(target: Element): void { this.targets.delete(target) }
+      disconnect(): void { this.targets.clear() }
+    }
+    vi.stubGlobal('ResizeObserver', Observer)
+    try {
+      render(<div data-physicsos-surface="lab"><header data-workbench-toolbar>Playback and reports</header>
+        <WorkbenchFloatPanel title="Parameters" closeLabel="Close parameters" onClose={() => {}} expanded placement="top-right">
+          <input aria-label="Mass" />
+        </WorkbenchFloatPanel>
+      </div>)
+      const panel = document.querySelector<HTMLElement>('[data-dockkit-float]')!
+      expect(Number.parseFloat(panel.style.top)).toBeGreaterThanOrEqual(64 + toolbarHeight + 12)
+      const header = screen.getByText('Playback and reports')
+      const observer = observers.find(item => item.targets.has(header))
+      expect(observer).toBeDefined()
+      toolbarHeight = 110
+      act(() => { observer!.callback([], observer as unknown as ResizeObserver) })
+      expect(Number.parseFloat(panel.style.top)).toBeGreaterThanOrEqual(64 + toolbarHeight + 12)
+    } finally { boxes.mockRestore() }
   })
 
   it('raises the panel receiving pointer or keyboard focus within its own workbench', () => {
