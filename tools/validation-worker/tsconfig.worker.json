@@ -110,9 +110,6 @@
     "packages/engine-wave/src/wave-demonstration.ts",
     "packages/engine-wave/src/wave-engine.ts",
     "packages/engine-wave/src/wave-model.ts",
-    "packages/experiment-validation/src/frame-plan.ts",
-    "packages/experiment-validation/src/planner.ts",
-    "packages/experiment-validation/src/server.ts",
     "packages/model-usage-outbox/src/index.ts",
     "packages/physics-composite-core/src/composite.ts",
     "packages/physics-composite-core/src/index.ts",
@@ -215,6 +212,9 @@
     "packages/shared/src/ids.ts",
     "packages/shared/src/index.ts",
     "packages/shared/src/time.ts",
+    "tools/validation-worker/src/frame-plan.ts",
+    "tools/validation-worker/src/planner.ts",
+    "tools/validation-worker/src/server.ts",
     "viewport/mechanics-workspace-runtime.ts"
   ]
 }

@@ -1,5 +1,5 @@
 {
-  "name": "@physicsos/experiment-validation",
+  "name": "@physicsos/validation-worker",
   "version": "0.1.0",
   "private": true,
   "description": "Isolated browser acceptance for generated question-code experiments: runtime checks, multi-time geometry, parameter changes and mobile layout, with pure verdict logic",

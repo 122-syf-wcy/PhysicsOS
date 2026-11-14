@@ -45,8 +45,7 @@
     "@physicsos/engine-optics": "link:../../../../../packages/engine-optics",
     "@physicsos/agent-tools": "link:../../../../../packages/agent-tools",
     "@physicsos/physics-scene": "link:../../../../../packages/physics-scene",
-    "@physicsos/physics-runtime": "link:../../../../../packages/physics-runtime",
-    "@physicsos/experiment-validation": "link:../../../../../packages/experiment-validation"
+    "@physicsos/physics-runtime": "link:../../../../../packages/physics-runtime"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^",

@@ -17082,7 +17082,7 @@ index 36dc0506d3f..eab1961766a 100644
        '@modelcontextprotocol/server':
          specifier: 2.0.0
          version: 2.0.0
-@@ -9831,34 +10065,548 @@ importers:
+@@ -9831,34 +10065,545 @@ importers:
        zod:
          specifier: ^4.4.3
          version: 4.4.3
@@ -17230,9 +17230,6 @@ index 36dc0506d3f..eab1961766a 100644
 +      '@physicsos/engine-optics':
 +        specifier: link:../../../../../packages/engine-optics
 +        version: link:../../../../../packages/engine-optics
-+      '@physicsos/experiment-validation':
-+        specifier: link:../../../../../packages/experiment-validation
-+        version: link:../../../../../packages/experiment-validation
 +      '@physicsos/physics-runtime':
 +        specifier: link:../../../../../packages/physics-runtime
 +        version: link:../../../../../packages/physics-runtime
@@ -20002,7 +19999,7 @@ index e2b7da61e84..17715920683 100644
        "@deepseek-ai/dsh-client-ui-settings-account": ["./packages/client/ui-settings-account/src/index.ts"],
        "@deepseek-ai/dsh-client-ui-settings-account/client": ["./packages/client/ui-settings-account/src/client/index.ts"],
        "@deepseek-ai/dsh-api-gateway/stream-protocol": ["./packages/api/gateway/src/stream-protocol.ts"],
-@@ -136,6 +137,42 @@
+@@ -136,6 +137,40 @@
        "@deepseek-ai/dsh-agent-preset-registry/display": ["./packages/preset/agent-preset-registry/src/display.ts"],
        "@deepseek-ai/dsh-pwsh-local": ["./packages/shell/pwsh-local/src/index.ts"],
        "@deepseek-ai/dsh-tool-pwsh": ["./packages/shell/tool-pwsh/src/index.ts"],
@@ -20011,8 +20008,6 @@ index e2b7da61e84..17715920683 100644
 +      "@deepseek-ai/dsh-client-runtime/client": ["./packages/client/ui-physicsos/src/client/runtime-compat.ts"],
 +      "@physicsos/agent-tools": ["../../packages/agent-tools/src/index.ts"],
 +      "@physicsos/web-research": ["../../packages/web-research/src/index.ts"],
-+      "@physicsos/experiment-validation/wrapper": ["../../packages/experiment-validation/src/wrapper.ts"],
-+      "@physicsos/experiment-validation/page": ["../../packages/experiment-validation/src/page.ts"],
 +      "@physicsos/engine-acoustics": ["../../packages/engine-acoustics/src/index.ts"],
 +      "@physicsos/engine-circuit": ["../../packages/engine-circuit/src/index.ts"],
 +      "@physicsos/engine-collision": ["../../packages/engine-collision/src/index.ts"],

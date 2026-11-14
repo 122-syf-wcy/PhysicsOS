@@ -21,7 +21,7 @@ import {
 import { questionCodeRoutes, QUESTION_CODE_PREFIX } from './question-code-routes.ts'
 import { QuestionCodeJobs } from './question-code-jobs.ts'
 import { requestCandidateValidation, validationWorkerFromEnv } from './question-code-validation.ts'
-import { validationWrapper as buildWrapper } from '@physicsos/experiment-validation/wrapper'
+import { validationWrapper as buildWrapper } from './validation-wrapper.ts'
 export {
   QuestionCodeArtifactService,
   QUESTION_CODE_SERVICE,

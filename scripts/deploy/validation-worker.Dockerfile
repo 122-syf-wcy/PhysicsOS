@@ -27,15 +27,16 @@ ARG PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright:v1.62.1-noble
 FROM ${NODE_IMAGE} AS build
 WORKDIR /build
 COPY packages ./packages
+COPY tools/validation-worker ./worker
 COPY viewport ./viewport
 COPY scripts/deploy/build-validation-workspace.mjs ./build-workspace.mjs
-COPY tsconfig.worker.json ./tsconfig.worker.json
+COPY worker/tsconfig.worker.json ./tsconfig.worker.json
 RUN npm install --no-audit --no-fund --ignore-scripts --save-exact \
       typescript@6.0.3 @types/node@24 @playwright/test@1.62.1 playwright-core@1.62.1 \
     && npx tsc -p tsconfig.worker.json \
     && node build-workspace.mjs --root /build \
     && node -e "const v=require('playwright-core/package.json').version; if(v!=='1.62.1'){console.error('playwright-core drift: '+v);process.exit(1)}" \
-    && test -f dist/packages/experiment-validation/src/server.js \
+    && test -f dist/tools/validation-worker/src/server.js \
     && test -f dist/node_modules/@physicsos/physics-scene/src/index.js
 
 FROM ${PLAYWRIGHT_IMAGE} AS runtime
@@ -54,4 +55,4 @@ WORKDIR /app/dist
 EXPOSE 8099
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:8099/healthz',{headers:{authorization:'Bearer '+process.env.PHYSICSOS_VALIDATION_TOKEN}}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
-ENTRYPOINT ["node", "packages/experiment-validation/src/server.js"]
+ENTRYPOINT ["node", "tools/validation-worker/src/server.js"]
