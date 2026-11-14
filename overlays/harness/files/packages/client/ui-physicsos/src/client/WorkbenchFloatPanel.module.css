@@ -1,4 +1,5 @@
 .anchor { display: none; }
+/* The active workbench layer is raised to 13 inline; shared modal layers stay above it. */
 .layer { position: fixed; inset: 0; z-index: 12; pointer-events: none; color: var(--physics-ink); }
 .layer :global([data-dockkit-float]) {
   border: 1px solid var(--physics-glass-border); border-radius: 22px;

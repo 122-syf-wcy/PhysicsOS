@@ -1,5 +1,5 @@
 /** Product panels reuse Dockkit's pointer capture, dragging and resize gestures. */
-import { useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { createIdMinter, FloatLayer, type DockIntents, type DockLabels, type FloatRect, type LayoutState } from '@deepseek-ai/dsh-client-ui-dockkit'
 import css from './WorkbenchFloatPanel.module.css'
@@ -40,6 +40,7 @@ export function WorkbenchFloatPanel({ id, title, closeLabel, collapseLabel, onCl
 }: WorkbenchFloatPanelProps) {
   const anchor = useRef<HTMLSpanElement>(null)
   const layer = useRef<HTMLDivElement>(null)
+  const ownerGroup = useRef('')
   const bounds = useRef<FloatRect>({ x: 0, y: 0, width: 0, height: 0 })
   const requestedSize = useRef({ width, height })
   const [rect, setRect] = useState<FloatRect>()
@@ -53,7 +54,9 @@ export function WorkbenchFloatPanel({ id, title, closeLabel, collapseLabel, onCl
 
   useLayoutEffect(() => {
     const owner = anchor.current?.closest<HTMLElement>('[data-physicsos-surface], [data-physicsos-canvas-workspace], [data-physicsos-whiteboard-workspace]') ?? document.documentElement
-    const sizeChanged = requestedSize.current.width !== width || requestedSize.current.height !== height
+    ownerGroup.current = owner.dataset.workbenchFloatScope ?? identity
+    owner.dataset.workbenchFloatScope = ownerGroup.current
+    let sizeChanged = requestedSize.current.width !== width || requestedSize.current.height !== height
     requestedSize.current = { width, height }
     const measure = () => {
       const measured = owner.getBoundingClientRect()
@@ -66,11 +69,15 @@ export function WorkbenchFloatPanel({ id, title, closeLabel, collapseLabel, onCl
       bounds.current = available
       setWide(box.width >= 1080)
       setPortal(document.fullscreenElement ?? document.body)
+      // Capture the one requested-size update before queuing a React updater;
+      // future observer callbacks only fit the user's settled geometry.
+      const applySize = sizeChanged
+      sizeChanged = false
       setRect(previous => fitWorkbenchFloat(previous === undefined ? {
         x: placement === 'top-left' ? available.x : available.x + available.width - width,
         y: placement === 'bottom-right' ? available.y + available.height - height : available.y + (placement === 'top-left' ? 72 : 0),
         width, height,
-      } : sizeChanged ? { ...previous, width, height } : previous, available))
+      } : applySize ? { ...previous, width, height } : previous, available))
     }
     measure()
     const observer = new ResizeObserver(measure)
@@ -82,14 +89,28 @@ export function WorkbenchFloatPanel({ id, title, closeLabel, collapseLabel, onCl
       window.removeEventListener('resize', measure)
       document.removeEventListener('fullscreenchange', measure)
     }
-  }, [width, height, placement])
+  }, [width, height, placement, identity])
+
+  // This is presentation-only state on the owning workbench's DOM layers.
+  // Dockkit still owns the panel gestures and geometry. No module singleton,
+  // application store or business subscription is introduced for stacking.
+  const raisePanel = useCallback(() => {
+    const active = layer.current
+    if (active === null || ownerGroup.current === '') return
+    for (const sibling of active.ownerDocument.querySelectorAll<HTMLElement>('[data-workbench-float-owner]')) {
+      if (sibling.dataset.workbenchFloatOwner !== ownerGroup.current) continue
+      sibling.style.zIndex = sibling === active ? '13' : '12'
+    }
+  }, [])
 
   useLayoutEffect(() => {
-    if (!expanded || wide || portal === null) return
+    if (portal === null) return
+    if (expanded) raisePanel()
+    if (!expanded || wide) return
     const previous = document.activeElement
     layer.current?.querySelector<HTMLButtonElement>('[data-dockkit-float-close]')?.focus({ preventScroll: true })
     return () => { if (previous instanceof HTMLElement && previous.isConnected) previous.focus({ preventScroll: true }) }
-  }, [expanded, portal, wide])
+  }, [expanded, portal, wide, raisePanel])
 
   const close = () => { onClose() }
   const collapse = () => { (onCollapse ?? onClose)() }
@@ -103,11 +124,11 @@ export function WorkbenchFloatPanel({ id, title, closeLabel, collapseLabel, onCl
   }
   const noChange = () => {}
   const intents: DockIntents = {
-    focusTab: noChange, focusPane: noChange, splitPane: noChange, addTab: noChange,
+    focusTab: raisePanel, focusPane: raisePanel, splitPane: noChange, addTab: noChange,
     closeTab: close, duplicateTab: noChange, floatTab: noChange, unfloatPane: collapse,
     placeTab: noChange, dropTab: noChange, resizeSplit: noChange,
-    moveFloat: (_id, x, y) => { setRect(previous => previous === undefined ? previous : fitWorkbenchFloat({ ...previous, x, y }, bounds.current)) },
-    resizeFloat: (_id, next) => { setRect(fitWorkbenchFloat(next, bounds.current)) },
+    moveFloat: (_id, x, y) => { raisePanel(); setRect(previous => previous === undefined ? previous : fitWorkbenchFloat({ ...previous, x, y }, bounds.current)) },
+    resizeFloat: (_id, next) => { raisePanel(); setRect(fitWorkbenchFloat(next, bounds.current)) },
   }
   const labels: DockLabels = {
     emptyPane: title, splitPane: title, splitPaneDisabled: title, splitPaneNarrow: title,
@@ -117,8 +138,15 @@ export function WorkbenchFloatPanel({ id, title, closeLabel, collapseLabel, onCl
   return <>
     <span ref={anchor} className={css.anchor} aria-hidden="true" />
     {portal !== null && state !== undefined && (expanded || (desktopDefault && wide)) ? createPortal(
-      <div ref={layer} id={id} role={role} aria-label={title} className={`${css.layer} ${className ?? ''}`} data-workbench-float={placement} data-can-collapse={onCollapse !== undefined && collapseLabel !== closeLabel} onKeyDown={event => {
-        if (event.key === 'Escape' && !event.defaultPrevented && !event.nativeEvent.isComposing) { event.stopPropagation(); close() }
+      <div ref={layer} id={id} role={role} aria-label={title} className={`${css.layer} ${className ?? ''}`} data-workbench-float={placement} data-workbench-float-owner={ownerGroup.current}
+        onPointerDownCapture={event => { if (event.target instanceof Node && layer.current?.contains(event.target)) raisePanel() }}
+        onFocusCapture={event => { if (event.target instanceof Node && layer.current?.contains(event.target)) raisePanel() }}
+        data-can-collapse={onCollapse !== undefined && collapseLabel !== closeLabel} onKeyDown={event => {
+        if (event.key === 'Escape' && !event.defaultPrevented && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229
+          && !event.ctrlKey && !event.altKey && !event.metaKey
+          && event.target instanceof Node && layer.current?.contains(event.target)) {
+          event.preventDefault(); event.stopPropagation(); close()
+        }
       }}>
         <FloatLayer state={state} intents={intents} labels={labels} renderTab={() => <div className={css.content}>{children}</div>} />
       </div>, portal,

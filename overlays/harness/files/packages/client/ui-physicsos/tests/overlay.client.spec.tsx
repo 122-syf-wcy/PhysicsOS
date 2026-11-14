@@ -355,7 +355,7 @@ describe('PhysicsOS overlay presentation', () => {
         <HomeBelow {...actionsProps(true, openSurface)} />
       </>,
     )
-    expect(screen.getByText('探索一个物理世界')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '今天，想探索什么？' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '创建实验' }))
     expect(openSurface).toHaveBeenCalledWith('lab')
   })

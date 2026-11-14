@@ -89,6 +89,7 @@ export function RecentSpaces({
               <button
                 type="button"
                 className={css.item}
+                data-physicsos-history-open=""
                 onClick={() => {
                   openSurface('lab', sceneRefOf(entry))
                 }}
@@ -131,6 +132,7 @@ export function RecentSpaces({
                 type="button"
                 className={clsx(css.item, session.id === currentSessionId && css.active)}
                 aria-current={session.id === currentSessionId ? 'true' : undefined}
+                data-physicsos-history-open=""
                 onClick={() => {
                   openSession(session.id)
                 }}

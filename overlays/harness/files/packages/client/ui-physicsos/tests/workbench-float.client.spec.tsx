@@ -3,6 +3,8 @@ import { useState } from 'react'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WorkbenchFloatPanel, fitWorkbenchFloat } from '../src/client/WorkbenchFloatPanel.tsx'
+import { Modal } from '@deepseek-ai/dsh-client-ui-primitives'
+import { ResponsiveInspector, useResponsiveInspector } from '../src/client/ResponsiveInspector.tsx'
 import { Chart } from '../src/client/workspace-parts.tsx'
 
 beforeEach(() => {
@@ -47,6 +49,74 @@ describe('workbench floating controls', () => {
     expect(Number.parseFloat(panel.style.top) + Number.parseFloat(panel.style.height)).toBeLessThanOrEqual(814)
     expect(screen.getByRole('textbox', { name: 'Mass' })).toBe(input)
     expect(input.value).toBe('2.5')
+  })
+
+  it('raises the panel receiving pointer or keyboard focus within its own workbench', () => {
+    render(<>
+      <div data-physicsos-surface="lab">
+        <WorkbenchFloatPanel title="Charts" closeLabel="Close charts" onClose={() => {}} expanded><input aria-label="Chart input" /></WorkbenchFloatPanel>
+        <WorkbenchFloatPanel title="Parameters" closeLabel="Close parameters" onClose={() => {}} expanded><input aria-label="Parameter input" /></WorkbenchFloatPanel>
+      </div>
+      <div data-physicsos-surface="lab">
+        <WorkbenchFloatPanel title="Another bench" closeLabel="Close another bench" onClose={() => {}} expanded><input aria-label="Other input" /></WorkbenchFloatPanel>
+      </div>
+    </>)
+    const charts = screen.getByRole('region', { name: 'Charts' })
+    const parameters = screen.getByRole('region', { name: 'Parameters' })
+    const other = screen.getByRole('region', { name: 'Another bench' })
+    const otherLayer = other.style.zIndex
+    pointer(screen.getByRole('textbox', { name: 'Chart input' }), 'pointerdown', 100, 100)
+    expect(Number(charts.style.zIndex)).toBeGreaterThan(Number(parameters.style.zIndex))
+    screen.getByRole('textbox', { name: 'Parameter input' }).focus()
+    expect(Number(parameters.style.zIndex)).toBeGreaterThan(Number(charts.style.zIndex))
+    expect(other.style.zIndex).toBe(otherLayer)
+  })
+
+  it('keeps a user-resized detail panel after the viewport is measured again', () => {
+    const view = render(<WorkbenchFloatPanel title="Parameters" closeLabel="Close parameters" onClose={() => {}} expanded width={310} height={210}>
+      <input aria-label="Mass" defaultValue="1" />
+    </WorkbenchFloatPanel>)
+    view.rerender(<WorkbenchFloatPanel title="Parameters" closeLabel="Close parameters" onClose={() => {}} expanded width={310} height={380}>
+      <input aria-label="Mass" defaultValue="1" />
+    </WorkbenchFloatPanel>)
+    const panel = document.querySelector<HTMLElement>('[data-dockkit-float]')!
+    const resize = panel.querySelector<HTMLElement>('[data-dockkit-float-resize]')!
+    pointer(resize, 'pointerdown', 100, 100)
+    pointer(window, 'pointerup', 150, 120)
+    const settled = { width: panel.style.width, height: panel.style.height }
+    expect(settled).toEqual({ width: '360px', height: '400px' })
+    fireEvent(window, new Event('resize'))
+    expect({ width: panel.style.width, height: panel.style.height }).toEqual(settled)
+  })
+
+  it('leaves IME and modal Escape with their owner while closing the focused inspector normally', () => {
+    vi.stubGlobal('innerWidth', 390)
+    function Fixture() {
+      const controller = useResponsiveInspector()
+      const [helpOpen, setHelpOpen] = useState(false)
+      return <>
+        <button ref={controller.triggerRef} type="button" onClick={controller.reveal}>Open inspector</button>
+        <ResponsiveInspector controller={controller} label="Parameters" closeLabel="Close parameters">
+          <input aria-label="Mass" />
+          <button type="button" onClick={() => { setHelpOpen(true) }}>Open help</button>
+        </ResponsiveInspector>
+        <Modal open={helpOpen} onClose={() => { setHelpOpen(false) }} title="Help" closeLabel="Close help"><input aria-label="Help input" /></Modal>
+      </>
+    }
+    render(<Fixture />)
+    fireEvent.click(screen.getByRole('button', { name: 'Open inspector' }))
+    const mass = screen.getByRole('textbox', { name: 'Mass' })
+    fireEvent.keyDown(mass, { key: 'Escape', isComposing: true })
+    fireEvent.keyDown(mass, { key: 'Escape', keyCode: 229 })
+    expect(screen.getByRole('complementary', { name: 'Parameters' })).toBeTruthy()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.getByRole('complementary', { name: 'Parameters' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Open help' }))
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Help input' }), { key: 'Escape' })
+    expect(screen.queryByRole('dialog', { name: 'Help' })).toBeNull()
+    expect(screen.getByRole('complementary', { name: 'Parameters' })).toBeTruthy()
+    fireEvent.keyDown(mass, { key: 'Escape' })
+    expect(screen.queryByRole('complementary', { name: 'Parameters' })).toBeNull()
   })
 
   it('opens only on request on a narrow bench and returns focus after Escape', () => {

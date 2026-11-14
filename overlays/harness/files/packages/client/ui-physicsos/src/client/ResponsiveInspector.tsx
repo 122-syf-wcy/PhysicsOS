@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { useCallback, useId, useRef, useState } from 'react'
 import type { ReactNode, RefObject } from 'react'
 import clsx from 'clsx'
 import {
@@ -33,15 +33,8 @@ export function useResponsiveInspector(): ResponsiveInspectorController {
   const toggle = useCallback(() => { setOpen(value => !value) }, [])
   const reveal = useCallback(() => { setOpen(true) }, [])
 
-  useEffect(() => {
-    if (!open) return
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') close()
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => { window.removeEventListener('keydown', handleKeyDown) }
-  }, [close, open])
-
+  // Escape belongs to the focused WorkbenchFloatPanel. A window listener
+  // would also consume IME cancellation and Escape already handled by a modal.
   return { id, open, close, toggle, reveal, triggerRef }
 }
 
