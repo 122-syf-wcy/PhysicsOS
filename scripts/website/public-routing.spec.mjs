@@ -49,8 +49,8 @@ test('the compatibility redirect runs only at the root pathname', () => {
 const links = [...page.matchAll(/<a\b[^>]*\bhref=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)]
   .map(([, href, content]) => ({ href, label: content.replace(/<[^>]+>/g, '').trim() }));
 
-test('all product and administrator links navigate from the website to the system root', () => {
-  for (const label of ['开始探索', '进入 PhysicsOS', '进入我的物理世界', '去完整实验室看看', '开启我的探索', '管理员后台']) {
+test('public entry actions navigate from the website to the system root', () => {
+  for (const label of ['开始探索', '进入 PhysicsOS', '进入我的物理世界', '开始我的提问', '创造我的课堂', '进入系统']) {
     const link = links.find(item => item.label === label);
     assert.ok(link, `missing ${label} link`);
     assert.equal(new URL(link.href, 'https://physicsos.dongsiwei.com/').href, 'https://physics.dongsiwei.com/', label);
@@ -58,7 +58,21 @@ test('all product and administrator links navigate from the website to the syste
 });
 
 test('developer documentation remains on the system domain', () => {
-  const link = links.find(item => item.label === '开发文档 ↗');
+  const link = links.find(item => item.label === '开发者文档');
   assert.ok(link, 'missing developer documentation link');
   assert.equal(new URL(link.href, 'https://physicsos.dongsiwei.com/').href, 'https://physics.dongsiwei.com/physicsos/developers/index.html');
+});
+
+
+test('feature entries retain their product destinations', () => {
+  const destinations = {
+    '进入实验中心': '/#/experiments',
+    '打开自由画布': '/#/canvases',
+    '打开教学画板': '/#/whiteboards',
+  };
+  for (const [label, path] of Object.entries(destinations)) {
+    const entry = links.find(item => item.label === label);
+    assert.ok(entry, `missing ${label} link`);
+    assert.equal(new URL(entry.href).href, `https://physics.dongsiwei.com${path}`);
+  }
 });

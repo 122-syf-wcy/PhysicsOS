@@ -1,0 +1,15 @@
+/* Free canvas has one continuous paper surface and a compact glass tool dock. */
+.workspace.workspace { padding: 0; gap: 0; background: var(--physics-canvas-bg); }
+.workspace .toolbar { border: 0; background: transparent; box-shadow: none; padding: 8px 18px; min-height: 54px; }
+.workspace .body { position: relative; flex: 1; min-height: 0; display: block; }
+.workspace .board { position: absolute; inset: 0; width: 100%; min-height: 0; height: 100%; border: 0; border-radius: 0; background: var(--physics-canvas-bg); box-shadow: none; }
+.workspace .dockShelf { position: absolute; left: 0; right: 0; bottom: 14px; padding: 0 16px; background: none; z-index: 9; }
+.workspace .toolDock { border: 1px solid var(--physics-glass-border); border-radius: 999px; background: var(--physics-glass-fill); background-image: var(--physics-glass-sheen); box-shadow: var(--physics-glass-rim), var(--physics-glass-lift); backdrop-filter: var(--physics-glass-blur); padding: 8px 14px; }
+.workspace .toolDock::before { display: none; }
+.workspace .navigationControls { gap: 6px; }
+.workspace .toolDock button { border-radius: 999px; min-height: 36px; }
+.workspace .zoomShelf { bottom: 18px; left: 14px; padding: 7px 10px; border-radius: 999px; background: var(--physics-glass-fill); box-shadow: var(--physics-glass-rim), var(--physics-glass-lift); backdrop-filter: var(--physics-glass-blur); }
+.floatAgent > * { position: static; width: 100%; height: 100%; box-sizing: border-box; border: 0; padding: 0; background: transparent; box-shadow: none; }
+@container physics-canvas (max-width: 1000px) { .workspace .zoomShelf { bottom: 90px; } .workspace .toolDock { border-radius: 26px; } }
+@container physics-canvas (max-width: 600px) { .workspace .toolbar { padding: 6px 8px; } .workspace .dockShelf { bottom: 10px; padding: 0 8px; } .workspace .toolDock { max-width: 100%; padding: 6px; } .workspace .zoomShelf { bottom: 105px; } }
+@media (prefers-reduced-transparency: reduce) { .workspace .toolDock, .workspace .zoomShelf { background: var(--physics-glass-fill-strong); backdrop-filter: none; } }

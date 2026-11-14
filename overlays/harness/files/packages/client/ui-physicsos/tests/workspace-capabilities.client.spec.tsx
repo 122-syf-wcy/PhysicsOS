@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { useStudentAuth } from './student-auth-fixture.client.ts'
 import { withOfficialRenderer } from './official-renderer-fixture.client.ts'
-import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   PhysicsSurface,
@@ -24,9 +24,11 @@ const neverHook = (() => {
   throw new Error('unused hook')
 }) as never
 
+beforeEach(() => { vi.stubGlobal('innerWidth', 1360) })
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
 const mountLab = (templateId: string) => {
@@ -115,11 +117,12 @@ describe.each(CASES)('capability-driven transport · $id ($kind)', ({ id }) => {
 describe('a timeline-less experiment loses only the transport', () => {
   it('keeps the scene tree and the editable inspector', () => {
     mountLab('series-circuit')
+    fireEvent.click(screen.getByRole('button', { name: '图层' }))
 
     /* The controls that remain meaningful are still there: the student can read
        the apparatus, edit parameters and re-solve. */
     expect(screen.getByRole('region', { name: '场景与对象' })).toBeTruthy()
-    expect(screen.getByRole('complementary', { name: '检查器' })).toBeTruthy()
+    expect(screen.getByRole('complementary', { name: /检查器|快捷参数/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: '检查器' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '报告' })).toBeTruthy()
     expect(screen.getByRole('img')).toBeTruthy()

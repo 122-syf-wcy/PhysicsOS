@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Chart } from './workspace-parts.tsx'
 import { LoadingState } from './LoadingState.tsx'
 import type { UsageApi, UsageSummary } from './usage-api.ts'
 import type { PhysicsosKey } from './locales.ts'
@@ -12,6 +13,8 @@ export interface UsageWorkspaceProps {
 
 /** Reads the same server-owned counters for the personal page and authorized overview. */
 export function UsageWorkspace({ api, admin = false, t }: UsageWorkspaceProps) {
+  const [metric, setMetric] = useState<'visits' | 'uses' | 'tokens'>('visits')
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null)
   const [summary, setSummary] = useState<UsageSummary>()
   const [error, setError] = useState<string>()
   const [refresh, setRefresh] = useState(0)
@@ -49,6 +52,10 @@ export function UsageWorkspace({ api, admin = false, t }: UsageWorkspaceProps) {
         ['usage.calls.missing', summary.coverage.missingCalls],
         ['usage.sessions.unavailable', summary.coverage.unavailableSessions ?? 0],
       ] as const)
+  const days = [...(summary?.daily ?? [])].sort((a, b) => a.date.localeCompare(b.date))
+  const metricLabel = t(metric === 'tokens' ? 'usage.tokens.total' : metric === 'uses' ? 'usage.uses' : 'usage.visits')
+  const valueOf = (day: NonNullable<UsageSummary['daily'][number]>): number => metric === 'tokens' ? day.tokens.totalTokens : day[metric]
+  const hovered = hoverIndex === null ? undefined : days[Math.max(0, Math.min(days.length - 1, hoverIndex))]
   return (
     <section className={admin ? css.embedded : css.root} data-physicsos-surface={admin ? undefined : 'record'}>
       <header className={css.header}>
@@ -115,6 +122,22 @@ export function UsageWorkspace({ api, admin = false, t }: UsageWorkspaceProps) {
               </>
             ) : null}
           </dl>
+          {days.length > 0 && <section className={css.trend} aria-label={t('usage.history')}>
+            <div className={css.trendHeader}>
+              <h2>{t('usage.history')}</h2>
+              <div className={css.metricTabs} role="group" aria-label={t('usage.history')}>
+                {(['visits', 'uses', 'tokens'] as const).map(value => <button key={value} type="button" aria-pressed={metric === value} onClick={() => { setMetric(value); setHoverIndex(null) }}>
+                  {t(value === 'tokens' ? 'usage.tokens.total' : value === 'uses' ? 'usage.uses' : 'usage.visits')}
+                </button>)}
+              </div>
+            </div>
+            <div className={css.trendReadout} role="status">{hovered === undefined ? `${days[0]?.date ?? ''} — ${days.at(-1)?.date ?? ''}` : `${hovered.date} · ${metricLabel}: ${n(valueOf(hovered))}`}</div>
+            <div className={css.trendPlot}>
+              <Chart series={{ id: `usage-${metric}`, title: metricLabel, xLabel: t('usage.date'), yLabel: metricLabel, role: 'trajectory', points: days.map((day, index) => ({ t: index, value: valueOf(day) })) }}
+                width={720} height={180} zeroBased time={hoverIndex ?? 0} total={hoverIndex === null ? 0 : days.length - 1}
+                onHoverTime={value => { setHoverIndex(value === null ? null : Math.round(value)) }} />
+            </div>
+          </section>}
           <h2>{t('usage.history')}</h2>
           {summary.daily.length === 0 ? (
             <p>{t('usage.empty')}</p>

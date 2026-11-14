@@ -1,0 +1,43 @@
+/* One uninterrupted simulation sheet; controls float without purchasing tracks. */
+.workspace.workspace { padding: 0; gap: 0; background: var(--physics-canvas-bg); }
+.workspace .toolbar { position: absolute; z-index: 8; inset: 6px 18px auto; min-height: 64px; max-height: 120px; padding: 4px 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; overflow: visible; pointer-events: none; animation: none; }
+.workspace .toolbar > * { pointer-events: auto; }
+.workspace .body { position: absolute; inset: 0; display: block; min-height: 0; }
+.workspace .stage { position: absolute; inset: 0; display: block; overflow: hidden; }
+.workspace .canvas { position: absolute; inset: 0; width: 100%; min-height: 0; height: 100%; border: 0; border-radius: 0; box-shadow: none; animation: none; }
+.workspace .timeline { position: absolute; z-index: 6; bottom: 22px; left: 50%; transform: translateX(-50%); display: flex; width: min(620px, calc(100% - 36px)); min-height: 54px; padding: 9px 16px; box-sizing: border-box; border: 1px solid var(--physics-glass-border); border-radius: 999px; background: var(--physics-glass-fill); box-shadow: var(--physics-glass-rim), var(--physics-glass-lift); backdrop-filter: var(--physics-glass-blur); animation: none; }
+.workspace .timeline > :first-child { flex: none; }
+.workspace .title { font-size: 20px; line-height: 28px; font-weight: 500; color: var(--physics-canvas-text); }
+.workspace .sceneIdentity { max-width: min(52%, 640px); }
+.workspace .toolGroup { justify-content: flex-end; flex-wrap: wrap; gap: 5px; max-width: 55%; }
+.workspace .crumb { background: transparent; }
+.workspace .tool { border-radius: 999px; background: var(--physics-glass-fill); border-color: var(--physics-glass-border-soft); backdrop-filter: var(--physics-glass-blur); }
+.workspace :global([data-workbench-scene-toggle]),
+.workspace :global([data-workbench-inspector-toggle]) { display: inline-flex; }
+.workspace .buildDiagnostic { position: absolute; top: 80px; left: 50%; transform: translateX(-50%); z-index: 5; max-width: 60%; }
+.floatData { display: flex; flex-direction: column; gap: 8px; width: 100%; min-width: 0; height: 100%; }
+.floatData .dataHead { flex: none; min-height: 32px; display: flex; flex-wrap: wrap; align-items: center; gap: 3px; border: 0; padding: 0; background: transparent; }
+.floatData .dataBody { flex: 1; min-height: 0; padding: 0; overflow: auto; }
+.floatData .tab { font-size: 11px; padding: 5px 8px; border-radius: 999px; }
+.floatData .tabActive { color: var(--physics-accent-strong); background: var(--physics-accent-soft); }
+.floatAgent > * { position: static; width: 100%; min-width: 0; max-width: none; height: 100%; max-height: none; border: 0; border-radius: 0; box-shadow: none; background: transparent; animation: none; }
+@media (max-width: 760px) {
+  .workspace .toolbar { inset: 6px 10px auto; gap: 4px; max-height: 145px; }
+  .workspace .sceneIdentity { max-width: 100%; flex-basis: 100%; }
+  .workspace .title { font-size: 17px; line-height: 24px; }
+  .workspace .toolGroup { max-width: 100%; justify-content: flex-start; flex-wrap: nowrap; overflow-x: auto; }
+  .workspace .toolGroup > * { flex-shrink: 0; }
+  .workspace .timeline { bottom: 12px; padding: 7px 10px; gap: 4px; }
+  .workspace .clockEnd { display: none; }
+}
+@media (prefers-reduced-transparency: reduce) { .workspace .timeline, .workspace .tool { background: var(--physics-glass-fill-strong); backdrop-filter: none; } }
+.questionWorkspace.questionWorkspace { display: flex; padding: 0; overflow: hidden; background: var(--physics-canvas-bg); }
+.questionContent { position: relative; display: flex; flex-direction: column; flex: 1; min-height: 0; width: 100%; max-width: none; gap: 0; margin: 0; padding: 0; }
+.questionContent .questionHeader { flex: none; min-height: 64px; margin: 0; padding: 8px 18px; background: transparent; }
+.questionContent .questionTransport { position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%); z-index: 6; display: flex; width: min(620px, calc(100% - 36px)); min-height: 54px; box-sizing: border-box; padding: 9px 14px; border-radius: 999px; border: 1px solid var(--physics-glass-border); background: var(--physics-glass-fill); box-shadow: var(--physics-glass-rim), var(--physics-glass-lift); backdrop-filter: var(--physics-glass-blur); }
+.questionHint { position: absolute; z-index: 5; bottom: 86px; left: 18px; max-width: min(540px, calc(100% - 36px)); padding: 7px 10px; border-radius: 10px; background: var(--physics-glass-fill); }
+@media (max-width: 600px) { .questionContent .questionHeader { flex-wrap: wrap; padding: 7px 10px; gap: 6px; } .questionContent .questionTransport { display: flex; flex-wrap: wrap; bottom: 12px; border-radius: 24px; padding: 8px 10px; } }
+
+.quickParameters { display: flex; flex-direction: column; gap: 10px; }
+.moreParameters { width: 100%; margin-top: 14px; padding: 7px; border: 0; border-radius: 8px; background: transparent; color: var(--physics-ink-link); font: inherit; font-size: 12px; cursor: pointer; }
+.moreParameters:hover { background: var(--physics-accent-soft); }

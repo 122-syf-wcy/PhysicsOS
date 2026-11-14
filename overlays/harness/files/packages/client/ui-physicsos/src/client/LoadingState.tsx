@@ -1,9 +1,10 @@
+import { Mascot } from './Mascot.tsx'
 import css from './LoadingState.module.css'
 
 /**
  * Lightweight startup artwork; readiness is controlled only by the feature loader.
  *
- * `inline` lays the same three characters out beside a short label, for waits
+ * `inline` lays the same character out beside a short label, for waits
  * inside a card, list or status row. It keeps the caller's visible text so every
  * existing acceptance probe and screen reader still sees the same words.
  */
@@ -18,9 +19,7 @@ export function LoadingState({ compact = false, inline = false, label = '正在�
   return <div className={className} role="status" aria-label={children === undefined ? label : undefined}>
     <div className={css.scene} aria-hidden="true">
       <div className={css.halo} />
-      <img className={css.boy} src="/physicsos/loading/boy.webp" alt="" width="320" height="320" />
-      <img className={css.girl} src="/physicsos/loading/girl.webp" alt="" width="320" height="320" />
-      <img className={css.cat} src="/physicsos/loading/cat.webp" alt="" width="320" height="320" />
+      <Mascot pose="think" size={inline ? 44 : compact ? 88 : 136} float={!inline} />
     </div>
     {children === undefined ? null : <span className={css.label}>{children}</span>}
     {inline ? null : <span className={css.brand} aria-hidden="true">PhysicsOS</span>}

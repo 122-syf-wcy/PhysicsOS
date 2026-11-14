@@ -150,7 +150,7 @@ describe('administrator shell', () => {
     ].every(primitive => typeof primitive === 'function')).toBe(true)
   })
 
-  it('offers conversation moderation only to platform administrators in the people group', () => {
+  it('offers conversation moderation only to platform administrators in the top navigation', () => {
     const first = render(<AdminWorkspace api={api} useAuth={authedAs('SCHOOL_ADMIN')} t={t} />)
     expect(screen.queryByRole('tab', { name: '对话审核' })).toBeNull()
     first.unmount()
@@ -159,7 +159,7 @@ describe('administrator shell', () => {
     student.unmount()
     render(<AdminWorkspace api={api} useAuth={authedAs('SUPER_ADMIN')} t={t} />)
     const tab = screen.getByRole('tab', { name: '对话审核' })
-    expect(tab.parentElement?.textContent).toContain('账号与学校')
+    expect(tab.closest('[role="tablist"]')).toBeTruthy()
   })
 
   it('does not offer developer helper pages as primary navigation', () => {

@@ -408,3 +408,26 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Compact entry cards leave the input and continuing work above the fold. */
+.root { gap: 18px; margin-top: 0; }
+.portals { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.portal { display: flex; align-items: center; border-radius: 15px; box-shadow: var(--physics-glass-inset); }
+.portalImage { width: 58px; height: 64px; margin-left: 12px; object-fit: cover; border: 0; border-radius: 12px; }
+.portalBody { flex: 1; padding: 14px 12px; }
+.portalMeta { display: none; }
+.empty { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px; }
+.emptyImage { display: none; }
+.emptyBody { flex: 1; margin: 0; }
+.emptyTitle { margin: 0; }
+@media (max-width: 600px) { .portals { grid-template-columns: 1fr; } }
+
+.quickActions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; margin: 8px 0 20px; }
+.quickAction { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 40px; padding: 8px 17px; border: 1px solid var(--physics-glass-border-soft); border-radius: 999px; background: var(--physics-glass-fill); color: var(--physics-ink); font: inherit; font-size: 13px; cursor: pointer; }
+.quickAction:hover { background: var(--physics-accent-soft); border-color: var(--physics-accent); }
+.recentTitle { font-size: 16px; font-weight: 500; }
+.list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.list > li { min-width: 0; border: 1px solid var(--physics-glass-border-soft); border-radius: 16px; background: var(--physics-glass-fill); padding: 12px; }
+.recentItem { width: 100%; min-width: 0; flex-wrap: wrap; }
+.recentMeta { display: none; }
+@media(max-width:600px) { .quickActions { gap: 8px; margin-bottom: 10px; } .quickAction { padding: 7px 11px; font-size: 12px; } .list { grid-template-columns: 1fr; } }

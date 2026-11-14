@@ -22,7 +22,7 @@ HEX64 = re.compile(r'^[a-f0-9]{64}$')
 HEX40 = re.compile(r'^[a-f0-9]{40}$')
 IMAGE_ID = re.compile(r'^sha256:[a-f0-9]{64}$')
 EXCLUDED = {'node_modules', '.git', 'tests', 'test', '__tests__', 'fixtures', '__fixtures__', '__snapshots__', '.home', '.ssh', 'secrets', '.turbo', '.vite', '__pycache__', 'preview'}
-ROOT_CODE = {'package.json', 'classroom-runtime-links.cjs', 'classroom-runtime-links.json', 'physicsos-runtime-update.cjs', 'physicsos-runtime-update.json'}
+ROOT_CODE = {'overlays/harness/files/packages/physicsos/health-host/deployment.patch.yml', 'package.json', 'classroom-runtime-links.cjs', 'classroom-runtime-links.json', 'physicsos-runtime-update.cjs', 'physicsos-runtime-update.json'}
 METADATA = {'physicsos-runtime-manifest.json', 'canvas-source-manifest.json'}
 LEGACY_ROOTS = {
     **{name: f'{HARNESS}/packages/physicsos/{name}' for name in ['auth-host', 'experiment-host', 'learning-host', 'model-pool-host', 'paper-host', 'plugin-center', 'tool-physicsos']},
@@ -272,7 +272,7 @@ const f=require('fs'),p=require('path'),c=require('crypto'),{createRequire}=requ
 function applyRuntimeUpdate(root,doc){root=f.realpathSync(root);
 const safe=n=>{if(typeof n!=='string'||!n||p.isAbsolute(n)||n.split('/').some(x=>x==='..'||x==='.'||!x||x==='.env'||x.startsWith('.env.'))||/[\\\0\r\n]/.test(n)||/\.(?:pem|key|p12|pfx)$/.test(n))throw Error('Unsafe runtime update path');return p.join(root,n);};
 const parent=abs=>{const dir=f.realpathSync(p.dirname(abs));if(dir!==root&&!dir.startsWith(root+'/'))throw Error('Runtime update parent escaped app');};
-for(const row of doc.deleted){const abs=safe(row.path);if(!(row.path.startsWith('packages/')||row.path.startsWith('scripts/')||row.path.startsWith('vendor/deepseek-harness/')||row.path==='classroom-runtime-links.cjs'||row.path==='classroom-runtime-links.json'))throw Error('Unowned runtime deletion');parent(abs);if(!f.existsSync(abs))continue;const st=f.lstatSync(abs);if(!st.isFile()||c.createHash('sha256').update(f.readFileSync(abs)).digest('hex')!==row.sha256)throw Error('Owned deleted file changed');}
+for(const row of doc.deleted){const abs=safe(row.path);if(!(row.path.startsWith('packages/')||row.path.startsWith('scripts/')||row.path.startsWith('vendor/deepseek-harness/')||row.path==='classroom-runtime-links.cjs'||row.path==='classroom-runtime-links.json'||row.path==='overlays/harness/files/packages/physicsos/health-host/deployment.patch.yml'))throw Error('Unowned runtime deletion');parent(abs);if(!f.existsSync(abs))continue;const st=f.lstatSync(abs);if(!st.isFile()||c.createHash('sha256').update(f.readFileSync(abs)).digest('hex')!==row.sha256)throw Error('Owned deleted file changed');}
 for(const row of doc.links){const abs=safe(row.link),target=safe(row.target);if(!row.link.includes('/node_modules/')&&!row.link.startsWith('node_modules/'))throw Error('Not a workspace link');if(!f.existsSync(p.join(target,'package.json')))throw Error('Workspace target absent');f.mkdirSync(p.dirname(abs),{recursive:true,mode:493});parent(abs);let current;try{current=f.lstatSync(abs)}catch{}if(current&&!current.isSymbolicLink())throw Error('Refusing real workspace dependency directory');}
 for(const row of doc.deleted){const abs=safe(row.path);if(f.existsSync(abs))f.unlinkSync(abs);}
 for(const row of doc.links){const abs=safe(row.link),target=safe(row.target);let exists=false;try{f.lstatSync(abs);exists=true}catch{}if(exists)f.unlinkSync(abs);f.symlinkSync(p.relative(p.dirname(abs),target),abs,'dir');try{f.lchownSync(abs,999,999)}catch{}}
@@ -299,7 +299,7 @@ def command(args, request=None, log=False):
 
 
 def image_metadata(image):
-    return json.loads(command(['docker', 'image', 'inspect', '--format', '{"id":{{json .Id}},"labels":{{json .Config.Labels}}}', image]))
+    return json.loads(command(['docker', 'image', 'inspect', '--format', '{"id":{{json .Id}},"labels":{{json (index .Config "Labels")}}}', image]))
 
 
 def check_builder(builder):
@@ -368,7 +368,7 @@ def selections_for(plan):
         selections.append({'root': 'packages/' + name, 'mode': 'source', 'items': ['src', 'package.json'], 'ownedItems': ['src', 'package.json']})
     if plan.get('vite'):
         selections.append({'root': HARNESS + '/apps/web/dist', 'items': ['.'], 'ownedItems': ['.']})
-    startup = {'package.json', 'scripts/docker-entrypoint.mjs', 'scripts/healthcheck.mjs', 'scripts/deploy/wait-for-ready.mjs', 'scripts/deploy/migrate-json-postgres.mjs'}
+    startup = {'overlays/harness/files/packages/physicsos/health-host/deployment.patch.yml', 'package.json', 'scripts/docker-entrypoint.mjs', 'scripts/healthcheck.mjs', 'scripts/deploy/wait-for-ready.mjs', 'scripts/deploy/migrate-json-postgres.mjs'}
     exact.extend(sorted(startup & set(plan.get('changed', []) + plan.get('deleted', []))))
     return selections, exact
 
@@ -596,6 +596,179 @@ def build_runtime(args):
     return result
 
 
+
+FULL_EXACT = ['package.json', 'scripts/healthcheck.mjs', 'scripts/docker-entrypoint.mjs',
+              'scripts/deploy/wait-for-ready.mjs', 'scripts/deploy/migrate-json-postgres.mjs',
+              'overlays/harness/files/packages/physicsos/health-host/deployment.patch.yml']
+
+
+def full_inventory_request():
+    # These are exactly the roots copied by the reviewed Dockerfile. Registry
+    # dependencies are installed by that full build, never delta-adopted.
+    return {'root': '/app', 'selections': [
+        {'root': 'packages', 'mode': 'files', 'items': ['.']},
+        {'root': HARNESS, 'mode': 'files', 'items': ['.']},
+    ], 'exact': FULL_EXACT, 'required': FULL_EXACT + [
+        HARNESS + '/apps/web/dist/index.html', HARNESS + '/apps/cli/lib/bin.js',
+        DEFAULT_TRUST['manifestPath'], DEFAULT_TRUST['publicKeyPath']]}
+
+
+def validate_full_record(source, marker, receipt, record, image):
+    files = source.get('files', {})
+    revision, source_digest = source.get('revision'), source.get('sourceDigest')
+    if not HEX40.fullmatch(revision or '') or not HEX64.fullmatch(source_digest or '') or not HEX64.fullmatch(source.get('dependencyFingerprint', '')) or sha(canonical(files)) != source_digest:
+        raise ValueError('Invalid full-build source freeze')
+    if record.get('format') != 'physicsos-full-build/1' or record.get('schemaVersion') != 1 or record.get('successfulStages') != ['builder', 'runtime'] or record.get('sourceProjectionVerified') is not True:
+        raise ValueError('Successful frozen full builder/runtime evidence is required')
+    for value in [marker, receipt, record]:
+        if value.get('sourceDigest') != source_digest or value.get('dependencyFingerprint') != source.get('dependencyFingerprint'):
+            raise ValueError('Full-build source/dependency evidence differs')
+    if marker.get('files') != files or marker.get('revision') != revision or record.get('revision') != revision:
+        raise ValueError('Full-build source marker differs')
+    if receipt.get('origin') != 'docker-builder-target' or receipt.get('fullBuildVerified') is not True or receipt.get('buildTarget') != 'builder':
+        raise ValueError('A reviewed complete Docker builder target is required')
+    if any(receipt.get(key) is not True for key in ['completeDevelopmentDependencies', 'lockedDependenciesVerified', 'sourceProjectionVerified', 'nativeProbeVerified', 'sharedDeclarationBoundaryVerified']):
+        raise ValueError('Full development builder evidence is incomplete')
+    abi = receipt.get('abi') or {}
+    if abi.get('platform') != 'linux' or not abi.get('node') or not abi.get('modules') or not abi.get('arch') or abi.get('libc') not in ['glibc', 'musl']:
+        raise ValueError('Full development builder ABI evidence is incomplete')
+    if not {'typescript', 'tsdown', 'vite', 'vitest', 'tsx'}.issubset(set(receipt.get('toolsVerified') or [])):
+        raise ValueError('Full development build tools were not verified')
+    if record.get('dockerfileSha256') != files.get('Dockerfile') or not HEX64.fullmatch(record.get('dockerfileSha256', '')):
+        raise ValueError('Full-build Dockerfile differs from frozen source')
+    for key in ['builderImage', 'nodeImage', 'runtimeImage']:
+        if not IMAGE_ID.fullmatch(record.get(key, '')):
+            raise ValueError('Full-build immutable image identity is required')
+    if record['builderImage'] != receipt.get('builderImage') or record['nodeImage'] != receipt.get('baseImage') or record['runtimeImage'] != image.get('id'):
+        raise ValueError('Full-build image evidence differs')
+    labels = image.get('labels') or {}
+    expected = {'physicsos.role': 'full-runtime-input', 'physicsos.full-build.revision': revision,
+                'physicsos.full-build.source-digest': source_digest,
+                'physicsos.full-build.dependency-fingerprint': source['dependencyFingerprint']}
+    if any(labels.get(key) != value for key, value in expected.items()):
+        raise ValueError('Full-runtime input does not belong to this frozen build')
+    return record
+
+
+def full_manifest(source, record, builder_inventory, runtime_inventory, proof):
+    before, actual = builder_inventory.get('files', {}), runtime_inventory.get('files', {})
+    expected_files = {name: value['sha256'] for name, value in before.items()}
+    actual_files = {name: value['sha256'] for name, value in actual.items()}
+    if not expected_files or expected_files != actual_files:
+        raise ValueError('Full runtime differs from the verified development builder')
+    for name, checksum in actual_files.items():
+        safe_code_path(name)
+        if name in source['files'] and checksum != source['files'][name]:
+            raise ValueError('Runtime source differs from the reviewed source freeze')
+    for name in full_inventory_request()['required']:
+        if name not in actual_files:
+            raise ValueError('Required full runtime artifact is absent')
+    if not proof.get('verified') or proof.get('entries', 0) < 1 or proof.get('publicKeySha256') != source['files'].get(DEFAULT_TRUST['publicKeyPath']):
+        raise ValueError('Plugin trust is not pinned by the reviewed full source')
+    files = dict(sorted(actual_files.items()))
+    return {'schemaVersion': 2, 'ownership': 'physicsos-runtime/2', 'revision': source['revision'],
+            'sourceDigest': source['sourceDigest'], 'codeDigest': sha(canonical(files)), 'files': files,
+            'pluginTrust': {**DEFAULT_TRUST, **proof}, 'buildProvenance': record}
+
+
+def export_full_runtime(args):
+    check_builder(args.builder)
+    source = json.loads(pathlib.Path(args.source_manifest).read_text())
+    record = json.loads(pathlib.Path(args.record_file).read_text())
+    image = image_metadata(args.image)
+    if image['id'] != args.image or not IMAGE_ID.fullmatch(args.image):
+        raise ValueError('An exact immutable full-runtime image is required')
+    marker = read_builder_json(args.builder, 'physicsos-source-manifest.json')
+    receipt = read_builder_json(args.builder, 'physicsos-development-builder.json')
+    validate_full_record(source, marker, receipt, record, image)
+    actual_builder = json.loads(command(['docker', 'inspect', '--format', '{{json .Image}}', args.builder]))
+    if actual_builder != record['builderImage'] or record.get('builder') != args.builder:
+        raise ValueError('Full builder container identity changed')
+    # ABI and the native lock are re-probed; no old image is a trust root.
+    abi_script = 'const h=process.report.getReport().header;console.log(JSON.stringify({node:process.versions.node,modules:process.versions.modules,platform:process.platform,arch:process.arch,libc:h.glibcVersionRuntime?"glibc":"musl"}));'
+    runtime_abi = node_operation(args.image, abi_script)
+    builder_abi = node_operation(args.builder, abi_script, builder=True)
+    if runtime_abi != receipt.get('abi') or builder_abi != receipt.get('abi'):
+        raise ValueError('Full runtime or builder ABI differs from the verified build')
+    native = 'const f=require("fs/promises");(async()=>{const {tryLockExclusive}=await import("/app/vendor/deepseek-harness/native/system/packages/entry/lib/flock.js");const p="/tmp/full-native-"+process.pid,h=await f.open(p,"w");try{await tryLockExclusive(h.fd)}finally{await h.close();await f.unlink(p)};console.log(JSON.stringify({verified:true}))})();'
+    command(['docker', 'exec', args.builder, 'node', '-e', native])
+    signature = {'root': '/app', **DEFAULT_TRUST}
+    builder_proof = node_operation(args.builder, SIGNATURE_JS, signature, builder=True)
+    runtime_proof = node_operation(args.image, SIGNATURE_JS, signature)
+    validate_signature_proofs(builder_proof, runtime_proof)
+    request = full_inventory_request()
+    built = node_operation(args.builder, INVENTORY_JS, request, builder=True)
+    runtime = node_operation(args.image, INVENTORY_JS, request)
+    manifest = full_manifest(source, record, built, runtime, runtime_proof)
+    output = pathlib.Path(args.output_dir)
+    owner = {'format': 'physicsos-full-runtime-export/1', 'baseImage': args.image,
+             'revision': source['revision'], 'sourceDigest': source['sourceDigest']}
+    if output.exists() and (output.is_symlink() or not (output / 'owner.json').is_file() or json.loads((output / 'owner.json').read_text()) != owner):
+        raise ValueError('Full-runtime output is not owned by this release')
+    output.parent.mkdir(parents=True, exist_ok=True)
+    payload = len(canonical(manifest).encode()) * 3 + 1024 * 1024
+    require_disk(output.parent, payload)
+    output.mkdir(mode=0o700, exist_ok=True)
+    atomic_json(output / 'owner.json', owner)
+    context = output / 'context'
+    context.mkdir(mode=0o700, exist_ok=True)
+    atomic_json(context / 'physicsos-runtime-manifest.json', manifest)
+    atomic_json(context / 'canvas-source-manifest.json', manifest)
+    dockerfile = '\n'.join(['ARG BASE_IMAGE=scratch', 'FROM ${BASE_IMAGE}', 'ARG REVISION', 'ARG SOURCE_DIGEST', 'ARG CODE_DIGEST',
+                          'USER root', 'COPY --chown=999:999 physicsos-runtime-manifest.json canvas-source-manifest.json /app/',
+                          'USER physicsos', 'LABEL org.opencontainers.image.revision=$REVISION',
+                          'LABEL physicsos.source.digest=$SOURCE_DIGEST', 'LABEL physicsos.code.digest=$CODE_DIGEST',
+                          'LABEL physicsos.role=verified-full-runtime', ''])
+    (context / 'Dockerfile').write_text(dockerfile)
+    result = {**owner, 'codeDigest': manifest['codeDigest'], 'checkedFiles': len(manifest['files']),
+              'manifestSha256': sha((context / 'physicsos-runtime-manifest.json').read_bytes()),
+              'dockerfileSha256': sha(dockerfile), 'context': str(context.resolve())}
+    atomic_json(output / 'export.json', result)
+    return result
+
+
+def build_full_runtime(args):
+    output = pathlib.Path(args.output_dir)
+    record = json.loads((output / 'export.json').read_text())
+    owner = json.loads((output / 'owner.json').read_text())
+    if record.get('format') != 'physicsos-full-runtime-export/1' or any(record.get(key) != owner.get(key) for key in owner):
+        raise ValueError('Full-runtime export ownership differs')
+    context = output / 'context'
+    if context.is_symlink() or context.resolve() != pathlib.Path(record['context']):
+        raise ValueError('Full-runtime export context changed')
+    manifest_path = context / 'physicsos-runtime-manifest.json'
+    manifest = json.loads(manifest_path.read_text())
+    if sha(manifest_path.read_bytes()) != record['manifestSha256'] or sha((context / 'Dockerfile').read_bytes()) != record['dockerfileSha256']:
+        raise ValueError('Full-runtime export content changed')
+    if json.loads((context / 'canvas-source-manifest.json').read_text()) != manifest:
+        raise ValueError('Runtime manifest aliases differ')
+    normalize_manifest(manifest)
+    if any(manifest.get(key) != record.get(key) for key in ['revision', 'sourceDigest', 'codeDigest']):
+        raise ValueError('Full-runtime manifest identity differs')
+    base = image_metadata(record['baseImage'])
+    if base['id'] != record['baseImage']:
+        raise ValueError('Immutable full-runtime input changed')
+    proof = manifest['buildProvenance']
+    if proof['runtimeImage'] != base['id'] or (base.get('labels') or {}).get('physicsos.full-build.source-digest') != record['sourceDigest']:
+        raise ValueError('Full-runtime base no longer matches the audited build')
+    checks = node_operation(base['id'], VERIFY_JS, manifest['files'])
+    if checks.get('failures') or checks.get('checked') != len(manifest['files']):
+        raise ValueError('Full-runtime base changed after export')
+    require_disk(output, manifest_path.stat().st_size * 3 + 1024 * 1024)
+    if not re.fullmatch(r'physicsos[a-z0-9_.-]*:[A-Za-z0-9_.-]+', args.image_tag):
+        raise ValueError('Owned PhysicsOS image tag required')
+    base_tag = 'physicsos:full-runtime-base-' + base['id'][7:31]
+    command(['docker', 'tag', base['id'], base_tag])
+    command(['docker', 'build', '--network=none', '--pull=false', '--build-arg', 'BASE_IMAGE=' + base_tag,
+             '--build-arg', 'REVISION=' + record['revision'], '--build-arg', 'SOURCE_DIGEST=' + record['sourceDigest'],
+             '--build-arg', 'CODE_DIGEST=' + record['codeDigest'], '--tag', args.image_tag, str(context)], log=True)
+    exact = image_metadata(args.image_tag)['id']
+    verified = verify_image(exact, record)
+    result = {**verified, 'imageTag': args.image_tag, 'baseImage': base['id'], 'fullBuild': True,
+              'sourceDigest': record['sourceDigest'], 'codeDigest': record['codeDigest']}
+    atomic_json(output / 'build.json', result)
+    return result
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='action', required=True)
@@ -607,6 +780,12 @@ def main():
     build.add_argument('--image-tag', required=True)
     build.add_argument('--base-tag')
     build.add_argument('--reserve-bytes', type=int, default=256 * 1024 * 1024)
+    full_export = commands.add_parser('full-export')
+    for name in ['builder', 'image', 'source-manifest', 'record-file', 'output-dir']:
+        full_export.add_argument('--' + name, required=True)
+    full_build = commands.add_parser('full-build')
+    full_build.add_argument('--output-dir', required=True)
+    full_build.add_argument('--image-tag', required=True)
     verify = commands.add_parser('verify')
     verify.add_argument('--image', required=True)
     verify.add_argument('--record-file')
@@ -615,6 +794,10 @@ def main():
         result = export_runtime(args)
     elif args.action == 'build':
         result = build_runtime(args)
+    elif args.action == 'full-export':
+        result = export_full_runtime(args)
+    elif args.action == 'full-build':
+        result = build_full_runtime(args)
     else:
         result = verify_image(args.image, json.loads(pathlib.Path(args.record_file).read_text()) if args.record_file else None)
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))

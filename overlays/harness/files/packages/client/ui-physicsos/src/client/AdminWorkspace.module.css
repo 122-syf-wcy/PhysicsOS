@@ -1311,3 +1311,53 @@
     gap: 2px;
   }
 }
+
+
+/* Approved full-width administration layout: one product rail, one tab row. */
+.root { padding: 10px 28px 28px; background-color: var(--physics-workspace-bg); background-image: none; }
+.page, .pageSplit { width: min(1200px, 100%); gap: 22px; }
+.pageHeader { padding: 0; gap: 12px; border: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
+.pageTabs { border: 0; gap: 5px; padding: 4px 0; overflow-x: auto; }
+.pageTab { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 11px 16px; margin: 0; border: 0; border-radius: 999px; font-size: 13px; }
+.pageTabActive { background: var(--physics-accent-soft); color: var(--physics-accent-strong); box-shadow: inset 0 -2px var(--physics-accent); }
+.pageTitle { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.pageContent { gap: 18px; }
+.sectionTabs { gap: 7px; padding: 0 0 8px; }
+.sectionTab { border: 0; border-radius: 999px; background: transparent; padding: 9px 16px; }
+.sectionTabActive { color: var(--physics-accent-strong); background: var(--physics-accent-soft); }
+.sectionContent { gap: 18px; }
+.card { padding: 20px; border-radius: 18px; box-shadow: var(--physics-glass-inset); }
+.cardTitle, .pageTab, .cardHead strong, .stat strong, .sectionTitle { font-weight: 500; }
+.sectionTitle { margin: 3px 0 1px; font-size: 21px; line-height: 1.5; color: var(--physics-ink-strong); }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+.stat { display: flex; flex-direction: column; gap: 9px; padding: 17px 19px; border: 1px solid var(--physics-glass-border-soft); border-radius: 15px; background: var(--physics-glass-fill); color: var(--physics-ink-muted); }
+.stat strong { color: var(--physics-ink-strong); font-size: 26px; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.toolbar { padding: 0; gap: 12px; margin: 0 0 16px; background: transparent; border: 0; box-shadow: none; }
+.input, .select, .textarea { border-radius: 11px; min-height: 38px; box-sizing: border-box; }
+.tableWrap { border: 1px solid var(--physics-glass-border-soft); border-radius: 17px; background: var(--physics-glass-fill); }
+.table { font-size: 12px; }
+.table th { font-weight: 500; color: var(--physics-ink-muted); background: color-mix(in srgb, var(--physics-glass-fill) 50%, transparent); }
+.table th, .table td { padding: 14px 16px; border-bottom: 1px solid var(--dsw-alias-border-l1); vertical-align: middle; }
+.table tr:last-child td { border-bottom: 0; }
+.table tbody tr[data-selected] { background: var(--physics-accent-soft); }
+.tableLink { padding: 0; background: none; color: var(--physics-ink-strong); border: 0; text-align: left; font: inherit; cursor: pointer; }
+.tableLink:hover { text-decoration: underline; text-underline-offset: 3px; }
+.detailLayout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(270px, 310px); gap: 24px; align-items: start; }
+.detailList { min-width: 0; }
+.detailPane { position: sticky; top: 0; display: flex; flex-direction: column; gap: 18px; }
+.detailFields { display: grid; gap: 16px; margin: 0; }
+.detailFields > div { display: grid; gap: 7px; }
+.detailFields dt { color: var(--physics-ink-muted); font-size: 12px; }
+.detailFields dd { margin: 0; padding: 11px 12px; border-radius: 10px; border: 1px solid var(--physics-glass-border-soft); background: var(--physics-glass-fill); font-size: 13px; overflow-wrap: anywhere; }
+.detailActions { gap: 7px; margin-top: 8px; }
+.createDisclosure { border: 1px solid var(--physics-glass-border-soft); border-radius: 12px; padding: 11px 15px; background: var(--physics-glass-fill); font-size: 13px; }
+.createDisclosure > summary { width: fit-content; color: var(--physics-accent-strong); cursor: pointer; }
+.timeCell { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.auditDetail { font-size: 11px; }
+.auditDetail pre { margin: 8px 0 0; max-width: 280px; white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 1000px) { .detailLayout { grid-template-columns: minmax(0, 1fr); } .detailPane { position: static; } .detailFields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .root { padding: 8px 12px 20px; } .pageTab { padding: 9px 12px; } .pageTab svg { width: 16px; height: 16px; } .detailFields { grid-template-columns: minmax(0, 1fr); } .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .table th, .table td { padding: 11px 12px; } }
+@media (prefers-reduced-transparency: reduce) { .card, .stat, .tableWrap, .createDisclosure { background: var(--physics-glass-fill-strong); backdrop-filter: none; } }
+
+.poolChannels { display: grid; gap: 18px; }
+.poolChannels[hidden] { display: none; }

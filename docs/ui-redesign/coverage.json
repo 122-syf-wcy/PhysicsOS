@@ -1,0 +1,2997 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-11-14",
+  "sourceRoot": "/Users/dongsiwei/Desktop/PhysicsOS-UI",
+  "sourceRevision": "6f2f0dcd61b693f372b27fcbeba6a0eae19063b9",
+  "designManifest": "/Users/dongsiwei/Desktop/PhysicsOS/design-refs/ui-redesign-2026-11-14/manifest.json",
+  "status": "映射研究完成；62/62项待实现与验收确认；0项已验收",
+  "notes": [
+    "Entry names describe existing product panels and local component states; only explicitly identified URL/hash entries are claimed as routes.",
+    "Role sets are observed client entry gates and must still be checked against server scope/host guards in candidate tests.",
+    "Source presence is not implementation completion. Screenshots/tests are intentionally empty.",
+    "Settings, conversation and shell retain upstream packages through overlay projection; mapped product components are integration/action origins.",
+    "Some target overlay/menu/detail compositions may still need implementation. Known uncertainty is recorded per item."
+  ],
+  "items": [
+    {
+      "designId": 1,
+      "title": "首页与新建对话",
+      "category": "对话与导航",
+      "kind": "页面",
+      "recommendedDesign": "screens/01-home.png",
+      "designSha256": "a45e30c25189960b13bad72c9975a467080ddadf5f831b81467bdc077f317738",
+      "components": [
+        "HomeHero.tsx",
+        "HomeBrand.tsx",
+        "HomeActions.tsx",
+        "index.ts"
+      ],
+      "entry": "首页 → 新对话；home = layout.selectPanel(null)",
+      "roles": [
+        "STUDENT",
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "新建会话",
+        "Lexical输入/附件/图片/草稿",
+        "IME",
+        "发送/停止/排队"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/HomeHero.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/HomeBrand.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/HomeActions.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/index.ts"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/HomeHero.tsx",
+          "lineCount": 69,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/HomeBrand.tsx",
+          "lineCount": 19,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/HomeActions.tsx",
+          "lineCount": 170,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/index.ts",
+          "lineCount": 888,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 2,
+      "title": "对话与实验预览",
+      "category": "对话与导航",
+      "kind": "页面",
+      "recommendedDesign": "screens/02-chat.png",
+      "designSha256": "4c634a414355022764f9bc9b7069b677f9d24497451b87e4aeaec1a5729ea18b",
+      "components": [
+        "SceneChatCard.tsx",
+        "SceneTurnCard.tsx",
+        "PhysicsWorkspace.tsx",
+        "index.ts"
+      ],
+      "entry": "已有对话 → 实验卡片/右侧实验预览（sidebar.right.pane.tab）",
+      "roles": [
+        "STUDENT",
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "会话共享与ownerSession",
+        "预览展开收起",
+        "参数修改",
+        "返回主实验"
+      ],
+      "mappingNotes": "对话主体由上游 ui-conversation 提供，不能另建 Agent Loop。",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/SceneChatCard.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/SceneTurnCard.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/PhysicsWorkspace.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/index.ts"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/SceneChatCard.tsx",
+          "lineCount": 591,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/SceneTurnCard.tsx",
+          "lineCount": 56,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/PhysicsWorkspace.tsx",
+          "lineCount": 1145,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/index.ts",
+          "lineCount": 888,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 3,
+      "title": "实验中心",
+      "category": "实验与资源",
+      "kind": "页面",
+      "recommendedDesign": "screens/03-experiment-center.png",
+      "designSha256": "d5e157cb954b9cbd27e5c22aceda0d18004c2d97eeba82538d5a64505ca81354",
+      "components": [
+        "LabWorkspace.tsx",
+        "ExperimentPicker.tsx",
+        "experiments/experiment-navigation.ts"
+      ],
+      "entry": "实验导航 → physicsos-lab；#/experiments",
+      "roles": [
+        "STUDENT",
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "分类/搜索/模板选择",
+        "继续当前场景",
+        "真实模板封面"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/LabWorkspace.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/ExperimentPicker.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/experiments/experiment-navigation.ts"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/LabWorkspace.tsx",
+          "lineCount": 338,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/ExperimentPicker.tsx",
+          "lineCount": 601,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/experiments/experiment-navigation.ts",
+          "lineCount": 166,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 4,
+      "title": "全幅实验运行台",
+      "category": "实验与资源",
+      "kind": "页面",
+      "recommendedDesign": "revisions/04-experiment-workbench-v2.png",
+      "designSha256": "ad2b7467b869e81b8bbdc015b7745f7aa3936aabfe7156c05054dcea9264b9d2",
+      "components": [
+        "LabWorkspace.tsx",
+        "PhysicsWorkspace.tsx",
+        "physics/PhysicsCanvas.tsx"
+      ],
+      "entry": "实验中心选模板；#/experiments/<template-id>（可带scene查询）",
+      "roles": [
+        "STUDENT",
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "播放暂停/重置/时间轴",
+        "参数preview/commit/revision",
+        "原题恢复",
+        "保存与重开",
+        "图像/数据表",
+        "社区及透镜独立分支"
+      ],
+      "mappingNotes": "包括PhysicsCanvas、透镜及社区/题目代码运行分支，不能仅按单个内置实验验收。",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/LabWorkspace.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/PhysicsWorkspace.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/PhysicsCanvas.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/LabWorkspace.tsx",
+          "lineCount": 338,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/PhysicsWorkspace.tsx",
+          "lineCount": 1145,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/PhysicsCanvas.tsx",
+          "lineCount": 732,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 5,
+      "title": "实验报告",
+      "category": "实验与资源",
+      "kind": "页面内状态",
+      "recommendedDesign": "screens/05-experiment-report.png",
+      "designSha256": "a522837de6b343733220c5dc2eb3509f61dae56744bdab1f0323b8da7d5475dc",
+      "components": [
+        "ExperimentReportPanel.tsx",
+        "physics/experiment-report.ts",
+        "PhysicsWorkspace.tsx"
+      ],
+      "entry": "运行台 → 实验报告（reportOpen）",
+      "roles": [
+        "STUDENT",
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "按真实快照生成",
+        "测量记录与单位",
+        "打印",
+        "Markdown下载",
+        "关闭返回"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/ExperimentReportPanel.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-report.ts",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/PhysicsWorkspace.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/ExperimentReportPanel.tsx",
+          "lineCount": 176,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-report.ts",
+          "lineCount": 260,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/PhysicsWorkspace.tsx",
+          "lineCount": 1145,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 6,
+      "title": "项目列表",
+      "category": "项目与画布",
+      "kind": "页面",
+      "recommendedDesign": "screens/06-projects.png",
+      "designSha256": "8f52bfa5a2deebddfe21c688f3326756522b55604303f213b65eca4fc261e302",
+      "components": [
+        "StudyProjects.tsx"
+      ],
+      "entry": "项目导航 → physicsos-projects",
+      "roles": [
+        "STUDENT",
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "创建/选择项目",
+        "内容归档",
+        "拖拽整理",
+        "账户范围持久化"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/StudyProjects.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/StudyProjects.tsx",
+          "lineCount": 77,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 7,
+      "title": "实验自由画布列表",
+      "category": "项目与画布",
+      "kind": "页面",
+      "recommendedDesign": "screens/07-canvas-list.png",
+      "designSha256": "f5edd837e424e57377804d9d7e886a81461ac4f40e609d6b0e4485c9bd602520",
+      "components": [
+        "canvas/CanvasSurface.tsx",
+        "canvas/navigation.ts"
+      ],
+      "entry": "画布导航 → physicsos-canvas；#/canvases",
+      "roles": [
+        "STUDENT",
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "新建/重命名/删除/打开",
+        "账户隔离",
+        "离线草稿与同步状态"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/canvas/CanvasSurface.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/canvas/navigation.ts"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/canvas/CanvasSurface.tsx",
+          "lineCount": 150,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/canvas/navigation.ts",
+          "lineCount": 79,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 8,
+      "title": "全幅自由画布编辑器",
+      "category": "项目与画布",
+      "kind": "页面",
+      "recommendedDesign": "screens/08-canvas-editor.png",
+      "designSha256": "4573b075b9ba319997b9efbf3c8bad6330ada34aa5b9ef72762b27a171f90275",
+      "components": [
+        "canvas/CanvasWorkspace.tsx",
+        "canvas/CanvasSurface.tsx",
+        "canvas/navigation.ts"
+      ],
+      "entry": "画布列表 → 画布；#/canvases/<id>",
+      "roles": [
+        "STUDENT",
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "选择/拖拽/分组",
+        "器材和实验节点",
+        "导入导出",
+        "撤销",
+        "CAS版本冲突副本",
+        "保存重开"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/canvas/CanvasWorkspace.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/canvas/CanvasSurface.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/canvas/navigation.ts"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/canvas/CanvasWorkspace.tsx",
+          "lineCount": 607,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/canvas/CanvasSurface.tsx",
+          "lineCount": 150,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/canvas/navigation.ts",
+          "lineCount": 79,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 9,
+      "title": "教学画板列表与空态",
+      "category": "项目与画布",
+      "kind": "空状态",
+      "recommendedDesign": "screens/09-whiteboard-list.png",
+      "designSha256": "8f5aec74b95d98a36a2dd48fe798d701b3ffab4089a98bbdf99431cf33fc6f7d",
+      "components": [
+        "whiteboard/WhiteboardSurface.tsx",
+        "whiteboard-entry.tsx",
+        "canvas/navigation.ts"
+      ],
+      "entry": "教学画板导航 → physicsos-whiteboard；#/whiteboards",
+      "roles": [
+        "STUDENT",
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "新建/打开/管理画板",
+        "空态与失败重试",
+        "账号范围"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/whiteboard/WhiteboardSurface.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/whiteboard-entry.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/canvas/navigation.ts"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/whiteboard/WhiteboardSurface.tsx",
+          "lineCount": 30,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/whiteboard-entry.tsx",
+          "lineCount": 75,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/canvas/navigation.ts",
+          "lineCount": 79,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 10,
+      "title": "出卷：新建试卷",
+      "category": "出卷专区",
+      "kind": "工作台标签",
+      "recommendedDesign": "screens/10-exam-new.png",
+      "designSha256": "c8d73c21f8c1eeb00000b2051f6be22a0c09244771f6b6f6d60572d4c8165f69",
+      "components": [
+        "PaperWorkspace.tsx"
+      ],
+      "entry": "出卷专区 → physicsos-paper → tab=new / NewPaperPanel",
+      "roles": [
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "蓝图/学段学科/难度配置",
+        "创建真实任务",
+        "错误与未配置反馈"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/PaperWorkspace.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/PaperWorkspace.tsx",
+          "lineCount": 1888,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 11,
+      "title": "出卷：草稿与审核列表",
+      "category": "出卷专区",
+      "kind": "工作台标签",
+      "recommendedDesign": "screens/11-exam-review-list.png",
+      "designSha256": "6624d89a13df84177619cfc3ece3cea511903a323158175e4c9b70f5eae094b4",
+      "components": [
+        "PaperWorkspace.tsx"
+      ],
+      "entry": "出卷专区 → tab=jobs / JobsPanel",
+      "roles": [
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "刷新/轮询任务",
+        "草稿选择",
+        "真实生成状态",
+        "失败重试"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/PaperWorkspace.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/PaperWorkspace.tsx",
+          "lineCount": 1888,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 12,
+      "title": "出卷：逐题审核",
+      "category": "出卷专区",
+      "kind": "详情状态",
+      "recommendedDesign": "screens/12-exam-review-detail.png",
+      "designSha256": "6195c0c2a73fc7b3daf2cfefb1e274f79ca4a3b1e10537d56175fb2b066fe33d",
+      "components": [
+        "PaperWorkspace.tsx"
+      ],
+      "entry": "出卷专区 → jobs → JobDetail",
+      "roles": [
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "逐题检查/求解报告",
+        "替换和审核",
+        "人工审核人",
+        "质量校验",
+        "定稿门槛"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/PaperWorkspace.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/PaperWorkspace.tsx",
+          "lineCount": 1888,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 13,
+      "title": "出卷：已定稿试卷",
+      "category": "出卷专区",
+      "kind": "工作台标签",
+      "recommendedDesign": "revisions/13-exam-final-v2.png",
+      "designSha256": "16ee617703c8df3eeab5701d2757b63d55a2173d7b1323304cb907b09c3e9f45",
+      "components": [
+        "PaperWorkspace.tsx"
+      ],
+      "entry": "出卷专区 → tab=final / FinalPanel",
+      "roles": [
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "读取已定稿任务",
+        "导出文件",
+        "预览",
+        "真实审核状态"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/PaperWorkspace.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/PaperWorkspace.tsx",
+          "lineCount": 1888,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 14,
+      "title": "出卷：题库与导入",
+      "category": "出卷专区",
+      "kind": "工作台标签",
+      "recommendedDesign": "revisions/14-exam-bank-v2.png",
+      "designSha256": "ffe79e2e4e669b35616e09919a11af617cca3121cb582e84767f92c33ad17fc4",
+      "components": [
+        "PaperWorkspace.tsx"
+      ],
+      "entry": "出卷专区 → tab=bank / BankPanel",
+      "roles": [
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "搜索题库",
+        "粘贴或文件识别导入",
+        "核验/退回",
+        "原文对照",
+        "批量确认"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/PaperWorkspace.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/PaperWorkspace.tsx",
+          "lineCount": 1888,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 15,
+      "title": "出卷：真题资料库",
+      "category": "出卷专区",
+      "kind": "工作台标签",
+      "recommendedDesign": "screens/15-exam-sources.png",
+      "designSha256": "fdf07eecbeae4a2420c34a634d8f7a290684b9080180554207267ad57150d0a7",
+      "components": [
+        "PaperWorkspace.tsx"
+      ],
+      "entry": "出卷专区 → tab=sources / SourcesPanel",
+      "roles": [
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "资料筛选",
+        "试卷/标注读取",
+        "CSV导入",
+        "真实统计"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/PaperWorkspace.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/PaperWorkspace.tsx",
+          "lineCount": 1888,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 16,
+      "title": "提交反馈",
+      "category": "反馈",
+      "kind": "页面",
+      "recommendedDesign": "screens/16-feedback.png",
+      "designSha256": "e35b6d1b7a506b8aeace5bbd61778f5baddcfc86d2801c2fa13fcce2511ea560",
+      "components": [
+        "NoticeBoard.tsx"
+      ],
+      "entry": "反馈导航 → physicsos-notice → tab=new",
+      "roles": [
+        "STUDENT",
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "选择类别",
+        "正文校验",
+        "提交真实反馈",
+        "失败保留草稿",
+        "公告读取"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/NoticeBoard.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/NoticeBoard.tsx",
+          "lineCount": 152,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 17,
+      "title": "物理资源库",
+      "category": "实验与资源",
+      "kind": "页面",
+      "recommendedDesign": "screens/17-resources.png",
+      "designSha256": "b8cf8d4c95bc596f5703f90edf474de3217bc61ab5b29a120b9acf55eb24dc18",
+      "components": [
+        "LibraryWorkspace.tsx"
+      ],
+      "entry": "资源库导航 → physicsos-library",
+      "roles": [
+        "STUDENT",
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "题目/真题筛选检索",
+        "查看标注",
+        "打开实验或练习",
+        "真实掌握记录"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/LibraryWorkspace.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/LibraryWorkspace.tsx",
+          "lineCount": 1026,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 18,
+      "title": "实验上传与贡献",
+      "category": "实验与资源",
+      "kind": "页面",
+      "recommendedDesign": "revisions/18-contribute-v2.png",
+      "designSha256": "84f26ea613cfc410f00a06548a2f768d803aa19594f75224270b6b1722837659",
+      "components": [
+        "ContributeWorkspace.tsx",
+        "experiments/experiment-navigation.ts"
+      ],
+      "entry": "上传贡献导航 → physicsos-contribute；#/contribute",
+      "roles": [
+        "STUDENT",
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "上传experiment.json实验包",
+        "校验预览",
+        "投稿/版本",
+        "失败重试"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/ContributeWorkspace.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/experiments/experiment-navigation.ts"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/ContributeWorkspace.tsx",
+          "lineCount": 44,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/experiments/experiment-navigation.ts",
+          "lineCount": 166,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 19,
+      "title": "项目内容与整理",
+      "category": "项目与画布",
+      "kind": "详情状态",
+      "recommendedDesign": "screens/19-project-detail.png",
+      "designSha256": "bd26f1de4da82c60a717052d1816a41f9e38076c374c03446ea566595eff9928",
+      "components": [
+        "StudyProjects.tsx"
+      ],
+      "entry": "项目列表 → 选择项目内容",
+      "roles": [
+        "STUDENT",
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "归档会话/实验",
+        "整理与移除",
+        "保存项目结构",
+        "重开真实内容"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/StudyProjects.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/StudyProjects.tsx",
+          "lineCount": 77,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 20,
+      "title": "全幅教学画板编辑器",
+      "category": "项目与画布",
+      "kind": "页面",
+      "recommendedDesign": "screens/20-whiteboard-editor.png",
+      "designSha256": "fd85c6a54331179488d7a20191c7ac4e4aef574f9e7297b3f474a5a95f4a74c9",
+      "components": [
+        "whiteboard/WhiteboardWorkspace.tsx",
+        "whiteboard/WhiteboardSurface.tsx"
+      ],
+      "entry": "教学画板列表 → #/whiteboards/<id>",
+      "roles": [
+        "STUDENT",
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "书写/选择/撤销",
+        "板书生成",
+        "导入导出",
+        "保存/任务恢复",
+        "版本冲突与离线草稿"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/whiteboard/WhiteboardWorkspace.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/whiteboard/WhiteboardSurface.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/whiteboard/WhiteboardWorkspace.tsx",
+          "lineCount": 152,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/whiteboard/WhiteboardSurface.tsx",
+          "lineCount": 30,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 21,
+      "title": "定稿 PDF 预览",
+      "category": "出卷专区",
+      "kind": "预览状态",
+      "recommendedDesign": "screens/21-exam-pdf-preview.png",
+      "designSha256": "8d9abf3d4e65c1f92833c3ee80744fbb7fef791f01798f828130a51dfb6f7f23",
+      "components": [
+        "PaperWorkspace.tsx"
+      ],
+      "entry": "出卷专区 → final → 试卷.pdf / 答案解析.pdf → iframe",
+      "roles": [
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "使用api.fileUrl真实产物",
+        "切换文件",
+        "下载",
+        "权限与失败态"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/PaperWorkspace.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/PaperWorkspace.tsx",
+          "lineCount": 1888,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 22,
+      "title": "资源题目详情",
+      "category": "实验与资源",
+      "kind": "详情状态",
+      "recommendedDesign": "screens/22-resource-detail.png",
+      "designSha256": "e15db0a210bcfda7f2b76ab518c6e254a32f05ad9bc7974f83a2c03291c834b7",
+      "components": [
+        "LibraryWorkspace.tsx"
+      ],
+      "entry": "资源库 → 题目内容/练习（非独立考试路由）",
+      "roles": [
+        "STUDENT",
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "题干/答案/知识点真实读取",
+        "练习结果",
+        "关联实验"
+      ],
+      "mappingNotes": "设计稿为补充详情状态；现有 LibraryWorkspace 中是否已有完整详情容器待实现者核对。",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/LibraryWorkspace.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/LibraryWorkspace.tsx",
+          "lineCount": 1026,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 23,
+      "title": "登录",
+      "category": "账户与设置",
+      "kind": "认证覆盖层",
+      "recommendedDesign": "screens/23-auth-login.png",
+      "designSha256": "90234a20c9776604f1e2bd8c3aa97cd6b3e28405f729d2829178e7635e4ca2ee",
+      "components": [
+        "AuthGate.tsx",
+        "auth-store.ts"
+      ],
+      "entry": "匿名进入系统 → shell.overlay → view=login",
+      "roles": [
+        "ANONYMOUS"
+      ],
+      "preserveActions": [
+        "用户名/学校选择",
+        "真实登录",
+        "错误提示",
+        "会话建立后按账户重载"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/AuthGate.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/auth-store.ts"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AuthGate.tsx",
+          "lineCount": 765,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/auth-store.ts",
+          "lineCount": 263,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 24,
+      "title": "创建学习空间",
+      "category": "账户与设置",
+      "kind": "认证覆盖层",
+      "recommendedDesign": "screens/24-auth-register.png",
+      "designSha256": "277748e081d3c4e86a596a6a35e1ed29d4cc24acc94459284b35053c14006387",
+      "components": [
+        "AuthGate.tsx",
+        "auth-store.ts"
+      ],
+      "entry": "认证覆盖层 → view=register",
+      "roles": [
+        "ANONYMOUS"
+      ],
+      "preserveActions": [
+        "学校检索/选择",
+        "注册输入校验",
+        "真实注册结果",
+        "待审核分支"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/AuthGate.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/auth-store.ts"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AuthGate.tsx",
+          "lineCount": 765,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/auth-store.ts",
+          "lineCount": 263,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 25,
+      "title": "找回密码申请",
+      "category": "账户与设置",
+      "kind": "认证覆盖层",
+      "recommendedDesign": "screens/25-auth-reset-request.png",
+      "designSha256": "a63a33c80bab86cc42a6db62b2481c22fc40750be70e8240751c82a3041cce95",
+      "components": [
+        "AuthGate.tsx"
+      ],
+      "entry": "认证覆盖层 → view=forgot",
+      "roles": [
+        "ANONYMOUS"
+      ],
+      "preserveActions": [
+        "提交密码找回申请",
+        "学校范围",
+        "真实回执与失败"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/AuthGate.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AuthGate.tsx",
+          "lineCount": 765,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 26,
+      "title": "设置新密码",
+      "category": "账户与设置",
+      "kind": "认证覆盖层",
+      "recommendedDesign": "screens/26-auth-reset-password.png",
+      "designSha256": "6a8302f9fd06a8f63944bee4ebd48fa755f74eda5f252f7460e365c2a42b5c98",
+      "components": [
+        "AuthGate.tsx"
+      ],
+      "entry": "密码重置链接/注入resetToken → view=reset",
+      "roles": [
+        "ANONYMOUS",
+        "STUDENT",
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "校验短期token",
+        "设置新密码",
+        "过期/无效/失败",
+        "不泄漏token"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/AuthGate.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AuthGate.tsx",
+          "lineCount": 765,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 27,
+      "title": "学校申请待审核",
+      "category": "账户与设置",
+      "kind": "回执状态",
+      "recommendedDesign": "screens/27-auth-school-pending.png",
+      "designSha256": "7e1fbf79966ec082b5d206e2e375d051b99ddaede8448152ff310fa352cfcc30",
+      "components": [
+        "AuthGate.tsx"
+      ],
+      "entry": "register 返回 kind=pending → pendingReview回执",
+      "roles": [
+        "ANONYMOUS"
+      ],
+      "preserveActions": [
+        "展示真实申请学校/账号",
+        "返回登录",
+        "不得伪造已登录"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/AuthGate.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AuthGate.tsx",
+          "lineCount": 765,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 28,
+      "title": "通用设置",
+      "category": "账户与设置",
+      "kind": "设置弹窗",
+      "recommendedDesign": "screens/28-settings-general.png",
+      "designSha256": "cce24fbce7c1ef7f0e56625f455585985a74e761724bb6dec75968288b569a1b",
+      "components": [
+        "chrome.ts",
+        "index.ts"
+      ],
+      "entry": "上游 SettingsRoot → 通用设置",
+      "roles": [
+        "STUDENT",
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "语言/主题/原设置存储",
+        "Escape与焦点恢复",
+        "深浅主题"
+      ],
+      "mappingNotes": "具体表单归 ui-settings 上游；本清单不把 chrome 样式视作实现完成。",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/chrome.ts",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/index.ts"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/chrome.ts",
+          "lineCount": 495,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/index.ts",
+          "lineCount": 888,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 29,
+      "title": "模型目录与只读配置",
+      "category": "账户与设置",
+      "kind": "设置弹窗",
+      "recommendedDesign": "revisions/29-settings-models-v2.png",
+      "designSha256": "c87d87c50214cfa80689d04c24729ca445a450dcb2c9aa93a04cb18b97ec4e72",
+      "components": [
+        "chrome.ts"
+      ],
+      "entry": "上游 SettingsRoot → 模型目录（ui-settings-models）",
+      "roles": [
+        "STUDENT",
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "只读模型目录",
+        "普通用户不可写凭据",
+        "平台策略真实状态"
+      ],
+      "mappingNotes": "ui-settings-models/src/client/store.ts 的改动在 upstream-changes.patch；需投影后验证。",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/chrome.ts"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/chrome.ts",
+          "lineCount": 495,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 30,
+      "title": "Agent 预设与权限说明",
+      "category": "账户与设置",
+      "kind": "设置弹窗",
+      "recommendedDesign": "revisions/30-settings-presets-v2.png",
+      "designSha256": "3baa71f6fdcc3053727f2fafc082b7fa58893e52a41196ad371ab96b3316c8ba",
+      "components": [
+        "PhysicsProfileSeat.tsx",
+        "PhysicsProfileLabel.tsx",
+        "profiles.ts"
+      ],
+      "entry": "设置 → Agent预设；首页已有预设席位",
+      "roles": [
+        "STUDENT",
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "现有预设与权限说明",
+        "选择合法学习/教学预设",
+        "保留平台控制"
+      ],
+      "mappingNotes": "预设设置表单由上游包持有；不可将首页预设席位误计成设置页面验收。",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/PhysicsProfileSeat.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/PhysicsProfileLabel.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/profiles.ts"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/PhysicsProfileSeat.tsx",
+          "lineCount": 96,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/PhysicsProfileLabel.tsx",
+          "lineCount": 47,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/profiles.ts",
+          "lineCount": 51,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 31,
+      "title": "我的访问与用量",
+      "category": "账户与设置",
+      "kind": "页面",
+      "recommendedDesign": "screens/31-account-usage.png",
+      "designSha256": "7ed67677b0f93b50cdcb75f415eee9bb21204403650c755963e38bac17f63472",
+      "components": [
+        "UsageWorkspace.tsx",
+        "LabWorkspace.tsx",
+        "SidebarFooter.tsx"
+      ],
+      "entry": "账户菜单 → 我的访问/用量 → physicsos-record（surface=record）",
+      "roles": [
+        "STUDENT",
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "本人访问/用量读取",
+        "范围切换",
+        "真实汇总",
+        "空/失败态"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/UsageWorkspace.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/LabWorkspace.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/SidebarFooter.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/UsageWorkspace.tsx",
+          "lineCount": 149,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/LabWorkspace.tsx",
+          "lineCount": 338,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/SidebarFooter.tsx",
+          "lineCount": 100,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 32,
+      "title": "账户菜单",
+      "category": "账户与设置",
+      "kind": "菜单",
+      "recommendedDesign": "screens/32-account-menu.png",
+      "designSha256": "b582095e1ce209f015f7ae0f676dbda530f28acba031d2e7a83c2badcddd4e80",
+      "components": [
+        "SidebarFooter.tsx"
+      ],
+      "entry": "账户按钮 → Menu",
+      "roles": [
+        "STUDENT",
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "真实账号/学校",
+        "我的用量",
+        "管理员入口按角色",
+        "退出登录",
+        "键盘/焦点"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/SidebarFooter.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/SidebarFooter.tsx",
+          "lineCount": 100,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 33,
+      "title": "后台：使用汇总",
+      "category": "管理后台",
+      "kind": "后台标签",
+      "recommendedDesign": "revisions/33-admin-overview-v2.png",
+      "designSha256": "4b8c15347b315757964bdce2dcdce4cd102932fea9664372fe55aa9de10f66af",
+      "components": [
+        "AdminWorkspace.tsx",
+        "AdminOverviewTab.tsx",
+        "UsageWorkspace.tsx"
+      ],
+      "entry": "账户菜单 → 管理后台 → overview → summary",
+      "roles": [
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "真实使用汇总",
+        "学校范围",
+        "筛选与空态",
+        "保留运维/审计入口"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWorkspace.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminOverviewTab.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/UsageWorkspace.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWorkspace.tsx",
+          "lineCount": 646,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminOverviewTab.tsx",
+          "lineCount": 23,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/UsageWorkspace.tsx",
+          "lineCount": 149,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 34,
+      "title": "后台：运维",
+      "category": "管理后台",
+      "kind": "后台标签",
+      "recommendedDesign": "screens/34-admin-operations.png",
+      "designSha256": "0fb6ad91bed0492b73fc0fd0d0903686862f570034efb0ecc5c391ec60b3b593",
+      "components": [
+        "AdminWorkspace.tsx",
+        "AdminOverviewTab.tsx",
+        "AdminOpsTab.tsx",
+        "AdminOpsPanel.tsx"
+      ],
+      "entry": "管理后台 → overview → operations",
+      "roles": [
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "真实健康/运行/容量读取",
+        "按权限维护动作",
+        "确认与审计"
+      ],
+      "mappingNotes": "AdminOpsPanel指标区仅SUPER_ADMIN渲染，校管保留批量用户运维；具体写入能力仍以host guard为准。",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWorkspace.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminOverviewTab.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminOpsTab.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminOpsPanel.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWorkspace.tsx",
+          "lineCount": 646,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminOverviewTab.tsx",
+          "lineCount": 23,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminOpsTab.tsx",
+          "lineCount": 332,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminOpsPanel.tsx",
+          "lineCount": 330,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 35,
+      "title": "后台：审计日志",
+      "category": "管理后台",
+      "kind": "后台标签",
+      "recommendedDesign": "screens/35-admin-audit.png",
+      "designSha256": "070c618f64647abffea0fda2df87e58a0c3260de3abd9761022ef3c462f18f95",
+      "components": [
+        "AdminWorkspace.tsx",
+        "AdminOverviewTab.tsx"
+      ],
+      "entry": "管理后台 → overview → audit / AuditTab",
+      "roles": [
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "审计筛选/读取",
+        "学校范围",
+        "真实操作记录",
+        "分页"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWorkspace.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminOverviewTab.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWorkspace.tsx",
+          "lineCount": 646,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminOverviewTab.tsx",
+          "lineCount": 23,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 36,
+      "title": "后台：用户管理",
+      "category": "管理后台",
+      "kind": "后台标签",
+      "recommendedDesign": "revisions/36-admin-users-v2.png",
+      "designSha256": "e4659d8e3f636a466e17b69ddfef6e6f3a49212ae2a5d3208cc2bf84497e7f3c",
+      "components": [
+        "AdminWorkspace.tsx",
+        "AdminAccountsTab.tsx"
+      ],
+      "entry": "管理后台 → users → accounts / UsersTab",
+      "roles": [
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "查询/创建/更新账户",
+        "角色及学校范围",
+        "重置/禁用确认",
+        "审计"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWorkspace.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminAccountsTab.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWorkspace.tsx",
+          "lineCount": 646,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminAccountsTab.tsx",
+          "lineCount": 24,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 37,
+      "title": "后台：密码重置请求",
+      "category": "管理后台",
+      "kind": "后台标签",
+      "recommendedDesign": "screens/37-admin-password-resets.png",
+      "designSha256": "bdd72da304606b1ec9383bb55d64b87311ae874246e13f23b032da6a9007d634",
+      "components": [
+        "AdminAccountsTab.tsx",
+        "AuthGate.tsx"
+      ],
+      "entry": "管理后台 → users → resets / PasswordResetQueue",
+      "roles": [
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "查看申请",
+        "签发/撤销/过期状态",
+        "学校范围",
+        "不泄漏重置凭据"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminAccountsTab.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/AuthGate.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminAccountsTab.tsx",
+          "lineCount": 24,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AuthGate.tsx",
+          "lineCount": 765,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 38,
+      "title": "后台：设备管理",
+      "category": "管理后台",
+      "kind": "后台标签",
+      "recommendedDesign": "screens/38-admin-devices.png",
+      "designSha256": "8e0e20ba7ace56a21f9fe9f76a51a0b12511e3cec9e8c21c0c21122296ecf1a9",
+      "components": [
+        "AdminAccountsTab.tsx",
+        "AdminDeviceTab.tsx"
+      ],
+      "entry": "管理后台 → users → devices",
+      "roles": [
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "设备读取/筛选",
+        "会话设备管理",
+        "权限范围与确认"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminAccountsTab.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminDeviceTab.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminAccountsTab.tsx",
+          "lineCount": 24,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminDeviceTab.tsx",
+          "lineCount": 189,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 39,
+      "title": "后台：学校申请审核",
+      "category": "管理后台",
+      "kind": "后台标签",
+      "recommendedDesign": "screens/39-admin-school-applications.png",
+      "designSha256": "e382763687742942e3aa3864311019e9f832dd37c569e07caa576a8543727f89",
+      "components": [
+        "AdminWorkspace.tsx"
+      ],
+      "entry": "管理后台 → requests / RequestsTab",
+      "roles": [
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "学校申请读取",
+        "批准/拒绝及理由",
+        "确认",
+        "真实状态/审计"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWorkspace.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWorkspace.tsx",
+          "lineCount": 646,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 40,
+      "title": "后台：学校管理",
+      "category": "管理后台",
+      "kind": "后台标签",
+      "recommendedDesign": "screens/40-admin-schools.png",
+      "designSha256": "a8b3963cbbf035e6ebce1cb84c1d413a8b53a5287cbb4b190b6007d2464d6b10",
+      "components": [
+        "AdminWorkspace.tsx"
+      ],
+      "entry": "管理后台 → schools / SchoolsTab",
+      "roles": [
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "学校读取/配置",
+        "管理员范围",
+        "真实持久化",
+        "确认/审计"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWorkspace.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWorkspace.tsx",
+          "lineCount": 646,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 41,
+      "title": "后台：对话审核",
+      "category": "管理后台",
+      "kind": "后台标签",
+      "recommendedDesign": "screens/41-admin-chat-review.png",
+      "designSha256": "dd624a58e00005f869354cf511ba950517fba778b4064f9934e5fc90dbe78487",
+      "components": [
+        "AdminWorkspace.tsx",
+        "AdminModerationTab.tsx"
+      ],
+      "entry": "管理后台 → moderation",
+      "roles": [
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "对话审核筛选/详情",
+        "真实内容与处理",
+        "审计"
+      ],
+      "mappingNotes": "前端当前仅SUPER_ADMIN可见，不擅自拓展给校管。",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWorkspace.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminModerationTab.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWorkspace.tsx",
+          "lineCount": 646,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminModerationTab.tsx",
+          "lineCount": 331,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 42,
+      "title": "后台：实验投稿审核",
+      "category": "管理后台",
+      "kind": "后台标签",
+      "recommendedDesign": "screens/42-admin-experiment-review.png",
+      "designSha256": "eeb4aaa012e8c5a2738355edee2555a2245e65ff8a85f09d9b1dcb00c69c8b36",
+      "components": [
+        "AdminWorkspace.tsx",
+        "AdminExperimentTab.tsx"
+      ],
+      "entry": "管理后台 → experimentReview → experiments",
+      "roles": [
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "投稿读取",
+        "内容预览",
+        "审核/上下架/版本",
+        "确认审计"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWorkspace.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminExperimentTab.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWorkspace.tsx",
+          "lineCount": 646,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminExperimentTab.tsx",
+          "lineCount": 28,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 43,
+      "title": "后台：题目内容核验",
+      "category": "管理后台",
+      "kind": "后台标签",
+      "recommendedDesign": "screens/43-admin-question-review.png",
+      "designSha256": "677e7faa9bf42dac92110bca02e2156209d1b716935ea369dcd639e30610dfc9",
+      "components": [
+        "AdminWorkspace.tsx",
+        "AdminContentTab.tsx"
+      ],
+      "entry": "管理后台 → experimentReview → content",
+      "roles": [
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "题目核验",
+        "审核人归属",
+        "真题/标注读取",
+        "学校范围"
+      ],
+      "mappingNotes": "需paperApi可用；以服务端核验权限为准。",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWorkspace.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminContentTab.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWorkspace.tsx",
+          "lineCount": 646,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminContentTab.tsx",
+          "lineCount": 339,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 44,
+      "title": "后台：用户反馈处理",
+      "category": "管理后台",
+      "kind": "后台标签",
+      "recommendedDesign": "screens/44-admin-feedback.png",
+      "designSha256": "3063c731cee11e7d25e5b40d1ad74615ec3f39c47934e62273e8fde0fbea3354",
+      "components": [
+        "AdminWorkspace.tsx",
+        "AdminNoticeTab.tsx"
+      ],
+      "entry": "管理后台 → feedback → feedback",
+      "roles": [
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "真实反馈筛选",
+        "回复/状态变更",
+        "学校范围",
+        "失败重试"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWorkspace.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminNoticeTab.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWorkspace.tsx",
+          "lineCount": 646,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminNoticeTab.tsx",
+          "lineCount": 138,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 45,
+      "title": "后台：公告编辑与发布",
+      "category": "管理后台",
+      "kind": "后台标签",
+      "recommendedDesign": "screens/45-admin-announcements.png",
+      "designSha256": "24b2958c439c2dafd5deb850f97f20345a6421bb0f63b3c040c876a4398269a0",
+      "components": [
+        "AdminWorkspace.tsx",
+        "AdminPlatformNoticeTab.tsx"
+      ],
+      "entry": "管理后台 → feedback → announcements",
+      "roles": [
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "公告编辑/发布",
+        "版本与通知",
+        "确认",
+        "持久化"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWorkspace.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminPlatformNoticeTab.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWorkspace.tsx",
+          "lineCount": 646,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminPlatformNoticeTab.tsx",
+          "lineCount": 145,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 46,
+      "title": "官网管理：展示反馈",
+      "category": "管理后台",
+      "kind": "后台标签",
+      "recommendedDesign": "screens/46-admin-site-testimonials.png",
+      "designSha256": "9b9310a889f7fb0d7b5f60de7ce4b8615aeed1c774debbef7b6579121104d13b",
+      "components": [
+        "AdminWebsiteTab.tsx"
+      ],
+      "entry": "管理后台 → website → testimonials",
+      "roles": [
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "展示反馈编辑",
+        "排序",
+        "上下架",
+        "真实公开配置",
+        "版本冲突处理"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWebsiteTab.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWebsiteTab.tsx",
+          "lineCount": 357,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 47,
+      "title": "官网管理：贡献者与项目",
+      "category": "管理后台",
+      "kind": "后台标签",
+      "recommendedDesign": "screens/47-admin-site-contributors.png",
+      "designSha256": "8a8630c92f30269f57fea848706ae15796886dcde35081d9ec90b1fcdbd01b06",
+      "components": [
+        "AdminWebsiteTab.tsx"
+      ],
+      "entry": "管理后台 → website → contributors",
+      "roles": [
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "贡献者头像/项目/链接配置",
+        "排序",
+        "上下架",
+        "持久化与冲突"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWebsiteTab.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWebsiteTab.tsx",
+          "lineCount": 357,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 48,
+      "title": "官网管理：反馈收件箱与截图",
+      "category": "管理后台",
+      "kind": "后台标签",
+      "recommendedDesign": "screens/48-admin-site-inbox.png",
+      "designSha256": "10bcbe5e963114bc57274ce227b83ac75cd67d1eef322bea3dec044d0474efdf",
+      "components": [
+        "AdminWebsiteTab.tsx"
+      ],
+      "entry": "管理后台 → website → inbox / FeedbackInbox",
+      "roles": [
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "真实反馈筛选",
+        "私密截图查看",
+        "回复/处理状态",
+        "可转展示但不自动公开"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWebsiteTab.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWebsiteTab.tsx",
+          "lineCount": 357,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 49,
+      "title": "后台：平台模型号池",
+      "category": "管理后台",
+      "kind": "后台标签",
+      "recommendedDesign": "revisions/49-admin-model-pool-v2.png",
+      "designSha256": "16d51d702b34db20cc20fb9c4f3bcabd5a89a20ab7f5aebdbff47ead4d4c4e02",
+      "components": [
+        "AdminModelPoolTab.tsx"
+      ],
+      "entry": "管理后台 → modelPool",
+      "roles": [
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "通道/模型/密钥池管理",
+        "探测",
+        "只显示掩码",
+        "缺加密配置禁止凭据写入"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminModelPoolTab.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminModelPoolTab.tsx",
+          "lineCount": 715,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 50,
+      "title": "公开官网首页",
+      "category": "官网与文档",
+      "kind": "官网首屏",
+      "recommendedDesign": "screens/50-official-home.png",
+      "designSha256": "732b71e224e41e028488f721f6af579f656106dd1ce175b346ce3ceabb169b7a",
+      "components": [
+        "@website/index.html",
+        "@website/motion.js"
+      ],
+      "entry": "https://physicsos.dongsiwei.com/；/physicsos/website/index.html",
+      "roles": [
+        "ANONYMOUS",
+        "STUDENT",
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "产品/文档真实链接",
+        "首屏与动效偏好",
+        "旧hash转系统域兼容"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/apps/web/public/physicsos/website/index.html",
+        "overlays/harness/files/apps/web/public/physicsos/website/motion.js"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/website/index.html",
+          "lineCount": 103,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/website/motion.js",
+          "lineCount": 190,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 51,
+      "title": "官网功能与实验演示",
+      "category": "官网与文档",
+      "kind": "官网区段",
+      "recommendedDesign": "screens/51-official-features.png",
+      "designSha256": "8b267f7c3a5cb447ae1a5c9a6c3f7b71febd9c127466515969dcd6423c7798bf",
+      "components": [
+        "@website/index.html",
+        "@website/motion.js"
+      ],
+      "entry": "官网 → 功能与实验演示区段",
+      "roles": [
+        "ANONYMOUS",
+        "STUDENT",
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "交互概念演示",
+        "标签切换",
+        "进入真实系统",
+        "减少动效适配"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/apps/web/public/physicsos/website/index.html",
+        "overlays/harness/files/apps/web/public/physicsos/website/motion.js"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/website/index.html",
+          "lineCount": 103,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/website/motion.js",
+          "lineCount": 190,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 52,
+      "title": "官网用户声音与共创项目",
+      "category": "官网与文档",
+      "kind": "官网区段",
+      "recommendedDesign": "screens/52-official-community.png",
+      "designSha256": "8dc4b5686984fc9b15523effea4321ed917f3810e49e76ff9a6d28c958157741",
+      "components": [
+        "@website/index.html",
+        "@website/motion.js"
+      ],
+      "entry": "官网 → 用户声音与共创项目区段",
+      "roles": [
+        "ANONYMOUS",
+        "STUDENT",
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "GET公开配置",
+        "真实评价/贡献者",
+        "空/加载/失败重试",
+        "焦点刷新"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/apps/web/public/physicsos/website/index.html",
+        "overlays/harness/files/apps/web/public/physicsos/website/motion.js"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/website/index.html",
+          "lineCount": 103,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/website/motion.js",
+          "lineCount": 190,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 53,
+      "title": "官网反馈与截图上传",
+      "category": "官网与文档",
+      "kind": "弹窗",
+      "recommendedDesign": "revisions/53-official-feedback-v2.png",
+      "designSha256": "df09d9cec52385ab8dd6cb08ca22a075c4ffbe997268b927cf22e807b3d94f8e",
+      "components": [
+        "@website/index.html",
+        "@website/motion.js"
+      ],
+      "entry": "官网 → feedback-trigger → #feedback-dialog",
+      "roles": [
+        "ANONYMOUS",
+        "STUDENT",
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "正文与类别",
+        "最多3张/每张5MiB截图校验",
+        "真实POST",
+        "失败保留草稿",
+        "焦点与关闭"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/apps/web/public/physicsos/website/index.html",
+        "overlays/harness/files/apps/web/public/physicsos/website/motion.js"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/website/index.html",
+          "lineCount": 103,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/website/motion.js",
+          "lineCount": 190,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 54,
+      "title": "官网反馈提交成功",
+      "category": "官网与文档",
+      "kind": "成功状态",
+      "recommendedDesign": "screens/54-official-feedback-success.png",
+      "designSha256": "89b9ab528b1e41afdb22637ae4a60df080c2d78a7838fe241d4e0206eb8d481a",
+      "components": [
+        "@website/index.html",
+        "@website/motion.js"
+      ],
+      "entry": "官网反馈POST返回真实id/createdAt → #feedback-success",
+      "roles": [
+        "ANONYMOUS",
+        "STUDENT",
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "真实回执",
+        "继续探索",
+        "再次反馈",
+        "失败不可展示成功"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/apps/web/public/physicsos/website/index.html",
+        "overlays/harness/files/apps/web/public/physicsos/website/motion.js"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/website/index.html",
+          "lineCount": 103,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/website/motion.js",
+          "lineCount": 190,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 55,
+      "title": "实验开发者文档",
+      "category": "官网与文档",
+      "kind": "文档共用模板",
+      "recommendedDesign": "screens/55-developer-docs.png",
+      "designSha256": "5d83e0e8da9df6431e37d9ee5b7472519e5b15bbf4e545fe40636681e6e65138",
+      "components": [
+        "@developers/index.html",
+        "@scripts/generate.mjs"
+      ],
+      "entry": "https://physics.dongsiwei.com/physicsos/developers/index.html",
+      "roles": [
+        "ANONYMOUS",
+        "STUDENT",
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "文档搜索/导航/锚点",
+        "提示词及模板下载",
+        "保留技术规范"
+      ],
+      "mappingNotes": "共用生成器负责各章节；不是单一首页样式验收。",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/apps/web/public/physicsos/developers/index.html",
+        "scripts/developers/generate.mjs"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/developers/index.html",
+          "lineCount": 38,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "scripts/developers/generate.mjs",
+          "lineCount": 140,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 56,
+      "title": "全幅电路搭建实验",
+      "category": "实验与资源",
+      "kind": "实验变体",
+      "recommendedDesign": "screens/56-circuit-builder.png",
+      "designSha256": "f580cb49f9a9f99c04f639f0608fc2c778e1f19fd1dece2a01ffbaa96b670fcc",
+      "components": [
+        "PhysicsWorkspace.tsx",
+        "physics/PhysicsCanvas.tsx",
+        "physics/CircuitBuilderPanel.tsx",
+        "physics/circuit-renderer.tsx"
+      ],
+      "entry": "实验中心 → 电路实验/自由搭建；运行台buildMode",
+      "roles": [
+        "STUDENT",
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "器材放置/接线",
+        "未求解场景保持显示",
+        "真实电路求解",
+        "保存",
+        "播放/测量"
+      ],
+      "mappingNotes": "电路沿用PhysicsCanvas与circuit-renderer/CircuitBuilderPanel独立逻辑，不能只修改通用三栏。",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/PhysicsWorkspace.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/PhysicsCanvas.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/CircuitBuilderPanel.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/circuit-renderer.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/PhysicsWorkspace.tsx",
+          "lineCount": 1145,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/PhysicsCanvas.tsx",
+          "lineCount": 732,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/CircuitBuilderPanel.tsx",
+          "lineCount": 577,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/circuit-renderer.tsx",
+          "lineCount": 1441,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 57,
+      "title": "历史对话面板",
+      "category": "对话与导航",
+      "kind": "抽屉",
+      "recommendedDesign": "screens/57-history.png",
+      "designSha256": "8f92ff99ab713fe9046fcaacf1c44badca5ac81ccd1c6f2ca70b9d9e80fee5e0",
+      "components": [
+        "RecentSpaces.tsx",
+        "index.ts"
+      ],
+      "entry": "历史/最近空间入口（原sidebar.workspacepanel slot）",
+      "roles": [
+        "STUDENT",
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "会话恢复",
+        "最近实验/画布恢复",
+        "账户隔离",
+        "收起/焦点"
+      ],
+      "mappingNotes": "新顶部抽屉是目标呈现，当前源码入口仍需壳层迁移后验收。",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/RecentSpaces.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/index.ts"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/RecentSpaces.tsx",
+          "lineCount": 161,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/index.ts",
+          "lineCount": 888,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 58,
+      "title": "悬浮导航：更多功能",
+      "category": "对话与导航",
+      "kind": "菜单",
+      "recommendedDesign": "screens/58-navigation-more.png",
+      "designSha256": "9edcd50be5fd421e92dcaafca65910498ae56d371e8dfbb8d660c388671ac087",
+      "components": [
+        "SidebarNav.tsx",
+        "SidebarFooter.tsx"
+      ],
+      "entry": "短导航 → 更多功能菜单（目标）；原SidebarNav导航动作",
+      "roles": [
+        "STUDENT",
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "资源库/贡献/反馈等全部入口",
+        "出卷教学角色限制",
+        "后台管理员限制",
+        "Escape/焦点"
+      ],
+      "mappingNotes": "更多菜单属于设计目标，原组件是现有动作来源；不能推断已实现。",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/SidebarNav.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/SidebarFooter.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/SidebarNav.tsx",
+          "lineCount": 118,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/SidebarFooter.tsx",
+          "lineCount": 100,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 59,
+      "title": "我的反馈与处理状态",
+      "category": "反馈",
+      "kind": "页面内状态",
+      "recommendedDesign": "screens/59-feedback-history.png",
+      "designSha256": "7e6a708b0fee04e8c51ab7e041f435e172180e61269344b679bbae6ab80d383b",
+      "components": [
+        "NoticeBoard.tsx"
+      ],
+      "entry": "反馈 → tab=history",
+      "roles": [
+        "STUDENT",
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "本人反馈读取",
+        "处理状态/回复",
+        "刷新",
+        "空态",
+        "新反馈跳转"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/NoticeBoard.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/NoticeBoard.tsx",
+          "lineCount": 152,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 60,
+      "title": "实验生成失败与重试",
+      "category": "对话与导航",
+      "kind": "失败状态",
+      "recommendedDesign": "revisions/60-chat-retry-v2.png",
+      "designSha256": "83841395a050909b6e34ca97e8709d5dc6c68a0839e1d9f57de53bff37f67391",
+      "components": [
+        "SceneTurnCard.tsx",
+        "SceneChatCard.tsx",
+        "experiments/QuestionCodeCanvas.tsx"
+      ],
+      "entry": "实验生成对话 → 失败卡片/题目代码任务失败状态",
+      "roles": [
+        "STUDENT",
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "真实错误",
+        "重试/直接重新生成",
+        "任务轮询与ownerSession",
+        "验证/修复",
+        "不得显示矛盾成功"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/SceneTurnCard.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/SceneChatCard.tsx",
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/experiments/QuestionCodeCanvas.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/SceneTurnCard.tsx",
+          "lineCount": 56,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/SceneChatCard.tsx",
+          "lineCount": 591,
+          "evidenceKind": "source-present-only"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/experiments/QuestionCodeCanvas.tsx",
+          "lineCount": 150,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 61,
+      "title": "后台：号池轮询与冷却策略",
+      "category": "管理后台",
+      "kind": "后台标签",
+      "recommendedDesign": "screens/61-admin-model-policy.png",
+      "designSha256": "d8aa484101f4fa945ec88030b3bc2e87fca3ec6deaec0fb0a060ae2862c7069f",
+      "components": [
+        "AdminModelPoolTab.tsx"
+      ],
+      "entry": "管理后台 → modelPool → 轮询/冷却策略区域",
+      "roles": [
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "真实策略读取/更新",
+        "轮询参数",
+        "基础/最大冷却",
+        "版本/权限",
+        "验证输入"
+      ],
+      "mappingNotes": "当前策略为同一modelPool页面区域，不是独立路由或假造标签。",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminModelPoolTab.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminModelPoolTab.tsx",
+          "lineCount": 715,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    },
+    {
+      "designId": 62,
+      "title": "题库：导入核验详情",
+      "category": "出卷专区",
+      "kind": "详情状态",
+      "recommendedDesign": "screens/62-exam-bank-verify.png",
+      "designSha256": "d357ded34085b01a102bcfddfc20a49f1d689934c2754265707c0590aac0fad0",
+      "components": [
+        "PaperWorkspace.tsx"
+      ],
+      "entry": "出卷 → bank → 导入识别结果/待核验详情",
+      "roles": [
+        "TEACHER",
+        "SCHOOL_ADMIN",
+        "SUPER_ADMIN"
+      ],
+      "preserveActions": [
+        "原文对照",
+        "逐条/批量核验",
+        "退回理由",
+        "真实审核人",
+        "入库/恢复待核验"
+      ],
+      "mappingNotes": "",
+      "implementationStatus": "待验收",
+      "visualValidation": "待验收",
+      "interactionValidation": "待验收",
+      "permissionValidation": "待验收",
+      "screenshots": [],
+      "tests": [],
+      "deviations": [],
+      "componentPaths": [
+        "overlays/harness/files/packages/client/ui-physicsos/src/client/PaperWorkspace.tsx"
+      ],
+      "missingComponents": [],
+      "evidence": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/PaperWorkspace.tsx",
+          "lineCount": 1888,
+          "evidenceKind": "source-present-only"
+        }
+      ]
+    }
+  ]
+}

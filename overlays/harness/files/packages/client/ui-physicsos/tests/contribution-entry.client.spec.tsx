@@ -25,8 +25,8 @@ it('offers a clearly named upload destination on the compact sidebar', () => {
     useAuth: (select) => select({ status: 'guest' }),
   } as SidebarNavProps
   render(<SidebarNav {...props} />)
-  const entry = screen.getByRole('button', { name: '实验上传' })
-  fireEvent.click(entry)
+  fireEvent.click(screen.getByRole('button', { name: '更多功能' }))
+  fireEvent.click(screen.getByRole('menuitem', { name: '实验上传' }))
   expect(openSurface).toHaveBeenCalledWith('contribute')
 })
 

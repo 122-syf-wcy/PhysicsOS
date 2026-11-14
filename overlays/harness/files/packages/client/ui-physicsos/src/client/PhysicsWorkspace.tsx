@@ -42,6 +42,8 @@ import { AgentDrawer } from './AgentDrawer.tsx'
 import { ExperimentGuidePanel } from './ExperimentGuidePanel.tsx'
 import { ExperimentReportPanel } from './ExperimentReportPanel.tsx'
 import { WorkspaceScenePanel } from './WorkspaceScenePanel.tsx'
+import { WorkbenchFloatPanel } from './WorkbenchFloatPanel.tsx'
+import sceneCss from './WorkbenchScene.module.css'
 import { IconChatBubble, IconScene, IconVariable, IconVerified } from './icons/physics-icons.tsx'
 import { Mascot } from './Mascot.tsx'
 import { WorkbenchAction } from './WorkbenchAction.tsx'
@@ -59,6 +61,7 @@ import type { SelfCheckAttemptInput } from './learning-record-store.ts'
 import {
   DataPanelBody,
   InspectorTabs,
+  QuantityField,
   SceneTreePanel,
   TimelineMarkers,
   type DataTab,
@@ -190,7 +193,7 @@ export function PhysicsWorkspace({
   const [selected, setSelected] = useState('scene')
   /* Time-varying experiments show their graph beside the apparatus from the
      first frame. Static scenes keep the optional analysis panel folded. */
-  const [dataOpen, setDataOpen] = useState(() => snapshot.charts.length > 0)
+  const [dataOpen, setDataOpen] = useState(() => snapshot.charts.length > 0 && window.innerWidth >= 1000)
   const [dataTab, setDataTab] = useState<DataTab>(() =>
     snapshot.charts.length > 0 ? 'charts' : 'data',
   )
@@ -213,8 +216,14 @@ export function PhysicsWorkspace({
      chevron that drops its grid column; the toolbar toggle restores it. At
      drawer widths the flags stay inert — the drawer open state owns
      visibility there, and the same toggle clears a stale flag first. */
-  const [sceneCollapsed, setSceneCollapsed] = useState(false)
+  const [sceneCollapsed, setSceneCollapsed] = useState(true)
   const [inspectorCollapsed, setInspectorCollapsed] = useState(false)
+  const [inspectorDetailed, setInspectorDetailed] = useState(false)
+  const allParameters = snapshot.inspector.flatMap(section => section.parameters ?? [])
+  const quickParameters = [...allParameters].sort((left, right) => {
+    const priority = (unit: string) => unit === 'T' ? 0 : unit === 'm/s' ? 1 : 2
+    return priority(left.unit) - priority(right.unit)
+  }).slice(0, 2)
   /* Hover highlight is transient chrome, so it is kept out of the runtime until
      it actually needs to reach the canvas. */
   const highlightRef = useRef<string | undefined>(undefined)
@@ -528,11 +537,11 @@ export function PhysicsWorkspace({
   if (questionCodeVisualization !== undefined && questionCodeScene !== undefined) {
     const independent = questionCodeVisualization.status === 'ready' && questionCodeVisualization.rendererKind === 'independent'
     const title = independent ? questionCodeVisualization.title : questionCodeScene.metadata.title ?? snapshot.title
-    return <div ref={coverRef} className={clsx(css.cover, codeCss.labCover)} data-private-question-code-workspace
+    return <div ref={coverRef} className={clsx(css.cover, codeCss.labCover, sceneCss.questionWorkspace)} data-private-question-code-workspace
       data-physicsos-surface="lab" data-physicsos-domain={snapshot.domain} data-physicsos-running={running ? 'true' : 'false'}
       data-scene-revision={snapshot.sceneRevision} data-verification-status={displayedStatus}>
-      <div className={codeCss.labContent}>
-        <header className={codeCss.labHeader}>
+      <div className={clsx(codeCss.labContent, sceneCss.questionContent)}>
+        <header className={clsx(codeCss.labHeader, sceneCss.questionHeader)}>
           <div className={codeCss.heading}>
             {onSwitchExperiment === undefined
               ? <span className={codeCss.badge}><IconScene size={14} />{t('lab.questionCode.trail')}</span>
@@ -543,16 +552,17 @@ export function PhysicsWorkspace({
             <h1 className={codeCss.title}>{title}</h1>
           </div>
           <div className={codeCss.labHeaderActions}>
+          <button type="button" className={codeCss.open} aria-pressed={!inspectorCollapsed} onClick={() => { setInspectorCollapsed(value => !value); inspector.reveal() }}>{t('lab.inspectorPanel')}</button>
           {onAddToCanvas === undefined ? null : <WorkbenchAction label={t('canvas.addToCanvas')} onClick={onAddToCanvas} />}
           {onReturnToChat === undefined ? null : <button type="button" className={codeCss.open} onClick={onReturnToChat}>
             <IconChatBubble size={14} />{t('lab.backToChat')}
           </button>}
           </div>
         </header>
-        <QuestionCodeCanvas visualization={questionCodeVisualization} scene={questionCodeScene} session={session}
+        <QuestionCodeCanvas presentation="workbench" visualization={questionCodeVisualization} scene={questionCodeScene} session={session}
           hasVerifiedSolution={questionCodeHasVerifiedSolution === true}
           {...(questionCodeOwner === undefined ? {} : { questionCodeOwner })} />
-        <div className={codeCss.transport} aria-label={t('lab.timeline')} data-running={running}>
+        <div className={clsx(codeCss.transport, sceneCss.questionTransport)} aria-label={t('lab.timeline')} data-running={running}>
           <button type="button" className={clsx(codeCss.control, codeCss.controlPrimary)} disabled={failed || clock.total <= 0}
             aria-label={ended ? t('lab.replay') : t('lab.playPause')} aria-pressed={running}
             onClick={() => { commit(runtime.setRunning(!running)) }}>
@@ -572,8 +582,10 @@ export function PhysicsWorkspace({
             options={PLAYBACK_RATES.map(rate => ({ value: String(rate), label: `${rate}×` }))}
             onChange={(value) => { commit(runtime.setRate(Number(value))) }} />
         </div>
-        <QuestionCodeControls session={session} snapshot={snapshot} />
-        {questionCodeVisualization.status === 'ready' && !independent ? <p className={codeCss.labHint}>
+        {inspectorCollapsed ? null : <WorkbenchFloatPanel title={t('lab.inspectorPanel')} closeLabel={t('lab.closeInspector')} onClose={() => { setInspectorCollapsed(true); inspector.close() }} placement="bottom-right" width={320} height={350} expanded={inspector.open}>
+          <QuestionCodeControls session={session} snapshot={snapshot} />
+        </WorkbenchFloatPanel>}
+        {questionCodeVisualization.status === 'ready' && !independent ? <p className={clsx(codeCss.labHint, sceneCss.questionHint)}>
           返回原学习对话，点击“升级为独立实验”，即可为这道题生成完整的新画面。
         </p> : null}
       </div>
@@ -583,7 +595,7 @@ export function PhysicsWorkspace({
   return (
     <div
       ref={coverRef}
-      className={css.cover}
+      className={clsx(css.cover, sceneCss.workspace)}
       data-physicsos-surface="lab"
       data-physicsos-domain={snapshot.domain}
       data-physicsos-running={running ? 'true' : 'false'}
@@ -596,8 +608,8 @@ export function PhysicsWorkspace({
       data-scene-drawer-open={sceneDrawer.open ? 'true' : undefined}
       data-inspector-drawer-open={inspector.open ? 'true' : undefined}
     >
-      <header className={css.toolbar}>
-        <div className={css.sceneIdentity}>
+      <header className={clsx(css.toolbar, sceneCss.toolbar)}>
+        <div className={clsx(css.sceneIdentity, sceneCss.sceneIdentity)}>
           {onSwitchExperiment === undefined ? null : (
             <button type="button" className={css.crumb} onClick={onSwitchExperiment}>
               <IconChevronLeftOutlineMedium size={13} />
@@ -608,7 +620,7 @@ export function PhysicsWorkspace({
           {/* The scene name is the switch affordance; the chevron button carries
               the keyboard/AT path because a heading may not live inside a button. */}
           <h1
-            className={clsx(css.title, onSwitchExperiment !== undefined && css.titleClickable)}
+            className={clsx(css.title, sceneCss.title, onSwitchExperiment !== undefined && css.titleClickable)}
             onClick={onSwitchExperiment}
           >
             {snapshot.title}
@@ -628,7 +640,10 @@ export function PhysicsWorkspace({
             <span className={css.saveState} title={readerSubtitle}>{readerSubtitle}</span>
           )}
         </div>
-        <div className={css.toolGroup}>
+        <div className={clsx(css.toolGroup, sceneCss.toolGroup)}>
+          <button type="button" className={clsx(css.tool, sceneCss.tool)} aria-pressed={dataOpen} onClick={() => { setDataTab('charts'); setDataOpen(value => !value) }}>
+            <IconListPenOutlineMedium size={14} />{t('lab.tab.charts')}
+          </button>
           {snapshot.branch === undefined ? null : (
             <span className={css.branchBadge} data-physicsos-branch="experimental">
               <IconVariable size={12} />
@@ -667,7 +682,7 @@ export function PhysicsWorkspace({
           {experimentMeta === undefined ? null : (
             <button
               type="button"
-              className={css.tool}
+              className={clsx(css.tool, sceneCss.tool)}
               onClick={() => {
                 setGuideOpen(true)
               }}
@@ -678,7 +693,7 @@ export function PhysicsWorkspace({
           )}
           <button
             type="button"
-            className={css.tool}
+            className={clsx(css.tool, sceneCss.tool)}
             disabled={failed}
             onClick={() => {
               setReportOpen(true)
@@ -705,6 +720,7 @@ export function PhysicsWorkspace({
             <>
               <button
                 ref={sceneDrawer.triggerRef}
+                data-workbench-scene-toggle
                 type="button"
                 className={clsx(css.tool, css.sceneToggle, sceneDrawer.open && css.toolActive)}
                 aria-controls={sceneDrawer.id}
@@ -714,6 +730,12 @@ export function PhysicsWorkspace({
                      live flag is the only case where the toggle means that. */
                   if (sceneCollapsed) {
                     setSceneCollapsed(false)
+                    sceneDrawer.reveal()
+                    return
+                  }
+                  if (sceneDrawer.open || (coverRef.current?.clientWidth ?? 0) >= 1080) {
+                    setSceneCollapsed(true)
+                    sceneDrawer.close()
                     return
                   }
                   if (inspector.open) inspector.toggle()
@@ -733,11 +755,15 @@ export function PhysicsWorkspace({
                     if (inspectorCollapsed) {
                       setInspectorCollapsed(false)
                       setAgentOpen(false)
+                      inspector.reveal()
                       return
                     }
                     if (sceneDrawer.open) sceneDrawer.toggle()
                     if (agentOpen) setAgentOpen(false)
-                    inspector.toggle()
+                    if (inspector.open || (coverRef.current?.clientWidth ?? 0) >= 1080) {
+                      setInspectorCollapsed(true)
+                      inspector.close()
+                    } else inspector.reveal()
                   },
                 }}
                 label={t('lab.inspectorPanel')}
@@ -763,7 +789,7 @@ export function PhysicsWorkspace({
             </button>
           )}
           {onReturnToChat === undefined ? null : (
-            <button type="button" className={css.tool} onClick={onReturnToChat}>
+            <button type="button" className={clsx(css.tool, sceneCss.tool)} onClick={onReturnToChat}>
               <IconChatBubble size={13} />
               {t('lab.backToChat')}
             </button>
@@ -813,8 +839,8 @@ export function PhysicsWorkspace({
             )}
         </div>
       ) : (
-        <div className={clsx(css.body, focused && css.bodyFocused)}>
-          {focused ? null : (
+        <div className={clsx(css.body, sceneCss.body, focused && css.bodyFocused)}>
+          {focused || sceneCollapsed ? null : (
             <WorkspaceScenePanel
               controller={sceneDrawer}
               label={t('lab.scene')}
@@ -847,9 +873,9 @@ export function PhysicsWorkspace({
             </WorkspaceScenePanel>
           )}
 
-          <div className={css.stage}>
+          <div className={clsx(css.stage, sceneCss.stage)}>
             {failed && buildMode === true ? (
-              <p className={css.buildDiagnostic} role="status" data-build-diagnostic="true">
+              <p className={clsx(css.buildDiagnostic, sceneCss.buildDiagnostic)} role="status" data-build-diagnostic="true">
                 {failureMessage(t, snapshot.error)}
               </p>
             ) : null}
@@ -858,7 +884,7 @@ export function PhysicsWorkspace({
                  per scene — parameter edits keep the same scene and do not
                  re-trigger it. */
               key={`${snapshot.domain}:${snapshot.title}`}
-              className={css.canvas}
+              className={clsx(css.canvas, sceneCss.canvas)}
               aria-label={t('lab.canvas')}
             >
               {/* The canvas is the renderer: it subscribes to the frame source
@@ -881,7 +907,7 @@ export function PhysicsWorkspace({
                 it (rather than disabling its buttons) is the honest default for
                 an experiment whose model has no time dimension. */}
             {capabilities.timeline ? (
-              <div className={css.timeline} aria-label={t('lab.timeline')}>
+              <div className={clsx(css.timeline, sceneCss.timeline)} aria-label={t('lab.timeline')}>
                 <button
                   type="button"
                   className={clsx(css.transport, css.transportPrimary)}
@@ -943,7 +969,7 @@ export function PhysicsWorkspace({
                   />
                   <TimelineMarkers events={snapshot.events} total={clock.total} onSeek={seek} />
                 </div>
-                <span className={clsx(css.clock, css.clockEnd)}>
+                <span className={clsx(css.clock, css.clockEnd, sceneCss.clockEnd)}>
                   {formatTimeIn(clock.total, clockScale)}
                 </span>
                 <GlassSelect
@@ -959,8 +985,11 @@ export function PhysicsWorkspace({
               </div>
             ) : null}
 
-            <section className={clsx(css.dataPanel, dataOpen && css.dataPanelOpen)}>
-              <div className={css.dataHead}>
+            {dataOpen && !focused ? <WorkbenchFloatPanel title={t('lab.tab.charts')} closeLabel={t('lab.collapse')}
+              collapseLabel={t('lab.collapse')} onClose={() => { setDataOpen(false) }} placement="top-right" width={400} height={310}
+              expanded={dataOpen} desktopDefault={false}>
+            <section className={sceneCss.floatData}>
+              <div className={clsx(css.dataHead, sceneCss.dataHead)}>
                 {(
                   [
                     ['summary', t('lab.tab.summary')],
@@ -973,7 +1002,7 @@ export function PhysicsWorkspace({
                   <button
                     key={id}
                     type="button"
-                    className={clsx(css.tab, dataOpen && dataTab === id && css.tabActive)}
+                    className={clsx(css.tab, sceneCss.tab, dataOpen && dataTab === id && css.tabActive, dataOpen && dataTab === id && sceneCss.tabActive)}
                     onClick={() => {
                       setDataTab(id)
                       setDataOpen(true)
@@ -995,19 +1024,10 @@ export function PhysicsWorkspace({
                     {t('lab.exportCsv')}
                   </button>
                 ) : null}
-                <button
-                  type="button"
-                  className={css.tab}
-                  aria-expanded={dataOpen}
-                  onClick={() => {
-                    setDataOpen(open => !open)
-                  }}
-                >
-                  {dataOpen ? t('lab.collapse') : t('lab.expand')}
-                </button>
+
               </div>
               {dataOpen ? (
-                <div className={css.dataBody}>
+                <div className={clsx(css.dataBody, sceneCss.dataBody)}>
                   <DataPanelBody
                     tab={dataTab}
                     table={snapshot.table}
@@ -1029,29 +1049,33 @@ export function PhysicsWorkspace({
                 </div>
               ) : null}
             </section>
+            </WorkbenchFloatPanel> : null}
           </div>
 
           {agentOpen ? (
             /* The drawer docks in the inspector's rail at track widths; at
                drawer widths its absolute positioning turns it into the same
                overlay the inspector drawer uses. One element, both modes. */
-            <AgentDrawer
+            <WorkbenchFloatPanel title={t('lab.agent')} closeLabel={t('lab.collapse')} onClose={closeAgent}
+              placement="bottom-right" width={350} height={430} expanded desktopDefault={false}>
+            <div className={sceneCss.floatAgent}><AgentDrawer
               snapshot={snapshot}
               runtime={runtime}
               onSnapshot={commit}
               onClose={closeAgent}
               t={t}
               {...(recordAttempt === undefined ? {} : { recordAttempt })}
-            />
-          ) : focused ? null : (
+            /></div></WorkbenchFloatPanel>
+          ) : focused || inspectorCollapsed ? null : (
             <ResponsiveInspector
               controller={inspector}
-              label={t('lab.inspectorPanel')}
+              label={t(inspectorDetailed || quickParameters.length === 0 ? 'lab.inspectorPanel' : 'lab.quickParameters')}
+              height={inspectorDetailed || quickParameters.length === 0 ? 380 : 210}
               closeLabel={t('lab.closeInspector')}
               collapseLabel={t('lab.inspector.collapse')}
               onCollapse={() => { setInspectorCollapsed(true) }}
             >
-              <InspectorTabs
+              {inspectorDetailed || quickParameters.length === 0 ? <InspectorTabs
                 sections={snapshot.inspector}
                 checks={snapshot.verification}
                 note={t('lab.derivedNote')}
@@ -1069,7 +1093,11 @@ export function PhysicsWorkspace({
                   commit(runtime.setChoice(id, value))
                 }}
                 onHighlight={highlight}
-              />
+              /> : <div className={sceneCss.quickParameters}>{quickParameters.map(parameter => <QuantityField key={parameter.id}
+                parameter={parameter} onCommit={value => { commit(runtime.editParameter(parameter.id, value)) }} onFocusChange={highlight} />)}</div>}
+              {quickParameters.length > 0 ? <button type="button" className={sceneCss.moreParameters} onClick={() => { setInspectorDetailed(value => !value) }}>
+                {t(inspectorDetailed ? 'lab.fewerParameters' : 'lab.moreParameters')}
+              </button> : null}
             </ResponsiveInspector>
           )}
         </div>

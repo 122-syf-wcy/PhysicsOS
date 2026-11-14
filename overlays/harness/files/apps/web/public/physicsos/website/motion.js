@@ -115,7 +115,9 @@ const visibleObserver = new IntersectionObserver(entries => {
     }
   }
 });
-visibleObserver.observe(hero); visibleObserver.observe(document.querySelector('.cta'));
+visibleObserver.observe(hero);
+const closingCallout = document.querySelector('.cta');
+if (closingCallout) visibleObserver.observe(closingCallout);
 document.addEventListener('visibilitychange', () => {
   root.dataset.pageHidden = String(document.hidden);
   if (document.hidden) { cancelAnimationFrame(pointerFrame); pointerFrame = 0; }
@@ -172,6 +174,7 @@ const tabs = document.querySelector('.experiment-tabs');
 const indicator = document.createElement('span'); indicator.className = 'tab-indicator'; indicator.setAttribute('aria-hidden', 'true'); tabs.prepend(indicator);
 function moveIndicator() {
   const selected = tabs.querySelector('[aria-selected="true"]');
+  if (!selected) return;
   indicator.style.width = `${selected.offsetWidth}px`;
   indicator.style.transform = `translateX(${selected.offsetLeft - 4}px)`;
 }

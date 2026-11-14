@@ -8,6 +8,8 @@ import { WhiteboardGenerationStatus } from './GenerationStatus.tsx'
 import { NativeEditor } from './NativeEditor.tsx'
 import type { WhiteboardFactoryProps } from './contract.ts'
 import css from './Whiteboard.module.css'
+import stageCss from './WhiteboardScene.module.css'
+import { WorkbenchFloatPanel } from '../WorkbenchFloatPanel.tsx'
 function download(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob); const anchor = document.createElement('a')
   anchor.href = url; anchor.download = name; anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 1000)
@@ -127,22 +129,23 @@ export function WhiteboardWorkspace(props: WhiteboardFactoryProps) {
       </> : null}
     </div></details>
   </>
-  return <main ref={root} className={css.workspace} data-physicsos-whiteboard-workspace="true">
-    <header className={css.header}>
+  return <main ref={root} className={`${css.workspace} ${stageCss.workspace}`} data-physicsos-whiteboard-workspace="true">
+    <header className={`${css.header} ${stageCss.header}`}>
       <Button variant="ghost" onClick={() => { controller.close(); props.openWhiteboardView() }}>{t('whiteboard.back')}</Button>
       <Input className={css.titleInput ?? ''} value={record?.document.title ?? ''} aria-label={t('whiteboard.name')} disabled={!record} onChange={event => controller.rename(event.target.value)} />
       <span className={css.sync} role="status">{t(`whiteboard.sync.${state.status}`)}</span>
+      <div className={stageCss.headerActions}>{toolbarExtras}</div>
     </header>
     <input ref={file} hidden type="file" accept="image/png,image/jpeg,image/webp" aria-label={t('whiteboard.upload')} onChange={event => { const image = event.currentTarget.files?.[0]; event.currentTarget.value = ''; if (image) void perform(async () => { const id = await controller.upload(image); if (id) { setImageId(id); setSourceVisible(true) } }) }} />
     {error || state.error ? <div className={css.notice} role="alert">{error ?? state.error}<button type="button" onClick={() => { void perform(async () => { await controller.save(); await controller.poll() }) }}>{t('whiteboard.retry')}</button></div> : null}
     <WhiteboardGenerationStatus job={state.job} t={t} onCancel={() => { void perform(() => controller.cancelGeneration()) }} />
-    <div className={css.body}>
-      {record ? <NativeEditor key={`${state.namespace}:${whiteboardId}`} documentId={whiteboardId} scene={record.document.scene} history={record.document.history ?? { undo: [], redo: [] }} onUndo={controller.undo} onRedo={controller.redo} onChange={controller.edit} images={images} t={t} revealId={state.revealId} clearRequest={clearRequest} onSave={() => { void perform(() => controller.save()) }} toolbarExtras={toolbarExtras} /> : <LoadingState inline>{t('whiteboard.editorLoading')}</LoadingState>}
-      {sourceVisible ? <aside className={css.sourcePanel}><header><strong>{t('whiteboard.source')}</strong><button type="button" onClick={() => setSourceVisible(false)} aria-label={t('whiteboard.close')}>×</button></header>
+    <div className={`${css.body} ${stageCss.body}`}>
+      {record ? <NativeEditor key={`${state.namespace}:${whiteboardId}`} documentId={whiteboardId} scene={record.document.scene} history={record.document.history ?? { undo: [], redo: [] }} onUndo={controller.undo} onRedo={controller.redo} onChange={controller.edit} images={images} t={t} revealId={state.revealId} clearRequest={clearRequest} onSave={() => { void perform(() => controller.save()) }} /> : <LoadingState inline>{t('whiteboard.editorLoading')}</LoadingState>}
+      {sourceVisible ? <WorkbenchFloatPanel title={t('whiteboard.source')} closeLabel={t('whiteboard.close')} onClose={() => { setSourceVisible(false) }} placement="top-right" width={270} height={280} expanded desktopDefault={false}><aside className={`${css.sourcePanel} ${stageCss.sourcePanel}`}>
         {!selectedSource ? <p>{t('whiteboard.sourceEmpty')}</p> : <><select aria-label={t('whiteboard.source')} value={imageId} onChange={event => setImageId(event.target.value)}>{record?.document.sourceImages.map((source, index) => <option key={source.id} value={source.id}>{t('whiteboard.source')} {index + 1} · {source.width} × {source.height}</option>)}</select>
           {sourceLoading ? <LoadingState inline>{t('whiteboard.sourceLoading')}</LoadingState> : images[selectedSource.id] ? <a href={images[selectedSource.id]} target="_blank" rel="noreferrer"><img src={images[selectedSource.id]} alt={t('whiteboard.source')} width={selectedSource.width} height={selectedSource.height} /></a> : null}
         </>}
-      </aside> : null}
+      </aside></WorkbenchFloatPanel> : null}
     </div>
     <dialog ref={confirmation} className={css.confirmation} aria-label={dialog === 'clear' ? t('whiteboard.clearConfirm') : t('whiteboard.reloadConfirm')} onCancel={() => setDialog(undefined)}>
       <h2>{dialog === 'clear' ? t('whiteboard.clearConfirm') : t('whiteboard.reloadConfirm')}</h2><p>{dialog === 'clear' ? t('whiteboard.clearHint') : t('whiteboard.reloadHint')}</p>

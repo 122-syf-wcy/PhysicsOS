@@ -214,6 +214,7 @@ describe('AdminModelPoolTab', () => {
     render(<AdminModelPoolTab api={client} t={t} />)
     await waitFor(() => { expect(screen.getByText('主通道')).toBeTruthy() })
 
+    fireEvent.click(screen.getByRole('tab', { name: zh['admin.modelPool.settings.title'] }))
     fireEvent.change(screen.getByLabelText('额外重试次数'), { target: { value: '4' } })
     fireEvent.change(screen.getByLabelText('连续失败阈值'), { target: { value: '5' } })
     fireEvent.change(screen.getByLabelText('冷却基数（毫秒）'), { target: { value: '15000' } })

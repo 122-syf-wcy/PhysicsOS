@@ -134,3 +134,8 @@
   -webkit-mask-image: url('/physicsos/navigation/whiteboard.png');
   mask-image: url('/physicsos/navigation/whiteboard.png');
 }
+
+.root.rail { gap: 9px; margin: 0; }
+.rail .item { width: 38px; height: 38px; min-height: 38px; border-radius: 50%; color: var(--physics-ink-muted); }
+.rail .active { color: var(--physics-accent-strong); background: var(--physics-accent-soft); box-shadow: inset 0 0 0 1px var(--physics-glass-border), 0 3px 8px color-mix(in srgb, var(--physics-accent) 10%, transparent); }
+@media (max-width: 600px) { .root.rail { flex-direction: row; gap: 2px; } .rail .item { width: 34px; height: 36px; min-height: 36px; } }

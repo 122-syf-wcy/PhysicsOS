@@ -3,7 +3,7 @@ import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import { useEffect, useState, type ReactNode } from 'react'
 import {
   AdminCard, AdminCardActions, AdminCardHead, AdminCardMeta,
-  AdminCardTitle, AdminEmpty, AdminToolbar,
+  AdminCardTitle, AdminEmpty, AdminTable, AdminToolbar,
 } from './AdminPrimitives.tsx'
 import { LoadingState } from './LoadingState.tsx'
 import { GlassSelect } from './GlassSelect.tsx'
@@ -117,6 +117,7 @@ function PublicPreview({ content, section, t }: { content: WebsiteContent; secti
 
 export function AdminWebsiteTab({ api, t }: { api: WebsiteApi; t: Translate }): ReactNode {
   const [section, setSection] = useState<Section>('testimonials')
+  const [selectedEntry, setSelectedEntry] = useState<string>()
   const [saved, setSaved] = useState<WebsiteContent>()
   const [draft, setDraft] = useState<WebsiteContent>()
   const [reload, setReload] = useState(0)
@@ -177,8 +178,12 @@ export function AdminWebsiteTab({ api, t }: { api: WebsiteApi; t: Translate }): 
     }
     change(value => ({ ...value, testimonials: [...value.testimonials, entry] }))
     setSection('testimonials')
+    setSelectedEntry(entry.id)
     if (source !== undefined) setNote(t('admin.website.converted'))
   }
+
+  const entries = section === 'inbox' ? [] : draft?.[section] ?? []
+  const activeEntryId = entries.find(entry => entry.id === selectedEntry)?.id ?? entries[0]?.id
 
   return <div className={css.root} data-admin-website="">
     <AdminCard>
@@ -217,15 +222,32 @@ export function AdminWebsiteTab({ api, t }: { api: WebsiteApi; t: Translate }): 
         <strong>{t(`admin.website.${section}`)} <span className={css.hint}>{draft[section].length} / {LIMIT}</span></strong>
         <button className={shared.ghost} type="button" disabled={busy || loading || draft[section].length >= LIMIT} onClick={() => {
           if (section === 'testimonials') addTestimonial()
-          else change(value => ({ ...value, contributors: [...value.contributors, {
-            id: randomUUID(), name: '', role: '', project: '', description: '', url: '', avatar: '', color: COLOR,
-            order: Math.max(-1, ...value.contributors.map(item => item.order)) + 1, enabled: false,
-          }] }))
+          else {
+            const id = randomUUID()
+            change(value => ({ ...value, contributors: [...value.contributors, {
+              id, name: '', role: '', project: '', description: '', url: '', avatar: '', color: COLOR,
+              order: Math.max(-1, ...value.contributors.map(item => item.order)) + 1, enabled: false,
+            }] }))
+            setSelectedEntry(id)
+          }
         }}>{t(section === 'testimonials' ? 'admin.website.addTestimonial' : 'admin.website.addContributor')}</button>
       </div>
       {draft[section].length === 0 && <AdminEmpty>{t(section === 'testimonials' ? 'admin.website.testimonialsEmpty' : 'admin.website.contributorsEmpty')}</AdminEmpty>}
-      <fieldset className={css.editor} disabled={busy || loading}>
+      <fieldset className={`${css.editor} ${css.collectionLayout}`} disabled={busy || loading}>
+        <div className={css.collectionList}>
+          <AdminTable minWidth={420}>
+            <thead><tr><th>{t('admin.website.name')}</th><th>{t(section === 'testimonials' ? 'admin.website.quote' : 'admin.website.project')}</th><th>{t('admin.website.order')}</th><th>{t('admin.website.enabled')}</th></tr></thead>
+            <tbody>{entries.map(entry => <tr key={entry.id} data-selected={entry.id === activeEntryId || undefined}>
+              <td><button type="button" className={shared.tableLink} onClick={() => { setSelectedEntry(entry.id) }}>{entry.name || t('admin.website.hidden')}</button></td>
+              <td className={css.entrySummary}>{'quote' in entry ? entry.quote : entry.project}</td>
+              <td>{Number.isFinite(entry.order) ? entry.order : '—'}</td>
+              <td><button type="button" className={shared.ghost} onClick={() => { setSelectedEntry(entry.id) }}>{t(entry.enabled ? 'admin.website.visible' : 'admin.website.hidden')}</button></td>
+            </tr>)}</tbody>
+          </AdminTable>
+        </div>
+        <div className={css.entryEditor}>
         {section === 'testimonials' ? draft.testimonials.map((entry, index) => {
+          if (entry.id !== activeEntryId) return null
           const update = (patch: Partial<WebsiteTestimonial>): void => { change(value => ({ ...value, testimonials: value.testimonials.map(item => item.id === entry.id ? { ...item, ...patch } : item) })) }
           return <AdminCard key={entry.id}>
             <AdminCardHead><AdminCardTitle>{t('admin.website.testimonialItem').replace('{number}', String(index + 1))}</AdminCardTitle><span className={css.tag}>{t(entry.enabled ? 'admin.website.visible' : 'admin.website.hidden')}</span></AdminCardHead>
@@ -240,6 +262,7 @@ export function AdminWebsiteTab({ api, t }: { api: WebsiteApi; t: Translate }): 
               onRemove={() => { change(value => ({ ...value, testimonials: value.testimonials.filter(item => item.id !== entry.id) })) }} />
           </AdminCard>
         }) : draft.contributors.map((entry, index) => {
+          if (entry.id !== activeEntryId) return null
           const update = (patch: Partial<WebsiteContributor>): void => { change(value => ({ ...value, contributors: value.contributors.map(item => item.id === entry.id ? { ...item, ...patch } : item) })) }
           return <AdminCard key={entry.id}>
             <AdminCardHead><AdminCardTitle>{t('admin.website.contributorItem').replace('{number}', String(index + 1))}</AdminCardTitle><span className={css.tag}>{t(entry.enabled ? 'admin.website.visible' : 'admin.website.hidden')}</span></AdminCardHead>
@@ -257,6 +280,7 @@ export function AdminWebsiteTab({ api, t }: { api: WebsiteApi; t: Translate }): 
               onRemove={() => { change(value => ({ ...value, contributors: value.contributors.filter(item => item.id !== entry.id) })) }} />
           </AdminCard>
         })}
+        </div>
       </fieldset>
       <PublicPreview content={draft} section={section} t={t} />
     </>}
@@ -269,6 +293,7 @@ export function AdminWebsiteTab({ api, t }: { api: WebsiteApi; t: Translate }): 
 function FeedbackInbox({ api, t, onConvert, canConvert, sources }: {
   api: WebsiteApi; t: Translate; onConvert: (feedback: WebsiteFeedback) => void; canConvert: boolean; sources: string[]
 }): ReactNode {
+  const [selected, setSelected] = useState<string>()
   const [status, setStatus] = useState<FeedbackStatus>('open')
   const [offset, setOffset] = useState(0)
   const [reload, setReload] = useState(0)
@@ -313,7 +338,20 @@ function FeedbackInbox({ api, t, onConvert, canConvert, sources }: {
     {loading && <AdminEmpty>{t('admin.loading')}</AdminEmpty>}
     {data !== undefined && <>
       {data.feedback.length === 0 && <AdminEmpty>{t('admin.website.inboxEmpty')}</AdminEmpty>}
+      <div className={css.collectionLayout}>
+        <div className={css.collectionList}>
+          <AdminTable minWidth={430}>
+            <thead><tr><th>{t('admin.audit.time')}</th><th>{t('notice.kindLabel')}</th><th>{t('notice.description')}</th><th>{t('admin.website.status')}</th></tr></thead>
+            <tbody>{data.feedback.map(row => <tr key={row.id} data-selected={row.id === (data.feedback.find(item => item.id === selected)?.id ?? data.feedback[0]?.id) || undefined}>
+              <td className={shared.timeCell}>{fmtTime(row.createdAt)}</td><td>{t(`notice.kind.${row.kind}`)}</td>
+              <td className={css.entrySummary}><button type="button" className={shared.tableLink} onClick={() => { setSelected(row.id) }}>{row.body}</button></td>
+              <td><button type="button" className={shared.ghost} onClick={() => { setSelected(row.id) }}>{t(`admin.notice.status.${row.status}`)}</button></td>
+            </tr>)}</tbody>
+          </AdminTable>
+        </div>
+        <div className={css.entryEditor}>
       {data.feedback.map(row => {
+        if (row.id !== (data.feedback.find(item => item.id === selected)?.id ?? data.feedback[0]?.id)) return null
         const value = replies[row.id] ?? ''
         const valid = value.trim().length > 0 && value.trim().length <= 2000
         return <AdminCard key={row.id} data-website-feedback={row.id}>
@@ -345,6 +383,8 @@ function FeedbackInbox({ api, t, onConvert, canConvert, sources }: {
           </fieldset>
         </AdminCard>
       })}
+        </div>
+      </div>
       <AdminToolbar className={css.pagination}>
         <span>{t('admin.website.pageRange').replace('{start}', String(data.total === 0 ? 0 : offset + 1)).replace('{end}', String(Math.min(offset + PAGE_SIZE, data.total))).replace('{total}', String(data.total))}</span>
         <AdminCardActions>

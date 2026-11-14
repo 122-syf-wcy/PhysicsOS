@@ -1,0 +1,6 @@
+.canvas.canvas { position: relative; flex: 1; display: flex; flex-direction: column; width: 100%; min-height: 0; border: 0; border-radius: 0; background: var(--physics-canvas-bg); box-shadow: none; }
+.canvas .stage { flex: 1; height: 100%; min-height: 0; }
+.canvas .scopeNote { flex: none; background: var(--physics-glass-fill); border: 0; padding: 6px 18px; }
+.canvas .actions { position: absolute; z-index: 5; right: 16px; bottom: 88px; max-width: calc(100% - 32px); padding: 5px 8px; border: 1px solid var(--physics-glass-border); border-radius: 12px; background: var(--physics-glass-fill); backdrop-filter: var(--physics-glass-blur); }
+.canvas .status { flex: 1; min-height: 0; }
+@media (max-width: 600px) { .canvas .actions { bottom: 120px; } }

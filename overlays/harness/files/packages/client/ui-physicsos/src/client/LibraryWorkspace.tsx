@@ -58,6 +58,7 @@ import { knowledgeMasteryOf, type LearningRecordState } from './learning-record-
 import type { AnnotationRow, PaperApi, SourcePaperRow } from './paper-api.ts'
 import type { PhysicsosKey } from './locales.ts'
 import { Mascot } from './Mascot.tsx'
+import { PhysicsOSMark } from './PhysicsOSMark.tsx'
 import type { PhysicsSurfaceId } from './surface-store.ts'
 import { IconLibrary } from './icons/physics-icons.tsx'
 import css from './LibraryWorkspace.module.css'
@@ -309,6 +310,7 @@ export function LibraryWorkspace({
 
   /* ------------------------------------------------------------- actions -- */
 
+  const [questionDetail, setQuestionDetail] = useState<GoldenQuestionDefinition>()
   const [practising, setPractising] = useState<string | null>(null)
   const [practiceError, setPracticeError] = useState<string | null>(null)
   const practise = (questionId: string): void => {
@@ -318,6 +320,9 @@ export function LibraryWorkspace({
     void practiceQuestion(questionId).then((result) => {
       setPractising(null)
       if (!result.ok) setPracticeError(result.error)
+    }).catch((reason: unknown) => {
+      setPractising(null)
+      setPracticeError(reason instanceof Error ? reason.message : String(reason))
     })
   }
 
@@ -343,7 +348,7 @@ export function LibraryWorkspace({
         <span className={clsx(css.qDomain, css[`subject-${libraryQuestionDomain(question)}`])}>
           {t(`lab.template.group.${libraryQuestionDomain(question)}`)}
         </span>
-        <span className={css.questionTitle}>{question.title}</span>
+        <button type="button" className={css.questionTitle} onClick={() => { setQuestionDetail(question) }}>{question.title}</button>
       </div>
       <p className={css.questionStem}>
         {question.text.length > STEM_PREVIEW ? `${question.text.slice(0, STEM_PREVIEW)}…` : question.text}
@@ -758,13 +763,39 @@ export function LibraryWorkspace({
       (sum, course) => sum + course.lessonCount + course.paperCount + course.coursewareCount, 0),
   }), [flatItems, papers.length, books, videoCourses])
 
+  if (questionDetail !== undefined) return (
+    <div className={css.cover} data-physicsos-surface="library" data-library-question-detail={questionDetail.id}>
+      <div className={css.detailBreadcrumb}>
+        <button type="button" className={css.studioLink} onClick={() => { setQuestionDetail(undefined) }}>{t('library.detail.close')}</button>
+        <span>{t('library.detail')}</span>
+      </div>
+      <div className={css.detailBody}>
+        <article className={css.detailQuestion}>
+          <span className={clsx(css.qDomain, css[`subject-${libraryQuestionDomain(questionDetail)}`])}>{t(`lab.template.group.${libraryQuestionDomain(questionDetail)}`)}</span>
+          <h1>{questionDetail.title}</h1>
+          <p className={css.detailStem}>{questionDetail.text}</p>
+          <section className={css.detailKnowledge}>
+            <h2>{t('library.detail.knowledge')}</h2>
+            <div className={css.nodeChips}>{QUESTION_NODES(questionDetail.id).map(label => <span key={label} className={css.nodeChip}>{label}</span>)}</div>
+          </section>
+        </article>
+        <aside className={css.detailTutor}>
+          <Mascot pose="think" size={144} />
+          <p>{t('library.detail.actionHint')}</p>
+          {practiceQuestion !== undefined && <button type="button" className={css.practiseButton} disabled={practising !== null} data-practice={questionDetail.id} onClick={() => { practise(questionDetail.id) }}>{t(practising === questionDetail.id ? 'library.practising' : 'library.practise')}</button>}
+          {practiceError !== null && <p className={css.notice} role="alert">{practiceError}</p>}
+        </aside>
+      </div>
+    </div>
+  )
+
   return (
     <div className={css.cover} data-physicsos-surface="library">
       <header className={css.header}>
-        <Mascot pose="search" size={64} className={css.mascot} />
+
         <div className={css.headerCopy}>
           <span className={css.eyebrow}>PhysicsOS / {t('library.title')}</span>
-          <h1 className={css.title}>{t('library.heading')}</h1>
+          <h1 className={css.title}><PhysicsOSMark size={42} />{t('library.heading')}</h1>
           <p className={css.subtitle}>{t('library.subtitle')}</p>
         </div>
         <div className={css.headerStats}>
@@ -783,6 +814,20 @@ export function LibraryWorkspace({
           loading="lazy"
         />
       </header>
+
+        <div className={css.searchField}>
+          <IconSearchOutlineMedium size={16} />
+          <input
+            type="search"
+            className={css.search}
+            placeholder={t('library.search')}
+            aria-label={t('library.search')}
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value)
+            }}
+          />
+        </div>
 
       <div className={css.toolbarRow}>
         <div className={css.orgTabs} role="tablist" aria-label={t('library.orgLabel')}>
@@ -815,19 +860,13 @@ export function LibraryWorkspace({
           ))}
         </div>
 
-        <div className={css.searchField}>
-          <IconSearchOutlineMedium size={16} />
-          <input
-            type="search"
-            className={css.search}
-            placeholder={t('library.search')}
-            aria-label={t('library.search')}
-            value={query}
-            onChange={(event) => {
-              setQuery(event.target.value)
-            }}
-          />
-        </div>
+
+        {org !== 'knowledge' && <div className={css.stageTabs} role="group" aria-label={t('library.stageLabel')}>
+          {(['all', 'junior', 'senior'] as const).map(id => <button key={id} type="button" aria-pressed={stage === id}
+            className={clsx(css.stageTab, stage === id && css.stageTabActive)} data-library-stage={id} onClick={() => { setStage(id) }}>
+            {t(id === 'all' ? 'lab.template.stage.all' : STAGE_LABEL[id])}
+          </button>)}
+        </div>}
       </div>
 
       {practiceError !== null && (
@@ -841,21 +880,7 @@ export function LibraryWorkspace({
         <aside className={css.rail}>
           {org === 'chapters' && (
             <>
-              <div className={css.stageTabs} role="tablist" aria-label={t('library.stageLabel')}>
-                {(['all', 'junior', 'senior'] as const).map(id => (
-                  <button
-                    key={id}
-                    type="button"
-                    role="tab"
-                    aria-selected={stage === id}
-                    className={clsx(css.stageTab, stage === id && css.stageTabActive)}
-                    data-library-stage={id}
-                    onClick={() => { setStage(id) }}
-                  >
-                    {t(id === 'all' ? 'lab.template.stage.all' : STAGE_LABEL[id])}
-                  </button>
-                ))}
-              </div>
+
               {visibleStages.map(stageTree => (
                 <section key={stageTree.stage} className={css.stageSection}>
                   <h4 className={css.stageTitle}>
@@ -915,23 +940,7 @@ export function LibraryWorkspace({
             </section>
           ))}
 
-          {(org === 'papers' || org === 'videos') && (
-            <div className={css.stageTabs} role="tablist" aria-label={t('library.stageLabel')}>
-              {(['all', 'junior', 'senior'] as const).map(id => (
-                <button
-                  key={id}
-                  type="button"
-                  role="tab"
-                  aria-selected={stage === id}
-                  className={clsx(css.stageTab, stage === id && css.stageTabActive)}
-                  data-library-stage={id}
-                  onClick={() => { setStage(id) }}
-                >
-                  {t(id === 'all' ? 'lab.template.stage.all' : STAGE_LABEL[id])}
-                </button>
-              ))}
-            </div>
-          )}
+
 
           {org === 'papers' && paperKinds.length > 0 && (
             <section className={css.filterGroup} aria-label={t('library.paper.filterKind')}>
@@ -987,7 +996,7 @@ export function LibraryWorkspace({
             </section>
           )}
 
-          {org === 'books' && books.map(book => (
+          {org === 'books' && books.filter(book => stage === 'all' || book.stage === stage).map(book => (
             <button
               key={`${book.stage}|${book.volume}`}
               type="button"

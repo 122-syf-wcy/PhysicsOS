@@ -26,6 +26,7 @@ import {
   AdminStats,
   AdminTable,
 } from './AdminPrimitives.tsx'
+import { AdminSectionTabs } from './AdminSectionTabs.tsx'
 import css from './AdminWorkspace.module.css'
 
 export interface AdminModelPoolTabProps {
@@ -244,6 +245,7 @@ const ChannelEditor = ({
 }
 
 export function AdminModelPoolTab({ api, t }: AdminModelPoolTabProps): React.ReactNode {
+  const [section, setSection] = useState<'channels' | 'policy'>('channels')
   const [state, setState] = useState<ModelPoolState | undefined>()
   const [policy, setPolicy] = useState<PolicyDraft | undefined>()
   const [newChannel, setNewChannel] = useState<ChannelDraft>(emptyChannel)
@@ -403,7 +405,7 @@ export function AdminModelPoolTab({ api, t }: AdminModelPoolTabProps): React.Rea
   }
 
   return (
-    <>
+    <AdminSectionTabs label={t('admin.modelPool.title')} items={[{ id: 'channels', label: t('admin.modelPool.title') }, { id: 'policy', label: t('admin.modelPool.settings.title') }]} value={section} onChange={setSection}>
       <div className={css.poolHeader} data-admin-model-pool="">
         <div>
           <AdminCardTitle>{t('admin.modelPool.title')}</AdminCardTitle>
@@ -430,6 +432,7 @@ export function AdminModelPoolTab({ api, t }: AdminModelPoolTabProps): React.Rea
         { key: 'disabledKeys', value: state.stats.disabledKeys, label: t('admin.modelPool.stats.disabled') },
       ]} />
 
+      <div hidden={section !== 'policy'}>
       <AdminCard>
         <AdminCardHead>
           <div>
@@ -474,6 +477,8 @@ export function AdminModelPoolTab({ api, t }: AdminModelPoolTabProps): React.Rea
         </label>
       </AdminCard>
 
+      </div>
+      <div hidden={section !== 'channels'} className={css.poolChannels}>
       <AdminCard>
         <AdminCardTitle>{t('admin.modelPool.channel.create')}</AdminCardTitle>
         <ChannelEditor
@@ -710,6 +715,7 @@ export function AdminModelPoolTab({ api, t }: AdminModelPoolTabProps): React.Rea
           </ul>
         </AdminCard>
       )}
-    </>
+      </div>
+    </AdminSectionTabs>
   )
 }

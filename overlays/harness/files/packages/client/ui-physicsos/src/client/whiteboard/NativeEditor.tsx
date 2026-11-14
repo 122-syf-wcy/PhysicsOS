@@ -6,6 +6,7 @@ import { inkElementPoints, readInkSamples, type InkSample } from './ink.ts'
 import { elementBounds, hitElement, numeric, sceneBounds } from './editor-model.ts'
 import { WhiteboardElements } from './Elements.tsx'
 import css from './Whiteboard.module.css'
+import stageCss from './WhiteboardScene.module.css'
 export interface NativeEditorProps { readonly documentId: string; readonly scene: WhiteboardScene; readonly history: WhiteboardHistory; readonly onUndo: () => void; readonly onRedo: () => void; readonly onChange: (scene: WhiteboardScene) => void; readonly images: Readonly<Record<string, string>>; readonly t: (key: WhiteboardKey) => string; readonly revealId?: string | undefined; readonly clearRequest: number; readonly onSave: () => void; readonly toolbarExtras?: ReactNode }
 type Tool = 'select' | 'freedraw' | 'eraser' | 'line' | 'arrow' | 'rectangle' | 'ellipse' | 'text' | 'pan'
 const tools: readonly { id: Tool; symbol: string }[] = [{ id: 'select', symbol: '↖' }, { id: 'freedraw', symbol: '✎' }, { id: 'eraser', symbol: '⌫' }, { id: 'line', symbol: '╱' }, { id: 'arrow', symbol: '↗' }, { id: 'rectangle', symbol: '▭' }, { id: 'ellipse', symbol: '○' }, { id: 'text', symbol: 'T' }, { id: 'pan', symbol: '✥' }]
@@ -134,9 +135,12 @@ export function NativeEditor({ scene, history, onUndo, onRedo, onChange, images,
   const selected = scene.elements.find(element => selection.includes(String(element.id)))
   const styleSelected = (key: string, value: string | number) => { if (selection.length) commit({ ...current.current, elements: current.current.elements.map(element => selection.includes(String(element.id)) ? { ...element, [key]: value } : element) }) }
   const displayed = draft ?? scene
-  return <div className={css.editor} data-history-revision={history.undo.length + history.redo.length}>
-    <div className={css.dockShelf} data-whiteboard-dock="true">
-      <div className={css.tools} role="toolbar" aria-label={t('whiteboard.dock')}>
+  return <div className={`${css.editor} ${stageCss.editor}`} data-history-revision={history.undo.length + history.redo.length}>
+      <div className={`${css.viewportControls} ${stageCss.zoom}`}>
+        <button type="button" onClick={() => zoom(1 / 1.2)} aria-label={t('whiteboard.zoomOut')}>−</button><span>{Math.round(view.zoom * 100)}%</span><button type="button" onClick={() => zoom(1.2)} aria-label={t('whiteboard.zoomIn')}>＋</button><button type="button" onClick={fit}>{t('whiteboard.fit')}</button>
+      </div>
+    <div className={`${css.dockShelf} ${stageCss.dock}`} data-whiteboard-dock="true">
+      <div className={`${css.tools} ${stageCss.tools}`} role="toolbar" aria-label={t('whiteboard.dock')}>
         <div className={css.drawingControls}>
           <div className={css.toolGroup}>{tools.map(item => <button key={item.id} type="button" data-testid={`toolbar-${item.id}`} aria-label={t(`whiteboard.${item.id}`)} title={t(`whiteboard.${item.id}`)} aria-pressed={tool === item.id} onClick={() => { finishText(); setTool(item.id) }}><span aria-hidden="true">{item.symbol}</span><span className={css.toolName}>{t(`whiteboard.${item.id}`)}</span></button>)}</div>
           <div className={css.appearanceGroup}>
@@ -148,14 +152,12 @@ export function NativeEditor({ scene, history, onUndo, onRedo, onChange, images,
             <button type="button" aria-label={t('whiteboard.redo')} title={t('whiteboard.redo')} onClick={() => undo(true)} disabled={!history.redo.length}>↷</button>
             <button type="button" aria-label={t('whiteboard.delete')} title={t('whiteboard.delete')} onClick={remove} disabled={!selection.length}>⌫</button>
           </div>
-      <div className={css.viewportControls}>
-        <button type="button" onClick={() => zoom(1 / 1.2)} aria-label={t('whiteboard.zoomOut')}>−</button><span>{Math.round(view.zoom * 100)}%</span><button type="button" onClick={() => zoom(1.2)} aria-label={t('whiteboard.zoomIn')}>＋</button><button type="button" onClick={fit}>{t('whiteboard.fit')}</button>
-      </div>
+
         </div>
         {toolbarExtras === undefined || toolbarExtras === null ? null : <div className={css.dockExtras}>{toolbarExtras}</div>}
       </div>
     </div>
-    <div className={css.stage}>
+    <div className={`${css.stage} ${stageCss.stage}`}>
       <svg ref={svg} className={css.canvas} data-whiteboard-canvas="true" role="application" aria-label={t('whiteboard.canvasLabel')} tabIndex={0}
         onPointerDown={down} onPointerMove={move} onPointerUp={event => up(event)} onPointerCancel={event => up(event, true)} onLostPointerCapture={event => up(event, true)}
         onDoubleClick={event => { const id = (event.target as Element).closest('[data-element-id]')?.getAttribute('data-element-id'); const element = current.current.elements.find(item => item.id === id); if (element?.type === 'text') editText(element) }}

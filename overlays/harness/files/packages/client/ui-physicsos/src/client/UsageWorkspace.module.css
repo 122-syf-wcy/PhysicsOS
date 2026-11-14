@@ -17,3 +17,34 @@
 .tableScroll table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .tableScroll th, .tableScroll td { padding: 12px; border-bottom: 1px solid var(--physics-glass-border-soft); text-align: left; }
 @media (max-width: 600px) { .root { padding: 16px; } .header h1 { font-size: 20px; } .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .card { padding: 14px; } }
+
+
+/* Usage shares the centered title, small stat cards and reading-width table. */
+.root { padding: 22px 40px 32px; background: var(--physics-workspace-bg); }
+.header { position: relative; justify-content: center; text-align: center; margin-bottom: 24px; }
+.header h1 { font-size: 30px; font-weight: 500; color: var(--physics-ink-strong); }
+.header > button { position: absolute; right: 0; top: 2px; }
+.embedded .header { justify-content: space-between; text-align: left; }
+.embedded .header h1 { font-size: 21px; }
+.embedded .header > button { position: static; }
+.cards { gap: 14px; }
+.card { padding: 20px; border-radius: 17px; box-shadow: var(--physics-glass-inset); gap: 10px; }
+.card strong { font-size: 27px; font-weight: 500; color: var(--physics-ink-strong); }
+.buckets { gap: 24px; padding: 20px 0; margin: 0; }
+.tableScroll { border: 1px solid var(--physics-glass-border-soft); border-radius: 16px; background: var(--physics-glass-fill); }
+.tableScroll table { font-size: 12px; }
+.tableScroll th { color: var(--physics-ink-muted); font-weight: 500; }
+.tableScroll th, .tableScroll td { padding: 13px 16px; }
+.root h2, .embedded h2 { margin: 24px 0 15px; font-size: 18px; font-weight: 500; color: var(--physics-ink-strong); }
+@media (max-width: 600px) { .root { padding: 16px 12px; } .header { justify-content: space-between; text-align: left; } .header h1 { font-size: 23px; } .header > button { position: static; } .cards { gap: 9px; } .card { padding: 14px; } }
+
+.trend { margin-top: 12px; padding: 18px 20px; border: 1px solid var(--physics-glass-border-soft); border-radius: 18px; background: var(--physics-glass-fill); box-shadow: var(--physics-glass-inset); }
+.trendHeader { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.root .trend h2, .embedded .trend h2 { margin: 0; font-size: 16px; }
+.metricTabs { display: flex; gap: 5px; }
+.metricTabs button { border: 0; border-radius: 999px; padding: 6px 10px; color: var(--physics-ink-muted); background: transparent; font: inherit; font-size: 11px; cursor: pointer; }
+.metricTabs button[aria-pressed='true'] { background: var(--physics-accent-soft); color: var(--physics-accent-strong); }
+.trendReadout { min-height: 18px; margin-top: 12px; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--physics-ink-muted); }
+.trendPlot { width: 100%; min-width: 0; }
+.trendPlot svg { display: block; width: 100%; height: auto; max-height: none; }
+@media (max-width: 600px) { .trend { padding: 14px 10px; } .trendHeader { gap: 10px; } .trendPlot { overflow: auto; } .trendPlot svg { min-width: 420px; } }

@@ -993,3 +993,50 @@
     display: none;
   }
 }
+
+/* Catalogue: centered identity, wide search, one filter row, then two sheets. */
+.cover { gap: 18px; padding: 14px 30px 28px; background: var(--physics-workspace-bg); }
+.header { position: relative; min-height: 76px; justify-content: center; text-align: center; }
+.headerCopy { flex: 0 1 auto; z-index: 1; }
+.eyebrow { display: none; }
+.title { display: flex; align-items: center; justify-content: center; gap: 11px; font-size: 30px; line-height: 1.4; font-weight: 500; margin: 0; }
+.subtitle { margin-top: 8px; font-size: 13px; }
+.headerStats { position: absolute; right: 0; top: 0; gap: 10px; opacity: .75; }
+.stat { min-width: 0; padding: 3px; border: 0; background: transparent; box-shadow: none; }
+.stat strong { font-size: 14px; font-weight: 500; }
+.stat span { font-size: 9px; }
+.hero { position: absolute; right: 0; width: 170px; height: 100px; border: 0; opacity: .1; object-fit: cover; z-index: 0; }
+.searchField { width: min(850px, 100%); min-height: 50px; flex: none; margin: 0 auto; padding: 0 20px; box-sizing: border-box; border: 1px solid var(--physics-glass-border-soft); border-radius: 20px; background: var(--physics-glass-fill); box-shadow: var(--physics-glass-inset); }
+.search { font-size: 14px; }
+.toolbarRow { width: 100%; justify-content: space-between; gap: 10px; }
+.orgTabs, .stageTabs { gap: 7px; padding: 0; border: 0; background: transparent; }
+.orgTab, .stageTab { padding: 8px 16px; border: 1px solid var(--physics-glass-border-soft); border-radius: 999px; font-weight: 500; background: var(--physics-glass-fill); }
+.orgTabActive, .stageTabActive { color: var(--physics-accent-strong); background: var(--physics-accent-soft); box-shadow: none; border-color: transparent; }
+.body { grid-template-columns: 265px minmax(0, 1fr); gap: 22px; }
+.rail, .panel { border: 1px solid var(--physics-glass-border-soft); border-radius: 18px; padding: 18px; background: var(--physics-glass-fill); box-shadow: var(--physics-glass-inset); }
+.rail { gap: 20px; }
+.chapterRow { padding: 10px 12px; border-radius: 12px; }
+.chapterRowActive, .chapterRowActive:hover { background: var(--physics-accent-soft); color: var(--physics-accent-strong); }
+.chapterName, .panelTitle, .groupTitle, .questionTitle { font-weight: 500; }
+.chapterHead { padding-bottom: 8px; }
+.panelTitle { font-size: 22px; }
+.groupTitle { display: flex; align-items: center; gap: 8px; font-size: 16px; color: var(--physics-ink-strong); margin: 12px 0 4px; }
+.groupTitle::before { content: ''; width: 3px; height: 17px; border-radius: 2px; background: var(--physics-accent); }
+.questionRow { padding: 13px 16px; border-radius: 12px; }
+.questionTitle { appearance: none; padding: 0; border: 0; background: transparent; text-align: left; font: inherit; font-size: 13px; color: var(--physics-ink-strong); cursor: pointer; }
+.questionTitle:hover { text-decoration: underline; text-underline-offset: 3px; }
+.questionStem { font-size: 12px; }
+.questionRow .practiseButton { border-radius: 999px; }
+.detailBreadcrumb { display: flex; align-items: center; gap: 14px; flex: none; color: var(--physics-ink-muted); font-size: 12px; }
+.detailBody { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 300px); gap: 24px; flex: 1; min-height: 0; overflow: auto; align-items: start; }
+.detailQuestion, .detailTutor { border: 1px solid var(--physics-glass-border-soft); border-radius: 18px; padding: 26px; background: var(--physics-glass-fill); box-shadow: var(--physics-glass-inset); }
+.detailQuestion h1 { font-size: 23px; font-weight: 500; color: var(--physics-ink-strong); margin: 16px 0 24px; }
+.detailStem { font-size: 15px; line-height: 2; white-space: pre-wrap; color: var(--physics-ink); }
+.detailKnowledge { margin-top: 34px; padding-top: 18px; border-top: 1px solid var(--dsw-alias-border-l1); }
+.detailKnowledge h2 { font-size: 14px; font-weight: 500; margin: 0 0 12px; }
+.detailTutor { display: flex; flex-direction: column; align-items: center; gap: 18px; }
+.detailTutor p { margin: 0; font-size: 13px; line-height: 1.8; color: var(--physics-ink-muted); }
+.detailTutor .practiseButton { width: 100%; padding: 10px; border-radius: 999px; color: var(--dsw-alias-label-primary-foreground); background: var(--physics-accent); border: 0; }
+@media (max-width: 1100px) { .headerStats { display: none; } .body { grid-template-columns: 230px minmax(0, 1fr); } .orgTab, .stageTab { padding: 7px 12px; } }
+@media (max-width: 860px) { .body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(120px, 28vh) minmax(0, 1fr); } .header { min-height: 70px; } .detailBody { grid-template-columns: minmax(0, 1fr); } .detailTutor { flex-direction: row; flex-wrap: wrap; justify-content: center; } .detailTutor p { flex: 1 1 180px; } .detailTutor .practiseButton { width: auto; } }
+@media (max-width: 600px) { .cover { padding: 12px; gap: 14px; } .title { font-size: 25px; } .title img, .title svg { width: 33px; height: 33px; } .subtitle { font-size: 12px; } .orgTabs { overflow-x: auto; width: 100%; } .orgTab { white-space: nowrap; } .stageTabs { margin-left: auto; } .rail, .panel { padding: 14px; } .detailQuestion, .detailTutor { padding: 18px; } }

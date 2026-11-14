@@ -1,4 +1,4 @@
-/* PhysicsOS mascot. Flat storybook cut-outs with no frame: the figure's own
+/* Guizhou-inspired PhysicsOS tutor. Flat storybook cut-outs with no frame: the figure's own
    outline is the edge, so no shadow, border or plate is ever drawn around it. */
 
 .root {
@@ -46,8 +46,8 @@
   height: var(--mascot-size, 32px);
   overflow: hidden;
   border-radius: 50%;
-  background: radial-gradient(circle at 50% 35%, #fff7e8, #f3e6cf);
-  box-shadow: inset 0 0 0 1px rgba(120, 90, 50, 0.16);
+  background: var(--physics-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--physics-glass-border-soft);
   line-height: 0;
   pointer-events: none;
   user-select: none;
@@ -67,3 +67,6 @@
     animation: none;
   }
 }
+
+/* Picture is an encoding choice, not an extra layout box. */
+.root > picture, .avatar > picture { display: contents; }

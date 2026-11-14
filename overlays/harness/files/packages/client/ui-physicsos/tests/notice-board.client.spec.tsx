@@ -43,7 +43,11 @@ describe('NoticeBoard', () => {
   it('keeps only feedback on the page; announcements are the shell modal', async () => {
     const { api, listAnnouncements } = stubApi()
     mount(api)
-    await waitFor(() => { expect(screen.getByText('液体压强实验里拖动液面读数不动')).toBeTruthy() })
+    await waitFor(() => { expect(api.listFeedback).toHaveBeenCalledTimes(1) })
+
+    expect(screen.queryByText('液体压强实验里拖动液面读数不动')).toBeNull()
+    fireEvent.click(screen.getByRole('tab', { name: zh['notice.mine'] }))
+    expect(await screen.findAllByText('液体压强实验里拖动液面读数不动')).toHaveLength(2)
 
     expect(screen.getByRole('heading', { level: 1, name: '反馈' })).toBeTruthy()
     expect(screen.queryByText('公告')).toBeNull()
@@ -54,7 +58,7 @@ describe('NoticeBoard', () => {
   it('sends the report with the kind and the page it came from', async () => {
     const { api, submitFeedback } = stubApi()
     mount(api)
-    await waitFor(() => { expect(screen.getByText('液体压强实验里拖动液面读数不动')).toBeTruthy() })
+    await waitFor(() => { expect(api.listFeedback).toHaveBeenCalledTimes(1) })
 
     fireEvent.click(screen.getByRole('button', { name: '建议' }))
     fireEvent.change(bodyBox(), { target: { value: '希望能加一个磁场方向的可视化' } })
@@ -71,7 +75,7 @@ describe('NoticeBoard', () => {
   it('will not send an empty report', async () => {
     const { api, submitFeedback } = stubApi()
     mount(api)
-    await waitFor(() => { expect(screen.getByText('液体压强实验里拖动液面读数不动')).toBeTruthy() })
+    await waitFor(() => { expect(api.listFeedback).toHaveBeenCalledTimes(1) })
 
     const button = screen.getByRole('button', { name: '提交' }) as HTMLButtonElement
     expect(button.disabled).toBe(true)
@@ -83,7 +87,7 @@ describe('NoticeBoard', () => {
   it('includes the contact field only when the reporter filled it in', async () => {
     const { api, submitFeedback } = stubApi()
     mount(api)
-    await waitFor(() => { expect(screen.getByText('液体压强实验里拖动液面读数不动')).toBeTruthy() })
+    await waitFor(() => { expect(api.listFeedback).toHaveBeenCalledTimes(1) })
 
     fireEvent.change(bodyBox(), { target: { value: '读数不对' } })
     fireEvent.click(screen.getByRole('button', { name: '提交' }))

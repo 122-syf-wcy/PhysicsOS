@@ -528,12 +528,16 @@ function hero() {
   const art = element('figure', 'hero-mascot')
   const picture = element('picture')
   const image = element('img')
-  image.src = 'assets/mascot-developer-640.webp'
-  image.srcset = 'assets/mascot-developer-320.webp 320w, assets/mascot-developer-640.webp 640w'
+  image.src = '../mascot/guizhou/v1/mascot-explain-320.png'
+  const encoded = element('source')
+  encoded.type = 'image/avif'
+  encoded.srcset = '../mascot/guizhou/v1/mascot-explain-320.avif 254w, ../mascot/guizhou/v1/mascot-explain-640.avif 508w'
+  encoded.sizes = '(max-width: 640px) 166px, 206px'
+  picture.append(encoded)
   image.sizes = '(max-width: 640px) 210px, 280px'
-  image.width = 640
-  image.height = 640
-  image.alt = 'PhysicsOS 小 Q 和小猫在实验桌边一起开发物理实验'
+  image.width = 1118
+  image.height = 1407
+  image.alt = '佩戴银饰的小物理老师正在讲解物理实验'
   image.decoding = 'async'
   picture.append(image)
   art.append(picture)
@@ -549,7 +553,15 @@ function renderNav() {
       group = doc.group
       nav.append(element('div', 'nav-group', group))
     }
-    const anchor = link(doc.title, `#/${doc.id}`, 'nav-link')
+    const anchor = link('', `#/${doc.id}`, 'nav-link')
+    const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+    icon.setAttribute('class', 'nav-icon')
+    icon.setAttribute('viewBox', '0 0 18 20')
+    icon.setAttribute('aria-hidden', 'true')
+    const path = document.createElementNS(icon.namespaceURI, 'path')
+    path.setAttribute('d', 'M4 1h6l4 4v13H4z M10 1v5h4 M6 10h6 M6 13h5')
+    icon.append(path)
+    anchor.append(icon, document.createTextNode(doc.title))
     anchor.dataset.doc = doc.id
     if (doc.id === 'agents') anchor.append(element('span', 'nav-badge', '复制'))
     nav.append(anchor)
@@ -658,10 +670,11 @@ function renderPage() {
     if (doc.id === 'agents') {
       header.classList.add('studio-header')
       const art = element('img', 'studio-mascot')
-      art.src = 'assets/studio/mascot-studio-480.webp'
+      art.src = '../mascot/guizhou/v1/mascot-think-320.png'
       art.alt = ''
       art.width = 160
-      art.height = 160
+      art.height = 201
+      art.decoding = 'async'
       header.append(art)
     }
     main.append(header)
@@ -697,14 +710,12 @@ function renderPage() {
     anchor.append(element('small', '', label), element('strong', '', next.title))
     pager.append(anchor)
   }
-  main.append(
-    pager,
-    element(
-      'footer',
-      'doc-footer',
-      `PhysicsOS · 开源实验，共同维护　 /　规范 ${STANDARD_VERSION} · ${UPDATED_AT}`,
-    ),
-  )
+  const docFooter = element('footer', 'doc-footer')
+  docFooter.append(element('span', '', `PhysicsOS · 开源实验，共同维护　 /　规范 ${STANDARD_VERSION} · ${UPDATED_AT}`))
+  const credit = element('p', 'culture-credit')
+  credit.append(document.createTextNode('角色服饰灵感：'), link('贵州苗绣', 'https://www.ihchina.cn/art/detail/id/13989.html'), document.createTextNode(' · '), link('苗族银饰锻制技艺', 'https://www.ihchina.cn/art/detail/id/14331.html'))
+  docFooter.append(credit)
+  main.append(pager, docFooter)
   if (route.section)
     requestAnimationFrame(() => {
       document.getElementById(route.section)?.scrollIntoView()

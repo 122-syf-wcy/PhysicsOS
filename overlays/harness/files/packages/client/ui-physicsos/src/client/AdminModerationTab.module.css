@@ -23,3 +23,12 @@
 .selected { background: #438cd910; }
 @media (max-width: 1000px) { .columns { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 600px) { .root > section, .columns > section { padding: 16px; } .identity { grid-template-columns: minmax(0, 1fr); gap: 4px; } .identity dd { margin-bottom: 8px; } }
+
+/* Review queue occupies the reading plane; evidence remains in a side sheet. */
+.columns { grid-template-columns: minmax(0, 1fr) minmax(300px, 370px); gap: 24px; }
+.root > section, .columns > section { padding: 20px; border-radius: 18px; }
+.columns > section:last-child { position: sticky; top: 0; }
+.evidence { max-height: 260px; background: var(--physics-glass-fill); font-size: 12px; }
+.root h4 { font-weight: 500; }
+.selected { background: var(--physics-accent-soft); }
+@media (max-width: 1000px) { .columns { grid-template-columns: minmax(0, 1fr); } .columns > section:last-child { position: static; } }

@@ -2,7 +2,7 @@
 import { useStudentAuth } from './student-auth-fixture.client.ts'
 import { useSyncExternalStore } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createMechanicsScene } from '@physicsos/physics-scene'
 import { PhysicsSurface, type PhysicsSurfaceProps } from '../src/client/LabWorkspace.tsx'
 import { createPhysicsSurfaceController } from '../src/client/surface-store.ts'
@@ -13,7 +13,8 @@ import { zh } from '../src/client/locales.ts'
 const translations: Readonly<Record<string, string>> = zh
 const t: PhysicsSurfaceProps['t'] = key => translations[key] ?? key
 const neverHook = (() => { throw new Error('unused hook') }) as never
-afterEach(cleanup)
+beforeEach(() => { vi.stubGlobal('innerWidth', 1360) })
+afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 it('persists a real inspector edit without rebuilding runtime, then resumes and reloads revision 1', () => {
   const storage = new Map<string, string>()
@@ -28,6 +29,7 @@ it('persists a real inspector edit without rebuilding runtime, then resumes and 
     useSessions={neverHook} useWorkspaces={neverHook} useAuth={useStudentAuth} t={t}
     updateScene={controller.updateScene} openSurface={controller.open} openExperimentPicker={controller.openExperimentPicker} />)
   const originalLab = container.querySelector('[data-physicsos-surface="lab"]')
+  fireEvent.click(screen.getByRole('button', { name: '更多参数' }))
   const input = screen.getByRole('textbox', { name: '质量' })
   fireEvent.change(input, { target: { value: '2' } })
   fireEvent.blur(input)
@@ -37,6 +39,8 @@ it('persists a real inspector edit without rebuilding runtime, then resumes and 
   act(() => { controller.openExperimentPicker() })
   expect(screen.getByText('返回当前实验')).toBeTruthy()
   act(() => { controller.open('lab') })
+  const more = screen.queryByRole('button', { name: '更多参数' })
+  if (more !== null) fireEvent.click(more)
   expect((screen.getByRole('textbox', { name: '质量' }) as HTMLInputElement).value).toBe('2')
   expect(container.querySelector('[data-scene-revision="1"]')).toBeTruthy()
   expect(createPhysicsSurfaceController(local).recent.getSnapshot().items[0]?.scene.bodies[0]?.mass.value).toBe(2)

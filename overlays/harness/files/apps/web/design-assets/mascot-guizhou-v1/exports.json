@@ -1,0 +1,176 @@
+{
+  "version": 1,
+  "description": "Approved no-cat Guizhou clothing variants. Native ImageIO AVIF/PNG exports; transparent source images retained beside this manifest.",
+  "files": [
+    {
+      "pose": "wave",
+      "path": "/mascot/guizhou/v1/mascot-wave-160.avif",
+      "height": 160,
+      "width": 127,
+      "hasAlpha": true,
+      "bytes": 8182,
+      "sha256": "d07c8ceb493e7c52addbbd1eb29e0475e7c0714eb1bc04b3426b0b653431559d"
+    },
+    {
+      "pose": "wave",
+      "path": "/mascot/guizhou/v1/mascot-wave-320.avif",
+      "height": 320,
+      "width": 254,
+      "hasAlpha": true,
+      "bytes": 21204,
+      "sha256": "2f5a909a7e978f1de06e27a8e07a70954f883d62727134a698c40ace91d5b561"
+    },
+    {
+      "pose": "wave",
+      "path": "/mascot/guizhou/v1/mascot-wave-640.avif",
+      "height": 640,
+      "width": 508,
+      "hasAlpha": true,
+      "bytes": 61251,
+      "sha256": "86173878af8d641079f3974e0357d21d9ac752fbaad22e404c330b2a7070c5b0"
+    },
+    {
+      "pose": "wave",
+      "path": "/mascot/guizhou/v1/mascot-wave-320.png",
+      "height": 320,
+      "bytes": 94108,
+      "sha256": "03cfca7c046a9714ce99774a81360762141947da8c04ae31af13920d671485cf"
+    },
+    {
+      "pose": "think",
+      "path": "/mascot/guizhou/v1/mascot-think-160.avif",
+      "height": 160,
+      "width": 127,
+      "hasAlpha": true,
+      "bytes": 9963,
+      "sha256": "cbcf4bb84e0cd1c26de616b21ed7cf3b5e71fb8a792fc8df7448bfe46adcf2d7"
+    },
+    {
+      "pose": "think",
+      "path": "/mascot/guizhou/v1/mascot-think-320.avif",
+      "height": 320,
+      "width": 254,
+      "hasAlpha": true,
+      "bytes": 25240,
+      "sha256": "b5482725e1a0b81659115d4dbec35102cea8a703a3e45ff8ac5062cd3534413c"
+    },
+    {
+      "pose": "think",
+      "path": "/mascot/guizhou/v1/mascot-think-640.avif",
+      "height": 640,
+      "width": 508,
+      "hasAlpha": true,
+      "bytes": 74832,
+      "sha256": "2ae262e577274cdbaa061a736e6c89afea2755952d8f52ba2e15ec1f1a9e87d9"
+    },
+    {
+      "pose": "think",
+      "path": "/mascot/guizhou/v1/mascot-think-320.png",
+      "height": 320,
+      "bytes": 119681,
+      "sha256": "21d50f2850ab85d48adcf286c37d7f8830c57734c8cf2bc828557c3514f87cd8"
+    },
+    {
+      "pose": "search",
+      "path": "/mascot/guizhou/v1/mascot-search-160.avif",
+      "height": 160,
+      "width": 146,
+      "hasAlpha": true,
+      "bytes": 11628,
+      "sha256": "02cc32105fab49482dda7460751a2b5d4ef1c09ad920d014b9a17164b799480c"
+    },
+    {
+      "pose": "search",
+      "path": "/mascot/guizhou/v1/mascot-search-320.avif",
+      "height": 320,
+      "width": 292,
+      "hasAlpha": true,
+      "bytes": 32693,
+      "sha256": "6601489a61a540e2a1a55ff18bea988b0b9e393bc71669d245e5e50b47beff02"
+    },
+    {
+      "pose": "search",
+      "path": "/mascot/guizhou/v1/mascot-search-640.avif",
+      "height": 640,
+      "width": 585,
+      "hasAlpha": true,
+      "bytes": 116236,
+      "sha256": "9eca1c64f7d4c68e1a474e86a479f6b51e51ad7ef0602c0f79127de0cf3e0748"
+    },
+    {
+      "pose": "search",
+      "path": "/mascot/guizhou/v1/mascot-search-320.png",
+      "height": 320,
+      "bytes": 150446,
+      "sha256": "cc6787211d8f6d08ec9d9a6042b1096abd554ac9d2cf2b82b95299303d679e96"
+    },
+    {
+      "pose": "explain",
+      "path": "/mascot/guizhou/v1/mascot-explain-160.avif",
+      "height": 160,
+      "width": 127,
+      "hasAlpha": true,
+      "bytes": 8803,
+      "sha256": "30d9adfcf57363897c716f452d5007c2ad6489e931c81c1f39063e5d9e74aadd"
+    },
+    {
+      "pose": "explain",
+      "path": "/mascot/guizhou/v1/mascot-explain-320.avif",
+      "height": 320,
+      "width": 254,
+      "hasAlpha": true,
+      "bytes": 22650,
+      "sha256": "3bcd5fbc6ea171f16a6b5efe34afa1a710d49e0a44d0c4b6879050d33894ecc5"
+    },
+    {
+      "pose": "explain",
+      "path": "/mascot/guizhou/v1/mascot-explain-640.avif",
+      "height": 640,
+      "width": 508,
+      "hasAlpha": true,
+      "bytes": 69873,
+      "sha256": "84b9c0dd5ece56712592ccd2d78d90425e73e40b81f2384e98fc07defe8881e6"
+    },
+    {
+      "pose": "explain",
+      "path": "/mascot/guizhou/v1/mascot-explain-320.png",
+      "height": 320,
+      "bytes": 94450,
+      "sha256": "3858b555943c333f53dfcc8061b13d0dd3a259cfdf0653fd572e5ee9ab33e33b"
+    },
+    {
+      "pose": "complete",
+      "path": "/mascot/guizhou/v1/mascot-complete-160.avif",
+      "height": 160,
+      "width": 127,
+      "hasAlpha": true,
+      "bytes": 9233,
+      "sha256": "21e638884fdf420480decda18d6f421f4e29dea0e73df221998f84a8a7c93957"
+    },
+    {
+      "pose": "complete",
+      "path": "/mascot/guizhou/v1/mascot-complete-320.avif",
+      "height": 320,
+      "width": 254,
+      "hasAlpha": true,
+      "bytes": 24789,
+      "sha256": "d873b164c1216ac2de5e79ae0c42ba44f376ed620a65a12854521fc74a24de1b"
+    },
+    {
+      "pose": "complete",
+      "path": "/mascot/guizhou/v1/mascot-complete-640.avif",
+      "height": 640,
+      "width": 508,
+      "hasAlpha": true,
+      "bytes": 73294,
+      "sha256": "6b8ea0e7d38c1bbdc0dd86c3347aec30d1d712594c8b3e211d1a2eb4afecfd11"
+    },
+    {
+      "pose": "complete",
+      "path": "/mascot/guizhou/v1/mascot-complete-320.png",
+      "height": 320,
+      "bytes": 102340,
+      "sha256": "fd31c4f67ff5f419d555ec56a33cd25a205271b270c88d2d2ba3e3864c497722"
+    }
+  ]
+}

@@ -227,6 +227,7 @@ export function QuantityField({
               commit()
             }
             if (event.key === 'Escape') {
+              event.stopPropagation()
               setDirty(false)
               setDraft(formatValue(parameter.value))
             }
@@ -486,14 +487,19 @@ export function Chart({
   time,
   total,
   onHoverTime,
+  width = 232,
+  height = 96,
+  zeroBased = false,
 }: {
   readonly series: ChartSeries
   readonly time: number
   readonly total: number
   readonly onHoverTime?: (time: number | null) => void
+  readonly width?: number
+  readonly height?: number
+  readonly zeroBased?: boolean
 }) {
-  const width = 232
-  const height = 96
+  const [hoverTime, setHoverTime] = useState<number | null>(null)
   const pad = { left: 34, right: 10, top: 20, bottom: 20 }
   const plotW = width - pad.left - pad.right
   const plotH = height - pad.top - pad.bottom
@@ -503,8 +509,8 @@ export function Chart({
   const rawMax = finite.length === 0 ? 1 : Math.max(...finite)
   /* A constant series (vx of a projectile) still needs a band to draw inside. */
   const span = rawMax - rawMin || Math.max(Math.abs(rawMax), 1)
-  const min = rawMin - span * 0.12
-  const max = rawMax + span * 0.12
+  const min = zeroBased && rawMin >= 0 ? 0 : rawMin - span * 0.12
+  const max = zeroBased && rawMin >= 0 ? Math.max(rawMax * 1.1, 1) : rawMax + span * 0.12
   const tEnd = series.points.at(-1)?.t ?? 1
   const tSpan = tEnd || 1
   const px = (t: number) => pad.left + (t / tSpan) * plotW
@@ -513,7 +519,12 @@ export function Chart({
     .filter(point => Number.isFinite(point.value))
     .map((point, index) => `${index === 0 ? 'M' : 'L'}${px(point.t).toFixed(1)} ${py(point.value).toFixed(1)}`)
     .join(' ')
-  const cursorX = px(Math.min(time, tSpan))
+  const cursorX = px(Math.min(Math.max(hoverTime ?? time, 0), tSpan))
+  const hoverPoint = hoverTime === null ? undefined : series.points.filter(point => Number.isFinite(point.value))
+    .reduce<ChartSeries['points'][number] | undefined>((nearest, point) => nearest === undefined || Math.abs(point.t - hoverTime) < Math.abs(nearest.t - hoverTime) ? point : nearest, undefined)
+  const tooltipText = hoverPoint === undefined ? '' : `${formatValue(hoverPoint.value)} · ${series.yLabel}`
+  const tooltipWidth = Math.min(width - pad.left - pad.right, Math.max(64, tooltipText.length * 6 + 16))
+  const tooltipX = Math.min(Math.max(pad.left, cursorX - tooltipWidth / 2), width - pad.right - tooltipWidth)
   const showZero = min < 0 && max > 0
 
   return (
@@ -522,21 +533,15 @@ export function Chart({
       viewBox={`0 0 ${width} ${height}`}
       role="img"
       aria-label={`${series.title}（${series.xLabel} / ${series.yLabel}）`}
-      onMouseMove={
-        onHoverTime === undefined
-          ? undefined
-          : (event) => {
-            const box = event.currentTarget.getBoundingClientRect()
-            const ratio = (event.clientX - box.left) / box.width
-            const viewX = ratio * width
-            if (viewX < pad.left || viewX > width - pad.right) {
-              onHoverTime(null)
-              return
-            }
-            onHoverTime(((viewX - pad.left) / plotW) * tSpan)
-          }
-      }
-      onMouseLeave={onHoverTime === undefined ? undefined : () => { onHoverTime(null) }}
+      onMouseMove={event => {
+        const box = event.currentTarget.getBoundingClientRect()
+        if (box.width <= 0) return
+        const viewX = ((event.clientX - box.left) / box.width) * width
+        const next = viewX < pad.left || viewX > width - pad.right ? null : ((viewX - pad.left) / plotW) * tSpan
+        setHoverTime(next)
+        onHoverTime?.(next)
+      }}
+      onMouseLeave={() => { setHoverTime(null); onHoverTime?.(null) }}
     >
       <line className={css.chartAxis} x1={pad.left} y1={pad.top} x2={pad.left} y2={pad.top + plotH} />
       <line
@@ -570,7 +575,12 @@ export function Chart({
         {series.yLabel}
       </text>
       <path className={clsx(css.chartLine, css[`chartRole_${series.role}`])} d={path} />
-      {total > 0 ? <line className={css.chartCursor} x1={cursorX} y1={pad.top} x2={cursorX} y2={pad.top + plotH} /> : null}
+      {hoverPoint === undefined ? null : <g aria-hidden="true">
+        <circle className={css.chartHoverPoint} cx={px(hoverPoint.t)} cy={py(hoverPoint.value)} r={3} />
+        <rect className={css.chartTooltip} x={tooltipX} y={pad.top} width={tooltipWidth} height={20} rx={5} />
+        <text className={css.chartTooltipText} x={tooltipX + 8} y={pad.top + 13}>{tooltipText}</text>
+      </g>}
+      {total > 0 || hoverTime !== null ? <line className={css.chartCursor} x1={cursorX} y1={pad.top} x2={cursorX} y2={pad.top + plotH} /> : null}
     </svg>
   )
 }

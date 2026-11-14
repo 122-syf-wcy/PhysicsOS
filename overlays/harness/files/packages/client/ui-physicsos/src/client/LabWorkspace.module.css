@@ -2940,3 +2940,7 @@
     min-height: clamp(240px, 40svh, 340px);
   }
 }
+
+.chartHoverPoint { fill: var(--physics-trajectory); stroke: var(--dsw-alias-bg-base); stroke-width: 2; }
+.chartTooltip { fill: var(--physics-glass-fill-strong); stroke: var(--physics-glass-border-soft); stroke-width: .5; }
+.chartTooltipText { fill: var(--physics-ink-strong); font-size: 9px; font-variant-numeric: tabular-nums; }

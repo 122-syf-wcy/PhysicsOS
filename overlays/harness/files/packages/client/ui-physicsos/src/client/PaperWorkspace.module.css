@@ -1959,3 +1959,66 @@ details[open] > .advancedSummary::before {
   font-size: 12px;
   color: var(--dsw-alias-label-secondary);
 }
+
+
+/* Paper studio matches the centered title, pipeline and two-column workbench. */
+.root { background-image: none; padding: 0 28px; box-sizing: border-box; }
+.hero { min-height: 78px; padding: 8px 0 12px; border: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
+.heroText { position: absolute; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 5px; max-width: 65%; }
+.title { display: inline-flex; align-items: center; gap: 10px; font-size: 30px; font-weight: 500; line-height: 1.4; }
+.subtitle { font-size: 12px; line-height: 1.6; text-align: center; }
+.back { border: 0; background: transparent; padding-left: 0; }
+.reviewer { border: 0; padding-right: 0; background: transparent; backdrop-filter: none; }
+.reviewer input { max-width: 100px; background: transparent; }
+.steps { padding: 8px 0 18px; gap: 18px; border-bottom: 0; align-items: center; }
+.step { padding: 9px 18px; border-radius: 999px; }
+.step::after { display: none; }
+.stepActive { color: var(--physics-accent-strong); background: var(--physics-accent-soft); }
+.stepSource { margin-left: auto; border: 1px solid var(--physics-glass-border-soft); background: var(--physics-glass-fill); }
+.stepSource + .stepSource { margin-left: -9px; }
+.stepLine { min-width: 26px; max-width: 64px; background: var(--dsw-alias-border-l2); }
+.panel { padding: 0 0 24px; }
+.workbench { gap: 18px; grid-template-columns: minmax(0, 1fr) minmax(280px, 340px); }
+.workbenchMain { border: 1px solid var(--physics-glass-border-soft); border-radius: 18px; padding: 20px; background: var(--physics-glass-fill); box-shadow: var(--physics-glass-inset); }
+.stepForm { gap: 20px; }
+.stepCard { border: 0; background: transparent; box-shadow: none; padding: 0; border-radius: 0; }
+.stepCardTitle, .summaryTitle { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 500; margin-bottom: 14px; }
+.stepCardTitle::before, .summaryTitle::before { content: ''; flex: none; width: 3px; height: 17px; border-radius: 2px; background: var(--physics-accent); }
+.field textarea, .field input { border-radius: 11px; font-size: 13px; }
+.stepCard[data-paper-step='scope'] textarea { min-height: 108px; }
+.templateMeta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin: 14px 0 0; }
+.templateMeta > div { display: grid; gap: 8px; }
+.templateMeta dt { color: var(--physics-ink-muted); font-size: 12px; }
+.templateMeta dd { margin: 0; padding: 10px 12px; border: 1px solid var(--physics-glass-border-soft); border-radius: 10px; background: var(--physics-glass-fill); color: var(--physics-ink-strong); font-size: 13px; }
+.summaryCard { padding: 22px; border-radius: 18px; box-shadow: var(--physics-glass-inset); }
+.summaryList { gap: 0; }
+.summaryList > div { padding: 12px 0; border-bottom: 1px solid var(--dsw-alias-border-l1); }
+.summaryList dd { font-weight: 500; }
+.summaryHint { margin: 16px 0 0; line-height: 1.8; font-size: 12px; }
+.statusEn { display: none; }
+.workbenchActions { padding: 17px 20px; border: 0; border-radius: 16px; background: var(--physics-accent-soft); }
+.workbenchActions .primary { margin-left: auto; }
+.workbenchActions .actionHint { order: -1; margin-right: auto; }
+.jobList { border-radius: 16px; background: var(--physics-glass-fill); border: 1px solid var(--physics-glass-border-soft); }
+.jobRow { border-radius: 12px; }
+.jobRowActive { background: var(--physics-accent-soft); border-color: var(--physics-accent); }
+.jobDetail { border-radius: 17px; box-shadow: var(--physics-glass-inset); }
+@media (max-width: 1000px) { .heroText { position: static; transform: none; align-items: flex-start; flex: 1; } .title { font-size: 24px; } .subtitle { text-align: left; } .workbench { grid-template-columns: minmax(0, 1fr); } .workbenchSide { position: static; } .steps { gap: 8px; } .step { padding: 8px 11px; } }
+@media (max-width: 600px) { .root { padding: 0 12px; } .hero { flex-wrap: wrap; gap: 7px; min-height: 76px; } .heroText { flex-basis: calc(100% - 120px); max-width: none; } .title { font-size: 21px; gap: 6px; } .title svg, .title img { width: 28px; height: 28px; } .back { font-size: 0; } .backArrow { font-size: 18px; } .reviewer { display: none; } .steps { overflow: auto; flex-wrap: nowrap; } .stepLine { display: none; } .stepSource { margin-left: 0; } .stepSource + .stepSource { margin-left: 0; } .stepNo { width: 24px; height: 24px; } .workbenchMain, .summaryCard { padding: 16px; } .templateMeta { gap: 12px; } .workbenchActions { flex-wrap: wrap; padding: 14px; } .workbenchActions .actionHint { width: 100%; } }
+
+.finalSplit { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(280px, 1fr); gap: 24px; align-items: start; }
+.finalList { min-width: 0; }
+.finalFilters { display: flex; gap: 12px; margin-bottom: 18px; }
+.finalFilters > input { min-width: 0; flex: 1; border: 1px solid var(--physics-glass-border-soft); border-radius: 12px; padding: 10px 14px; background: var(--physics-glass-fill); color: var(--physics-ink); font: inherit; font-size: 13px; }
+.finalRows { display: grid; gap: 14px; }
+.finalRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 9px 18px; align-items: center; border: 1px solid var(--physics-glass-border-soft); border-radius: 15px; background: var(--physics-glass-fill); box-shadow: var(--physics-glass-inset); padding: 20px; }
+.finalRow .jobTitle { font-size: 16px; font-weight: 500; }
+.finalRow .jobMeta { grid-column: 1; }
+.finalRow .fileLinks { grid-column: 2; grid-row: 1 / 3; margin: 0; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; max-width: 260px; }
+.finalPreview { position: sticky; top: 0; min-height: 420px; display: grid; place-items: center; border: 1px solid var(--physics-glass-border-soft); border-radius: 18px; background: var(--physics-glass-fill); overflow: hidden; }
+.finalPreview .empty { padding: 30px; text-align: center; font-size: 13px; }
+.finalPreview .preview { width: 100%; min-height: 560px; border: 0; }
+@media (max-width: 1000px) { .finalSplit { grid-template-columns: minmax(0, 1fr); } .finalPreview { position: static; min-height: 300px; } }
+@media (max-width: 600px) { .finalFilters { flex-wrap: wrap; } .finalRow { grid-template-columns: minmax(0, 1fr); padding: 16px; } .finalRow .fileLinks { grid-column: 1; grid-row: auto; justify-content: flex-start; max-width: none; } }
+
+.answerStep { margin: 6px 0; line-height: 1.8; }

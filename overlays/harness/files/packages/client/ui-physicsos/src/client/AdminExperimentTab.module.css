@@ -58,3 +58,10 @@
     height: 54px;
   }
 }
+
+/* The review title stays compact above the real candidate workflow. */
+.root { gap: 16px; }
+.root .overview { padding: 10px 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.root .title { font-size: 21px; font-weight: 500; letter-spacing: 0; }
+.heading img { width: 42px; height: 42px; }
+.eyebrow { display: none; }

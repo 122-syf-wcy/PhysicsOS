@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "date": "2026-11-14",
+  "tool": "built-in image_gen",
+  "animated": false,
+  "runtimeIntegrated": false,
+  "assets": [
+    {
+      "id": "silver-greeting",
+      "label": "欢迎",
+      "file": "silver-greeting.png",
+      "width": 1118,
+      "height": 1407,
+      "bytes": 1571081,
+      "sha256": "a6573c4f52bf301ec33aa9897d01d1b4da450ef283327334a5d86991b2b66665",
+      "transparent": true
+    },
+    {
+      "id": "thinking",
+      "label": "思考",
+      "file": "thinking.png",
+      "width": 1118,
+      "height": 1407,
+      "bytes": 2013411,
+      "sha256": "f5ae13aa0bf1272c41b90b2475b2628f2730848a337049743a060984f6445a04",
+      "transparent": true
+    },
+    {
+      "id": "searching",
+      "label": "检索",
+      "file": "searching.png",
+      "width": 1199,
+      "height": 1312,
+      "bytes": 2318020,
+      "sha256": "f3f3a94b8599ead520d58c29a1b0bcd5dab95ad5ccd827dd5c8d81a2a1abe369",
+      "transparent": true
+    },
+    {
+      "id": "explaining",
+      "label": "推演讲解",
+      "file": "explaining.png",
+      "width": 1118,
+      "height": 1407,
+      "bytes": 1666550,
+      "sha256": "4c2df647be1e3b5153157c34982a0ce5d355a90b18e216203c7beee93270ebb7",
+      "transparent": true
+    },
+    {
+      "id": "complete",
+      "label": "完成",
+      "file": "complete.png",
+      "width": 1118,
+      "height": 1407,
+      "bytes": 1728368,
+      "sha256": "d2e90ce0956a92f566aeba9fe198ae6dadfaef3648024eab3af0f84811456520",
+      "transparent": true
+    }
+  ]
+}

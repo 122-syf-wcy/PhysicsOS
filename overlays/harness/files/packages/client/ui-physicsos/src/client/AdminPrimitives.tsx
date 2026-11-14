@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import type {
   ElementType,
   HTMLAttributes,
@@ -16,6 +17,7 @@ type AdminDataAttributes = {
 export interface AdminPageTab<T extends string = string> {
   readonly id: T
   readonly label: ReactNode
+  readonly icon?: ReactNode
 }
 
 export interface AdminPageProps<T extends string = string> {
@@ -51,65 +53,49 @@ export function AdminPage<T extends string>({
   groups,
   children,
 }: AdminPageProps<T>): ReactNode {
-  const rail = groups === undefined
-    ? null
-    : (
-        <nav className={css.pageRail} role="tablist" aria-orientation="vertical">
-          {groups.filter(group => group.tabs.length > 0).map(group => (
-            <div key={group.key} className={css.railGroup}>
-              {group.label !== undefined && (
-                <div className={css.railGroupLabel}>{group.label}</div>
-              )}
-              {group.tabs.map(tab => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={activeTab === tab.id}
-                  className={clsx(css.railTab, activeTab === tab.id && css.railTabActive)}
-                  onClick={() => { onTabChange(tab.id) }}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-          ))}
-        </nav>
-      )
+  // All authorized destinations remain visible in the top navigation. The
+  // product rail already lives on the left; a second rail squeezed the tables.
+  const orderedTabs = groups?.flatMap(group => group.tabs) ?? tabs
+  const pageId = useId()
 
   return (
-    <div className={clsx(css.page, rail !== null && css.pageSplit)} data-admin-page="">
+    <div className={clsx(css.page, css.pageSplit)} data-admin-page="">
       <header className={css.pageHeader} data-admin-page-header="">
-        <h1 className={css.pageTitle}>{title}</h1>
-        {rail === null && (
-          <nav className={css.pageTabs} role="tablist">
-            {tabs.map(tab => (
+          <nav className={css.pageTabs} role="tablist" aria-label={typeof title === 'string' ? title : undefined}>
+            {orderedTabs.map((tab, index) => (
               <button
                 key={tab.id}
                 type="button"
                 role="tab"
+                id={`${pageId}-${tab.id}`}
+                aria-controls={`${pageId}-content`}
                 aria-selected={activeTab === tab.id}
+                tabIndex={activeTab === tab.id ? 0 : -1}
                 className={clsx(css.pageTab, activeTab === tab.id && css.pageTabActive)}
                 onClick={() => { onTabChange(tab.id) }}
+                onKeyDown={event => {
+                  if (event.defaultPrevented || event.nativeEvent.isComposing || event.altKey || event.ctrlKey || event.metaKey) return
+                  const next = event.key === 'ArrowRight' ? (index + 1) % orderedTabs.length
+                    : event.key === 'ArrowLeft' ? (index + orderedTabs.length - 1) % orderedTabs.length
+                      : event.key === 'Home' ? 0 : event.key === 'End' ? orderedTabs.length - 1 : undefined
+                  if (next === undefined) return
+                  const target = orderedTabs[next]
+                  if (target === undefined) return
+                  event.preventDefault()
+                  onTabChange(target.id)
+                  event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus()
+                }}
               >
+                {tab.icon}
                 {tab.label}
               </button>
             ))}
           </nav>
-        )}
+        <h1 className={css.pageTitle}>{title}</h1>
       </header>
-      {rail !== null ? (
-        <div className={css.pageBody}>
-          {rail}
-          <div className={css.pageContent} data-admin-page-content="">
-            {children}
-          </div>
-        </div>
-      ) : (
-        <div className={css.pageContent} data-admin-page-content="">
+        <div className={css.pageContent} data-admin-page-content="" role="tabpanel" id={`${pageId}-content`} aria-labelledby={`${pageId}-${activeTab}`}>
           {children}
         </div>
-      )}
     </div>
   )
 }
@@ -150,8 +136,7 @@ export function AdminStats({
           data-stat={item.dataStat ?? item.key}
         >
           <strong>{item.value}</strong>
-          {' '}
-          {item.label}
+          <span>{item.label}</span>
         </span>
       ))}
     </div>

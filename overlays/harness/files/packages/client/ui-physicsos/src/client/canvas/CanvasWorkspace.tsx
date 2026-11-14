@@ -20,6 +20,8 @@ import { CanvasAssistantPanel } from './CanvasAssistantPanel.tsx'
 import { downloadCanvasFile } from './download.ts'
 import { draftToScene, starterDraft } from '../physics/circuit-builder.ts'
 import css from './CanvasWorkspace.module.css'
+import stageCss from './CanvasStage.module.css'
+import { WorkbenchFloatPanel } from '../WorkbenchFloatPanel.tsx'
 import '@xyflow/react/dist/style.css'
 
 const sameViewport = (left: Viewport, right: Viewport): boolean => left.x === right.x && left.y === right.y && left.zoom === right.zoom
@@ -437,12 +439,12 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
   }
   const located = (manifest?.nodes ?? []).filter(node => `${node.title ?? ''} ${node.kind} ${node.id}`.toLocaleLowerCase().includes(locateSearch.toLocaleLowerCase()))
 
-  return <main ref={root} className={`${css.workspace} ${view.tool === 'hand' ? css.handMode : ''} ${agentOpen ? css.agentVisible : ''}`} data-physicsos-canvas-workspace="true" data-canvas-id={canvasId}
+  return <main ref={root} className={`${css.workspace} ${stageCss.workspace} ${view.tool === 'hand' ? css.handMode : ''} ${agentOpen ? css.agentVisible : ''}`} data-physicsos-canvas-workspace="true" data-canvas-id={canvasId}
     tabIndex={0} aria-label={t('canvas.title')} onKeyDown={keyboard}
     onFocusCapture={event => { setSuspendingPanKeys(inputTarget(event.target)) }}
     onBlurCapture={event => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) { setSpacePan(false); setSuspendingPanKeys(false) } }}
     onKeyUp={event => { if (event.code === 'Space') setSpacePan(false) }}>
-    <header className={css.toolbar}>
+    <header className={`${css.toolbar} ${stageCss.toolbar}`}>
       <div className={css.identity}>
         <div className={css.identityTitle}>
           <Tooltip label={t('canvas.back')} portal><Button size="sm" variant="toolbar" aria-label={t('canvas.back')} onClick={() => { props.openCanvasView(undefined) }}><IconChevronLeftOutlineRegular size={14} /></Button></Tooltip>
@@ -497,8 +499,8 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
         <Button size="sm" variant="ghost" onClick={() => { actionMenu('export') }}>{t('canvas.export')}</Button>
       </div>
     </div> : null}
-    <div className={css.canvasBody}>
-    <div ref={board} className={css.board}>
+    <div className={`${css.canvasBody} ${stageCss.body}`}>
+    <div ref={board} className={`${css.board} ${stageCss.board}`}>
       {manifest === undefined && document?.loading !== false ? <div className={css.loading}><LoadingState inline>{t('canvas.sync.loading')}</LoadingState></div> :
         <ReactFlow<CanvasFlowNode, Edge> className={css.flow} nodes={flowNodes} edges={flowEdges} nodeTypes={nodeTypes} viewport={viewport}
           onInit={(instance: ReactFlowInstance<CanvasFlowNode, Edge>) => { flow.current = instance }}
@@ -531,12 +533,12 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
           minZoom={0.08} maxZoom={4} preventScrolling nodeOrigin={[0, 0]}
           noDragClassName="nodrag" noPanClassName="nopan" noWheelClassName="nowheel"
           elevateNodesOnSelect={false} elevateEdgesOnSelect={false}>
-          <Background variant={BackgroundVariant.Lines} gap={20} lineWidth={0.4} color="var(--dsw-alias-border-l2)" />
+          <Background variant={BackgroundVariant.Dots} gap={24} size={0.7} color="var(--dsw-alias-border-l2)" />
           {minimap ? <MiniMap aria-label={t('canvas.minimap')} pannable zoomable nodeColor={node => node.type === 'group' ? 'var(--dsw-alias-bg-module-platform)' : 'var(--dsw-alias-button-info-fill)'} maskColor="color-mix(in srgb, var(--dsw-alias-bg-base) 75%, transparent)" /> : null}
 
         </ReactFlow>}
       <CanvasAnnotations document={document} viewport={viewport} tool={view.tool} active={editable && !spacePan} commands={canvasCommands} toWorld={toWorld} candidate={candidate} onError={annotationError} onSuggestion={setShapeSuggestion} />
-          <div className={`${css.boardControls} ${css.zoomShelf}`}>
+          <div className={`${css.boardControls} ${css.zoomShelf} ${stageCss.zoomShelf}`}>
             <Tooltip label={t('canvas.zoomOut')} portal><Button size="sm" variant="toolbar" aria-label={t('canvas.zoomOut')} onClick={() => { zoom(-1) }}>−</Button></Tooltip>
             <span className={css.zoomValue}>{String(Math.round(viewport.zoom * 100))}%</span>
             <Tooltip label={t('canvas.zoomIn')} portal><Button size="sm" variant="toolbar" aria-label={t('canvas.zoomIn')} onClick={() => { zoom(1) }}>+</Button></Tooltip>
@@ -550,11 +552,11 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
         <Button variant="outline" disabled={!editable} onClick={addNote}>{t('canvas.addNote')}</Button>
       </div></div> : null}
     </div>
-    {agentOpen ? <CanvasAssistantPanel canvasId={canvasId} document={document} commands={canvasCommands} selectedNodeIds={view.selected} viewport={{ ...viewport, width: board.current?.clientWidth ?? 800, height: board.current?.clientHeight ?? 600 }} getViewport={() => ({ ...(flow.current?.getViewport() ?? viewport), width: board.current?.clientWidth || 800, height: board.current?.clientHeight || 600 })} t={t} onClose={() => { setAgentOpen(false); setCandidate(undefined) }} onCandidate={setCandidate} /> : null}
+    {agentOpen ? <WorkbenchFloatPanel title={t('canvas.agentPanel')} closeLabel={t('canvas.close')} onClose={() => { setAgentOpen(false); setCandidate(undefined) }} placement="bottom-right" width={340} height={420} expanded desktopDefault={false}><div className={stageCss.floatAgent}><CanvasAssistantPanel canvasId={canvasId} document={document} commands={canvasCommands} selectedNodeIds={view.selected} viewport={{ ...viewport, width: board.current?.clientWidth ?? 800, height: board.current?.clientHeight ?? 600 }} getViewport={() => ({ ...(flow.current?.getViewport() ?? viewport), width: board.current?.clientWidth || 800, height: board.current?.clientHeight || 600 })} t={t} onClose={() => { setAgentOpen(false); setCandidate(undefined) }} onCandidate={setCandidate} /></div></WorkbenchFloatPanel> : null}
     </div>
-    <div className={css.dockShelf}>
-      <div className={css.toolDock} role="toolbar" aria-label={t('canvas.title')}>
-        <div className={css.navigationControls}>
+    <div className={`${css.dockShelf} ${stageCss.dockShelf}`}>
+      <div className={`${css.toolDock} ${stageCss.toolDock}`} role="toolbar" aria-label={t('canvas.title')}>
+        <div className={`${css.navigationControls} ${stageCss.navigationControls}`}>
           <div className={css.toolGroup}>
             <Button size="sm" variant={view.tool === 'hand' ? 'primary' : 'toolbar'} aria-label={t('canvas.hand')} title={t('canvas.hand')} aria-pressed={view.tool === 'hand'} onClick={() => { actions.setTool('hand') }}><span aria-hidden="true">✥</span></Button>
             <Button size="sm" variant={view.tool === 'select' ? 'primary' : 'toolbar'} aria-label={t('canvas.select')} title={t('canvas.select')} aria-pressed={view.tool === 'select'} onClick={() => { actions.setTool('select') }}><span aria-hidden="true">↖</span></Button>

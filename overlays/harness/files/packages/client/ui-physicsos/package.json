@@ -122,7 +122,8 @@
     "idb": "8.0.4",
     "fake-indexeddb": "6.2.7",
     "@physicsos/physics-workbench": "link:../../../../../packages/physics-workbench",
-    "@physicsos/physics-whiteboard": "link:../../../../../packages/physics-whiteboard"
+    "@physicsos/physics-whiteboard": "link:../../../../../packages/physics-whiteboard",
+    "@deepseek-ai/dsh-client-ui-dockkit": "workspace:*"
   },
   "files": [
     "lib/index.js",

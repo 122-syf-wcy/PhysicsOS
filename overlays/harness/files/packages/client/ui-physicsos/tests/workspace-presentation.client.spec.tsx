@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { withOfficialRenderer } from './official-renderer-fixture.client.ts'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { PhysicsSurface, type PhysicsSurfaceProps } from '../src/client/LabWorkspace.tsx'
 import { createPhysicsSurfaceController } from '../src/client/surface-store.ts'
@@ -17,9 +17,11 @@ const neverHook = (() => {
   throw new Error('unused hook')
 }) as never
 
+beforeEach(() => { vi.stubGlobal('innerWidth', 1360) })
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
 const mountLab = (templateId: string) => {
@@ -39,6 +41,8 @@ const mountLab = (templateId: string) => {
     />
   )
   const view = render(element())
+  const more = screen.queryByRole('button', { name: '更多参数' })
+  if (more !== null) fireEvent.click(more)
   return { ...view, surface, refresh: () => { view.rerender(element()) } }
 }
 
@@ -107,7 +111,7 @@ describe('workspace data panel', () => {
     expect(screen.getByText('U - t')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '收起' }))
     expect(screen.queryByText('I - t')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: '展开' }))
+    fireEvent.click(screen.getByRole('button', { name: zh['lab.tab.charts'] }))
     expect(screen.getByText('I - t')).toBeTruthy()
   })
 
@@ -115,7 +119,7 @@ describe('workspace data panel', () => {
     mountLab('series-circuit')
     /* One-state circuit: no curves, so an empty chart strip must not greet
        the student — but the strip still opens on demand. */
-    const expand = screen.getByRole('button', { name: '展开' })
+    const expand = screen.getByRole('button', { name: zh['lab.tab.charts'] })
     expect(screen.queryByRole('button', { name: '收起' })).toBeNull()
     fireEvent.click(expand)
     expect(screen.getByRole('button', { name: '收起' })).toBeTruthy()
@@ -125,6 +129,7 @@ describe('workspace data panel', () => {
 describe('workspace panel folding', () => {
   it('folds a scene-tree group on click and expands it again', () => {
     mountLab('rheostat-circuit')
+    fireEvent.click(screen.getByRole('button', { name: '图层' }))
     const group = screen.getAllByRole('button').find(
       button => button.getAttribute('aria-expanded') === 'true',
     )!
@@ -143,7 +148,7 @@ describe('workspace panel folding', () => {
   it('folds a side panel track via its chevron and restores via the toolbar toggle', () => {
     mountLab('rheostat-circuit')
     const cover = document.querySelector('[data-physicsos-surface="lab"]')!
-
+    fireEvent.click(screen.getByRole('button', { name: '图层' }))
     fireEvent.click(screen.getByRole('button', { name: '收起场景面板' }))
     expect(cover.getAttribute('data-scene-collapsed')).toBe('true')
     fireEvent.click(screen.getByRole('button', { name: '图层' }))
@@ -173,13 +178,14 @@ describe('workspace focus mode', () => {
 
   it('hides the side panels reversibly while keeping the tools', () => {
     mountLab('rheostat-circuit')
+    fireEvent.click(screen.getByRole('button', { name: '图层' }))
     expect(screen.getByRole('region', { name: '场景与对象' })).toBeTruthy()
-    expect(screen.getByRole('complementary', { name: '检查器' })).toBeTruthy()
+    expect(screen.getByRole('complementary', { name: /检查器|快捷参数/ })).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: '专注实验' }))
     expect(screen.getByRole('button', { name: '退出专注' })).toBeTruthy()
     expect(screen.queryByRole('region', { name: '场景与对象' })).toBeNull()
-    expect(screen.queryByRole('complementary', { name: '检查器' })).toBeNull()
+    expect(screen.queryByRole('complementary', { name: /检查器|快捷参数/ })).toBeNull()
     /* Tools stay reachable on the bench: playback, report, agent dock. */
     expect(screen.getByRole('button', { name: '播放 / 暂停' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '报告' })).toBeTruthy()
@@ -214,7 +220,7 @@ describe('workspace focus mode', () => {
     fireEvent.click(screen.getByRole('button', { name: '退出专注' }))
     expect(screen.getByRole('button', { name: '专注实验' })).toBeTruthy()
     expect(screen.getByRole('region', { name: '场景与对象' })).toBeTruthy()
-    expect(screen.getByRole('complementary', { name: '检查器' })).toBeTruthy()
+    expect(screen.getByRole('complementary', { name: /检查器|快捷参数/ })).toBeTruthy()
   })
 
   it('reinitializes focus and data visibility when the active scene changes', () => {
@@ -225,8 +231,10 @@ describe('workspace focus mode', () => {
     surface.open('lab', createExperimentSceneRef(staticTemplate, t(staticTemplate.label)))
     refresh()
     expect(screen.getByRole('button', { name: '专注实验' })).toBeTruthy()
+    expect(screen.queryByRole('region', { name: '场景与对象' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '图层' }))
     expect(screen.getByRole('region', { name: '场景与对象' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: '展开' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: zh['lab.tab.charts'] })).toBeTruthy()
 
     const chartTemplate = findExperimentTemplate('rheostat-circuit')!
     surface.open('lab', createExperimentSceneRef(chartTemplate, t(chartTemplate.label)))
@@ -268,127 +276,41 @@ it('offers slow motion down to 0.01x while leaving the experiment paused', () =>
   }
 })
 
-describe.each([
-  { toggleLabel: '图层', panelRole: 'region', panelLabel: '场景与对象', closeLabel: '关闭图层' },
-  { toggleLabel: '检查器', panelRole: 'complementary', panelLabel: '检查器', closeLabel: '关闭检查器' },
-])('responsive $toggleLabel drawer', ({ toggleLabel, panelRole, panelLabel, closeLabel }) => {
-  it('only moves opening focus when the drawer controls are visible', () => {
-    mountLab('magnetic-circular')
-    const toggle = screen.getByRole('button', { name: toggleLabel })
-    const close = screen.getByRole('button', { name: closeLabel })
-
-    /* jsdom has no container layout; supply the resolved desktop display. */
-    close.style.display = 'none'
-    toggle.focus()
-    fireEvent.click(toggle)
-    expect(document.activeElement).toBe(toggle)
-
-    fireEvent.click(toggle)
-    close.style.display = 'inline-flex'
-    fireEvent.click(toggle)
-    expect(document.activeElement).toBe(close)
-  })
-
-  it('releases Tab navigation after the drawer becomes a desktop panel', () => {
-    mountLab('magnetic-circular')
-    const toggle = screen.getByRole('button', { name: toggleLabel })
-    const panel = screen.getByRole(panelRole, { name: panelLabel })
-    const close = within(panel).getByRole('button', { name: closeLabel })
-    close.style.display = 'inline-flex'
-    fireEvent.click(toggle)
-    expect(document.activeElement).toBe(close)
-
-    const controls = [...panel.querySelectorAll<HTMLElement>('button, input, select')]
-    const firstDesktopControl = controls[1]!
-    const lastControl = controls.at(-1)!
-    /* A wider container hides the close control without changing open state. */
-    close.style.display = 'none'
-    expect(toggle.getAttribute('aria-expanded')).toBe('true')
-    lastControl.focus()
-    expect(fireEvent.keyDown(lastControl, { key: 'Tab' })).toBe(true)
-    firstDesktopControl.focus()
-    expect(fireEvent.keyDown(firstDesktopControl, { key: 'Tab', shiftKey: true })).toBe(true)
-  })
-
-  it.each(['display', 'visibility', 'ancestor'])('excludes %s-hidden controls from the drawer focus loop', (hiddenBy) => {
-    mountLab('magnetic-circular')
-    const panel = screen.getByRole(panelRole, { name: panelLabel })
-    const close = within(panel).getByRole('button', { name: closeLabel })
-    close.style.display = 'inline-flex'
-    fireEvent.click(screen.getByRole('button', { name: toggleLabel }))
-    const controls = [...panel.querySelectorAll<HTMLElement>('button, input, select')]
-    const hiddenControl = controls.at(-1)!
-    let lastVisibleControl = controls.at(-2)!
-    if (hiddenBy === 'ancestor') {
-      const hiddenParent = hiddenControl.parentElement!
-      hiddenParent.style.display = 'none'
-      lastVisibleControl = controls.filter(control => !hiddenParent.contains(control)).at(-1)!
-    } else if (hiddenBy === 'visibility') {
-      hiddenControl.style.visibility = 'hidden'
-    } else {
-      hiddenControl.style.display = 'none'
-    }
-
-    lastVisibleControl.focus()
-    expect(fireEvent.keyDown(lastVisibleControl, { key: 'Tab' })).toBe(false)
-    expect(document.activeElement).toBe(close)
-    expect(fireEvent.keyDown(close, { key: 'Tab', shiftKey: true })).toBe(false)
-    expect(document.activeElement).toBe(lastVisibleControl)
-  })
-})
-
-describe('workspace layers drawer', () => {
-  it('keeps only the last opened drawer active and focused', async () => {
-    mountLab('magnetic-circular')
-    const layers = screen.getByRole('button', { name: '图层' })
-    const inspector = screen.getByRole('button', { name: '检查器' })
-
-    fireEvent.click(layers)
-    expect(layers.getAttribute('aria-expanded')).toBe('true')
-    fireEvent.click(inspector)
-    expect(layers.getAttribute('aria-expanded')).toBe('false')
-    expect(inspector.getAttribute('aria-expanded')).toBe('true')
-    await Promise.resolve()
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: '关闭检查器' }))
-
-    fireEvent.click(layers)
-    expect(inspector.getAttribute('aria-expanded')).toBe('false')
-    expect(layers.getAttribute('aria-expanded')).toBe('true')
-    await Promise.resolve()
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: '关闭图层' }))
-
-    fireEvent.keyDown(window, { key: 'Escape' })
-    expect(layers.getAttribute('aria-expanded')).toBe('false')
-    await waitFor(() => { expect(document.activeElement).toBe(layers) })
-  })
-
-  it('opens usable scene controls and returns keyboard focus after Escape', async () => {
+describe('floating workspace controls', () => {
+  it('opens the scene on demand and closes a focused float without losing its observable changes', async () => {
+    vi.stubGlobal('innerWidth', 720)
     const { container } = mountLab('magnetic-circular')
     const toggle = screen.getByRole('button', { name: '图层' })
-    expect(toggle.getAttribute('aria-expanded')).toBe('false')
-
+    expect(screen.queryByRole('region', { name: '场景与对象' })).toBeNull()
+    toggle.focus()
     fireEvent.click(toggle)
-    expect(toggle.getAttribute('aria-expanded')).toBe('true')
     const scene = screen.getByRole('region', { name: '场景与对象' })
     expect(scene.id).toBe(toggle.getAttribute('aria-controls'))
     const close = within(scene).getByRole('button', { name: '关闭图层' })
     expect(document.activeElement).toBe(close)
-
-    const velocityLabels = () =>
-      [...container.querySelectorAll('svg text')].filter(node => node.textContent === 'v')
+    const velocityLabels = () => [...container.querySelectorAll('svg text')].filter(node => node.textContent === 'v')
     expect(velocityLabels()).toHaveLength(1)
     fireEvent.click(within(scene).getByRole('button', { name: '速度' }))
     expect(velocityLabels()).toHaveLength(0)
-
-    const lastControl = within(scene).getAllByRole('button').at(-1)!
-    lastControl.focus()
-    fireEvent.keyDown(lastControl, { key: 'Tab' })
-    expect(document.activeElement).toBe(close)
-
-    fireEvent.keyDown(window, { key: 'Escape' })
-    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.keyDown(close, { key: 'Escape' })
+    expect(screen.queryByRole('region', { name: '场景与对象' })).toBeNull()
     await waitFor(() => { expect(document.activeElement).toBe(toggle) })
+    fireEvent.click(toggle)
     expect(velocityLabels()).toHaveLength(0)
+  })
+
+  it('keeps modeless float tab navigation native and restores controls through the toolbar', () => {
+    mountLab('magnetic-circular')
+    fireEvent.click(screen.getByRole('button', { name: '图层' }))
+    const scene = screen.getByRole('region', { name: '场景与对象' })
+    const controls = within(scene).getAllByRole('button')
+    const last = controls.at(-1)!
+    last.focus()
+    expect(fireEvent.keyDown(last, { key: 'Tab' })).toBe(true)
+    fireEvent.click(within(scene).getByRole('button', { name: '收起场景面板' }))
+    expect(screen.queryByRole('region', { name: '场景与对象' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '图层' }))
+    expect(screen.getByRole('region', { name: '场景与对象' })).toBeTruthy()
   })
 })
 

@@ -1,0 +1,3186 @@
+{
+  "schemaVersion": 1,
+  "auditedAt": "2026-11-14",
+  "repository": "/Users/dongsiwei/Desktop/PhysicsOS",
+  "scope": "Read-only audit of existing brand, website, experiment covers, icon components, and adjacent navigation/mascot/docs assets; no application edits or new generation.",
+  "summary": {
+    "fileCount": 105,
+    "totalBytes": 2601611,
+    "counts": {
+      "brand": 3,
+      "developer-docs": 9,
+      "experiment-cover": 78,
+      "product-mascot": 9,
+      "custom-navigation-mask": 3,
+      "website-brand": 1,
+      "website-hero": 1,
+      "vector-icon-components": 1
+    },
+    "bytesByCategory": {
+      "brand": 28823,
+      "developer-docs": 213978,
+      "experiment-cover": 1294482,
+      "product-mascot": 969648,
+      "custom-navigation-mask": 8140,
+      "website-brand": 18901,
+      "website-hero": 39946,
+      "vector-icon-components": 27693
+    },
+    "existingRasterCoverCount": 78,
+    "rasterArtDeclaredCount": 77,
+    "iconCount": 71,
+    "newGeneratedAssetsRequired": 0
+  },
+  "duplicateGroups": [
+    [
+      "overlays/harness/files/apps/web/public/physicsos/brand/physicsos-mark-128.png",
+      "overlays/harness/files/apps/web/public/physicsos/developers/assets/physicsos-mark-128.png",
+      "overlays/harness/files/apps/web/public/physicsos/website/assets/logo.png"
+    ],
+    [
+      "overlays/harness/files/apps/web/public/physicsos/brand/physicsos-mark-32.png",
+      "overlays/harness/files/apps/web/public/physicsos/developers/assets/physicsos-mark-32.png"
+    ]
+  ],
+  "notes": [
+    "All audited rasters decoded successfully; dimensions and hashes are observed values.",
+    "No need for fresh artwork for the currently specified UI. CSS provides glass material; actual experiment engines provide scientific graphics.",
+    "Dynamic and relative references are identified separately from literal URLs. No-reference status alone is not a deletion recommendation.",
+    "Brand logo duplicates may be kept at stable URL paths; do not delete on digest match alone.",
+    "Visual identity/permission/content truth override mockup sample data.",
+    "Audit does not certify licensing beyond preserving current notices or production deployment availability."
+  ],
+  "assets": [
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/brand/physicsos-mark-128.png",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/brand/physicsos-mark-128.png",
+      "bytes": 18901,
+      "sha256": "ed17753fa0b9f7a6d00d2d3259502408302179ab061892e56f2c325104b54d2f",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/PhysicsOSMark.tsx",
+          "kind": "literal-url"
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 128,
+      "height": 128,
+      "format": "PNG",
+      "mode": "RGBA",
+      "hasAlpha": true,
+      "decodable": true,
+      "category": "brand",
+      "assignment": [
+        "app chrome",
+        "login/register",
+        "favicon"
+      ],
+      "recommendation": "128px asset for normal brand mark; 32/64px variants for compact contexts; preserve aspect ratio."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/brand/physicsos-mark-32.png",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/brand/physicsos-mark-32.png",
+      "bytes": 2615,
+      "sha256": "bc2fe57fbbdbfd383772cb7226c7c20c98a3ef2b05fa91a531682eb0d90cd7d4",
+      "references": [],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 32,
+      "height": 32,
+      "format": "PNG",
+      "mode": "RGBA",
+      "hasAlpha": true,
+      "decodable": true,
+      "category": "brand",
+      "assignment": [
+        "app chrome",
+        "login/register",
+        "favicon"
+      ],
+      "recommendation": "128px asset for normal brand mark; 32/64px variants for compact contexts; preserve aspect ratio."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/brand/physicsos-mark-64.png",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/brand/physicsos-mark-64.png",
+      "bytes": 7307,
+      "sha256": "d07a0929219adc51a6914832c0221ff4921810e4aeb5af7962690015e646c3de",
+      "references": [],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 64,
+      "height": 64,
+      "format": "PNG",
+      "mode": "RGBA",
+      "hasAlpha": true,
+      "decodable": true,
+      "category": "brand",
+      "assignment": [
+        "app chrome",
+        "login/register",
+        "favicon"
+      ],
+      "recommendation": "128px asset for normal brand mark; 32/64px variants for compact contexts; preserve aspect ratio."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/developers/assets/mascot-developer-320.webp",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/developers/assets/mascot-developer-320.webp",
+      "bytes": 22154,
+      "sha256": "b63096f1cc389a58c11cc1694eac5bd40ff086d0d2bc62a8c409a375641f07c7",
+      "references": [
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/developers/app.js",
+          "kind": "relative-name-reference"
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 320,
+      "height": 320,
+      "format": "WEBP",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "developer-docs",
+      "assignment": [
+        "developer docs header",
+        "template/studio upload/review/prompt flow"
+      ],
+      "recommendation": "Reuse docs-specific mascot and studio illustrations; preserve public relative paths and download references."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/developers/assets/mascot-developer-640.webp",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/developers/assets/mascot-developer-640.webp",
+      "bytes": 70736,
+      "sha256": "308b1b79fd3265d7b966cb25ed2348d4ad11b1a3b75a061677e0e9783eeefeaf",
+      "references": [
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/developers/app.js",
+          "kind": "relative-name-reference"
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 640,
+      "height": 640,
+      "format": "WEBP",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "developer-docs",
+      "assignment": [
+        "developer docs header",
+        "template/studio upload/review/prompt flow"
+      ],
+      "recommendation": "Reuse docs-specific mascot and studio illustrations; preserve public relative paths and download references."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/developers/assets/physicsos-mark-128.png",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/developers/assets/physicsos-mark-128.png",
+      "bytes": 18901,
+      "sha256": "ed17753fa0b9f7a6d00d2d3259502408302179ab061892e56f2c325104b54d2f",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/PhysicsOSMark.tsx",
+          "kind": "relative-name-reference"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/developers/index.html",
+          "kind": "relative-name-reference"
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 128,
+      "height": 128,
+      "format": "PNG",
+      "mode": "RGBA",
+      "hasAlpha": true,
+      "decodable": true,
+      "category": "developer-docs",
+      "assignment": [
+        "developer docs header",
+        "template/studio upload/review/prompt flow"
+      ],
+      "recommendation": "Reuse docs-specific mascot and studio illustrations; preserve public relative paths and download references."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/developers/assets/physicsos-mark-32.png",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/developers/assets/physicsos-mark-32.png",
+      "bytes": 2615,
+      "sha256": "bc2fe57fbbdbfd383772cb7226c7c20c98a3ef2b05fa91a531682eb0d90cd7d4",
+      "references": [
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/developers/index.html",
+          "kind": "relative-name-reference"
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 32,
+      "height": 32,
+      "format": "PNG",
+      "mode": "RGBA",
+      "hasAlpha": true,
+      "decodable": true,
+      "category": "developer-docs",
+      "assignment": [
+        "developer docs header",
+        "template/studio upload/review/prompt flow"
+      ],
+      "recommendation": "Reuse docs-specific mascot and studio illustrations; preserve public relative paths and download references."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/developers/assets/studio/icon-prompt.webp",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/developers/assets/studio/icon-prompt.webp",
+      "bytes": 7796,
+      "sha256": "d9deff2992e7806932a17c1fa4dc019d03dc50f15b6d57ac306571ad4c884f7e",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminPromptTab.tsx",
+          "kind": "literal-url"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/experiments/ContributionPanel.tsx",
+          "kind": "literal-url"
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 192,
+      "height": 192,
+      "format": "WEBP",
+      "mode": "RGBA",
+      "hasAlpha": true,
+      "decodable": true,
+      "category": "developer-docs",
+      "assignment": [
+        "developer docs header",
+        "template/studio upload/review/prompt flow"
+      ],
+      "recommendation": "Reuse docs-specific mascot and studio illustrations; preserve public relative paths and download references."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/developers/assets/studio/icon-review.webp",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/developers/assets/studio/icon-review.webp",
+      "bytes": 9904,
+      "sha256": "a02307ddc5ab091c01bb5692b9bd76962865c1df78505a3a32d11c0da51a48e0",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminExperimentTab.tsx",
+          "kind": "literal-url"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/experiments/ContributionPanel.tsx",
+          "kind": "literal-url"
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 192,
+      "height": 192,
+      "format": "WEBP",
+      "mode": "RGBA",
+      "hasAlpha": true,
+      "decodable": true,
+      "category": "developer-docs",
+      "assignment": [
+        "developer docs header",
+        "template/studio upload/review/prompt flow"
+      ],
+      "recommendation": "Reuse docs-specific mascot and studio illustrations; preserve public relative paths and download references."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/developers/assets/studio/icon-upload.webp",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/developers/assets/studio/icon-upload.webp",
+      "bytes": 9542,
+      "sha256": "b08e9549c65bc9cc7b8130fd5a3afb1456eda33dab961b6dae7189449bbb7c7e",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/experiments/ContributionPanel.tsx",
+          "kind": "literal-url"
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 192,
+      "height": 192,
+      "format": "WEBP",
+      "mode": "RGBA",
+      "hasAlpha": true,
+      "decodable": true,
+      "category": "developer-docs",
+      "assignment": [
+        "developer docs header",
+        "template/studio upload/review/prompt flow"
+      ],
+      "recommendation": "Reuse docs-specific mascot and studio illustrations; preserve public relative paths and download references."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/developers/assets/studio/mascot-studio-240.webp",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/developers/assets/studio/mascot-studio-240.webp",
+      "bytes": 18962,
+      "sha256": "c32029635b083c228cf9d255c6e5ae07bbc730b83b35b4eea3d24bd3740d26cf",
+      "references": [],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 240,
+      "height": 240,
+      "format": "WEBP",
+      "mode": "RGBA",
+      "hasAlpha": true,
+      "decodable": true,
+      "category": "developer-docs",
+      "assignment": [
+        "developer docs header",
+        "template/studio upload/review/prompt flow"
+      ],
+      "recommendation": "Reuse docs-specific mascot and studio illustrations; preserve public relative paths and download references."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/developers/assets/studio/mascot-studio-480.webp",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/developers/assets/studio/mascot-studio-480.webp",
+      "bytes": 53368,
+      "sha256": "10f4a3a00703661efccd6396420f203403a135cf132e793783fab826a76dc618",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/ContributeWorkspace.tsx",
+          "kind": "literal-url"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/developers/app.js",
+          "kind": "relative-name-reference"
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 480,
+      "height": 480,
+      "format": "WEBP",
+      "mode": "RGBA",
+      "hasAlpha": true,
+      "decodable": true,
+      "category": "developer-docs",
+      "assignment": [
+        "developer docs header",
+        "template/studio upload/review/prompt flow"
+      ],
+      "recommendation": "Reuse docs-specific mascot and studio illustrations; preserve public relative paths and download references."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/apparent-weight.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/apparent-weight.jpg",
+      "bytes": 24730,
+      "sha256": "68da596fed4e05a00a7a28a19e8d1f955b31e7208417d159744fb8506b9daf43",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "apparent-weight",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template apparent-weight"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/atmospheric-pressure.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/atmospheric-pressure.jpg",
+      "bytes": 24757,
+      "sha256": "b0d29f7e2fb304cc6485b09e2d1e33214ac0dfdebfe8f8a3bc48e8ed859c705f",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "atmospheric-pressure",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template atmospheric-pressure"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/average-speed.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/average-speed.jpg",
+      "bytes": 16158,
+      "sha256": "5cad287573ea83dc2269c6627a30f25a619fbb0dc166a1c8fb5870ef8e13b505",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "average-speed",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template average-speed"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/boiling-water.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/boiling-water.jpg",
+      "bytes": 23956,
+      "sha256": "b18680b46767757e79a0fbb759ce41e2cb48aac3f496d21fa1a5050e8495475f",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "boiling-water",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template boiling-water"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/bulb-power.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/bulb-power.jpg",
+      "bytes": 12259,
+      "sha256": "8dcac9d49ec1989ee15ce289a0f371e147124dcabe83ab32deed56f850dba4d5",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "bulb-power",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template bulb-power"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/buoyancy.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/buoyancy.jpg",
+      "bytes": 24333,
+      "sha256": "7448dcf0fdbe661558a2314d2b5b8e719793d6d2c6ba288bf2cf78cebb92d10e",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "buoyancy",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template buoyancy"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/chase-meeting.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/chase-meeting.jpg",
+      "bytes": 19585,
+      "sha256": "416b8a03edbd5356fda42488690458c6883dc0c1dc1a07cc5ba945851c71376d",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "chase-meeting",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template chase-meeting"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/circular-orbit.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/circular-orbit.jpg",
+      "bytes": 19020,
+      "sha256": "19aee7f65ad7153c1a9ff4034ecd16ca6b15f055eb5b8b8ac0600124c689eb7a",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "circular-orbit",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template circular-orbit"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/collision-elastic.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/collision-elastic.jpg",
+      "bytes": 11177,
+      "sha256": "9912ba930dcd3262ed8e1566c225759096cf83b839ad346ebb8965e6c9fd08a6",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "collision-elastic",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template collision-elastic"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/collision-inelastic.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/collision-inelastic.jpg",
+      "bytes": 12381,
+      "sha256": "6a8a03bf81d841726bd18bf47c566a85b7f670ea5d7f71d07c83375d4e5c8795",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "collision-inelastic",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template collision-inelastic"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/collision-perfectly-inelastic.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/collision-perfectly-inelastic.jpg",
+      "bytes": 11412,
+      "sha256": "92ae403ca814acfca9151c20c0992bc7ca8e3f42756db8dd58cf10a2d09762ec",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "collision-perfectly-inelastic",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template collision-perfectly-inelastic"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/composite-eb.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/composite-eb.jpg",
+      "bytes": 14826,
+      "sha256": "da9d9588df4640f9dd7bc34b2fe87e97f73bdcdec948e52cac7fb64fe0019e02",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "composite-eb",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template composite-eb"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/composite-ebg.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/composite-ebg.jpg",
+      "bytes": 12825,
+      "sha256": "2821f87cc7f021d3b6f3e61ce3a55f389683bafe0580c395a02db5cbfc0901cc",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "composite-ebg",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template composite-ebg"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/concave-mirror.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/concave-mirror.jpg",
+      "bytes": 10363,
+      "sha256": "b35f6e9a169dd504a297ab81be74461bacbcb0fac4d665edff4704fc7c8b5b55",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "concave-mirror",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template concave-mirror"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/concurrent-equilibrium.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/concurrent-equilibrium.jpg",
+      "bytes": 21917,
+      "sha256": "fab7811c75415c073b8601ebdfa4b5a8de5eb42214ffc715baabca7669918a2f",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "concurrent-equilibrium",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template concurrent-equilibrium"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/convex-lens.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/convex-lens.jpg",
+      "bytes": 9859,
+      "sha256": "c0406f16ad39d80109904602aa30fae1937c4b4e34c86c32f79e76d36157982c",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "convex-lens",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template convex-lens"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/convex-mirror.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/convex-mirror.jpg",
+      "bytes": 15564,
+      "sha256": "aaa16ff9ac03644225b99749772ead98c625c32a3ea2401e2ec68056dae6c4c2",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "convex-mirror",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template convex-mirror"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/crystal-melting.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/crystal-melting.jpg",
+      "bytes": 15910,
+      "sha256": "aa05a37fbe3a41d04b32d69efdb9c7664d610d79ba87ac31b18fbc7cfd2985ac",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "crystal-melting",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template crystal-melting"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/cyclotron.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/cyclotron.jpg",
+      "bytes": 21335,
+      "sha256": "ad2106f89f5127454357d4d957e97e5c4f0134a347717ab934b848c8381a6400",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "cyclotron",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template cyclotron"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/echo-ranging.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/echo-ranging.jpg",
+      "bytes": 16580,
+      "sha256": "16995d854d6858e3d1133ced82277fa87adf7e9e3ec5156f5bb4e2b8f2f383af",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "echo-ranging",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template echo-ranging"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/electromagnet.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/electromagnet.jpg",
+      "bytes": 22937,
+      "sha256": "524f9263116497fd5067271868686ff32deab4f5d324038bd2e1b0c019bb50cc",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "electromagnet",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template electromagnet"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/emf-measurement.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/emf-measurement.jpg",
+      "bytes": 15696,
+      "sha256": "fc69727d7bcf109817d6ebe527c29dba0fa66e1a8891e2be3f3e0064c39a9793",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "emf-measurement",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template emf-measurement"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/force-composition.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/force-composition.jpg",
+      "bytes": 18622,
+      "sha256": "3a472bf8a89a9ec613cb6b14764c446d6241d80053bc641c972dd90b127ab8f1",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "force-composition",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template force-composition"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/friction-mu.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/friction-mu.jpg",
+      "bytes": 23256,
+      "sha256": "930b51ba6205b1cb45434a6fb7197ffdf471b04a8c3e848d8794c0faf7882e98",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "friction-mu",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template friction-mu"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/friction-static.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/friction-static.jpg",
+      "bytes": 20946,
+      "sha256": "deef91a719ac38a5a35b7da916a12b58658d2c89dedcca7807a2fac4fa670d37",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "friction-static",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template friction-static"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/heat-capacity-comparison.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/heat-capacity-comparison.jpg",
+      "bytes": 14825,
+      "sha256": "d48367a2d61b568da6ae3fc256679878725c32a28db90fccce3ca1735133b2c4",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "heat-capacity-comparison",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template heat-capacity-comparison"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/hooke-law.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/hooke-law.jpg",
+      "bytes": 21058,
+      "sha256": "b86ae888fe5f115a7ef5adb3b65d42ecdc60fddaf3e3b7b85caedb6f81516af7",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "hooke-law",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template hooke-law"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/incline.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/incline.jpg",
+      "bytes": 19125,
+      "sha256": "27085d5bf0cdee834ab29c36f4bc4ceed3f42164dfde5c0dd91d11267907a9eb",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "incline",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template incline"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/induction-bar-motion.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/induction-bar-motion.jpg",
+      "bytes": 13967,
+      "sha256": "c1db3da26c7d638ea2f410205778c399b607115eec842c529945de33d8e20062",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "induction-bar-motion",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template induction-bar-motion"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/induction-double-bar-force.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/induction-double-bar-force.jpg",
+      "bytes": 11062,
+      "sha256": "66e281bb8a958cc49493a24c6895ac1a3214220c2e6de59f4d57bef7a656d71a",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "induction-double-bar-force",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template induction-double-bar-force"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/induction-double-bar-momentum.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/induction-double-bar-momentum.jpg",
+      "bytes": 12067,
+      "sha256": "9669d3496405b1d62f22b0ea99521a6d1e8aef71f3b46e47072be7e3f452d783",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "induction-double-bar-momentum",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template induction-double-bar-momentum"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/induction-flux-change.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/induction-flux-change.jpg",
+      "bytes": 17689,
+      "sha256": "9aa9f99516e2ad3765244d8955004e1ba2bc7341bbb010745d90ffae392193a5",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "induction-flux-change",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template induction-flux-change"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/lab.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/lab.jpg",
+      "bytes": 20882,
+      "sha256": "5bf2b191a28e85d0e8371d1221d5a3039816c2118b2e5808e48dbca56a136a34",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "lab",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template lab"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/lever-balance.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/lever-balance.jpg",
+      "bytes": 10816,
+      "sha256": "5eb8d6f081808924d91306be7e1173be93ae641a34722962827293f0ac4d0548",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "lever-balance",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template lever-balance"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/liquid-pressure.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/liquid-pressure.jpg",
+      "bytes": 21317,
+      "sha256": "f0e0543c9514bbc9b4752593a38e450646024bb33f5faba2dcc34dbb2dc8cfde",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "liquid-pressure",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template liquid-pressure"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/magnetic-circular.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/magnetic-circular.jpg",
+      "bytes": 10283,
+      "sha256": "d4e702cf1b26998f86ae502f485aeaf9d80f13510803245c075253f974dd11e5",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "magnetic-circular",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template magnetic-circular"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/mass-spectrometer.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/mass-spectrometer.jpg",
+      "bytes": 14368,
+      "sha256": "1703f61797434b1be7cae55d52f97f550297f150ec2e15be1d9d9f3b393db09a",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "mass-spectrometer",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template mass-spectrometer"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/mechanical-energy.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/mechanical-energy.jpg",
+      "bytes": 18132,
+      "sha256": "b0dbc42c7009392230dae8f0f021110431791e540c7eca90d6ae1e1f4bf31e03",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "mechanical-energy",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template mechanical-energy"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/mixed-circuit.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/mixed-circuit.jpg",
+      "bytes": 11391,
+      "sha256": "372491bd26a84ebdab9a199184eb2a23a9b530c8f8bdc48fe1fe4e975ffd199e",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "mixed-circuit",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template mixed-circuit"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/motor.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/motor.jpg",
+      "bytes": 20764,
+      "sha256": "679249ca5b0636bc79d1d91f38dca9f4bd51c2b4bbda49c2f87c869070482d11",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "motor",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template motor"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/multi-point-charge.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/multi-point-charge.jpg",
+      "bytes": 12083,
+      "sha256": "48eb7da60b15a49f35cfef756da9737f518785d2091f89dd43601656ff09e392",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "multi-point-charge",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template multi-point-charge"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/multi-region-field.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/multi-region-field.jpg",
+      "bytes": 11700,
+      "sha256": "eb4323fe9bb37f76e6d71579f11029d2f53c6f709988731da443c9ee3b3302b6",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "multi-region-field",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template multi-region-field"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/newton-second-law.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/newton-second-law.jpg",
+      "bytes": 7855,
+      "sha256": "c466f11392627a3b62bab992c2aaceee0d46a3d680f94fe1aadbc3a5a58bf075",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "newton-second-law",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template newton-second-law"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/noise.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/noise.jpg",
+      "bytes": 19143,
+      "sha256": "889aa6ef1316704e4a260c38a64e218b615d14becba2f07ee6d6635ba378c453",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "noise",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template noise"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/parallel-circuit.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/parallel-circuit.jpg",
+      "bytes": 12046,
+      "sha256": "0ca23162cf71dbd471596263f346ad495452a85d03a57a7e2a4f3e3b5044a5e4",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "parallel-circuit",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template parallel-circuit"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/parallel-plate.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/parallel-plate.jpg",
+      "bytes": 14858,
+      "sha256": "d4e31cde2c736ee12a28fec9c77e9ef144e82576309e5238db6db5643294a3e5",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "parallel-plate",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template parallel-plate"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/photoelectric-effect.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/photoelectric-effect.jpg",
+      "bytes": 19487,
+      "sha256": "841bee94df05c7e126a703c6a2dca91819186e3a36f64377040880060ca316d1",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "photoelectric-effect",
+          "listed": false
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template photoelectric-effect"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/pinhole.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/pinhole.jpg",
+      "bytes": 18650,
+      "sha256": "c22efa906c68b0aab6332594bbb1e0ee56646b5d4792713eab1f7ac6186724c7",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "pinhole",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template pinhole"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/plane-mirror.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/plane-mirror.jpg",
+      "bytes": 11221,
+      "sha256": "ac069df37c5ea3e6aea1d5d16bdc79e2abf3ff026900994e2afa4307892ae324",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "plane-mirror",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template plane-mirror"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/point-charge.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/point-charge.jpg",
+      "bytes": 11769,
+      "sha256": "13f3cef4addead4257641860bf0a763fcd120c3d7ea7f2246c41126df1b01ffb",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "point-charge",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template point-charge"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/projectile-horizontal.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/projectile-horizontal.jpg",
+      "bytes": 8998,
+      "sha256": "9bd0fddf3b6bdff2b93228948f6a8c30c25525044dd46a365dc1bf24e6b8a53b",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "projectile-horizontal",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template projectile-horizontal"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/projectile-oblique.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/projectile-oblique.jpg",
+      "bytes": 8517,
+      "sha256": "4f63465d0417fe85810e1e88ec097f8e12c65e10d0372febe5909a36c0affb31",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "projectile-oblique",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template projectile-oblique"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/question.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/question.jpg",
+      "bytes": 16085,
+      "sha256": "9bdbbd8f8a7771bf6101f0fe35418f96d07ef0d02277883e26190953c7cfb323",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "question",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "question fallback"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/ramp-friction.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/ramp-friction.jpg",
+      "bytes": 22006,
+      "sha256": "70f81ba426ad2743569189be9f497e536925863c9e1ec260718a9a0391752317",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "ramp-friction",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template ramp-friction"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/rheostat-circuit.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/rheostat-circuit.jpg",
+      "bytes": 15382,
+      "sha256": "c8856f16254eb2e11dd9f0a9bc40cdd54e6b4f5895c70d5311e8db051b43bceb",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "rheostat-circuit",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template rheostat-circuit"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/series-circuit.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/series-circuit.jpg",
+      "bytes": 13635,
+      "sha256": "1b857ef751207721d392f28292ff0764cba9d08d5cbde758de1f5cc804babaa5",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "series-circuit",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template series-circuit"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/short-circuit.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/short-circuit.jpg",
+      "bytes": 19894,
+      "sha256": "092d5cfece2ac976c1dac409aa1d469f5b5271dedb0351b7e9e63d6699c23808",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "short-circuit",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template short-circuit"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/simple-pendulum.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/simple-pendulum.jpg",
+      "bytes": 17142,
+      "sha256": "c6957a82d11d2612573769ccbcca29a6127396c78241275077a3f2499eacd197",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "simple-pendulum",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template simple-pendulum"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/solenoid-field.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/solenoid-field.jpg",
+      "bytes": 27206,
+      "sha256": "559bde56a6a6a6cdc7236ba691faf46e3886367e3bf12b7b3f8370f7007a415a",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "solenoid-field",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template solenoid-field"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/solid-pressure.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/solid-pressure.jpg",
+      "bytes": 16510,
+      "sha256": "93d2544f14a1e73eb0295a99ae45db55a795911c2bf8a5b55df2a10a909263ee",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "solid-pressure",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template solid-pressure"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/spring-oscillator.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/spring-oscillator.jpg",
+      "bytes": 20532,
+      "sha256": "5f0dfb8c2e3b0f8f6bb3f5294f246a152a19477f07ae156eade662df64bab5ca",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "spring-oscillator",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template spring-oscillator"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/straight-wire-field.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/straight-wire-field.jpg",
+      "bytes": 20597,
+      "sha256": "8de3c1ef4a5f56696c99344f7db27fd5a89e6866b92e84e0fcbe2cc7118ba0dd",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "straight-wire-field",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template straight-wire-field"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/thermometer.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/thermometer.jpg",
+      "bytes": 16487,
+      "sha256": "b0543dd69ff6428fc1a45713d0a620c5eaee17808a02fd8b8015ccf1eea0d527",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "thermometer",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template thermometer"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/total-reflection.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/total-reflection.jpg",
+      "bytes": 20561,
+      "sha256": "6cecdd81283a22a5a13703ec2913f5f21d661315f6eb25e4531821322dd2fbfc",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "total-reflection",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template total-reflection"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/transformer.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/transformer.jpg",
+      "bytes": 25299,
+      "sha256": "db42d4274e90a6e200251ebb8d579fb0cef314c81133ecb1abedd03f1479e0d8",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "transformer",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template transformer"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/uniform-acceleration.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/uniform-acceleration.jpg",
+      "bytes": 9025,
+      "sha256": "dfcb00f32cd4e9fa4e85f0bde965e89b69d5b0813086875e113299d27bed89d3",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "uniform-acceleration",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template uniform-acceleration"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/uniform-electric.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/uniform-electric.jpg",
+      "bytes": 9118,
+      "sha256": "d997f3ba99a35a42dc1a3a4ced3815010a8eeb20197f0d2d3854dccf07f7964c",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "uniform-electric",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template uniform-electric"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/uniform-linear.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/uniform-linear.jpg",
+      "bytes": 9397,
+      "sha256": "fd0bb68f391466f139ad25485d7ec2491d69db26a5fb66e2e82c0bf76580b812",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "uniform-linear",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template uniform-linear"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/va-resistance.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/va-resistance.jpg",
+      "bytes": 12629,
+      "sha256": "71fcc93bd9d521f510536023fbc1057c5c53e6d642cf69f0aa4fd098cf0417b2",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "va-resistance",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template va-resistance"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/velocity-selector.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/velocity-selector.jpg",
+      "bytes": 11409,
+      "sha256": "71cba1f76ae86977e3fa7255d2c0d92b0e60764d26d764a42e56bc6c96c07ed1",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "velocity-selector",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template velocity-selector"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/vt-area.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/vt-area.jpg",
+      "bytes": 21486,
+      "sha256": "3507fb1edf871647168f700e32c77f2e39dccfe03011ce4c58ce00e0e3749502",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "vt-area",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template vt-area"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/wave-diffraction.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/wave-diffraction.jpg",
+      "bytes": 34265,
+      "sha256": "7a6764e618e1cc9513388b625b226a61555f62a7d3519cf68d61823114dfb9ea",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "wave-diffraction",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template wave-diffraction"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/wave-doppler.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/wave-doppler.jpg",
+      "bytes": 23473,
+      "sha256": "006a03c1916c1610280bbaa36f286b2dc703429b59e7414008d9f11742e4049d",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "wave-doppler",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template wave-doppler"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/wave-interference.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/wave-interference.jpg",
+      "bytes": 14359,
+      "sha256": "fe7cdac2e7ab4156864c106bb50a90a12ff988bd7d70bb7fdfabda2b66353e07",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "wave-interference",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template wave-interference"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/wave-longitudinal.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/wave-longitudinal.jpg",
+      "bytes": 19207,
+      "sha256": "0f04c84037b6b0a45e5fd49e34ac0b3595d86082ff6c8480c383324486c12313",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "wave-longitudinal",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template wave-longitudinal"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/wave-reflection-refraction.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/wave-reflection-refraction.jpg",
+      "bytes": 21723,
+      "sha256": "eda1974d76828d631b0a728426cfdf73aa6c458f551e578769faae482a152332",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "wave-reflection-refraction",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template wave-reflection-refraction"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/wave-standing.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/wave-standing.jpg",
+      "bytes": 10660,
+      "sha256": "52713b9074be5a1e80d7e9d8e0eded96e4613731370ceef1b3a6b25541d30561",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "wave-standing",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template wave-standing"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/experiment-art/wave-travelling.jpg",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/experiment-art/wave-travelling.jpg",
+      "bytes": 11918,
+      "sha256": "f490d04dec4bce20240614e1d3ed32b95a78bb272402da24b3188e06ff6e6ba9",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-artwork.tsx",
+          "kind": "dynamic-template-key",
+          "key": "wave-travelling",
+          "listed": true
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 512,
+      "height": 512,
+      "format": "JPEG",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "experiment-cover",
+      "assignment": [
+        "experiment centre cards",
+        "library cards",
+        "matching template wave-travelling"
+      ],
+      "recommendation": "Use ExperimentArt existing template mapping and SVG load-failure fallback; decorative cover only, never substitute for actual engine output."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/mascot/mascot-search-160.webp",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/mascot/mascot-search-160.webp",
+      "bytes": 17650,
+      "sha256": "a998d4bd9674f3abd2662617bc83037226c34e5dbf0d18646ff063fbd34269c3",
+      "references": [],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 141,
+      "height": 160,
+      "format": "WEBP",
+      "mode": "RGBA",
+      "hasAlpha": true,
+      "decodable": true,
+      "category": "product-mascot",
+      "assignment": [
+        "search/empty state"
+      ],
+      "recommendation": "Reuse nearest appropriate resolution for visible size; keep existing stylistic role distinct from glass website mascot."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/mascot/mascot-search-320.webp",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/mascot/mascot-search-320.webp",
+      "bytes": 66076,
+      "sha256": "8151f15b7b6743d18507a5e897424daf1ba9f936a4497a3d78627a564e5165c7",
+      "references": [],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 282,
+      "height": 320,
+      "format": "WEBP",
+      "mode": "RGBA",
+      "hasAlpha": true,
+      "decodable": true,
+      "category": "product-mascot",
+      "assignment": [
+        "search/empty state"
+      ],
+      "recommendation": "Reuse nearest appropriate resolution for visible size; keep existing stylistic role distinct from glass website mascot."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/mascot/mascot-search-640.webp",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/mascot/mascot-search-640.webp",
+      "bytes": 237294,
+      "sha256": "41d3a821201caab4e6a0f3c77d25cee960e712d1b00ac3b5182f68abb5b10c1b",
+      "references": [],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 564,
+      "height": 640,
+      "format": "WEBP",
+      "mode": "RGBA",
+      "hasAlpha": true,
+      "decodable": true,
+      "category": "product-mascot",
+      "assignment": [
+        "search/empty state"
+      ],
+      "recommendation": "Reuse nearest appropriate resolution for visible size; keep existing stylistic role distinct from glass website mascot."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/mascot/mascot-think-160.webp",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/mascot/mascot-think-160.webp",
+      "bytes": 15142,
+      "sha256": "5faef2a1385218da23f5d03943efd9c5524e03fd086106d0cf54b92b18619965",
+      "references": [],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 114,
+      "height": 160,
+      "format": "WEBP",
+      "mode": "RGBA",
+      "hasAlpha": true,
+      "decodable": true,
+      "category": "product-mascot",
+      "assignment": [
+        "thinking/loading state"
+      ],
+      "recommendation": "Reuse nearest appropriate resolution for visible size; keep existing stylistic role distinct from glass website mascot."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/mascot/mascot-think-320.webp",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/mascot/mascot-think-320.webp",
+      "bytes": 60650,
+      "sha256": "859c87f31918fb44816de761f5ec4607f415ee0b7bb8905ea82a6e3757275cbb",
+      "references": [],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 228,
+      "height": 320,
+      "format": "WEBP",
+      "mode": "RGBA",
+      "hasAlpha": true,
+      "decodable": true,
+      "category": "product-mascot",
+      "assignment": [
+        "thinking/loading state"
+      ],
+      "recommendation": "Reuse nearest appropriate resolution for visible size; keep existing stylistic role distinct from glass website mascot."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/mascot/mascot-think-640.webp",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/mascot/mascot-think-640.webp",
+      "bytes": 230256,
+      "sha256": "f60d0555d3a13228770ac271bae40b400ecd6a3853773cd8f80e6a4a1287baf8",
+      "references": [],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 457,
+      "height": 640,
+      "format": "WEBP",
+      "mode": "RGBA",
+      "hasAlpha": true,
+      "decodable": true,
+      "category": "product-mascot",
+      "assignment": [
+        "thinking/loading state"
+      ],
+      "recommendation": "Reuse nearest appropriate resolution for visible size; keep existing stylistic role distinct from glass website mascot."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/mascot/mascot-wave-160.webp",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/mascot/mascot-wave-160.webp",
+      "bytes": 16664,
+      "sha256": "3d4c00f874cd25a87b407329ef0e59ce83032df1d56aa0f064e6f2f706a13b65",
+      "references": [],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 127,
+      "height": 160,
+      "format": "WEBP",
+      "mode": "RGBA",
+      "hasAlpha": true,
+      "decodable": true,
+      "category": "product-mascot",
+      "assignment": [
+        "welcome/onboarding"
+      ],
+      "recommendation": "Reuse nearest appropriate resolution for visible size; keep existing stylistic role distinct from glass website mascot."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/mascot/mascot-wave-320.webp",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/mascot/mascot-wave-320.webp",
+      "bytes": 67242,
+      "sha256": "4961adec6bddae01c95e69040c23791682120c719c35574d9b22b7d6cdad5707",
+      "references": [],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 254,
+      "height": 320,
+      "format": "WEBP",
+      "mode": "RGBA",
+      "hasAlpha": true,
+      "decodable": true,
+      "category": "product-mascot",
+      "assignment": [
+        "welcome/onboarding"
+      ],
+      "recommendation": "Reuse nearest appropriate resolution for visible size; keep existing stylistic role distinct from glass website mascot."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/mascot/mascot-wave-640.webp",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/mascot/mascot-wave-640.webp",
+      "bytes": 258674,
+      "sha256": "99e0d93b5a3e6974949c7accc1481ec5ff4b436cdb651e43e8d45cc74cae0e0d",
+      "references": [],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 509,
+      "height": 640,
+      "format": "WEBP",
+      "mode": "RGBA",
+      "hasAlpha": true,
+      "decodable": true,
+      "category": "product-mascot",
+      "assignment": [
+        "welcome/onboarding"
+      ],
+      "recommendation": "Reuse nearest appropriate resolution for visible size; keep existing stylistic role distinct from glass website mascot."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/navigation/canvas.png",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/navigation/canvas.png",
+      "bytes": 3765,
+      "sha256": "2d12aafb09d44db569a07b6cd127278d15010f6fde23d24fbd15a67948bd3d80",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/SidebarNav.module.css",
+          "kind": "literal-url"
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 128,
+      "height": 128,
+      "format": "PNG",
+      "mode": "RGBA",
+      "hasAlpha": true,
+      "decodable": true,
+      "category": "custom-navigation-mask",
+      "assignment": [
+        "canvas navigation action"
+      ],
+      "recommendation": "Retain distinct user-selected PNG mask semantics. Use CSS currentColor masking and accessible button labels."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/navigation/projects.png",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/navigation/projects.png",
+      "bytes": 1617,
+      "sha256": "2c0e25bc2313f09d7dfe4a35f7fc457de4280287ceb5deaaa75a13f3f8e94989",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/SidebarNav.module.css",
+          "kind": "literal-url"
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 128,
+      "height": 128,
+      "format": "PNG",
+      "mode": "RGBA",
+      "hasAlpha": true,
+      "decodable": true,
+      "category": "custom-navigation-mask",
+      "assignment": [
+        "projects navigation action"
+      ],
+      "recommendation": "Retain distinct user-selected PNG mask semantics. Use CSS currentColor masking and accessible button labels."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/navigation/whiteboard.png",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/navigation/whiteboard.png",
+      "bytes": 2758,
+      "sha256": "e327dbff42979d222d6a1ae6a427363bd0542793f00fe1d5ac9a0b900a0a9818",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/SidebarNav.module.css",
+          "kind": "literal-url"
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 128,
+      "height": 128,
+      "format": "PNG",
+      "mode": "RGBA",
+      "hasAlpha": true,
+      "decodable": true,
+      "category": "custom-navigation-mask",
+      "assignment": [
+        "whiteboard navigation action"
+      ],
+      "recommendation": "Retain distinct user-selected PNG mask semantics. Use CSS currentColor masking and accessible button labels."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/website/assets/logo.png",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/website/assets/logo.png",
+      "bytes": 18901,
+      "sha256": "ed17753fa0b9f7a6d00d2d3259502408302179ab061892e56f2c325104b54d2f",
+      "references": [
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/website/index.html",
+          "kind": "literal-url"
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 128,
+      "height": 128,
+      "format": "PNG",
+      "mode": "RGBA",
+      "hasAlpha": true,
+      "decodable": true,
+      "category": "website-brand",
+      "assignment": [
+        "official website navigation/footer/favicon"
+      ],
+      "recommendation": "Reuse current public logo; retain brand identity."
+    },
+    {
+      "path": "overlays/harness/files/apps/web/public/physicsos/website/assets/mascot-glass.webp",
+      "source": "existing-repository-asset",
+      "url": "/physicsos/website/assets/mascot-glass.webp",
+      "bytes": 39946,
+      "sha256": "9f85e7bf6b5b1457ca063a110ad4d40f6edf83d1014a6e47608a1f07fac9c900",
+      "references": [
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/website/index.html",
+          "kind": "literal-url"
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "width": 800,
+      "height": 800,
+      "format": "WEBP",
+      "mode": "RGB",
+      "hasAlpha": false,
+      "decodable": true,
+      "category": "website-hero",
+      "assignment": [
+        "official website hero",
+        "website CTA"
+      ],
+      "recommendation": "Reuse existing glass mascot on light backdrop; RGB white background is not transparency."
+    },
+    {
+      "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/icons/physics-icons.tsx",
+      "source": "existing-repository-asset",
+      "url": null,
+      "bytes": 27693,
+      "sha256": "c6e89c69363d78d45c53ab2b1dc40c2b9b824688ba6eee2e29e39f14d59d930a",
+      "references": [
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/ContributeWorkspace.tsx",
+          "kind": "import"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/SidebarPanels.tsx",
+          "kind": "import"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/VerifiedResult.tsx",
+          "kind": "import"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminOpsPanel.tsx",
+          "kind": "import"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/ExperimentPicker.tsx",
+          "kind": "import"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/PhysicsWorkspace.tsx",
+          "kind": "import"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/SidebarNav.tsx",
+          "kind": "import"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/SceneChatCard.tsx",
+          "kind": "import"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/RecentSpaces.tsx",
+          "kind": "import"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/LibraryWorkspace.tsx",
+          "kind": "import"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/workspace-parts.tsx",
+          "kind": "import"
+        },
+        {
+          "path": "overlays/harness/files/packages/client/ui-physicsos/src/client/HomeActions.tsx",
+          "kind": "import"
+        }
+      ],
+      "decision": "reuse",
+      "licenseDecision": "retain-existing-repository-notices; no new license claim",
+      "category": "vector-icon-components",
+      "width": 24,
+      "height": 24,
+      "format": "TSX/SVG",
+      "exportedIcons": [
+        "IconPhysicsLab",
+        "IconQuestionSheet",
+        "IconAnnouncement",
+        "IconChatBubble",
+        "IconArchive",
+        "IconDisk",
+        "IconHealth",
+        "IconCache",
+        "IconRefresh",
+        "IconDatabase",
+        "IconKinematics",
+        "IconVelocity",
+        "IconCollision",
+        "IconAcceleration",
+        "IconTrajectory",
+        "IconGravity",
+        "IconForce",
+        "IconNetForce",
+        "IconNewtonLaw",
+        "IconProjectileHorizontal",
+        "IconProjectileOblique",
+        "IconInclinedPlane",
+        "IconFriction",
+        "IconSpring",
+        "IconPendulum",
+        "IconNormalForce",
+        "IconPointCharge",
+        "IconUniformElectric",
+        "IconParallelPlate",
+        "IconMagneticCircle",
+        "IconVelocitySelector",
+        "IconMassSpectrometer",
+        "IconCompositeField",
+        "IconCircuitSeries",
+        "IconCircuitParallel",
+        "IconRheostat",
+        "IconEmfMeasure",
+        "IconBulb",
+        "IconLever",
+        "IconBuoyancy",
+        "IconPlaneMirror",
+        "IconConvexLens",
+        "IconConcaveMirror",
+        "IconConvexMirror",
+        "IconCrystalMelting",
+        "IconHeatCapacity",
+        "IconEchoRanging",
+        "IconInductionBar",
+        "IconInductionCoil",
+        "IconWaveRope",
+        "IconWaveInterference",
+        "IconStandingWave",
+        "IconTime",
+        "IconTimeline",
+        "IconChart",
+        "IconMeasurement",
+        "IconVerified",
+        "IconUnverified",
+        "IconComputed",
+        "IconVerifiedStrong",
+        "IconScene",
+        "IconObservable",
+        "IconVariable",
+        "IconKeyPoint",
+        "IconGround",
+        "IconLibrary",
+        "IconContribution",
+        "IconPhysicsPlay",
+        "IconPhysicsPause",
+        "IconPhysicsReset",
+        "IconPhysicsStep"
+      ],
+      "assignment": [
+        "all 16–24px product controls",
+        "navigation except retained custom masks",
+        "experiment inspector",
+        "admin status/actions"
+      ],
+      "recommendation": "Use currentColor, existing optical stroke and accessible labels on buttons. Do not rasterize or crop design mockup glyphs."
+    }
+  ]
+}

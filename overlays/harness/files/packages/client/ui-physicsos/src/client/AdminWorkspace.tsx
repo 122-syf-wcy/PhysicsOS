@@ -30,6 +30,7 @@ import type { ModelPoolApi } from './model-pool-api.ts'
 import type { UsageApi } from './usage-api.ts'
 import { UsageWorkspace } from './UsageWorkspace.tsx'
 import { GlassSelect } from './GlassSelect.tsx'
+import { IconAnnouncement, IconArchive, IconChart, IconChatBubble, IconComputed, IconLibrary, IconScene, IconVerified } from './icons/physics-icons.tsx'
 import {
   AdminCard,
   AdminCardActions,
@@ -38,6 +39,7 @@ import {
   AdminCardTitle,
   AdminEmpty,
   AdminPage,
+  AdminTable,
   AdminToolbar,
 } from './AdminPrimitives.tsx'
 import css from './AdminWorkspace.module.css'
@@ -139,6 +141,14 @@ export function AdminWorkspace({
   const fallback = tabs[0]
   if (fallback === undefined) throw new Error('AdminWorkspace: no tab is visible for this role')
   const active = tabs.some(item => item.id === tab) ? tab : fallback.id
+  const navigationIcons: Record<Tab, ReactNode> = {
+    overview: <IconChart size={18} />, requests: <IconLibrary size={18} />,
+    schools: <IconLibrary size={18} />, users: <IconScene size={18} />,
+    experimentReview: <IconVerified size={18} />, feedback: <IconAnnouncement size={18} />,
+    website: <IconArchive size={18} />, moderation: <IconChatBubble size={18} />,
+    modelPool: <IconComputed size={18} />,
+  }
+  const navigationTabs = tabs.map(item => ({ ...item, icon: navigationIcons[item.id] }))
 
   /* Empty groups drop out, so a school admin never sees a heading with
      nothing under it. */
@@ -150,7 +160,7 @@ export function AdminWorkspace({
   ] as const).map(spec => ({
     key: spec.key,
     label: spec.label,
-    tabs: tabs.filter(item => item.group === spec.key),
+    tabs: navigationTabs.filter(item => item.group === spec.key),
   }))
 
   return (
@@ -158,7 +168,7 @@ export function AdminWorkspace({
       <AdminPage
         key={`${principal?.id}:${principal?.schoolId}:${role}`}
         title={t('admin.title')}
-        tabs={tabs}
+        tabs={navigationTabs}
         activeTab={active}
         onTabChange={setTab}
         groups={groups}
@@ -246,6 +256,7 @@ const Field = ({ label, children }: { label: string; children: ReactNode }) => (
 function RequestsTab({ api, t }: { api: AdminApi; t: (key: PhysicsosKey) => string }) {
   const { data, error, reload } = useLoad(
     () => api.listSchoolRequests('pending').then(r => r.requests), [api])
+  const [selectedRequest, setSelectedRequest] = useState<string>()
   const [form, setForm] = useState<Record<string, string>>({})
   const [expanded, setExpanded] = useState<string | undefined>()
   const [busy, setBusy] = useState<string | undefined>()
@@ -296,8 +307,19 @@ function RequestsTab({ api, t }: { api: AdminApi; t: (key: PhysicsosKey) => stri
   return (
     <>
       {note !== undefined && <p className={css.error}>{note}</p>}
-      {data.map((request: SchoolRequestRow) => (
-        <AdminCard key={request.id}>
+      <h2 className={css.sectionTitle}>{t('admin.tab.requests')}</h2>
+      <div className={css.detailLayout}>
+        <section className={css.detailList}>
+          <AdminTable minWidth={520}>
+            <thead><tr><th>{t('admin.schools.field.name')}</th><th>{t('admin.contact')}</th><th>{t('admin.requestedBy')}</th><th>{t('admin.audit.time')}</th><th>{t('admin.users.actions')}</th></tr></thead>
+            <tbody>{data.map(request => <tr key={request.id} data-selected={request.id === (data.find(item => item.id === selectedRequest)?.id ?? data[0]?.id) || undefined}>
+              <td><button type="button" className={css.tableLink} onClick={() => { setSelectedRequest(request.id); setExpanded(undefined) }}>{request.schoolName}</button></td><td>{request.contact}</td><td>{request.requestedBy ?? t('admin.anonymous')}</td><td className={css.timeCell}>{fmtTime(request.createdAt)}</td>
+              <td><button type="button" className={css.ghost} onClick={() => { setSelectedRequest(request.id); setExpanded(undefined) }}>{t('admin.users.select')}</button></td>
+            </tr>)}</tbody>
+          </AdminTable>
+        </section>
+      {data.filter(request => request.id === (data.find(item => item.id === selectedRequest)?.id ?? data[0]?.id)).map((request: SchoolRequestRow) => (
+        <AdminCard key={request.id} className={css.detailPane}>
           <AdminCardHead>
             <div>
               <AdminCardTitle>{request.schoolName}</AdminCardTitle>
@@ -372,6 +394,7 @@ function RequestsTab({ api, t }: { api: AdminApi; t: (key: PhysicsosKey) => stri
           )}
         </AdminCard>
       ))}
+      </div>
     </>
   )
 }
@@ -398,8 +421,9 @@ function SchoolsTab({ api, t }: { api: AdminApi; t: (key: PhysicsosKey) => strin
   return (
     <>
       {note !== undefined && <p className={css.error}>{note}</p>}
-      <AdminCard>
-        <AdminCardTitle>{t('admin.schools.create')}</AdminCardTitle>
+      <h2 className={css.sectionTitle}>{t('admin.tab.schools')}</h2>
+      <details className={css.createDisclosure}>
+        <summary>{t('admin.schools.create')}</summary>
         <div className={css.formRow}>
           <input className={css.input} placeholder={t('admin.schools.field.id')}
             value={form.id} onChange={(e) => { setForm(f => ({ ...f, id: e.target.value })) }} />
@@ -420,33 +444,18 @@ function SchoolsTab({ api, t }: { api: AdminApi; t: (key: PhysicsosKey) => strin
             {t('admin.confirm.submit')}
           </button>
         </div>
-      </AdminCard>
+      </details>
       {data.length === 0 && <AdminEmpty>{t('admin.empty')}</AdminEmpty>}
-      {data.map(school => (
-        <AdminCard key={school.id}>
-          <AdminCardHead>
-            <div>
-              <AdminCardTitle>{school.name}</AdminCardTitle>
-              <AdminCardMeta>
-                {school.id}{school.shortName === undefined ? '' : ` · ${school.shortName}`}
-                {' · '}{school.status === 'active' ? t('admin.schools.status.active') : t('admin.schools.status.disabled')}
-              </AdminCardMeta>
-            </div>
-            <button
-              type="button"
-              className={school.status === 'active' ? css.danger : css.ghost}
-              onClick={() => {
-                setNote(undefined)
-                api.setSchoolStatus(school.id, school.status === 'active' ? 'disabled' : 'active')
-                  .then(reload)
-                  .catch((reason: unknown) => { setNote(reason instanceof Error ? reason.message : String(reason)) })
-              }}
-            >
-              {school.status === 'active' ? t('admin.schools.disable') : t('admin.schools.enable')}
-            </button>
-          </AdminCardHead>
-        </AdminCard>
-      ))}
+      {data.length > 0 && <AdminTable minWidth={540}>
+        <thead><tr><th>{t('admin.schools.field.name')}</th><th>{t('admin.schools.field.id')}</th><th>{t('admin.requests.field.shortName')}</th><th>{t('admin.users.status')}</th><th>{t('admin.users.actions')}</th></tr></thead>
+        <tbody>{data.map(school => <tr key={school.id}>
+          <td>{school.name}</td><td><code>{school.id}</code></td><td>{school.shortName ?? '—'}</td><td><span className={school.status === 'active' ? css.badgeActive : css.badgeRevoked}>{t(school.status === 'active' ? 'admin.schools.status.active' : 'admin.schools.status.disabled')}</span></td>
+          <td><button type="button" className={school.status === 'active' ? css.danger : css.ghost} onClick={() => {
+            setNote(undefined)
+            api.setSchoolStatus(school.id, school.status === 'active' ? 'disabled' : 'active').then(reload).catch((reason: unknown) => { setNote(reason instanceof Error ? reason.message : String(reason)) })
+          }}>{t(school.status === 'active' ? 'admin.schools.disable' : 'admin.schools.enable')}</button></td>
+        </tr>)}</tbody>
+      </AdminTable>}
     </>
   )
 }
@@ -457,180 +466,101 @@ function UsersTab({ api, t, isSuper }: { api: AdminApi; t: (key: PhysicsosKey) =
   const [q, setQ] = useState('')
   const [roleFilter, setRoleFilter] = useState('')
   const { data, error, reload } = useLoad(
-    () => api.listUsers({ ...(roleFilter === '' ? {} : { role: roleFilter }), ...(q === '' ? {} : { q }) })
-      .then(r => r.users),
+    () => api.listUsers({ ...(roleFilter === '' ? {} : { role: roleFilter }), ...(q === '' ? {} : { q }) }).then(r => r.users),
     [api, q, roleFilter])
   const [form, setForm] = useState({ schoolId: '', username: '', displayName: '', password: '', role: 'STUDENT' })
-  const [resetFor, setResetFor] = useState<string | undefined>()
+  const [selected, setSelected] = useState<string>()
+  const [resetFor, setResetFor] = useState<string>()
   const [newPassword, setNewPassword] = useState('')
-  const [note, setNote] = useState<string | undefined>()
-
-  const run = (job: () => Promise<unknown>) => {
-    setNote(undefined)
+  const [note, setNote] = useState<string>()
+  const [busy, setBusy] = useState(false)
+  const run = (job: () => Promise<unknown>): void => {
+    if (busy) return
+    setBusy(true); setNote(undefined)
     job().then(reload).catch((reason: unknown) => {
       setNote(reason instanceof Error ? reason.message : String(reason))
-    })
+    }).finally(() => { setBusy(false) })
   }
-
-  if (error !== undefined) return <p className={css.error}>{error}</p>
-
-  return (
-    <>
-      {note !== undefined && <p className={css.error}>{note}</p>}
-      <AdminCard>
-        <AdminCardTitle>{t('admin.users.create')}</AdminCardTitle>
-        <div className={css.formRow}>
-          {isSuper && (
-            <input className={css.input} placeholder={t('admin.schools.field.id')}
-              value={form.schoolId} onChange={(e) => { setForm(f => ({ ...f, schoolId: e.target.value })) }} />
-          )}
-          <input className={css.input} placeholder={t('admin.users.field.username')}
-            value={form.username} onChange={(e) => { setForm(f => ({ ...f, username: e.target.value })) }} />
-          <input className={css.input} placeholder={t('admin.users.field.displayName')}
-            value={form.displayName} onChange={(e) => { setForm(f => ({ ...f, displayName: e.target.value })) }} />
-          <input className={css.input} type="password" placeholder={t('admin.users.field.password')}
-            value={form.password} onChange={(e) => { setForm(f => ({ ...f, password: e.target.value })) }} />
-          <GlassSelect
-            className={css.select}
-            value={form.role}
-            ariaLabel={t('admin.users.field.role')}
-            testId="user-role"
-            options={[
-              { value: 'STUDENT', label: t('role.STUDENT') },
-              { value: 'TEACHER', label: t('role.TEACHER') },
-              ...isSuper ? [{ value: 'SCHOOL_ADMIN', label: t('role.SCHOOL_ADMIN') }] : [],
-            ]}
-            onChange={(role) => { setForm(f => ({ ...f, role })) }}
-          />
-          <button
-            type="button" className={css.primary}
-            onClick={() => {
-              run(() => api.createUser({
-                /* Only supers see the schoolId field; a school admin omits it
-                   and the host lands the account in their own tenant. */
-                ...(form.schoolId === '' ? {} : { schoolId: form.schoolId }),
-                username: form.username,
-                displayName: form.displayName,
-                password: form.password,
-                role: form.role as 'STUDENT' | 'TEACHER' | 'SCHOOL_ADMIN',
-              }).then(() => { setForm(f => ({ ...f, username: '', displayName: '', password: '' })) }))
-            }}
-          >
-            {t('admin.confirm.submit')}
-          </button>
-        </div>
-      </AdminCard>
-
-      <AdminToolbar>
-        <input className={css.input} placeholder={t('admin.users.search')}
-          value={q} onChange={(e) => { setQ(e.target.value) }} />
-        <GlassSelect
-          className={css.select}
-          value={roleFilter}
-          ariaLabel={t('admin.users.role.all')}
-          testId="role-filter"
-          options={[
-            { value: '', label: t('admin.users.role.all') },
-            { value: 'STUDENT', label: t('role.STUDENT') },
-            { value: 'TEACHER', label: t('role.TEACHER') },
-            { value: 'SCHOOL_ADMIN', label: t('role.SCHOOL_ADMIN') },
-            ...isSuper ? [{ value: 'SUPER_ADMIN', label: t('role.SUPER_ADMIN') }] : [],
-          ]}
-          onChange={setRoleFilter}
-        />
-      </AdminToolbar>
-
-      {data === undefined
-        ? <AdminEmpty>{t('admin.loading')}</AdminEmpty>
-        : data.length === 0
-          ? <AdminEmpty>{t('admin.empty')}</AdminEmpty>
-          : data.map((user: AdminUserRow) => {
-            const key = `${user.schoolId}:${user.username}`
-            return (
-              <AdminCard key={key}>
-                <AdminCardHead>
-                  <div>
-                    <AdminCardTitle>
-                      {user.displayName} <span className={css.dim}>@{user.username}</span>
-                    </AdminCardTitle>
-                    <AdminCardMeta>
-                      {user.schoolName} · {t(`role.${user.role}`)}
-                      {' · '}{user.status === 'active' ? t('admin.schools.status.active') : t('admin.schools.status.disabled')}
-                    </AdminCardMeta>
-                  </div>
-                  {user.role !== 'SUPER_ADMIN' && (
-                    <AdminCardActions>
-                      <button
-                        type="button" className={user.status === 'active' ? css.danger : css.ghost}
-                        onClick={() => {
-                          run(() => api.setUserStatus(
-                            user.schoolId, user.username,
-                            user.status === 'active' ? 'disabled' : 'active'))
-                        }}
-                      >
-                        {user.status === 'active' ? t('admin.users.disable') : t('admin.users.enable')}
-                      </button>
-                      <button
-                        type="button" className={css.ghost}
-                        onClick={() => { setResetFor(resetFor === key ? undefined : key); setNewPassword('') }}
-                      >
-                        {t('admin.users.reset')}
-                      </button>
-                      <button
-                        type="button" className={css.ghost}
-                        onClick={() => { run(() => api.revokeUserSessions(user.schoolId, user.username)) }}
-                      >
-                        {t('admin.users.revoke')}
-                      </button>
-                    </AdminCardActions>
-                  )}
-                </AdminCardHead>
-                {resetFor === key && (
-                  <div className={css.formRow}>
-                    <input
-                      className={css.input} type="password" placeholder={t('admin.users.field.newPassword')}
-                      value={newPassword} onChange={(e) => { setNewPassword(e.target.value) }}
-                    />
-                    <button
-                      type="button" className={css.primary}
-                      onClick={() => {
-                        run(() => api.resetUserPassword(user.schoolId, user.username, newPassword)
-                          .then(() => { setResetFor(undefined) }))
-                      }}
-                    >
-                      {t('admin.confirm.submit')}
-                    </button>
-                  </div>
-                )}
-              </AdminCard>
-            )
-          })}
-    </>
-  )
+  const userKey = (user: AdminUserRow): string => `${user.schoolId}:${user.username}`
+  const current = data?.find(user => userKey(user) === selected) ?? data?.[0]
+  if (error !== undefined) return <p className={css.error} role="alert">{error}</p>
+  return <>
+    <h2 className={css.sectionTitle}>{t('admin.tab.users')}</h2>
+    {note !== undefined && <p className={css.error} role="alert">{note}</p>}
+    <details className={css.createDisclosure}>
+      <summary>{t('admin.users.create')}</summary>
+      <div className={css.formRow}>
+        {isSuper && <input className={css.input} aria-label={t('admin.schools.field.id')} placeholder={t('admin.schools.field.id')} value={form.schoolId} onChange={e => { setForm(f => ({ ...f, schoolId: e.target.value })) }} />}
+        <input className={css.input} aria-label={t('admin.users.field.username')} placeholder={t('admin.users.field.username')} value={form.username} onChange={e => { setForm(f => ({ ...f, username: e.target.value })) }} />
+        <input className={css.input} aria-label={t('admin.users.field.displayName')} placeholder={t('admin.users.field.displayName')} value={form.displayName} onChange={e => { setForm(f => ({ ...f, displayName: e.target.value })) }} />
+        <input className={css.input} type="password" autoComplete="new-password" aria-label={t('admin.users.field.password')} placeholder={t('admin.users.field.password')} value={form.password} onChange={e => { setForm(f => ({ ...f, password: e.target.value })) }} />
+        <GlassSelect className={css.select} value={form.role} ariaLabel={t('admin.users.field.role')} testId="user-role"
+          options={[{ value: 'STUDENT', label: t('role.STUDENT') }, { value: 'TEACHER', label: t('role.TEACHER') }, ...isSuper ? [{ value: 'SCHOOL_ADMIN', label: t('role.SCHOOL_ADMIN') }] : []]}
+          onChange={role => { setForm(f => ({ ...f, role })) }} />
+        <button type="button" className={css.primary} disabled={busy} onClick={() => {
+          run(() => api.createUser({ ...(form.schoolId === '' ? {} : { schoolId: form.schoolId }), username: form.username, displayName: form.displayName, password: form.password, role: form.role as 'STUDENT' | 'TEACHER' | 'SCHOOL_ADMIN' }).then(() => { setForm(f => ({ ...f, username: '', displayName: '', password: '' })) }))
+        }}>{t('admin.confirm.submit')}</button>
+      </div>
+    </details>
+    <div className={css.detailLayout}>
+      <section className={css.detailList}>
+        <AdminToolbar>
+          <input className={css.input} aria-label={t('admin.users.search')} placeholder={t('admin.users.search')} value={q} onChange={e => { setQ(e.target.value) }} />
+          <GlassSelect className={css.select} value={roleFilter} ariaLabel={t('admin.users.role.all')} testId="role-filter"
+            options={[{ value: '', label: t('admin.users.role.all') }, { value: 'STUDENT', label: t('role.STUDENT') }, { value: 'TEACHER', label: t('role.TEACHER') }, { value: 'SCHOOL_ADMIN', label: t('role.SCHOOL_ADMIN') }, ...isSuper ? [{ value: 'SUPER_ADMIN', label: t('role.SUPER_ADMIN') }] : []]} onChange={setRoleFilter} />
+        </AdminToolbar>
+        {data === undefined ? <AdminEmpty>{t('admin.loading')}</AdminEmpty> : data.length === 0 ? <AdminEmpty>{t('admin.empty')}</AdminEmpty> : <AdminTable minWidth={560}>
+          <thead><tr><th>{t('admin.users.field.username')}</th><th>{t('admin.users.field.displayName')}</th><th>{t('admin.schools.field.name')}</th><th>{t('admin.users.field.role')}</th><th>{t('admin.users.status')}</th><th>{t('admin.users.actions')}</th></tr></thead>
+          <tbody>{data.map(user => <tr key={userKey(user)} data-selected={current !== undefined && userKey(current) === userKey(user) || undefined}>
+            <td><button type="button" className={css.tableLink} onClick={() => { setSelected(userKey(user)); setResetFor(undefined); setNewPassword('') }}>{user.username}</button></td>
+            <td>{user.displayName}</td><td>{user.schoolName}</td><td><span className={css.action}>{t(`role.${user.role}`)}</span></td>
+            <td><span className={user.status === 'active' ? css.badgeActive : css.badgeRevoked}>{t(user.status === 'active' ? 'admin.schools.status.active' : 'admin.schools.status.disabled')}</span></td>
+            <td><button type="button" className={css.ghost} aria-label={`${t('admin.users.select')} ${user.username}`} onClick={() => { setSelected(userKey(user)); setResetFor(undefined); setNewPassword('') }}>···</button></td>
+          </tr>)}</tbody>
+        </AdminTable>}
+      </section>
+      {current !== undefined && <AdminCard className={css.detailPane}>
+        <AdminCardTitle as="h2">{t('admin.users.details')}</AdminCardTitle>
+        <dl className={css.detailFields}>
+          <div><dt>{t('admin.users.field.displayName')}</dt><dd>{current.displayName}</dd></div>
+          <div><dt>{t('admin.users.field.username')}</dt><dd>{current.username}</dd></div>
+          <div><dt>{t('admin.users.field.role')}</dt><dd>{t(`role.${current.role}`)}</dd></div>
+          <div><dt>{t('admin.schools.field.name')}</dt><dd>{current.schoolName}</dd></div>
+          <div><dt>{t('admin.users.status')}</dt><dd>{t(current.status === 'active' ? 'admin.schools.status.active' : 'admin.schools.status.disabled')}</dd></div>
+        </dl>
+        <p className={css.cardMeta}>{t('admin.users.scope')}</p>
+        {current.role !== 'SUPER_ADMIN' && <>
+          <AdminCardActions className={css.detailActions}>
+            <button type="button" className={current.status === 'active' ? css.danger : css.ghost} disabled={busy} onClick={() => { run(() => api.setUserStatus(current.schoolId, current.username, current.status === 'active' ? 'disabled' : 'active')) }}>{t(current.status === 'active' ? 'admin.users.disable' : 'admin.users.enable')}</button>
+            <button type="button" className={css.ghost} disabled={busy} onClick={() => { setResetFor(resetFor === userKey(current) ? undefined : userKey(current)); setNewPassword('') }}>{t('admin.users.reset')}</button>
+            <button type="button" className={css.ghost} disabled={busy} onClick={() => { run(() => api.revokeUserSessions(current.schoolId, current.username)) }}>{t('admin.users.revoke')}</button>
+          </AdminCardActions>
+          {resetFor === userKey(current) && <div className={css.formRow}>
+            <input className={css.input} type="password" autoComplete="new-password" aria-label={t('admin.users.field.newPassword')} placeholder={t('admin.users.field.newPassword')} value={newPassword} onChange={e => { setNewPassword(e.target.value) }} />
+            <button type="button" className={css.primary} disabled={busy || newPassword === ''} onClick={() => { run(() => api.resetUserPassword(current.schoolId, current.username, newPassword).then(() => { setResetFor(undefined); setNewPassword('') })) }}>{t('admin.confirm.submit')}</button>
+          </div>}
+        </>}
+      </AdminCard>}
+    </div>
+  </>
 }
 
 /* ---- 审计 tab ---- */
 
 function AuditTab({ api, t }: { api: AdminApi; t: (key: PhysicsosKey) => string }) {
   const { data, error } = useLoad(() => api.listAudit({ limit: 200 }).then(r => r.events), [api])
-  if (error !== undefined) return <p className={css.error}>{error}</p>
+  const [query, setQuery] = useState('')
+  if (error !== undefined) return <p className={css.error} role="alert">{error}</p>
   if (data === undefined) return <AdminEmpty>{t('admin.loading')}</AdminEmpty>
-  if (data.length === 0) return <AdminEmpty>{t('admin.empty')}</AdminEmpty>
-
-  return (
-    <>
-      {data.map((event: AuditEventRow) => (
-        <AdminCard key={event.id}>
-          <AdminCardMeta>{fmtTime(event.createdAt)} · {event.schoolId}</AdminCardMeta>
-          <AdminCardTitle>
-            <code className={css.action}>{event.action}</code> {event.target}
-          </AdminCardTitle>
-          <AdminCardMeta>
-            {t('admin.audit.actor')}: {event.actorKey}
-            {event.detail === undefined ? '' : ` · ${JSON.stringify(event.detail)}`}
-          </AdminCardMeta>
-        </AdminCard>
-      ))}
-    </>
-  )
+  const rows = data.filter(event => `${event.actorKey} ${event.action} ${event.target} ${event.schoolId}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))
+  return <>
+    <AdminToolbar><input className={css.input} type="search" aria-label={t('admin.audit.search')} placeholder={t('admin.audit.search')} value={query} onChange={event => { setQuery(event.target.value) }} /></AdminToolbar>
+    {rows.length === 0 ? <AdminEmpty>{t('admin.empty')}</AdminEmpty> : <AdminTable minWidth={680}>
+      <thead><tr><th>{t('admin.audit.time')}</th><th>{t('admin.audit.actor')}</th><th>{t('admin.audit.action')}</th><th>{t('admin.audit.target')}</th><th>{t('admin.schools.field.name')}</th><th>{t('admin.audit.detail')}</th></tr></thead>
+      <tbody>{rows.map((event: AuditEventRow) => <tr key={event.id}>
+        <td className={css.timeCell}>{fmtTime(event.createdAt)}</td><td>{event.actorKey}</td><td><code className={css.action}>{event.action}</code></td><td>{event.target}</td><td>{event.schoolId}</td>
+        <td>{event.detail === undefined ? '—' : <details className={css.auditDetail}><summary>{t('admin.audit.detail')}</summary><pre>{JSON.stringify(event.detail, null, 2)}</pre></details>}</td>
+      </tr>)}</tbody>
+    </AdminTable>}
+  </>
 }

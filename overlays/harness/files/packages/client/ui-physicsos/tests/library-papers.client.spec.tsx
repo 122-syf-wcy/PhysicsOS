@@ -139,7 +139,7 @@ describe('LibraryWorkspace 真题卷库', () => {
     await openPapers(stubApi([paper({ kind: 'real' })], []))
     await screen.findByText('2025 贵阳中考物理真题')
     /* All seeded papers are 中考 — the 高中 stage tab empties the shelf. */
-    fireEvent.click(screen.getByRole('tab', { name: '高中' }))
+    fireEvent.click(screen.getByRole('button', { name: '高中' }))
     expect(await screen.findByText('当前筛选下没有匹配的试卷。')).toBeTruthy()
   })
 
@@ -160,4 +160,20 @@ describe('LibraryWorkspace 真题卷库', () => {
     fireEvent.click(within(card).getByRole('button', { name: /题目清单/ }))
     expect(within(card).getByText('该卷尚未录入题目。')).toBeTruthy()
   })
+
+  it('opens a complete question and keeps the practice action tied to that question', async () => {
+    const practiceQuestion = vi.fn().mockResolvedValue({ ok: true })
+    render(<LibraryWorkspace useLearningRecord={useLearningRecord} t={t}
+      practiceQuestion={practiceQuestion} useSessions={neverHook} useWorkspaces={neverHook} />)
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: '质子垂直进入匀强磁场' } })
+    fireEvent.click(screen.getByRole('button', { name: '质子垂直进入匀强磁场' }))
+    expect(screen.getByRole('heading', { level: 1, name: '质子垂直进入匀强磁场' })).toBeTruthy()
+    expect(screen.getByText(/一个质子以 2.0×10/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '练习此题' }))
+    await vi.waitFor(() => { expect(practiceQuestion).toHaveBeenCalledWith('01-proton-basic') })
+    fireEvent.click(screen.getByRole('button', { name: zh['library.detail.close'] }))
+    expect(screen.getByRole('searchbox')).toBeTruthy()
+    expect((screen.getByRole('searchbox') as HTMLInputElement).value).toBe('质子垂直进入匀强磁场')
+  })
+
 })

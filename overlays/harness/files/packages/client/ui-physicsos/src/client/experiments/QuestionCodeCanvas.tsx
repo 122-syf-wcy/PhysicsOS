@@ -6,8 +6,10 @@ import type { ExperimentSession } from './experiment-session.ts'
 import { questionCodeApi, questionCodeRefMatches, questionCodeSceneIdentity, questionCodeSceneSha256, sameQuestionCodeRef, type QuestionCodeJobView, type QuestionCodeRegenerate } from './question-code-api.ts'
 import { useQuestionCodeOwner, type QuestionCodeOwnerStore } from './question-code-context.ts'
 import css from '../SceneChatCard.module.css'
+import workbenchCss from './QuestionCodeWorkbench.module.css'
 
 interface Props {
+  readonly presentation?: 'workbench'
   readonly questionCodeOwner?: QuestionCodeOwnerStore
   readonly visualization?: CodeVisualizationState
   /** Frozen original question; the session may fork local parameter explorations. */
@@ -17,7 +19,7 @@ interface Props {
   readonly hasVerifiedSolution?: boolean
 }
 /** Private code only paints snapshots from this question's platform-owned session. */
-export function QuestionCodeCanvas({ visualization, scene, session, regenerateQuestionCode, questionCodeOwner, hasVerifiedSolution = false }: Props) {
+export function QuestionCodeCanvas({ presentation, visualization, scene, session, regenerateQuestionCode, questionCodeOwner, hasVerifiedSolution = false }: Props) {
   const owner = useQuestionCodeOwner(questionCodeOwner)
   const [attempt, setAttempt] = useState(0)
   const [loaded, setLoaded] = useState<{ entryUrl: string; source: CodeVisualizationSource; key: string }>()
@@ -107,13 +109,13 @@ export function QuestionCodeCanvas({ visualization, scene, session, regenerateQu
       if (!result.ok) setError(result.error)
     }).catch(() => { setError('未能提交生成请求，请稍后重试。') }).finally(() => { setRegenerating(false) })
   }
-  return <div className={css.codeCanvas} data-question-code-layout={independent ? 'independent' : 'pending'}
+  return <div className={`${css.codeCanvas} ${presentation === 'workbench' ? workbenchCss.canvas : ''}`} data-question-code-layout={independent ? 'independent' : 'pending'}
     data-question-code-status={ready ? frameStatus === 'failed' ? 'render-failed' : frameStatus : status}>
-    {hasVerifiedSolution === false ? <div className={css.scopeNote} data-question-scope="scene">
+    {hasVerifiedSolution === false ? <div className={`${css.scopeNote} ${presentation === 'workbench' ? workbenchCss.scopeNote : ''}`} data-question-scope="scene">
       <strong>当前场景演示</strong>
       <span>展示已保存的条件与运动过程，尚未包含整道题的求解验证。</span>
     </div> : null}
-    {ready ? <div className={css.codeStage}>
+    {ready ? <div className={`${css.codeStage} ${presentation === 'workbench' ? workbenchCss.stage : ''}`}>
       <CommunityExperimentFrame key={key} entryUrl={loaded.entryUrl} session={session}
         experimentId={ref.experimentId} protocolVersion={3} title={loaded.source.title || ref.title} showStatus={false}
         onStatusChange={setFrameStatus}
@@ -124,7 +126,7 @@ export function QuestionCodeCanvas({ visualization, scene, session, regenerateQu
         <p>{frameStatus === 'failed' ? '当前条件已保留，可以重新载入画面。' : '即将呈现本题的独立可视化。'}</p>
         {frameStatus === 'failed' ? <button type="button" onClick={() => { setAttempt(value => value + 1) }}>重新加载实验文件</button> : null}
       </div> : null}
-    </div> : <div className={css.codeStatus} role={error || status === 'failed' ? 'alert' : 'status'}>
+    </div> : <div className={`${css.codeStatus} ${presentation === 'workbench' ? workbenchCss.status : ''}`} role={error || status === 'failed' ? 'alert' : 'status'}>
       <span className={css.codeMark} aria-hidden="true">{'</>'}</span><strong>{title}</strong>
       <p>{status === 'failed' && visualization?.status === 'failed' ? visualization.message
         : status === 'generating' ? job?.status === 'validating'
@@ -136,7 +138,7 @@ export function QuestionCodeCanvas({ visualization, scene, session, regenerateQu
             : hasVerifiedSolution === false ? '已保存的场景条件已保留。' : '本题的条件、解题步骤和物理验证已保留。'}</p>
       {error && bound && independent ? <button type="button" onClick={() => { setAttempt(value => value + 1) }}>重新载入本题实验</button> : null}
     </div>}
-    {ready || (regenerateQuestionCode !== undefined && status !== 'owner-mismatch') ? <div className={css.codeActions}>
+    {ready || (regenerateQuestionCode !== undefined && status !== 'owner-mismatch') ? <div className={`${css.codeActions} ${presentation === 'workbench' ? workbenchCss.actions : ''}`}>
       {ready ? <details className={css.source}><summary><span aria-hidden="true">{'</>'}</span>本题实验代码</summary>
         <div className={css.sourceBody}><p>{loaded.source.summary}</p><pre><code>{loaded.source.rendererJs}</code></pre>
           {loaded.source.stylesheet ? <details><summary>样式</summary><pre><code>{loaded.source.stylesheet}</code></pre></details> : null}

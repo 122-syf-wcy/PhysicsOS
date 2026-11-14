@@ -279,5 +279,67 @@ import "node:fs"; require("path"); import "./chunk.js";
             self.assertNotEqual(invalid.returncode, 0)
 
 
+
+
+class FullRuntimeProvenanceTests(unittest.TestCase):
+    def full_fixture(self):
+        files = {'Dockerfile': sha('reviewed dockerfile'), runtime.DEFAULT_TRUST['publicKeyPath']: sha('reviewed public key')}
+        source = {'revision': 'a' * 40, 'files': files, 'sourceDigest': runtime.sha(runtime.canonical(files)), 'dependencyFingerprint': 'b' * 64}
+        builder_image, node_image, image_id = ['sha256:' + c * 64 for c in 'cde']
+        receipt = {**source, 'origin': 'docker-builder-target', 'fullBuildVerified': True, 'buildTarget': 'builder',
+                   'builderImage': builder_image, 'baseImage': node_image,
+                   **{key: True for key in ['completeDevelopmentDependencies', 'lockedDependenciesVerified', 'sourceProjectionVerified', 'nativeProbeVerified', 'sharedDeclarationBoundaryVerified']}}
+        receipt.update({'abi': {'node': '24.7.0', 'modules': '137', 'platform': 'linux', 'arch': 'x64', 'libc': 'glibc'}, 'toolsVerified': ['typescript', 'tsdown', 'vite', 'vitest', 'tsx']})
+        record = {**source, 'schemaVersion': 1, 'format': 'physicsos-full-build/1', 'successfulStages': ['builder', 'runtime'],
+                  'sourceProjectionVerified': True, 'builderImage': builder_image, 'nodeImage': node_image,
+                  'runtimeImage': image_id, 'dockerfileSha256': files['Dockerfile']}
+        labels = {'physicsos.role': 'full-runtime-input', 'physicsos.full-build.revision': source['revision'],
+                  'physicsos.full-build.source-digest': source['sourceDigest'],
+                  'physicsos.full-build.dependency-fingerprint': source['dependencyFingerprint']}
+        image = {'id': image_id, 'labels': labels}
+        return source, dict(source), receipt, record, image
+
+    def test_full_build_accepts_only_matching_source_dockerfile_receipt_and_immutable_images(self):
+        source, marker, receipt, record, image = self.full_fixture()
+        runtime.validate_full_record(source, marker, receipt, record, image)
+        bad_values = [
+            (source, marker, {**receipt, 'origin': 'runtime-seed'}, record, image),
+            (source, marker, {**receipt, 'nativeProbeVerified': False}, record, image),
+            (source, marker, receipt, {**record, 'dockerfileSha256': 'f' * 64}, image),
+            (source, marker, receipt, {**record, 'successfulStages': ['runtime']}, image),
+            (source, marker, receipt, record, {**image, 'labels': {}}),
+            (source, marker, receipt, {**record, 'runtimeImage': 'sha256:' + 'f' * 64}, image),
+            (source, {**marker, 'files': {}}, receipt, record, image),
+        ]
+        for values in bad_values:
+            with self.subTest(values=values[2].get('origin')), self.assertRaises(ValueError):
+                runtime.validate_full_record(*values)
+
+    def test_full_runtime_inventory_must_match_builder_and_pin_plugin_key_to_source(self):
+        source, _, _, record, _ = self.full_fixture()
+        files = {name: {'sha256': sha(name), 'bytes': 1} for name in runtime.full_inventory_request()['required']}
+        files[runtime.DEFAULT_TRUST['publicKeyPath']]['sha256'] = source['files'][runtime.DEFAULT_TRUST['publicKeyPath']]
+        inventory = {'files': files}
+        proof = {'verified': True, 'entries': 2, 'publicKeySha256': source['files'][runtime.DEFAULT_TRUST['publicKeyPath']]}
+        manifest = runtime.full_manifest(source, record, inventory, inventory, proof)
+        self.assertEqual(manifest['sourceDigest'], source['sourceDigest'])
+        self.assertEqual(manifest['codeDigest'], runtime.sha(runtime.canonical(manifest['files'])))
+        self.assertEqual(manifest['buildProvenance'], record)
+        self.assertEqual(runtime.normalize_manifest(manifest)['files'], manifest['files'])
+        changed = {'files': {**files, 'scripts/healthcheck.mjs': {'sha256': sha('altered'), 'bytes': 7}}}
+        with self.assertRaisesRegex(ValueError, 'differs'):
+            runtime.full_manifest(source, record, inventory, changed, proof)
+        with self.assertRaisesRegex(ValueError, 'trust'):
+            runtime.full_manifest(source, record, inventory, inventory, {**proof, 'publicKeySha256': 'f' * 64})
+        incomplete = {'files': {key: value for key, value in files.items() if key != 'scripts/healthcheck.mjs'}}
+        with self.assertRaisesRegex(ValueError, 'absent'):
+            runtime.full_manifest(source, record, incomplete, incomplete, proof)
+
+    def test_incremental_base_without_a_manifest_stays_rejected(self):
+        for value in [{}, {'files': {}}, {'schemaVersion': 2}]:
+            with self.assertRaises(ValueError):
+                runtime.normalize_manifest(value)
+
+
 if __name__ == '__main__':
     unittest.main()

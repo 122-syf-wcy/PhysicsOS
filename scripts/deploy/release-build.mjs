@@ -507,7 +507,7 @@ export async function prepareBuilder({ projection, builder, baseImage, cacheRoot
     const previousManifest = await adoptBuilderSource({ builder, revision: manifest.revision, submoduleRevision: manifest.submoduleRevision })
     await syncSource({ builder, projection, previousManifest, cacheRoot })
     const abi = JSON.parse(await command('docker', ['exec', builder, 'node', '-e', ABI_SCRIPT]))
-    receipt = { schemaVersion: 1, origin: 'docker-builder-target', baseImage, dependencyFingerprint: manifest.dependencyFingerprint, sourceDigest: manifest.sourceDigest, abi, completeDevelopmentDependencies: true, lockedDependenciesVerified: true, sourceProjectionVerified: true, cacheIdentity: builderCacheIdentity({ dependencyFingerprint: manifest.dependencyFingerprint, abi, baseImage }) }
+    receipt = { schemaVersion: 1, origin: 'docker-builder-target', baseImage, builderImage: (await inspectBuilder(builder)).Image, fullBuildVerified: true, buildTarget: 'builder', dependencyFingerprint: manifest.dependencyFingerprint, sourceDigest: manifest.sourceDigest, abi, completeDevelopmentDependencies: true, lockedDependenciesVerified: true, sourceProjectionVerified: true, cacheIdentity: builderCacheIdentity({ dependencyFingerprint: manifest.dependencyFingerprint, abi, baseImage }) }
   }
   for (const name of ['typescript', 'tsdown', 'vitest', 'tsx']) await command('docker', ['exec', builder, 'node', '-e', TOOL_SCRIPT, '/app/' + HARNESS, name, '--version'])
   await command('docker', ['exec', builder, 'node', '-e', TOOL_SCRIPT, '/app/' + HARNESS + '/apps/web', 'vite', '--version'])

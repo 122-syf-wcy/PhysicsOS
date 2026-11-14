@@ -277,7 +277,7 @@ describe('canvas entry object owner', () => {
 })
 
 describe('canvas normal-user entry controls', () => {
-  it('opens the current lab, project and workbench entries from Home and keeps recent source provenance', () => {
+  it('opens the lab from Home and preserves recent source provenance when adding to a workbench', () => {
     const scene = createMagneticScene({ title: 'Recent real scene' })
     const recent = createSnapshotStore({ items: [{ sceneId: String(scene.id), scene, title: 'Recent real scene', domain: 'magnetic',
       kind: 'experiment' as const, updatedAt: new Date().toISOString(), originScene: scene, buildMode: true as const }] })
@@ -287,12 +287,8 @@ describe('canvas normal-user entry controls', () => {
     const requestSceneInCanvas = vi.fn()
     render(<HomeActions t={t} openSurface={openSurface} openCanvasView={openCanvasView} newCanvas={newCanvas}
       requestSceneInCanvas={requestSceneInCanvas} useRecentExperiments={selector => selector(recent.getSnapshot())} />)
-    fireEvent.click(screen.getByRole('button', { name: t('home.card.lab.title') }))
+    fireEvent.click(screen.getByRole('button', { name: t('home.quick.experiment') }))
     expect(openSurface).toHaveBeenCalledWith('lab')
-    fireEvent.click(screen.getByRole('button', { name: t('nav.projects') }))
-    expect(openSurface).toHaveBeenCalledWith('projects')
-    fireEvent.click(screen.getByRole('button', { name: t('canvas.open') }))
-    expect(openCanvasView).toHaveBeenCalledWith()
     fireEvent.click(screen.getByRole('button', { name: `${t('canvas.addToCanvas')} · Recent real scene` }))
     expect(requestSceneInCanvas).toHaveBeenCalledWith(expect.objectContaining({ scene, originScene: scene, buildMode: true }))
   })

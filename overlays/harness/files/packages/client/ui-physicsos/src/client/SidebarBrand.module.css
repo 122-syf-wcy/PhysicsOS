@@ -39,3 +39,8 @@
 .rail {
   flex: none;
 }
+
+:global(html[data-physicsos-ui]) .brandCol { flex-direction: row; align-items: center; gap: 12px; }
+:global(html[data-physicsos-ui]) .name { font-size: 17px; font-weight: 500; }
+:global(html[data-physicsos-ui]) .school { max-width: 140px; font-size: 11px; }
+@media(max-width:720px) { :global(html[data-physicsos-ui]) .school { display: none; } }

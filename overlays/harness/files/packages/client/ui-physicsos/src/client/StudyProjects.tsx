@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { IconFolderOpenOutlineMedium, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionId, SessionSummary, WorkspaceId } from './runtime-compat.ts'
 import css from './StudyProjects.module.css'
@@ -32,7 +33,7 @@ export function StudyProjects({t,useWorkspaces,useSessions,createProject,renameP
  const [name,setName]=useState('')
  const [item,setItem]=useState('')
  const projects=registry.items.filter(p=>p.title.toLocaleLowerCase().includes(search.toLocaleLowerCase()))
- const current=registry.items.find(p=>p.workspaceId===selected) ?? projects[0]
+ const current=registry.items.find(p=>p.workspaceId===selected)
  const archived=new Set(registry.archivedSessionIds)
  const available=useMemo(()=>sessions.ids.map(id=>sessions.byId[id]).filter((s): s is SessionSummary=>s!==undefined&&!s.blank&&s.origin!=='subagent'&&!archived.has(s.id)),[sessions,registry.archivedSessionIds])
  const members=available.filter(s=>current?.sessionIds.includes(s.id)).sort((a,b)=>b.updatedAt-a.updatedAt)
@@ -47,17 +48,17 @@ export function StudyProjects({t,useWorkspaces,useSessions,createProject,renameP
   else {await assignBoard(item,current!.workspaceId);setBoards(await listBoards())}
   setDialog(undefined)
  })}
- return <main className={css.root} data-physicsos-projects="true">
+ return <main className={css.root} data-physicsos-projects="true" data-project-selected={current!==undefined}>
   <header className={css.header}><div><h1>{t('projects.title')}</h1><p>{t('projects.hint')}</p></div><button onClick={()=>begin({kind:'project'})}>{t('projects.new')}</button></header>
   {error&&<p role="alert" className={css.error}>{error}</p>}
   <div className={css.layout}><aside className={css.folders}>
    <input aria-label={t('projects.search')} placeholder={t('projects.search')} value={search} onChange={e=>setSearch(e.target.value)} />
    {projects.map(p=><button key={p.workspaceId} aria-pressed={current?.workspaceId===p.workspaceId} className={css.folder} onClick={()=>{setSelected(p.workspaceId);setError(undefined)}}>
-    <span aria-hidden="true">▤</span><span>{p.title}<small>{p.sessionIds.filter(id=>available.some(s=>s.id===id)).length} {t('projects.conversations')}</small></span></button>)}
+    <span className={css.folderMark} aria-hidden="true"><IconFolderOpenOutlineMedium size={28} /></span><span>{p.title}<small>{p.sessionIds.filter(id=>available.some(s=>s.id===id)).length} {t('projects.conversations')}</small></span></button>)}
    {projects.length===0&&<p>{t('projects.empty')}</p>}
   </aside><section className={css.content}>
    {current===undefined?<div className={css.empty}><h2>{t('projects.empty')}</h2><p>{t('projects.example')}</p></div>:<>
-    <div className={css.projectHeader}><div><h2>{current.title}</h2><p>{t('projects.chapterHint')}</p></div><button onClick={()=>begin({kind:'rename-project',id:current.workspaceId})}>{t('projects.rename')}</button></div>
+    <div className={css.projectHeader}><button type="button" className={css.back} onClick={()=>setSelected(undefined)}>{t('projects.title')}</button><div><h2>{current.title}</h2><p>{t('projects.chapterHint')}</p></div><button onClick={()=>begin({kind:'rename-project',id:current.workspaceId})}>{t('projects.rename')}</button></div>
     <div className={css.tabs}><button aria-pressed={tab==='chats'} onClick={()=>setTab('chats')}>{t('projects.conversations')}</button><button aria-pressed={tab==='boards'} onClick={()=>setTab('boards')}>{t('projects.boards')}</button></div>
     {tab==='chats'?<>
      <div className={css.actions}><button disabled={busy} onClick={()=>{void run(()=>newConversation(current.workspaceId))}}>{t('projects.newConversation')}</button><button onClick={()=>begin({kind:'add-chat'})}>{t('projects.addConversation')}</button></div>
@@ -68,10 +69,9 @@ export function StudyProjects({t,useWorkspaces,useSessions,createProject,renameP
     </>}
    </>}
   </section></div>
-  {dialog&&<div className={css.backdrop}><form role="dialog" aria-modal="true" aria-label={t(dialog.kind==='project'?'projects.new':dialog.kind.startsWith('rename')?'projects.rename':dialog.kind==='add-chat'?'projects.addConversation':'projects.addBoard')} className={css.dialog} onSubmit={e=>{e.preventDefault();confirm()}}>
-   <h2>{t(dialog.kind==='project'?'projects.new':dialog.kind.startsWith('rename')?'projects.rename':dialog.kind==='add-chat'?'projects.addConversation':'projects.addBoard')}</h2>
-   {dialog.kind==='add-chat'||dialog.kind==='add-board'?<select aria-label={t('projects.choose')} value={item} onChange={e=>setItem(e.target.value)}><option value="">{t('projects.choose')}</option>{dialog.kind==='add-chat'?available.filter(s=>!current?.sessionIds.includes(s.id)).map(s=><option key={s.id} value={s.id}>{s.displayTitle}</option>):boards.filter(b=>b.projectId!==current?.workspaceId).map(b=><option key={b.id} value={b.id}>{b.title}</option>)}</select>:<input autoFocus maxLength={80} aria-label={t('projects.name')} placeholder={t('projects.example')} value={name} onChange={e=>setName(e.target.value)} />}
+  {dialog&&<Modal open title={t(dialog.kind==='project'?'projects.new':dialog.kind.startsWith('rename')?'projects.rename':dialog.kind==='add-chat'?'projects.addConversation':'projects.addBoard')} closeLabel={t('projects.cancel')} onClose={()=>{if(!busy)setDialog(undefined)}}><form className={css.dialog} onSubmit={e=>{e.preventDefault();confirm()}}>
+   {dialog.kind==='add-chat'||dialog.kind==='add-board'?<select aria-label={t('projects.choose')} value={item} onChange={e=>setItem(e.target.value)}><option value="">{t('projects.choose')}</option>{dialog.kind==='add-chat'?available.filter(s=>!current?.sessionIds.includes(s.id)).map(s=><option key={s.id} value={s.id}>{s.displayTitle}</option>):boards.filter(b=>b.projectId!==current?.workspaceId).map(b=><option key={b.id} value={b.id}>{b.title}</option>)}</select>:<input data-modal-autofocus maxLength={80} aria-label={t('projects.name')} placeholder={t('projects.example')} value={name} onChange={e=>setName(e.target.value)} />}
    <div className={css.actions}><button type="button" disabled={busy} onClick={()=>setDialog(undefined)}>{t('projects.cancel')}</button><button type="submit" disabled={busy||((dialog.kind==='add-chat'||dialog.kind==='add-board')?item==='':name.trim()==='')}>{t('projects.save')}</button></div>
-  </form></div>}
+  </form></Modal>}
  </main>
 }

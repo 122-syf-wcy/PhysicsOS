@@ -51,6 +51,7 @@ import type { PhysicsSceneRef, PhysicsSurfaceId, RecentExperimentsState } from '
 import { formatUpdatedAt } from './workspaceMeta.ts'
 import { IconPhysicsPlay, IconCircuitSeries } from './icons/physics-icons.tsx'
 import css from './ExperimentPicker.module.css'
+import catalogCss from './ExperimentCatalog.module.css'
 
 /** Locale keys for the domain tabs. 'all' is the union tab, not a group id. */
 type TabId = 'all' | ExperimentDomain
@@ -292,13 +293,13 @@ export function ExperimentPicker({
   const hasFocusRow = continueCard !== undefined || recommendations.length > 0
 
   return (
-    <div className={css.root} data-physicsos-surface="lab" data-physicsos-state="picker" data-physicsos-picker-mode={mode}>
-      <div className={css.panel}>
+    <div className={clsx(css.root, catalogCss.root)} data-physicsos-surface="lab" data-physicsos-state="picker" data-physicsos-picker-mode={mode}>
+      <div className={clsx(css.panel, catalogCss.panel)}>
         {/* ---------------------------------------------------------- header */}
-        <header className={clsx(css.header, css.reveal)} style={revealAt(0)}>
-          <Mascot pose="search" size={72} className={css.mascot} />
-          <div className={css.headerCopy}>
-            <h2 className={css.title}>{t(mode === 'add' ? 'canvas.selectExperiment' : 'lab.template.empty.title')}</h2>
+        <header className={clsx(css.header, catalogCss.header, css.reveal)} style={revealAt(0)}>
+          <Mascot pose="search" size={40} className={css.mascot} />
+          <div className={clsx(css.headerCopy, catalogCss.headerCopy)}>
+            <h2 className={clsx(css.title, catalogCss.title)}>{t(mode === 'add' ? 'canvas.selectExperiment' : 'lab.template.empty.title')}</h2>
             <p className={css.body}>{t(mode === 'add' ? 'canvas.inspectorNote' : 'lab.template.empty.body')}</p>
             {onNewCanvas === undefined ? null : <button className={css.uploadEntry} type="button" onClick={onNewCanvas}>{t('canvas.new')}</button>}
             {mode !== 'open' || onAddTemplate === undefined ? null : <Menu open={addMenuOpen} portal autoFocus
@@ -317,23 +318,23 @@ export function ExperimentPicker({
               开发者文档与贡献规范 ↗
             </a>
           </div>
-          <span className={css.headerCount}>
+          <span className={clsx(css.headerCount, catalogCss.headerCount)}>
             {/* The badge numbers what a student can actually open; the grid
                 below also renders the coming-soon card, so labelling this
                 "所有实验" made 43 sit next to 44 cards. */}
-            <strong className={css.headerCountValue}>{SELECTABLE_TEMPLATE_COUNT}</strong>
+            <strong className={clsx(css.headerCountValue, catalogCss.headerCountValue)}>{SELECTABLE_TEMPLATE_COUNT}</strong>
             <span>{t('lab.template.picker.availableTemplates')}</span>
           </span>
         </header>
 
         {/* ------------------------------------------------------- focus row */}
         {hasFocusRow ? (
-          <div className={clsx(css.focusRow, continueCard === undefined && css.focusRowNoContinue)}>
+          <div className={clsx(css.focusRow, catalogCss.focusRow, continueCard === undefined && css.focusRowNoContinue)}>
             {continueCard === undefined ? null : (
               <button
                 type="button"
                 className={clsx(
-                  css.continueCard,
+                  css.continueCard, catalogCss.continueCard,
                   css.reveal,
                   continueCard.domain !== undefined && css[`subject-${continueCard.domain}`],
                 )}
@@ -341,18 +342,18 @@ export function ExperimentPicker({
                 data-physicsos-continue={continueCard.state}
                 onClick={continueCard.onOpen}
               >
-                <span className={css.continueArt} aria-hidden="true">
+                <span className={clsx(css.continueArt, catalogCss.continueArt)} aria-hidden="true">
                   <ExperimentArt templateId={continueCard.templateId} kind={continueCard.kind} />
                 </span>
-                <span className={css.continueBody}>
+                <span className={clsx(css.continueBody, catalogCss.continueBody)}>
                   <span className={css.continueEyebrow}>
                     {continueCard.state === 'running' ? (
                       <span className={css.liveDot} aria-hidden="true" />
                     ) : null}
                     {continueCard.eyebrow}
                   </span>
-                  <span className={css.continueTitle}>{continueCard.title}</span>
-                  <span className={css.continueMeta}>{continueCard.meta}</span>
+                  <span className={clsx(css.continueTitle, catalogCss.continueTitle)}>{continueCard.title}</span>
+                  <span className={clsx(css.continueMeta, catalogCss.continueMeta)}>{continueCard.meta}</span>
                   <span className={css.continueCta}>
                     {t(mode === 'add' ? 'canvas.addToCanvas' : 'lab.picker.continue.cta')}
                     <IconPhysicsPlay size={13} />
@@ -363,13 +364,13 @@ export function ExperimentPicker({
 
             {recommendations.length > 0 ? (
               <section
-                className={clsx(css.recommendSection, css.reveal)}
+                className={clsx(css.recommendSection, catalogCss.recommendSection, css.reveal)}
                 style={revealAt(2)}
                 aria-label={t('lab.picker.recommend.title')}
                 data-physicsos-recommend=""
               >
                 <h3 className={css.sectionLabel}>{t('lab.picker.recommend.title')}</h3>
-                <div className={css.recommendGrid}>
+                <div className={clsx(css.recommendGrid, catalogCss.recommendGrid)}>
                   {recommendations.map(({ template, reason, nodeId }, index) => {
                     const node = nodeId === undefined ? undefined : knowledgeNodeOf(nodeId)
                     return (
@@ -377,7 +378,7 @@ export function ExperimentPicker({
                         key={`recommend-${template.id}`}
                         type="button"
                         className={clsx(
-                          css.recommendCard,
+                          css.recommendCard, catalogCss.recommendCard,
                           css.card,
                           css[`subject-${template.domain}`],
                         )}
@@ -388,7 +389,7 @@ export function ExperimentPicker({
                           pick(template)
                         }}
                       >
-                        <span className={clsx(css.art, css.artThumb)}>
+                        <span className={clsx(css.art, catalogCss.art, css.artThumb)}>
                           <ExperimentArt templateId={template.id} />
                         </span>
                         <span className={css.recommendText}>
@@ -397,8 +398,8 @@ export function ExperimentPicker({
                               ? `${t('lab.picker.recommend.weakness')}${node === undefined ? '' : ` · ${node.label}`}`
                               : t('lab.picker.recommend.classic')}
                           </span>
-                          <span className={css.recommendName}>{t(template.label)}</span>
-                          <span className={css.recommendHint}>{t(template.hint)}</span>
+                          <span className={clsx(css.recommendName, catalogCss.recommendName)}>{t(template.label)}</span>
+                          <span className={clsx(css.recommendHint, catalogCss.recommendHint)}>{t(template.hint)}</span>
                         </span>
                       </button>
                     )
@@ -413,7 +414,7 @@ export function ExperimentPicker({
         {onFreeBuild === undefined ? null : (
           <button
             type="button"
-            className={clsx(css.freeBuild, css.reveal)}
+            className={clsx(css.freeBuild, catalogCss.freeBuild, css.reveal)}
             style={revealAt(2)}
             onClick={onFreeBuild}
           >
@@ -429,7 +430,7 @@ export function ExperimentPicker({
         )}
 
         {/* ------------------------------------------------------ filter bar */}
-        <div className={clsx(css.browseHead, css.reveal)} style={revealAt(3)}>
+        <div className={clsx(css.browseHead, catalogCss.browseHead, css.reveal)} style={revealAt(3)}>
           <div className={css.browseTitle}>
             <h3 className={css.browseHeading}>{t('lab.template.picker.allTemplates')}</h3>
             <span className={css.browseHint}>{t('lab.picker.browse.hint')}</span>
@@ -475,7 +476,7 @@ export function ExperimentPicker({
         </div>
 
         <div
-          className={clsx(css.tabs, css.reveal)}
+          className={clsx(css.tabs, catalogCss.tabs, css.reveal)}
           style={revealAt(4)}
           role="tablist"
           aria-label={t('lab.template.picker.allTemplates')}
@@ -528,13 +529,13 @@ export function ExperimentPicker({
                     <span className={css.shelfCount}>{shelf.templates.length}</span>
                   </h4>
                 ) : null}
-                <div className={css.grid}>
+                <div className={clsx(css.grid, catalogCss.grid)}>
                   {shelf.templates.map((template, index) => (
                     <button
                       key={template.id}
                       type="button"
                       className={clsx(
-                        css.entry,
+                        css.entry, catalogCss.entry,
                         css.card,
                         css[`subject-${template.domain}`],
                         template.comingSoon === true && css.entrySoon,
@@ -547,11 +548,11 @@ export function ExperimentPicker({
                         pick(template)
                       }}
                     >
-                      <span className={clsx(css.art, css.artThumb)}>
+                      <span className={clsx(css.art, catalogCss.art, css.artThumb)}>
                         <ExperimentArt templateId={template.id} />
                       </span>
-                      <span className={css.entryText}>
-                        <span className={css.entryName}>
+                      <span className={clsx(css.entryText, catalogCss.entryText)}>
+                        <span className={clsx(css.entryName, catalogCss.entryName)}>
                           <span>{t(template.label)}</span>
                           {template.comingSoon === true ? (
                             <span className={css.soonBadge}>
@@ -561,9 +562,9 @@ export function ExperimentPicker({
                             <span className={css.recentBadge}>{t('lab.picker.recentBadge')}</span>
                           ) : null}
                         </span>
-                        <span className={css.entryHint}>{t(template.hint)}</span>
+                        <span className={clsx(css.entryHint, catalogCss.entryHint)}>{t(template.hint)}</span>
                       </span>
-                      <span className={css.tagColumn}>
+                      <span className={clsx(css.tagColumn, catalogCss.tagColumn)}>
                         {/* The subject is redundant under a subject shelf heading;
                             it earns its place only on a flat cross-subject list. */}
                         {grouped ? null : (
@@ -575,7 +576,7 @@ export function ExperimentPicker({
                           {t(`lab.template.stage.${template.stage}`)}
                         </span>
                         {template.comingSoon === true ? null : (
-                          <span className={css.entryPlay} aria-hidden="true">
+                          <span className={clsx(css.entryPlay, catalogCss.entryPlay)} aria-hidden="true">
                             <IconPhysicsPlay size={15} />
                           </span>
                         )}

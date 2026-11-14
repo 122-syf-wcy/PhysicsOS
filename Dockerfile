@@ -78,11 +78,13 @@ RUN node scripts/overlay/harness-overlay.mjs apply
 # lockfile entries; that sweep alone cost 2m21s here. The lockfile is committed
 # and reviewed, which is the case the flag documents.
 RUN --mount=type=cache,target=/pnpm/store,sharing=locked \
-    printf 'onlyBuiltDependencies:\n  - node-pty\nfetchTimeout: 1800000\n' \
+    cp vendor/deepseek-harness/pnpm-workspace.yaml /tmp/physicsos-build-workspace.yaml \
+    && printf 'onlyBuiltDependencies:\n  - node-pty\nfetchTimeout: 1800000\n' \
         >> vendor/deepseek-harness/pnpm-workspace.yaml \
     && pnpm install --frozen-lockfile --trust-lockfile \
     && pnpm -C vendor/deepseek-harness install --frozen-lockfile --trust-lockfile \
-    && pnpm -C vendor/deepseek-harness rebuild node-pty
+    && pnpm -C vendor/deepseek-harness rebuild node-pty \
+    && mv /tmp/physicsos-build-workspace.yaml vendor/deepseek-harness/pnpm-workspace.yaml
 
 # The JSONL session backend takes its cross-process write lock through the
 # native `flock` Node-API addon (@deepseek-ai/node-addon-system-<platform>-<arch>).

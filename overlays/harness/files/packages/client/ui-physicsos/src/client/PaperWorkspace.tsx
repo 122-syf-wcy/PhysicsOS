@@ -22,6 +22,8 @@ import {
   type Difficulty, type DifficultyMix,
 } from '@physicsos/question-paper/difficulty'
 import { isTeachingRole, type AuthState } from './auth-store.ts'
+import { Mascot } from './Mascot.tsx'
+import { PhysicsOSMark } from './PhysicsOSMark.tsx'
 import { MathText } from './physics/MathText.tsx'
 import { GlassSelect } from './GlassSelect.tsx'
 import {
@@ -182,7 +184,7 @@ function StageRail({ status }: { readonly status: string }) {
 function Empty({ text }: { text: string }) {
   return (
     <div className={css.emptyState}>
-      <img src="/physicsos/paper-empty.jpg" alt="" />
+      <Mascot pose="search" size={112} />
       <p>{text}</p>
     </div>
   )
@@ -366,8 +368,8 @@ function PaperStudio({ api, t, openSurface }: PaperWorkspaceProps) {
           </button>
         )}
         <div className={css.heroText}>
-          <h1 className={css.title}>贵州高考物理 · 出卷工作台</h1>
-          <p className={css.subtitle}>贵州本土 · 2027 届 — 初中理综 / 高中物理 · 单元 · 周考 · 月考 · 期中 · 期末 · 模拟</p>
+          <h1 className={css.title}><PhysicsOSMark size={38} />{t('paper.heading')}</h1>
+          <p className={css.subtitle}>{t('paper.subtitle')}</p>
         </div>
         <label className={css.reviewer}>
           复核人
@@ -413,6 +415,7 @@ function PaperStudio({ api, t, openSurface }: PaperWorkspaceProps) {
 
       {tab === 'new' && (
         <NewPaperPanel
+          t={t}
           blueprints={verifiedBlueprints}
           api={api}
           onCreated={(job) => { selectedId.current = job.id; applyJob(job); setTab('jobs'); void refresh() }}
@@ -430,7 +433,7 @@ function PaperStudio({ api, t, openSurface }: PaperWorkspaceProps) {
         />
       )}
       {tab === 'final' && (
-        <FinalPanel jobs={finalJobs} exports_={exports_} api={api} />
+        <FinalPanel jobs={finalJobs} exports_={exports_} api={api} t={t} />
       )}
       {tab === 'bank' && (
         <BankPanel
@@ -461,7 +464,8 @@ function PaperStudio({ api, t, openSurface }: PaperWorkspaceProps) {
  * only required inputs, the section structure rides under the template, and
  * kind/difficulty/exclude live behind an 高级设置 fold with sane defaults.
  */
-function NewPaperPanel({ blueprints, api, onCreated, onError, onReview }: {
+function NewPaperPanel({ blueprints, api, onCreated, onError, onReview, t }: {
+  t: PaperWorkspaceProps['t']
   blueprints: BlueprintRow[]
   api: PaperApi
   onCreated: (job: PaperJobWire) => void
@@ -527,6 +531,10 @@ function NewPaperPanel({ blueprints, api, onCreated, onError, onReview }: {
                   onChange={setBlueprintId}
                 />
               </div>
+              <dl className={css.templateMeta}>
+                <div><dt>{t('paper.new.level')}</dt><dd>{blueprint === undefined ? '—' : blueprint.level === 'zhongkao' ? '初中' : '高中'}</dd></div>
+                <div><dt>{t('paper.new.subject')}</dt><dd>{blueprint === undefined ? '—' : SUBJECT_LABEL[blueprint.subject] ?? blueprint.subject}</dd></div>
+              </dl>
               {blueprint !== undefined && (
                 <>
                   <div className={css.bpInfo}>
@@ -596,7 +604,7 @@ function NewPaperPanel({ blueprints, api, onCreated, onError, onReview }: {
           <div className={css.summaryCard}>
             <h3 className={css.summaryTitle}>试卷摘要</h3>
             <dl className={css.summaryList}>
-              <div><dt>规范 Profile</dt><dd>{blueprint === undefined ? '未选择' : blueprint.policyLabel ?? '未标注'}</dd></div>
+              <div><dt>{t('paper.new.policy')}</dt><dd>{blueprint === undefined ? '未选择' : blueprint.policyLabel ?? '未标注'}</dd></div>
               <div><dt>试卷结构</dt><dd>{blueprint?.title ?? '未选择'}</dd></div>
               <div><dt>总分 / 时长</dt><dd>{blueprint === undefined ? '—' : `${blueprint.totalScore} 分 / ${blueprint.minutes} 分钟`}</dd></div>
               <div><dt>题量</dt><dd>{blueprint === undefined ? '—' : `${totalQuestions} 题`}</dd></div>
@@ -619,11 +627,7 @@ function NewPaperPanel({ blueprints, api, onCreated, onError, onReview }: {
                 <span className={clsx(css.statusPill, css.statusPending)}>待检查</span>
               </li>
             </ul>
-            <p className={css.summaryHint}>
-              点击「AI 起草 + 自动检查」一键完成：细目表自动确认并起草，过程实时可见；
-              物理验证通过、考试规范校验到达
-              <code className={css.code}>READY_FOR_TEACHER_REVIEW</code> 再由教研复核。
-            </p>
+            <p className={css.summaryHint}>{t('paper.new.pendingHint')}</p>
           </div>
         </aside>
 
@@ -633,7 +637,7 @@ function NewPaperPanel({ blueprints, api, onCreated, onError, onReview }: {
             {busy ? '创建中…' : '生成双向细目表'}
           </button>
           <button type="button" className={css.miniBtn} onClick={onReview}>前往审核</button>
-          {blueprint === undefined && <span className={css.actionHint}>请先选择试卷结构模板</span>}
+          {blueprint === undefined && <span className={css.actionHint}>{t('paper.new.emptyHint')}</span>}
         </div>
       </div>
     </section>
@@ -1130,7 +1134,7 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate, onPolling, notify }: 
                 {q.answer !== undefined && (
                   <div className={css.answer}>
                     <p><b>答案：</b><Rich text={q.answer.result} /></p>
-                    {q.answer.steps.map((s, i) => <p key={i} className={css.step}><Rich text={s} /></p>)}
+                    {q.answer.steps.map((s, i) => <p key={i} className={css.answerStep}><Rich text={s} /></p>)}
                     <p className={css.grading}>
                       评分点：{q.answer.gradingPoints.map((p, i) => (
                         <span key={i}>{i > 0 && '；'}<Rich text={p.text} />（{p.score}分）</span>
@@ -1228,19 +1232,28 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate, onPolling, notify }: 
 
 /* ------------------------------------------------------------- 已定稿 -- */
 
-function FinalPanel({ jobs, exports_, api }: {
+function FinalPanel({ jobs, exports_, api, t }: {
+  t: PaperWorkspaceProps['t']
   jobs: PaperJobWire[]
   exports_: ExportBundleRow[]
   api: PaperApi
 }) {
+  const [query, setQuery] = useState('')
+  const [subject, setSubject] = useState('all')
+  const rows = jobs.filter(job => (query.trim() === '' || `${job.document?.title ?? ''} ${job.id}`.includes(query.trim())) && (subject === 'all' || job.request.subjects.includes(subject)))
   const [preview, setPreview] = useState<{ jobId: string; name: string } | undefined>()
   return (
     <section className={css.panel}>
       <h2>已定稿试卷</h2>
       {jobs.length === 0 && <Empty text="暂无已定稿的试卷 — 批准并导出的试卷会出现在这里" />}
-      <div className={css.split}>
-        <aside className={css.jobList}>
-          {jobs.map((job) => {
+      <div className={css.finalSplit}>
+        <div className={css.finalList}>
+          <div className={css.finalFilters}>
+            <input type="search" aria-label={t('paper.final.search')} placeholder={t('paper.final.search')} value={query} onChange={event => { setQuery(event.target.value) }} />
+            <GlassSelect value={subject} ariaLabel={t('paper.final.subjects')} options={[{ value: 'all', label: t('paper.final.allSubjects') }, { value: 'physics', label: '物理' }, { value: 'chemistry', label: '化学' }]} onChange={setSubject} />
+          </div>
+          <div className={css.finalRows}>
+          {rows.map((job) => {
             const bundle = exports_.find(e => e.paperId === job.id)
             /* Bind the download names to consts: the `!== undefined` checks
                below sit inside JSX closures, where narrowing on a property
@@ -1248,12 +1261,12 @@ function FinalPanel({ jobs, exports_, api }: {
             const paperPdf = bundle?.files.paperPdf
             const answerPdf = bundle?.files.answerPdf
             return (
-              <div key={job.id} className={css.jobRow}>
+              <div key={job.id} className={css.finalRow}>
                 <span className={css.jobTitle}>{job.document?.title ?? job.id}</span>
                 <span className={css.jobMeta}><StatusChip status={job.status} /> v{job.versions.at(-1)?.version ?? '-'} · {jobRating(job)}</span>
                 <div className={css.fileLinks}>
                   {paperPdf !== undefined && (
-                    <button type="button" onClick={() => { setPreview({ jobId: job.id, name: paperPdf }) }}>试卷.pdf</button>
+                    <><button type="button" onClick={() => { setPreview({ jobId: job.id, name: paperPdf }) }}>试卷.pdf</button><a className={css.primary} href={api.fileUrl(job.id, paperPdf)} download>{t('paper.final.download')}</a></>
                   )}
                   {answerPdf !== undefined && (
                     <button type="button" onClick={() => { setPreview({ jobId: job.id, name: answerPdf }) }}>答案解析.pdf</button>
@@ -1268,8 +1281,10 @@ function FinalPanel({ jobs, exports_, api }: {
               </div>
             )
           })}
-        </aside>
-        <div className={css.jobDetail}>
+          </div>
+          {jobs.length > 0 && rows.length === 0 && <p className={css.empty}>{t('paper.final.filteredEmpty')}</p>}
+        </div>
+        <div className={css.finalPreview}>
           {preview === undefined
             ? <p className={css.empty}>选择一份 PDF 在此预览（即最终打印版式）。</p>
             : <iframe className={css.preview} title="试卷 PDF 预览"

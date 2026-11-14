@@ -1,0 +1,21 @@
+/* The drawing sheet stays full-sized while its tools and source float above it. */
+.workspace.workspace { padding: 0; gap: 0; background: var(--physics-canvas-bg); }
+.workspace .header { z-index: 9; min-height: 54px; padding: 8px 18px; border: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
+.workspace .body { position: relative; display: block; flex: 1; min-height: 0; }
+.editor.editor { position: absolute; inset: 0; border: 0; border-radius: 0; padding: 0; overflow: hidden; background: var(--physics-canvas-bg); }
+.editor .stage { position: absolute; inset: 0; border-radius: 0; background-color: var(--physics-canvas-bg); background-image: radial-gradient(var(--physics-grid-major) .7px, transparent .7px); background-size: 24px 24px; }
+.editor .dock { position: absolute; z-index: 8; bottom: 14px; left: 0; right: 0; padding: 0 16px; background: transparent; }
+.editor .tools { flex-direction: row; border-radius: 999px; padding: 8px 14px; box-shadow: var(--physics-glass-rim), var(--physics-glass-lift); }
+.editor .tools::before { border-radius: inherit; }
+.editor .zoom { z-index: 7; left: 16px; bottom: 18px; padding: 7px 10px; border-radius: 999px; color: var(--physics-ink); border: 1px solid var(--physics-glass-border); background: var(--physics-glass-fill); box-shadow: var(--physics-glass-rim), var(--physics-glass-lift); backdrop-filter: var(--physics-glass-blur); }
+.headerActions { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin-left: auto; }
+.headerActions button, .headerActions summary { font-size: 12px; min-height: 30px; padding: 5px 8px; color: var(--physics-ink); border: 1px solid var(--physics-glass-border-soft); border-radius: 999px; background: var(--physics-glass-fill); }
+.headerActions summary { cursor: pointer; }
+.headerActions :global([aria-pressed='true']) { background: var(--physics-accent-soft); }
+.headerActions :global([aria-label]) > span:first-child { margin-right: 4px; }
+.headerActions :global(details) { position: relative; }
+.headerActions :global(details) > div { right: 0; z-index: 30; }
+.sourcePanel.sourcePanel { position: static; width: 100%; max-width: none; min-width: 0; height: 100%; max-height: none; padding: 0; border: 0; background: transparent; box-shadow: none; }
+@media (max-width: 1000px) { .editor .zoom { bottom: 90px; } .editor .tools { border-radius: 26px; } }
+@media (max-width: 600px) { .workspace .header { padding: 6px 8px; flex-wrap: wrap; } .headerActions { flex-basis: 100%; flex-wrap: nowrap; overflow-x: auto; } .headerActions > * { flex-shrink: 0; } .editor .dock { padding: 0 8px; bottom: 10px; } .editor .tools { max-width: 100%; padding: 6px; } .editor .zoom { bottom: 138px; } }
+@media (prefers-reduced-transparency: reduce) { .editor .tools, .editor .zoom { background: var(--physics-glass-fill-strong); backdrop-filter: none; } }

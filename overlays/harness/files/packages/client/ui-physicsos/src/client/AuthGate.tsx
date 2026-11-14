@@ -14,6 +14,7 @@ import type { FormEvent, ReactNode } from 'react'
 import clsx from 'clsx'
 import type { SnapshotStore } from './runtime-compat.ts'
 import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import { Mascot } from './Mascot.tsx'
 import { PhysicsOSMark } from './PhysicsOSMark.tsx'
 import {
   createAuthApi,
@@ -94,7 +95,7 @@ const EyeIcon = ({ hidden }: { hidden: boolean }): ReactNode => (
 )
 
 /** Brand chrome shared by every gate view. */
-function GateChrome({ t, children }: { t: (key: PhysicsosKey) => string; children: ReactNode }) {
+function GateChrome({ t, children, heading = 'auth.login.title' }: { t: (key: PhysicsosKey) => string; children: ReactNode; heading?: PhysicsosKey }) {
   return (
     <div className={css.gate} data-physicsos-auth-gate="">
       <header className={css.topbar}>
@@ -105,10 +106,12 @@ function GateChrome({ t, children }: { t: (key: PhysicsosKey) => string; childre
         <span className={css.topLinks}>{t('auth.topLinks')}</span>
       </header>
       <main className={css.stage}>
+        <section className={css.authCard}>
         <PhysicsOSMark size={52} className={css.heroMark} />
-        <h1 className={css.tagline}>{t('brand.tagline')}</h1>
-        <p className={css.support}>{t('auth.support')}</p>
+        <h1 className={css.tagline}>{t(heading)}</h1>
+        <p className={css.support}>{t(heading === 'auth.login.title' ? 'auth.login.support' : 'auth.support')}</p>
         {children}
+        </section>
       </main>
       <footer className={css.footer}>
         {t('auth.footerLinks')}
@@ -317,9 +320,8 @@ export function AuthGate({
      the gate becomes a receipt instead of the shell. */
   if (pendingReview !== undefined) {
     return (
-      <GateChrome t={t}>
+      <GateChrome t={t} heading="auth.pending.title">
         <div className={css.form} data-physicsos-auth-view="pending">
-          <h2 className={css.formTitle}>{t('auth.pending.title')}</h2>
           <p className={css.receipt}>{t('auth.pending.body')}</p>
           <dl className={css.receiptList}>
             <div>
@@ -355,7 +357,8 @@ export function AuthGate({
   if (status === 'loading' && token === '') {
     return (
       <GateChrome t={t}>
-        <div className={css.form} aria-busy="true">
+        <div className={css.form} aria-busy="true" aria-label={t('auth.busy')}>
+          <Mascot pose="think" size={112} />
           <span className={css.loadingDot} />
         </div>
       </GateChrome>
@@ -383,7 +386,7 @@ export function AuthGate({
   )
 
   return (
-    <GateChrome t={t}>
+    <GateChrome t={t} heading={view === 'login' ? 'auth.login.title' : view === 'register' ? 'auth.register.title' : view === 'forgot' ? 'auth.forgot.title' : 'auth.reset.title'}>
       {view === 'login' && (
         <form className={css.form} onSubmit={submitLogin} noValidate data-physicsos-auth-view="login">
           <Field label={t('auth.username.label')}>
@@ -443,7 +446,7 @@ export function AuthGate({
 
       {view === 'register' && (
         <form className={css.form} onSubmit={submitRegister} noValidate data-physicsos-auth-view="register">
-          <h2 className={css.formTitle}>{t('auth.register.title')}</h2>
+
           <Field label={t('auth.school.label')} invalid={error !== '' && schoolName.trim() === ''}>
             <input
               className={css.input}
@@ -557,7 +560,7 @@ export function AuthGate({
         forgotSent
           ? (
             <div className={css.form} data-physicsos-auth-view="forgot">
-              <h2 className={css.formTitle}>{t('auth.forgot.title')}</h2>
+
               <p className={css.receipt}>{t('auth.forgot.receipt')}</p>
               <button type="button" className={css.submit} onClick={() => { switchView('login') }}>
                 {t('auth.forgot.back')}
@@ -566,7 +569,7 @@ export function AuthGate({
           )
           : (
             <form className={css.form} onSubmit={submitForgot} noValidate>
-              <h2 className={css.formTitle}>{t('auth.forgot.title')}</h2>
+
               <p className={css.receipt}>{t('auth.forgot.hint')}</p>
               <Field label={t('auth.username.label')}>
                 <input
@@ -594,7 +597,7 @@ export function AuthGate({
         resetSent
           ? (
             <div className={css.form} data-physicsos-auth-view="reset">
-              <h2 className={css.formTitle}>{t('auth.reset.title')}</h2>
+
               <p className={css.receipt}>{t('auth.reset.receipt')}</p>
               <button
                 type="button"
@@ -607,7 +610,7 @@ export function AuthGate({
           )
           : (
             <form className={css.form} onSubmit={submitReset} noValidate>
-              <h2 className={css.formTitle}>{t('auth.reset.title')}</h2>
+
               <p className={css.receipt}>{t('auth.reset.hint')}</p>
               <Field label={t('auth.password.label')}>
                 {passwordField}

@@ -59,19 +59,19 @@ describe('AdminNoticeTab', () => {
       row({ id: 'b', body: '已经回复的', status: 'answered' }),
     ])
     mount(api)
-    expect(await screen.findByText('还没处理的')).toBeTruthy()
+    expect(await screen.findByRole('button', { name: '还没处理的' })).toBeTruthy()
     expect(screen.queryByText('已经回复的')).toBeNull()
 
     fireEvent.click(screen.getByRole('combobox'))
     fireEvent.click(screen.getByRole('option', { name: '已回复' }))
-    expect(await screen.findByText('已经回复的')).toBeTruthy()
+    expect(await screen.findByRole('button', { name: '已经回复的' })).toBeTruthy()
     expect(screen.queryByText('还没处理的')).toBeNull()
   })
 
   it('replies to a report and refuses an empty reply', async () => {
     const { api, replyFeedback } = stubApi([row({ id: 'fb-9' })])
     mount(api)
-    await screen.findByText('液体压强实验里拖动液面读数不动')
+    await screen.findByRole('button', { name: '液体压强实验里拖动液面读数不动' })
 
     const box = screen.getByPlaceholderText('回复这位同学')
     const button = screen.getByRole('button', { name: '回复' }) as HTMLButtonElement

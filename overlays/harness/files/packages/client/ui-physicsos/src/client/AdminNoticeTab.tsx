@@ -14,6 +14,7 @@ import {
   AdminCardMeta,
   AdminEmpty,
   AdminStats,
+  AdminTable,
   AdminToolbar,
 } from './AdminPrimitives.tsx'
 import css from './AdminWorkspace.module.css'
@@ -23,13 +24,6 @@ export interface AdminNoticeTabProps {
   readonly t: (key: PhysicsosKey) => string
 }
 
-const KIND_LABEL: Record<FeedbackRow['kind'], string> = {
-  bug: '故障',
-  content: '内容',
-  idea: '建议',
-  other: '其他',
-}
-
 const fmtTime = (iso: string): string => {
   const date = new Date(iso)
   return Number.isNaN(date.getTime()) ? iso : date.toLocaleString('zh-CN', { hour12: false })
@@ -37,6 +31,7 @@ const fmtTime = (iso: string): string => {
 
 export function AdminNoticeTab({ api, t }: AdminNoticeTabProps) {
   const [items, setItems] = useState<readonly FeedbackRow[] | undefined>()
+  const [selected, setSelected] = useState<string>()
   const [status, setStatus] = useState<FeedbackStatus | ''>('open')
   const [error, setError] = useState<string | undefined>()
   const [drafts, setDrafts] = useState<Readonly<Record<string, string>>>({})
@@ -97,10 +92,21 @@ export function AdminNoticeTab({ api, t }: AdminNoticeTabProps) {
       </AdminToolbar>
 
       {visible.length === 0 && <AdminEmpty>{t('admin.empty')}</AdminEmpty>}
-      {visible.map(row => (
-        <AdminCard key={row.id} data-feedback={row.id}>
+      <div className={css.detailLayout}>
+        <section className={css.detailList}>
+          <AdminTable minWidth={430}>
+            <thead><tr><th>{t('admin.audit.time')}</th><th>{t('notice.kindLabel')}</th><th>{t('notice.description')}</th><th>{t('admin.users.status')}</th></tr></thead>
+            <tbody>{visible.map(row => <tr key={row.id} data-selected={row.id === (visible.find(item => item.id === selected)?.id ?? visible[0]?.id) || undefined}>
+              <td className={css.timeCell}>{fmtTime(row.createdAt)}</td><td>{t(`notice.kind.${row.kind}`)}</td>
+              <td><button type="button" className={css.tableLink} onClick={() => { setSelected(row.id) }}>{row.body.length > 80 ? `${row.body.slice(0, 80)}…` : row.body}</button></td>
+              <td><button type="button" className={css.ghost} onClick={() => { setSelected(row.id) }}>{t(`admin.notice.status.${row.status}`)}</button></td>
+            </tr>)}</tbody>
+          </AdminTable>
+        </section>
+      {visible.filter(row => row.id === (visible.find(item => item.id === selected)?.id ?? visible[0]?.id)).map(row => (
+        <AdminCard key={row.id} className={css.detailPane} data-feedback={row.id}>
           <AdminCardMeta>
-            {fmtTime(row.createdAt)} · {KIND_LABEL[row.kind]} · {row.authorKey}
+            {fmtTime(row.createdAt)} · {t(`notice.kind.${row.kind}`)} · {row.authorKey}
             {row.context === undefined ? '' : ` · ${row.context}`}
           </AdminCardMeta>
           <p className={css.cardText}>{row.body}</p>
@@ -133,6 +139,7 @@ export function AdminNoticeTab({ api, t }: AdminNoticeTabProps) {
           </div>
         </AdminCard>
       ))}
+      </div>
     </>
   )
 }

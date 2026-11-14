@@ -207,9 +207,9 @@ describe('PhysicsOS overlay presentation', () => {
 
   it('renders the home brand copy', () => {
     render(<HomeBrand t={t} />)
-    expect(screen.getByText('PhysicsOS')).toBeTruthy()
-    expect(screen.getByText('探索一个物理世界')).toBeTruthy()
-    expect(screen.getByText('描述一个物理现象、创建实验，或直接输入一道试题。')).toBeTruthy()
+    expect(screen.getByText('让好奇发生')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '今天，想探索什么？' })).toBeTruthy()
+    expect(screen.getByText('提一个问题、上传试题，或直接创建实验。')).toBeTruthy()
   })
 
   it('lists recent real scenes as a compact row and restores one on click', () => {
@@ -253,16 +253,11 @@ describe('PhysicsOS overlay presentation', () => {
         t={t}
       />,
     )
-    fireEvent.click(screen.getByRole('button', { name: '物理实验室' }))
-    fireEvent.click(screen.getByRole('button', { name: 'AI 物理解题' }))
-    fireEvent.click(screen.getByRole('button', { name: '打开' }))
-    fireEvent.click(screen.getByRole('button', { name: '项目' }))
-    expect(screen.getByText('电磁学 / 磁场与洛伦兹力 · 实验')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '创建实验' }))
+    fireEvent.click(screen.getByRole('button', { name: '拍题解答' }))
     fireEvent.click(screen.getByRole('button', { name: /^磁场实验/ }))
     expect(openSurface).toHaveBeenNthCalledWith(1, 'lab')
     expect(startQuestion).toHaveBeenCalledOnce()
-    expect(openCanvasView).toHaveBeenCalledOnce()
-    expect(openSurface).toHaveBeenNthCalledWith(2, 'projects')
     /* The recent row restores the REAL stored scene, not a session. */
     expect(openSurface).toHaveBeenLastCalledWith('lab', { sceneId: ref.sceneId, scene: ref.scene })
     fireEvent.click(screen.getByRole('button', { name: '加入工作台 · 磁场实验' }))
@@ -283,10 +278,9 @@ describe('PhysicsOS overlay presentation', () => {
         t={t}
       />,
     )
-    expect(screen.getByText('正电粒子垂直进入匀强磁场')).toBeTruthy()
-    expect(screen.getByText('比较不同角度的平抛轨迹')).toBeTruthy()
-    expect(screen.getByText('为什么洛伦兹力不做功？')).toBeTruthy()
-    expect(screen.getByText('最近实验')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '讲解概念' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '教学设计' })).toBeTruthy()
+    expect(screen.getByText('继续探索')).toBeTruthy()
     expect(screen.getByText('还没有创建物理世界')).toBeTruthy()
     expect(screen.getByText(/PhysicsOS 会为你建立对应的物理世界/)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '创建物理实验' }))
@@ -362,7 +356,7 @@ describe('PhysicsOS overlay presentation', () => {
       </>,
     )
     expect(screen.getByText('探索一个物理世界')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: '物理实验室' }))
+    fireEvent.click(screen.getByRole('button', { name: '创建实验' }))
     expect(openSurface).toHaveBeenCalledWith('lab')
   })
 

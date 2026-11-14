@@ -73,3 +73,25 @@
   .details dd { margin-bottom: 8px; }
   .previewCard { padding: 16px; }
 }
+
+/* The collection remains visible while one selected entry is edited. */
+.collectionLayout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 370px); gap: 24px; align-items: start; }
+.collectionList { min-width: 0; }
+.entryEditor { position: sticky; top: 0; min-width: 0; }
+.entryEditor .fields { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+.entryEditor > section { display: grid; gap: 16px; }
+.entrySummary { max-width: 240px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+.sections > button { border-radius: 999px; padding: 8px 16px; }
+.version { margin: 12px 0; }
+.collectionHeader { margin-top: 6px; }
+.entryControls { gap: 12px; }
+.entryControls > :last-child { margin-left: 0; flex-basis: 100%; }
+.entryControls .visibility { flex-basis: auto; }
+.previewCard strong, .previewCard h4, .preview h3 { font-weight: 500; }
+.previewGrid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); }
+@container (max-width: 900px) { .collectionLayout { grid-template-columns: minmax(0, 1fr); } .entryEditor { position: static; } .entryEditor .fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (max-width: 650px) { .entryEditor .fields { grid-template-columns: minmax(0, 1fr); } }
+
+.collectionLayout { grid-template-columns: minmax(0, 1.45fr) minmax(340px, 1fr); }
+.root > section:first-child { padding: 5px 0 12px; border: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
+@container (max-width: 900px) { .collectionLayout { grid-template-columns: minmax(0, 1fr); } }

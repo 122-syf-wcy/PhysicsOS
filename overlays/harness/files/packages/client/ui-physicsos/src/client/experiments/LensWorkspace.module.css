@@ -1,0 +1,24 @@
+/* Optics uses the same uninterrupted bench as other experiment domains. */
+.workspace.workspace { padding: 0; overflow: hidden; background: var(--physics-canvas-bg); }
+.workspace .header { position: absolute; z-index: 8; top: 8px; left: 18px; right: 18px; min-height: 62px; margin: 0; pointer-events: none; }
+.workspace .header > * { pointer-events: auto; }
+.workspace .grid { position: absolute; inset: 0; display: block; }
+.workspace .stageCard { position: absolute; inset: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.workspace .stage { position: absolute; inset: 0; min-height: 0; height: 100%; margin: 0; border-radius: 0; background: var(--physics-canvas-bg); }
+.workspace .stage > :global([data-community-status]) { height: 100%; min-height: 0; }
+.workspace .stageToolbar { position: absolute; z-index: 6; top: 128px; left: 18px; right: 18px; border: 0; background: transparent; padding: 0; }
+.workspace .steps { position: absolute; top: 78px; left: 18px; z-index: 6; display: flex; gap: 6px; width: min(700px, calc(100% - 36px)); margin: 0; }
+.workspace .steps button { padding: 7px 11px; gap: 6px; border-radius: 999px; background: var(--physics-glass-fill); border: 1px solid var(--physics-glass-border-soft); font-size: 12px; }
+.workspace .steps button i { display: none; }
+.workspace .resultStrip { position: absolute; z-index: 5; bottom: 22px; left: 50%; transform: translateX(-50%); width: min(600px, calc(100% - 36px)); padding: 10px 18px; margin: 0; border: 1px solid var(--physics-glass-border); border-radius: 999px; background: var(--physics-glass-fill); box-shadow: var(--physics-glass-rim), var(--physics-glass-lift); backdrop-filter: var(--physics-glass-blur); }
+.workspace .screenHint { position: absolute; z-index: 5; left: 18px; bottom: 100px; width: min(350px, calc(100% - 36px)); max-height: 130px; overflow: auto; margin: 0; padding: 10px 12px; border: 1px solid var(--physics-glass-border-soft); border-radius: 16px; background: var(--physics-glass-fill); backdrop-filter: var(--physics-glass-blur); }
+.workspace .stageCaption { position: absolute; top: 178px; left: 18px; right: auto; z-index: 4; }
+.workspace .stageFoot { position: absolute; bottom: 86px; right: 18px; left: auto; z-index: 4; padding: 3px 0; background: transparent; }
+.controls.controls { position: static; width: 100%; padding: 0; border: 0; box-shadow: none; background: transparent; }
+.notebook { min-height: 0; }
+.notebook .presets { padding: 0; margin: 0 0 18px; border: 0; background: transparent; }
+.notebook .zoneGrid { display: grid; grid-template-columns: 1fr; gap: 6px; }
+.notebook .zoneGrid button { padding: 8px 10px; }
+.agent > * { position: static; width: 100%; min-width: 0; max-width: none; height: 100%; max-height: none; box-shadow: none; border: 0; border-radius: 0; background: transparent; }
+@container experiment-page (max-width: 800px) { .workspace .header { align-items: flex-start; flex-direction: column; gap: 6px; } .workspace .header :global(h1) { font-size: 18px; } .workspace .steps { top: 126px; } .workspace .stageToolbar { top: 172px; } .workspace .stageCaption { top: 214px; } .workspace .screenHint { display: none; } .workspace .stageFoot { display: none; } }
+@media (prefers-reduced-transparency: reduce) { .workspace .resultStrip, .workspace .screenHint { background: var(--physics-glass-fill-strong); backdrop-filter: none; } }

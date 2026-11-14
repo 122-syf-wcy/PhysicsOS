@@ -69,7 +69,7 @@ export function SidebarFooter({ wide, openRecord, openAdmin, logout, useAuth, t 
       {user !== undefined && (
         <Menu
           open={menuOpen}
-          side="top"
+          side="bottom"
           align="start"
           portal
           items={accountItems}

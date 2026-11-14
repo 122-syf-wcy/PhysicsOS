@@ -1,6 +1,6 @@
 import { sceneRefOf } from './surface-store.ts'
 import {
-  IconBrowseOutlineMedium, IconChevronRightOutlineMedium, IconFolderOpenOutlineMedium,
+  IconBrowseOutlineMedium, IconFolderOpenOutlineMedium,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SnapshotStore } from './runtime-compat.ts'
 import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
@@ -26,95 +26,18 @@ export type HomeActionsProps =
   & PropsLocale<'physicsos'>
 
 /** Quick actions and the recent real-scene list under the hero composer. */
-export function HomeActions({ useRecentExperiments, openSurface, openCanvasView, requestSceneInCanvas, startQuestion, t }: HomeActionsProps) {
+export function HomeActions({ useRecentExperiments, openSurface, requestSceneInCanvas, startQuestion, t }: HomeActionsProps) {
   const items = useRecentExperiments(s => s.items)
   return (
     <div className={css.root}>
-      <ul className={css.examples} aria-label={t('examples.label')}>
-        {(['examples.magnet', 'examples.projectile', 'examples.work'] as const).map(key => (
-          <li key={key}>
-            <button
-              type="button"
-              className={css.example}
-              onClick={() => { fillComposerDraft(t(key)) }}
-            >
-              {t(key)}
-            </button>
-          </li>
-        ))}
-      </ul>
-      <div className={css.portals}>
-        <button
-          type="button"
-          className={css.portal}
-          aria-label={t('home.card.lab.title')}
-          onClick={() => { openSurface('lab') }}
-        >
-          <img
-            className={css.portalImage}
-            src="/physicsos/lab-portal-hero.jpg"
-            alt=""
-            aria-hidden="true"
-          />
-          <span className={css.portalBody}>
-            <span className={css.portalTitle}>
-              <span className={css.portalIcon}><IconPhysicsLab size={18} /></span>
-              {t('home.card.lab.title')}
-            </span>
-            <span className={css.portalDescription}>{t('home.lab.description')}</span>
-            <span className={css.portalMeta}>
-              {t('home.card.lab.action')}
-              <IconChevronRightOutlineMedium size={14} />
-            </span>
-          </span>
-        </button>
-        {/* The question bank lives on the record surface: picking one hands the
-            stem to the tutor and the solved scene card lands in the chat. */}
-        <button
-          type="button"
-          className={css.portal}
-          aria-label={t('home.ask.title')}
-          onClick={() => { if (startQuestion !== undefined) startQuestion(); else openSurface('home') }}
-        >
-          <img
-            className={css.portalImage}
-            src="/physicsos/question-portal-hero.jpg"
-            alt=""
-            aria-hidden="true"
-          />
-          <span className={css.portalBody}>
-            <span className={css.portalTitle}>
-              <span className={css.portalIcon}><IconQuestionSheet size={18} /></span>
-              {t('home.ask.title')}
-            </span>
-            <span className={css.portalDescription}>{t('home.ask.description')}</span>
-            <span className={css.portalMeta}>
-              {t('home.ask.action')}
-              <IconChevronRightOutlineMedium size={14} />
-            </span>
-          </span>
-        </button>
-      </div>
-      <div className={css.utilities}>
-        <button
-          type="button"
-          className={css.action}
-          onClick={() => { openCanvasView() }}
-        >
-          <IconFolderOpenOutlineMedium size={16} />
-          <span>{t('canvas.open')}</span>
-        </button>
-        <button
-          type="button"
-          className={css.action}
-          onClick={() => { openSurface('projects') }}
-        >
-          <IconBrowseOutlineMedium size={16} />
-          <span>{t('nav.projects')}</span>
-        </button>
+      <div className={css.quickActions} aria-label={t('home.cards.label')}>
+        <button type="button" className={css.quickAction} onClick={() => { if (startQuestion !== undefined) startQuestion(); else fillComposerDraft(t('home.ask.action')) }}><IconQuestionSheet size={17} />{t('home.quick.question')}</button>
+        <button type="button" className={css.quickAction} onClick={() => { openSurface('lab') }}><IconPhysicsLab size={17} />{t('home.quick.experiment')}</button>
+        <button type="button" className={css.quickAction} onClick={() => { fillComposerDraft(t('home.quick.conceptPrompt')) }}><IconBrowseOutlineMedium size={17} />{t('home.quick.concept')}</button>
+        <button type="button" className={css.quickAction} onClick={() => { fillComposerDraft(t('home.quick.teachingPrompt')) }}><IconFolderOpenOutlineMedium size={17} />{t('home.quick.teaching')}</button>
       </div>
       <section className={css.recent} aria-label={t('recent.title')}>
-        <h2 className={css.recentTitle}>{t('recent.title')}</h2>
+        <h2 className={css.recentTitle}>{t('home.recent.title')}</h2>
         {items.length === 0 ? (
           <div className={css.empty}>
             <img

@@ -393,3 +393,21 @@ select.input {
   word-break: break-all;
   text-align: right;
 }
+
+/* A quiet entrance reuses the same paper and glass as the application. */
+.gate::before { background-image: var(--physics-glass-ambient); opacity: .45; }
+.gate::after { background: transparent; }
+.wordmark, .tagline { font-weight: 500; }
+.stage { padding-top: 12px; }
+
+.authCard { display: flex; flex-direction: column; align-items: center; width: min(580px, 100%); padding: 30px 42px 32px; box-sizing: border-box; border: 1px solid var(--physics-glass-border); border-radius: 28px; background: var(--physics-glass-fill); box-shadow: var(--physics-glass-rim), var(--physics-glass-lift); backdrop-filter: var(--physics-glass-blur); }
+.authCard .form { max-width: none; margin-top: 26px; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; box-sizing: border-box; }
+.authCard .tagline { font-size: 29px; line-height: 1.35; font-weight: 500; text-align: center; }
+.authCard .heroMark { width: 44px; height: 44px; margin-bottom: 17px; }
+.authCard .support { font-size: 16px; line-height: 1.6; }
+.authCard input:not([type='checkbox']) { min-height: 48px; border-radius: 13px; }
+.authCard .submit { min-height: 46px; border-radius: 12px; font-size: 16px; font-weight: 500; }
+.gate { overflow-y: auto; }
+.gate:has([data-physicsos-auth-view='register']) .stage { justify-content: flex-start; }
+.gate:has([data-physicsos-auth-view='register']) .authCard { margin: 18px auto; }
+@media(max-width:600px) { .authCard { padding: 25px 22px; border-radius: 22px; } .authCard .tagline { font-size: 23px; } .stage { padding: 20px 14px 30px; } .authCard .support { font-size: 13px; } }

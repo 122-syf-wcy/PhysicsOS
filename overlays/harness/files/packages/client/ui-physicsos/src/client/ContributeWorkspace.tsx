@@ -4,6 +4,7 @@ import type { ProductSurfaceBaseProps } from './surface-props.ts'
 import { IconContribution } from './icons/physics-icons.tsx'
 import { ContributionPanel } from './experiments/ContributionPanel.tsx'
 import { experimentHref } from './experiments/experiment-navigation.ts'
+import { Mascot } from './Mascot.tsx'
 import css from './ContributeWorkspace.module.css'
 
 export function ContributeWorkspace({ t }: Pick<ProductSurfaceBaseProps, 't'>): ReactElement {
@@ -26,16 +27,10 @@ export function ContributeWorkspace({ t }: Pick<ProductSurfaceBaseProps, 't'>): 
             {t('contribute.openDocs')}
           </a>
         </div>
-        <img
-          className={css.mascot}
-          src="/physicsos/developers/assets/studio/mascot-studio-480.webp"
-          width="240"
-          height="240"
-          alt=""
-        />
+        <Mascot pose="think" size={104} className={css.mascot} />
       </header>
       <div className={css.supported}>
-        <strong>全部 76 个已有实验均支持上传与审核</strong>
+        <strong>{t('contribute.supported')}</strong>
         <a href={experimentHref('convex-lens')}>{t('contribute.openExperiment')} →</a>
       </div>
       <ContributionPanel embedded />
