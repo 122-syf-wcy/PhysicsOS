@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto'
 import { mkdir, readFile, writeFile, rename } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { createSourceProjection, prepareBuilder, requireDisk, verifySourceProjection } from './release-build.mjs'
+import { createSourceProjection, prepareBuilder, requireDisk, validateSourceManifest, verifySourceProjection } from './release-build.mjs'
 import { runCommand, safeFailureMessage, terminationSignal } from './backup-lib.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -25,6 +25,25 @@ export function fullReleaseIdentity({ revision, nodeImage, estimatedBytes = 12 *
   return { revision, nodeImage, estimatedBytes }
 }
 
+/** Reuse the frozen runtime stage literally; only its builder provider changes. */
+export function seedRuntimeDockerfile(source) {
+  const marker = /^FROM \$\{NODE_IMAGE\} AS runtime\r?$/m
+  const matches = [...source.matchAll(new RegExp(marker.source, 'gm'))]
+  if (matches.length !== 1) throw new Error('A single reviewed Node runtime stage is required')
+  const runtimeStage = source.slice(matches[0].index)
+  return { runtimeStage, dockerfile: 'ARG NODE_IMAGE\nARG BUILDER_IMAGE\nFROM ${BUILDER_IMAGE} AS builder\n\n' + runtimeStage }
+}
+
+export function validateFullSeedAudit(receipt) {
+  if (receipt?.origin !== 'audited-runtime-seed' || receipt.audited !== true ||
+    receipt.offlineRootLockVerified !== true || receipt.offlineHarnessLockVerified !== true ||
+    !Array.isArray(receipt.offlineEvidence) || receipt.offlineEvidence.length < 2 ||
+    receipt.offlineEvidence.some(step => step.exitCode !== 0 || typeof step.command !== 'string' || !step.command.includes('--offline') || !step.command.includes('--frozen-lockfile')) ||
+    !['/app', '/app/vendor/deepseek-harness'].every(cwd => receipt.offlineEvidence.some(step => step.cwd === cwd)))
+    throw new Error('Seed requires successful real offline frozen-lock evidence for both workspace roots')
+  return receipt
+}
+
 export async function buildFullRelease(options, dependencies = {}) {
   const run = dependencies.run ?? runCommand
   const projectDir = resolve(options.projectDir ?? process.env.PHYSICSOS_DIR ?? process.cwd())
@@ -40,7 +59,7 @@ export async function buildFullRelease(options, dependencies = {}) {
   const event = dependencies.progress ?? (value => process.stderr.write(JSON.stringify(value) + '\n'))
   const timings = [], started = Date.now()
   let phase = 'admission'
-  const command = async (name, args) => run(name, args, { timeoutMs: 7_200_000, signal: options.signal })
+  const command = async (name, args, extras = {}) => run(name, args, { timeoutMs: 7_200_000, ...extras, signal: options.signal })
   const dockerJson = async args => JSON.parse((await command('docker', args)).toString('utf8'))
   try {
     options.signal?.throwIfAborted()
@@ -52,16 +71,47 @@ export async function buildFullRelease(options, dependencies = {}) {
     if ((await command('docker', ['image', 'inspect', '--format', '{{.Id}}', identity.nodeImage])).toString('utf8').trim() !== identity.nodeImage)
       throw new Error('Pinned Node image is not available locally')
     const existing = (await command('docker', ['ps', '-aq', '--filter', 'name=^/' + builder + '$'])).toString('utf8').trim()
-    if (existing) throw new Error('Requested development builder already exists')
+    if (existing && !options.seedReceipt) throw new Error('Requested development builder already exists')
+    if (!existing && options.seedReceipt) throw new Error('Audited seed builder does not exist')
+    if (Boolean(options.seedReceipt) !== Boolean(options.abi)) throw new Error('Seed receipt and verified ABI file must be supplied together')
 
     phase = 'source'; event({ phase, state: 'start' })
-    const projection = await (dependencies.project ?? createSourceProjection)({ root: projectDir, revision, outputDir: join(outputDir, 'projection') })
+    const projection = options.projection
+      ? { root: join(resolve(options.projection), 'source'), manifestPath: join(resolve(options.projection), 'source-manifest.json') }
+      : await (dependencies.project ?? createSourceProjection)({ root: projectDir, revision, outputDir: join(outputDir, 'projection') })
     const source = await json(projection.manifestPath)
+    validateSourceManifest(source)
+    if (source.revision !== revision) throw new Error('Existing projection differs from requested revision')
+    await verifySourceProjection(projection.root, source, { exact: true })
     timings.push({ phase, seconds: (Date.now() - started) / 1000 })
 
     phase = 'builder'; event({ phase, state: 'start' }); let step = Date.now()
-    const receipt = await (dependencies.prepare ?? prepareBuilder)({ projection: join(outputDir, 'projection'), builder, baseImage: identity.nodeImage, cacheRoot, estimatedBytes: identity.estimatedBytes })
-    await record(join(outputDir, 'development-builder.json'), receipt)
+    const seedReceipt = options.seedReceipt ? validateFullSeedAudit(await json(options.seedReceipt)) : undefined
+    const expectedAbi = options.abi ? await json(options.abi) : undefined
+    if (seedReceipt && seedReceipt.baseImage !== identity.nodeImage) throw new Error('Audited Node base differs from the requested immutable base')
+    let receipt = await (dependencies.prepare ?? prepareBuilder)({ projection: dirname(projection.manifestPath), builder,
+      baseImage: identity.nodeImage, cacheRoot, estimatedBytes: identity.estimatedBytes, seedReceipt, expectedAbi })
+    if (seedReceipt) {
+      const evidence = []
+      const toolPath = '/app/vendor/deepseek-harness/node_modules/pnpm/bin/pnpm.mjs'
+      // Direct pnpm plus a process-local PATH serves nested build scripts. The
+      // verified locked closure is reused without package-manager downloads.
+      for (const [cwd, script] of [['/app/vendor/deepseek-harness', 'build:lib'], ['/app', 'build:web']]) {
+        options.signal?.throwIfAborted()
+        const args = ['exec', '-u', '0', '-w', cwd, '-e', 'DSH_CLIENT_TITLE=PhysicsOS',
+          '-e', 'npm_config_manage_package_manager_versions=false',
+          '-e', 'PATH=/app/vendor/deepseek-harness/node_modules/.bin:/app/node_modules/.bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+          builder, 'node', toolPath, 'run', script]
+        const began = Date.now()
+        await command('docker', args)
+        evidence.push({ command: 'pnpm run ' + script, cwd, exitCode: 0, seconds: (Date.now() - began) / 1000 })
+      }
+      receipt = { ...receipt, builderImage: await dockerJson(['inspect', '--format', '{{json .Image}}', builder]),
+        fullBuildVerified: true, buildTarget: 'audited-seed-full-build', fullBuildEvidence: evidence }
+      const marker = join(outputDir, 'development-builder.json')
+      await record(marker, receipt)
+      await command('docker', ['cp', marker, builder + ':/app/physicsos-development-builder.json'])
+    } else await record(join(outputDir, 'development-builder.json'), receipt)
     timings.push({ phase, seconds: (Date.now() - step) / 1000 })
 
     options.signal?.throwIfAborted()
@@ -69,18 +119,37 @@ export async function buildFullRelease(options, dependencies = {}) {
     await verifySourceProjection(projection.root, source, { exact: true })
     const nodeTag = 'physicsos:development-node-base-' + identity.nodeImage.slice(7, 31)
     const rawTag = 'physicsos:full-input-' + revision.slice(0, 16)
+    await command('docker', ['tag', identity.nodeImage, nodeTag])
     if ((await command('docker', ['image', 'inspect', '--format', '{{.Id}}', nodeTag])).toString('utf8').trim() !== identity.nodeImage)
       throw new Error('Pinned Node build reference changed')
-    await command('docker', ['build', '--target', 'runtime', '--pull=false', '--build-arg', 'NODE_IMAGE=' + nodeTag,
-      '--label', 'physicsos.role=full-runtime-input', '--label', 'physicsos.full-build.revision=' + revision,
+    const originalDockerfile = await readFile(join(projection.root, 'Dockerfile'), 'utf8')
+    let builderSnapshot, runtimeStageSha256, runtimeDockerfileSha256
+    const runtimeArgs = ['build', '--target', 'runtime', '--pull=false', '--build-arg', 'NODE_IMAGE=' + nodeTag]
+    if (seedReceipt) {
+      // The commit provides files only. Final runtime configuration is taken
+      // verbatim from the reviewed Dockerfile, never from the test container.
+      builderSnapshot = (await command('docker', ['commit', builder])).toString('utf8').trim()
+      if (!/^sha256:[a-f0-9]{64}$/.test(builderSnapshot)) throw new Error('Immutable builder snapshot is required')
+      const snapshotTag = 'physicsos:full-builder-snapshot-' + revision.slice(0, 16)
+      await command('docker', ['tag', builderSnapshot, snapshotTag])
+      const derived = seedRuntimeDockerfile(originalDockerfile)
+      runtimeStageSha256 = createHash('sha256').update(derived.runtimeStage).digest('hex')
+      runtimeDockerfileSha256 = createHash('sha256').update(derived.dockerfile).digest('hex')
+      const file = join(outputDir, 'Dockerfile.seed-runtime')
+      await writeFile(file, derived.dockerfile, { mode: 0o600 })
+      runtimeArgs.push('--file', file, '--build-arg', 'BUILDER_IMAGE=' + snapshotTag)
+    }
+    runtimeArgs.push('--label', 'physicsos.role=full-runtime-input', '--label', 'physicsos.full-build.revision=' + revision,
       '--label', 'physicsos.full-build.source-digest=' + source.sourceDigest,
       '--label', 'physicsos.full-build.dependency-fingerprint=' + source.dependencyFingerprint,
-      '--tag', rawTag, projection.root])
+      '--tag', rawTag, projection.root)
+    await command('docker', runtimeArgs)
     await verifySourceProjection(projection.root, source, { exact: true })
     const image = await dockerJson(['image', 'inspect', '--format', '{{json .Id}}', rawTag])
     const built = { schemaVersion: 1, format: 'physicsos-full-build/1', revision, sourceDigest: source.sourceDigest,
       dependencyFingerprint: source.dependencyFingerprint, nodeImage: identity.nodeImage, builder, builderImage: receipt.builderImage,
-      runtimeImage: image, dockerfileSha256: createHash('sha256').update(await readFile(join(projection.root, 'Dockerfile'))).digest('hex'),
+      runtimeImage: image, dockerfileSha256: createHash('sha256').update(originalDockerfile).digest('hex'),
+      ...(seedReceipt ? { builderSnapshot, runtimeStageSha256, runtimeDockerfileSha256, seedReceiptOrigin: seedReceipt.origin } : {}),
       successfulStages: ['builder', 'runtime'], sourceProjectionVerified: true, estimatedBytes: identity.estimatedBytes }
     await record(join(outputDir, 'full-build-record.json'), built)
     timings.push({ phase, seconds: (Date.now() - step) / 1000 })
@@ -110,7 +179,8 @@ async function main() {
     const options = {}
     for (let i = 0; i < args.length; i += 2) {
       const key = { '--revision': 'revision', '--node-image': 'nodeImage', '--project-dir': 'projectDir', '--state-root': 'stateRoot',
-        '--output-dir': 'outputDir', '--builder': 'builder', '--image-tag': 'imageTag', '--estimated-bytes': 'estimatedBytes' }[args[i]]
+        '--output-dir': 'outputDir', '--builder': 'builder', '--image-tag': 'imageTag', '--estimated-bytes': 'estimatedBytes',
+        '--seed-receipt': 'seedReceipt', '--abi': 'abi', '--projection': 'projection' }[args[i]]
       if (!key || args[i + 1] === undefined) throw new Error('Invalid full-release argument')
       options[key] = key === 'estimatedBytes' ? Number(args[i + 1]) : args[i + 1]
     }

@@ -335,6 +335,22 @@ class FullRuntimeProvenanceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'absent'):
             runtime.full_manifest(source, record, incomplete, incomplete, proof)
 
+    def test_audited_seed_still_requires_full_compilation_and_immutable_runtime_stage_evidence(self):
+        source, marker, receipt, record, image = self.full_fixture()
+        receipt.update({'origin': 'audited-runtime-seed', 'audited': True, 'buildTarget': 'audited-seed-full-build',
+                        'seedImage': record['builderImage'], 'offlineRootLockVerified': True, 'offlineHarnessLockVerified': True,
+                        'offlineEvidence': [{'cwd': cwd, 'command': 'pnpm install --offline --frozen-lockfile --prod=false', 'exitCode': 0} for cwd in ['/app', '/app/vendor/deepseek-harness']],
+                        'fullBuildEvidence': [{'command': 'pnpm run ' + script, 'exitCode': 0} for script in ['build:lib', 'build:web']]})
+        record.update({'seedReceiptOrigin': 'audited-runtime-seed', 'builderSnapshot': 'sha256:' + 'f' * 64,
+                       'runtimeStageSha256': '1' * 64, 'runtimeDockerfileSha256': '2' * 64})
+        runtime.validate_full_record(source, marker, receipt, record, image)
+        with self.assertRaisesRegex(ValueError, 'both complete build'):
+            runtime.validate_full_record(source, marker, {**receipt, 'fullBuildEvidence': []}, record, image)
+        with self.assertRaisesRegex(ValueError, 'offline'):
+            runtime.validate_full_record(source, marker, {**receipt, 'offlineEvidence': []}, record, image)
+        with self.assertRaisesRegex(ValueError, 'snapshot'):
+            runtime.validate_full_record(source, marker, receipt, {**record, 'builderSnapshot': 'mutable:tag'}, image)
+
     def test_incremental_base_without_a_manifest_stays_rejected(self):
         for value in [{}, {'files': {}}, {'schemaVersion': 2}]:
             with self.assertRaises(ValueError):

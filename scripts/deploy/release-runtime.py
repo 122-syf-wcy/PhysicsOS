@@ -625,8 +625,19 @@ def validate_full_record(source, marker, receipt, record, image):
             raise ValueError('Full-build source/dependency evidence differs')
     if marker.get('files') != files or marker.get('revision') != revision or record.get('revision') != revision:
         raise ValueError('Full-build source marker differs')
-    if receipt.get('origin') != 'docker-builder-target' or receipt.get('fullBuildVerified') is not True or receipt.get('buildTarget') != 'builder':
-        raise ValueError('A reviewed complete Docker builder target is required')
+    target_build = receipt.get('origin') == 'docker-builder-target' and receipt.get('buildTarget') == 'builder'
+    seed_build = receipt.get('origin') == 'audited-runtime-seed' and receipt.get('buildTarget') == 'audited-seed-full-build'
+    if seed_build:
+        evidence = receipt.get('fullBuildEvidence') or []
+        offline = receipt.get('offlineEvidence') or []
+        if receipt.get('audited') is not True or receipt.get('offlineRootLockVerified') is not True or receipt.get('offlineHarnessLockVerified') is not True or len(offline) < 2 or any(row.get('exitCode') != 0 or '--offline' not in row.get('command', '') or '--frozen-lockfile' not in row.get('command', '') for row in offline) or not {'/app', '/app/vendor/deepseek-harness'}.issubset({row.get('cwd') for row in offline}):
+            raise ValueError('Audited offline frozen seed evidence is incomplete')
+        if [row.get('command') for row in evidence] != ['pnpm run build:lib', 'pnpm run build:web'] or any(row.get('exitCode') != 0 for row in evidence):
+            raise ValueError('Seed must run both complete build stages successfully')
+        if record.get('seedReceiptOrigin') != 'audited-runtime-seed' or receipt.get('seedImage') != record.get('builderImage') or not IMAGE_ID.fullmatch(record.get('builderSnapshot', '')) or any(not HEX64.fullmatch(record.get(key, '')) for key in ['runtimeStageSha256', 'runtimeDockerfileSha256']):
+            raise ValueError('Reviewed runtime stage and immutable seed snapshot evidence are required')
+    if receipt.get('fullBuildVerified') is not True or not (target_build or seed_build):
+        raise ValueError('A reviewed complete Docker builder target or audited full seed build is required')
     if any(receipt.get(key) is not True for key in ['completeDevelopmentDependencies', 'lockedDependenciesVerified', 'sourceProjectionVerified', 'nativeProbeVerified', 'sharedDeclarationBoundaryVerified']):
         raise ValueError('Full development builder evidence is incomplete')
     abi = receipt.get('abi') or {}
@@ -681,6 +692,18 @@ def export_full_runtime(args):
     marker = read_builder_json(args.builder, 'physicsos-source-manifest.json')
     receipt = read_builder_json(args.builder, 'physicsos-development-builder.json')
     validate_full_record(source, marker, receipt, record, image)
+    frozen_dockerfile = pathlib.Path(args.source_manifest).parent / 'source/Dockerfile'
+    dockerfile_source = frozen_dockerfile.read_text()
+    if sha(dockerfile_source) != source['files']['Dockerfile']:
+        raise ValueError('Reviewed source Dockerfile changed')
+    if record.get('seedReceiptOrigin'):
+        stages = list(re.finditer(r'^FROM \$\{NODE_IMAGE\} AS runtime\r?$', dockerfile_source, re.M))
+        if len(stages) != 1:
+            raise ValueError('Expected one reviewed runtime stage')
+        stage = dockerfile_source[stages[0].start():]
+        derived = 'ARG NODE_IMAGE\nARG BUILDER_IMAGE\nFROM ${BUILDER_IMAGE} AS builder\n\n' + stage
+        if sha(stage) != record['runtimeStageSha256'] or sha(derived) != record['runtimeDockerfileSha256'] or image_metadata(record['builderSnapshot'])['id'] != record['builderSnapshot']:
+            raise ValueError('Seed runtime stage or builder snapshot changed')
     actual_builder = json.loads(command(['docker', 'inspect', '--format', '{{json .Image}}', args.builder]))
     if actual_builder != record['builderImage'] or record.get('builder') != args.builder:
         raise ValueError('Full builder container identity changed')
