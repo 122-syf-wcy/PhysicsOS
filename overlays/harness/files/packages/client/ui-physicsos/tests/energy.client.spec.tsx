@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { revealFullWorkbenchInspector } from './workbench-interaction-fixture.client.ts'
 import { useStudentAuth } from './student-auth-fixture.client.ts'
 import { withOfficialRenderer } from './official-renderer-fixture.client.ts'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -201,6 +202,7 @@ describe('energy Lab surface', () => {
     const { container } = mountLab('mechanical-energy')
 
     fireEvent.click(screen.getByRole('button', { name: '检查器' }))
+    revealFullWorkbenchInspector()
     const height = screen.getByRole('textbox', { name: '释放高度' })
     if (!(height instanceof HTMLInputElement)) throw new Error('Expected 释放高度 input.')
     fireEvent.change(height, { target: { value: '180' } })

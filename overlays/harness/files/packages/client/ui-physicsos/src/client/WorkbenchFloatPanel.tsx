@@ -68,7 +68,7 @@ export function WorkbenchFloatPanel({ id, title, closeLabel, collapseLabel, onCl
       }
       bounds.current = available
       setWide(box.width >= 1080)
-      setPortal(document.fullscreenElement ?? document.body)
+      setPortal(document.fullscreenElement ?? owner.closest('[role="dialog"][aria-modal="true"]') ?? document.body)
       // Capture the one requested-size update before queuing a React updater;
       // future observer callbacks only fit the user's settled geometry.
       const applySize = sizeChanged

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { revealFullWorkbenchInspector } from './workbench-interaction-fixture.client.ts'
 import { useStudentAuth } from './student-auth-fixture.client.ts'
 import { withOfficialRenderer } from './official-renderer-fixture.client.ts'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -570,6 +571,7 @@ describe('current Lab surface', () => {
     const { container } = mountLab('solenoid-field')
 
     fireEvent.click(screen.getByRole('button', { name: '检查器' }))
+    revealFullWorkbenchInspector()
     const turns = screen.getByRole('textbox', { name: '匝数' })
     if (!(turns instanceof HTMLInputElement)) throw new Error('Expected 匝数 input.')
     fireEvent.change(turns, { target: { value: '800' } })

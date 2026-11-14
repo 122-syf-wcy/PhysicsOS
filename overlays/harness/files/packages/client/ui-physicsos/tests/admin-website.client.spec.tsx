@@ -40,7 +40,7 @@ const auth = (role: AuthUser['role']) => <S,>(selector: (state: AuthState) => S)
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
 
 describe('official website administration', () => {
-  it('offers the real website editor only to SUPER_ADMIN in the content group', async () => {
+  it('offers the real website editor only to SUPER_ADMIN in the top navigation', async () => {
     const adminApi = { listUsers: async () => ({ users: [] }) } as unknown as AdminApi
     const { api, getContent } = mockApi()
     const first = render(<AdminWorkspace api={adminApi} websiteApi={api} useAuth={auth('SCHOOL_ADMIN')} t={t} />)
@@ -48,7 +48,7 @@ describe('official website administration', () => {
     first.unmount()
     render(<AdminWorkspace api={adminApi} websiteApi={api} useAuth={auth('SUPER_ADMIN')} t={t} />)
     const tab = screen.getByRole('tab', { name: '官网管理' })
-    expect(tab.parentElement?.textContent).toContain('内容')
+    expect(tab.closest('[role="tablist"]')).toBeTruthy()
     fireEvent.click(tab)
     await screen.findByText('当前版本 3')
     expect((screen.getByRole('link', { name: '打开官网 ↗' }) as HTMLAnchorElement).href).toBe('https://physicsos.dongsiwei.com/')
@@ -72,6 +72,7 @@ describe('official website administration', () => {
     fireEvent.change(screen.getAllByLabelText('展示姓名')[0]!, { target: { value: '待保存姓名' } })
     fireEvent.click(screen.getAllByLabelText('官网展示（保存后生效）')[0]!)
     fireEvent.click(screen.getAllByRole('button', { name: '下移' })[0]!)
+    expect(screen.getByDisplayValue('待保存姓名')).toBeTruthy()
     saveContent.mockRejectedValueOnce(new WebsiteApiError(409, 'VERSION_CONFLICT', 'conflict'))
     fireEvent.click(screen.getByRole('button', { name: '保存官网配置' }))
     await screen.findByRole('alert')

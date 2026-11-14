@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { revealFullWorkbenchInspector } from './workbench-interaction-fixture.client.ts'
 import { useStudentAuth } from './student-auth-fixture.client.ts'
 import { withOfficialRenderer } from './official-renderer-fixture.client.ts'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -133,6 +134,7 @@ describe('pinhole rig', () => {
     const { container } = mountLab('pinhole')
 
     fireEvent.click(screen.getByRole('button', { name: '检查器' }))
+    revealFullWorkbenchInspector()
     const distance = screen.getByRole('textbox', { name: '物距' })
     if (!(distance instanceof HTMLInputElement)) throw new Error('Expected 物距 input.')
     fireEvent.change(distance, { target: { value: '60' } })

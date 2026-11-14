@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { revealFullWorkbenchInspector } from './workbench-interaction-fixture.client.ts'
 import { useStudentAuth } from './student-auth-fixture.client.ts'
 import { withOfficialRenderer } from './official-renderer-fixture.client.ts'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -385,6 +386,7 @@ describe('pressure Lab surface', () => {
     const { container } = mountLab('solid-pressure')
 
     fireEvent.click(screen.getByRole('button', { name: '检查器' }))
+    revealFullWorkbenchInspector()
     const area = screen.getByRole('textbox', { name: '受力面积' })
     if (!(area instanceof HTMLInputElement)) throw new Error('Expected 受力面积 input.')
     fireEvent.change(area, { target: { value: '100' } })

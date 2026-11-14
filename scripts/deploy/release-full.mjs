@@ -74,6 +74,11 @@ export async function buildFullRelease(options, dependencies = {}) {
     if (existing && !options.seedReceipt) throw new Error('Requested development builder already exists')
     if (!existing && options.seedReceipt) throw new Error('Audited seed builder does not exist')
     if (Boolean(options.seedReceipt) !== Boolean(options.abi)) throw new Error('Seed receipt and verified ABI file must be supplied together')
+    if (options.seedReceipt) {
+      const mounts = await dockerJson(['inspect', '--format', '{{json .Mounts}}', builder])
+      if (mounts.some(mount => mount.Destination === '/app' || mount.Destination.startsWith('/app/')))
+        throw new Error('A committed seed snapshot cannot include application bind/volume mounts')
+    }
 
     phase = 'source'; event({ phase, state: 'start' })
     const projection = options.projection
@@ -96,10 +101,12 @@ export async function buildFullRelease(options, dependencies = {}) {
       const toolPath = '/app/vendor/deepseek-harness/node_modules/pnpm/bin/pnpm.mjs'
       // Direct pnpm plus a process-local PATH serves nested build scripts. The
       // verified locked closure is reused without package-manager downloads.
+      // pnpm 11 uses pmOnFail; the earlier managePackageManagerVersions setting
+      // was removed and does not disable nested package-manager bootstrapping.
       for (const [cwd, script] of [['/app/vendor/deepseek-harness', 'build:lib'], ['/app', 'build:web']]) {
         options.signal?.throwIfAborted()
         const args = ['exec', '-u', '0', '-w', cwd, '-e', 'DSH_CLIENT_TITLE=PhysicsOS',
-          '-e', 'npm_config_manage_package_manager_versions=false',
+          '-e', 'pnpm_config_pm_on_fail=ignore',
           '-e', 'PATH=/app/vendor/deepseek-harness/node_modules/.bin:/app/node_modules/.bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
           builder, 'node', toolPath, 'run', script]
         const began = Date.now()

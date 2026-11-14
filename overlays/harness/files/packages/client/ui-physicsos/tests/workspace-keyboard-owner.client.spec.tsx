@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { revealFullWorkbenchInspector } from './workbench-interaction-fixture.client.ts'
 import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -76,7 +77,8 @@ describe('single workspace keyboard modal ownership', () => {
       <PhysicsWorkspace runtime={world} t={t} />
     </Modal>)
     const owner = screen.getByRole('dialog', { name: 'Focused single experiment' }).querySelector('[data-physicsos-surface="lab"]')!
-    const input = owner.querySelector('input:not([type="range"])')!
+    revealFullWorkbenchInspector()
+    const input = screen.getByRole('dialog', { name: 'Focused single experiment' }).querySelector('input:not([type="range"])')!
     fireEvent.keyDown(input, { key: 'ArrowRight' })
     fireEvent.keyDown(input, { key: ' ' })
     fireEvent.keyDown(owner.querySelector('[role="img"]')!, { key: 'ArrowRight', isComposing: true })

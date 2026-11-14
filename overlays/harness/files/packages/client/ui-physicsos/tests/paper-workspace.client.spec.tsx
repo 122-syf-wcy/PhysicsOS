@@ -6,6 +6,7 @@ import { PaperWorkspace } from '../src/client/PaperWorkspace.tsx'
 import type { PaperApi, PaperJobWire } from '../src/client/paper-api.ts'
 import type { AuthUser } from '../src/client/auth-api.ts'
 import type { AuthState } from '../src/client/auth-store.ts'
+import { zh, type PhysicsosKey } from '../src/client/locales.ts'
 
 const job = (over: Partial<PaperJobWire> = {}): PaperJobWire => ({
   id: 'paper-1',
@@ -41,9 +42,8 @@ const useAuthAs = (role?: AuthUser['role']) => {
 const neverHook = (() => {
   throw new Error('unused hook')
 }) as never
-/* Only the back control is localised; everything else is Chinese-only and the
-   keys pass straight through. */
-const t = (key: string): string => (key === 'paper.backToHome' ? '返回首页' : key)
+/* The redesigned header and controls use the actual typed product dictionary. */
+const t = (key: PhysicsosKey): string => zh[key] ?? key
 
 const stubApi = (jobs: PaperJobWire[] = []): PaperApi => ({
   listSources: vi.fn().mockResolvedValue([]),
@@ -357,8 +357,8 @@ describe('PaperWorkspace back control', () => {
   it('renders no back control when the seat is absent, and nothing harmful', () => {
     render(<PaperWorkspace api={stubApi()} useAuth={useAuthAs('TEACHER')} useSessions={neverHook} useWorkspaces={neverHook} t={t} />)
     expect(screen.queryByRole('button', { name: '返回首页' })).toBeNull()
-    /* The rest of the header is untouched — the title still anchors the page. */
-    expect(screen.getByRole('heading', { name: /出卷工作台/ })).toBeTruthy()
+    /* Removing an unavailable exit does not remove the localized page identity. */
+    expect(screen.getByRole('heading', { level: 1, name: zh['paper.heading'] })).toBeTruthy()
   })
 })
 

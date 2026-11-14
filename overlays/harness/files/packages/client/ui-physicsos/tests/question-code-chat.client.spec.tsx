@@ -374,6 +374,7 @@ it('uses the private renderer in the full Lab with the same question session and
   expect(view.queryByRole('tree')).toBeNull()
   expect(view.queryByRole('tab', { name: t('lab.inspectorTab.properties') })).toBeNull()
   expect(view.queryByLabelText(t('lab.scene'))).toBeNull()
+  fireEvent.click(view.getByRole('button', { name: t('lab.inspectorPanel') }))
   const height = view.getByRole('spinbutton', { name: /初始高度/ })
   expect((height as HTMLInputElement).value).toBe('32')
   fireEvent.change(height, { target: { value: '35' } }); fireEvent.blur(height)

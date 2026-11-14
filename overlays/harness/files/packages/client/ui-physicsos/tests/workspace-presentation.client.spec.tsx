@@ -130,8 +130,8 @@ describe('workspace panel folding', () => {
   it('folds a scene-tree group on click and expands it again', () => {
     mountLab('rheostat-circuit')
     fireEvent.click(screen.getByRole('button', { name: '图层' }))
-    const group = screen.getAllByRole('button').find(
-      button => button.getAttribute('aria-expanded') === 'true',
+    const group = within(screen.getByRole('region', { name: '场景与对象' })).getAllByRole('button').find(
+      button => button.getAttribute('aria-expanded') === 'true' && button.closest('li') !== null,
     )!
     const item = group.closest('li')!
     expect(item.querySelector('ul')).toBeTruthy()

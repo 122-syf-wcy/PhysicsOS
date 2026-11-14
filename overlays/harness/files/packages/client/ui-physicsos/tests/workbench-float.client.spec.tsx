@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { useState } from 'react'
+import { Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WorkbenchFloatPanel, fitWorkbenchFloat } from '../src/client/WorkbenchFloatPanel.tsx'
@@ -13,7 +14,7 @@ beforeEach(() => {
 })
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
-const pointer = (target: EventTarget, type: string, x: number, y: number): void => {
+const pointer = (target: Element | Window | Document | Node, type: string, x: number, y: number): void => {
   const event = new MouseEvent(type, { bubbles: true, clientX: x, clientY: y, button: 0 })
   Object.defineProperty(event, 'pointerId', { value: 3 })
   fireEvent(target, event)
@@ -156,4 +157,14 @@ it('supports a zero-based usage trend while retaining hover inspection and its o
   expect(screen.getByText('4 · requests')).toBeTruthy()
   fireEvent.mouseLeave(chart)
   expect(hover).toHaveBeenLastCalledWith(null)
+})
+
+it('keeps floating editors inside the existing focused experiment modal', () => {
+  render(<Modal open title="Focused experiment" closeLabel="Close experiment" onClose={() => {}}>
+    <div data-physicsos-surface="lab"><WorkbenchFloatPanel title="Parameters" closeLabel="Close parameters" onClose={() => {}} expanded>
+      <input aria-label="Mass" defaultValue="1" />
+    </WorkbenchFloatPanel></div>
+  </Modal>)
+  const modal = screen.getByRole('dialog', { name: 'Focused experiment' })
+  expect(modal.contains(screen.getByRole('textbox', { name: 'Mass' }))).toBe(true)
 })

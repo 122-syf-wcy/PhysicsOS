@@ -454,8 +454,8 @@ describe('circuit builder shell', () => {
     /* The shelf stocks three sources and two rheostats; the photograph has to
        follow the rating the button places, or the part you pick is not the part
        you see on the bench. */
-    const { container } = mountDraft(starterDraft())
-    const shot = (id: string) => container
+    mountDraft(starterDraft())
+    const shot = (id: string) => document
       .querySelector(`[data-testid="builder-add-${id}"] img`)
       ?.getAttribute('src')
     expect(shot('battery-1.5')).toBe('/physicsos/parts3d/studio-v3/cell-aa.png')

@@ -258,7 +258,7 @@ export function AdminWebsiteTab({ api, t }: { api: WebsiteApi; t: Translate }): 
             <TextField label={t('admin.website.quote')} value={entry.quote} maxLength={280} multiline required onChange={quote => { update({ quote }) }} />
             <TextField label={t('admin.website.topic')} value={entry.topic} maxLength={32} onChange={topic => { update({ topic }) }} />
             <EntryControls entry={entry} index={index} total={draft.testimonials.length} t={t} onChange={update}
-              onMove={direction => { change(value => ({ ...value, testimonials: reorder(value.testimonials, index, direction) })) }}
+              onMove={direction => { setSelectedEntry(entry.id); change(value => ({ ...value, testimonials: reorder(value.testimonials, index, direction) })) }}
               onRemove={() => { change(value => ({ ...value, testimonials: value.testimonials.filter(item => item.id !== entry.id) })) }} />
           </AdminCard>
         }) : draft.contributors.map((entry, index) => {
@@ -276,7 +276,7 @@ export function AdminWebsiteTab({ api, t }: { api: WebsiteApi; t: Translate }): 
             <TextField label={t('admin.website.url')} value={entry.url} maxLength={2048} type="url" onChange={url => { update({ url }) }} />
             <p className={css.hint}>{t('admin.website.urlHint')}</p>
             <EntryControls entry={entry} index={index} total={draft.contributors.length} t={t} onChange={update}
-              onMove={direction => { change(value => ({ ...value, contributors: reorder(value.contributors, index, direction) })) }}
+              onMove={direction => { setSelectedEntry(entry.id); change(value => ({ ...value, contributors: reorder(value.contributors, index, direction) })) }}
               onRemove={() => { change(value => ({ ...value, contributors: value.contributors.filter(item => item.id !== entry.id) })) }} />
           </AdminCard>
         })}

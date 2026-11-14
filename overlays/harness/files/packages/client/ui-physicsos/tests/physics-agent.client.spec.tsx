@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { revealFullWorkbenchInspector } from './workbench-interaction-fixture.client.ts'
 import { useStudentAuth } from './student-auth-fixture.client.ts'
 import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -349,6 +350,7 @@ describe('agent drawer', () => {
        back on the inspector after the drawer hands the rail over. */
     const drawer = screen.getByRole('complementary', { name: 'AI 助教' })
     fireEvent.click(within(drawer).getByRole('button', { name: '收起' }))
+    revealFullWorkbenchInspector()
     const angle = screen.getByRole('textbox', { name: '倾角' })
     if (!(angle instanceof HTMLInputElement)) throw new Error('angle editor is not an input.')
     expect(angle.value).toBe('45')

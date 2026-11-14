@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { revealFullWorkbenchInspector } from './workbench-interaction-fixture.client.ts'
 import { useStudentAuth } from './student-auth-fixture.client.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -598,6 +599,7 @@ describe('PhysicsOS overlay presentation', () => {
       />,
     )
     expect(screen.getByText('磁场中的带电粒子运动')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '图层' }))
     expect(screen.getByText('场景与对象')).toBeTruthy()
     expect(screen.getByRole('img', { name: '磁场中的带电粒子运动' })).toBeTruthy()
 
@@ -611,6 +613,7 @@ describe('PhysicsOS overlay presentation', () => {
 
     // Inspector separates editable parameters from read-only derived values.
     fireEvent.click(screen.getByRole('button', { name: '检查器' }))
+    revealFullWorkbenchInspector()
     expect(screen.getByText('粒子属性')).toBeTruthy()
     fireEvent.click(screen.getByRole('tab', { name: '读数' }))
     expect(screen.getByText('派生量由引擎计算，只读。')).toBeTruthy()
@@ -652,6 +655,7 @@ describe('PhysicsOS overlay presentation', () => {
     const velocityLabels = () =>
       [...container.querySelectorAll('svg text')].filter(node => node.textContent === 'v').length
     expect(velocityLabels()).toBe(1)
+    fireEvent.click(screen.getByRole('button', { name: '图层' }))
     fireEvent.click(screen.getByRole('button', { name: /^速度$/ }))
     expect(velocityLabels()).toBe(0)
   })
@@ -674,6 +678,8 @@ describe('PhysicsOS overlay presentation', () => {
     expect(lab?.getAttribute('data-scene-revision')).toBe('0')
     expect(lab?.getAttribute('data-verification-status')).toBe('verified')
 
+    fireEvent.click(screen.getByRole('button', { name: '图层' }))
+    revealFullWorkbenchInspector()
     const input = screen.getByLabelText(/磁感应强度/)
     if (!(input instanceof HTMLInputElement)) throw new Error('B editor is not an input.')
     fireEvent.change(input, { target: { value: '1' } })

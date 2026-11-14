@@ -335,6 +335,7 @@ describe('composite Lab surface', () => {
 
   it('drives the same toggle from the scene tree in the mounted Lab', () => {
     const { container } = mountLab('velocity-selector')
+    fireEvent.click(screen.getByRole('button', { name: '图层' }))
     const vectorLines = () => container.querySelectorAll('svg line').length
     const before = vectorLines()
     fireEvent.click(screen.getByRole('button', { name: /力·电场力/ }))

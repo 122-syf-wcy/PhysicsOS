@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { revealFullWorkbenchInspector } from './workbench-interaction-fixture.client.ts'
 import { useStudentAuth } from './student-auth-fixture.client.ts'
 import { withOfficialRenderer } from './official-renderer-fixture.client.ts'
 import { readFileSync } from 'node:fs'
@@ -620,6 +621,7 @@ describe('circuit Lab surface', () => {
 
     const inspectorToggle = screen.getByRole('button', { name: '检查器' })
     fireEvent.click(inspectorToggle)
+    revealFullWorkbenchInspector()
     const emfInput = screen.getByRole('textbox', { name: '电动势' })
     if (!(emfInput instanceof HTMLInputElement)) throw new Error('Expected EMF input.')
     fireEvent.change(emfInput, { target: { value: '12' } })
@@ -634,6 +636,7 @@ describe('circuit Lab surface', () => {
     const { container } = mountLab('series-circuit')
 
     fireEvent.click(screen.getByRole('button', { name: '检查器' }))
+    revealFullWorkbenchInspector()
     /* The inspector choice is a GlassSelect: open it, then click the row. */
     fireEvent.click(screen.getByRole('combobox', { name: 'S' }))
     fireEvent.click(screen.getByRole('option', { name: '断开' }))

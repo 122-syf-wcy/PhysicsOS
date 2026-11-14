@@ -238,7 +238,7 @@ describe('AuthGate', () => {
     const { getByText, queryByText } = render(
       <AuthGate {...gateProps({ status: 'guest' })} />,
     )
-    expect(getByText('探索一个物理世界')).toBeTruthy()
+    expect(getByText('欢迎回到 PhysicsOS')).toBeTruthy()
     expect(queryByText('学校')).toBeNull()
     expect(getByText('登录 PhysicsOS')).toBeTruthy()
     expect(getByText('忘记密码')).toBeTruthy()

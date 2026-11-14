@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { revealFullWorkbenchInspector } from './workbench-interaction-fixture.client.ts'
 import { useStudentAuth } from './student-auth-fixture.client.ts'
 import { withOfficialRenderer } from './official-renderer-fixture.client.ts'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -330,6 +331,7 @@ describe('fluid Lab surface', () => {
     const { container } = mountLab('buoyancy')
 
     fireEvent.click(screen.getByRole('button', { name: '检查器' }))
+    revealFullWorkbenchInspector()
     const densityInput = screen.getByRole('textbox', { name: '液体密度' })
     if (!(densityInput instanceof HTMLInputElement)) throw new Error('Expected 液体密度 input.')
     fireEvent.change(densityInput, { target: { value: '1100' } })

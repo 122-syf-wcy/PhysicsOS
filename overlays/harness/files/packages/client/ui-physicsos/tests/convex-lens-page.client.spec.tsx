@@ -8,7 +8,12 @@ import { zh } from '../src/client/locales.ts'
 import { contributionApi } from '../src/client/experiments/contribution-api.ts'
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
-const mount = () => render(<ConvexLensPage runtime={createOpticsWorkspaceRuntime(createConvexLensScene())} t={key => zh[key]} />)
+const mount = () => {
+  const view = render(<ConvexLensPage runtime={createOpticsWorkspaceRuntime(createConvexLensScene())} t={key => zh[key]} />)
+  fireEvent.click(screen.getByRole('button', { name: zh['lab.tab.data'] }))
+  fireEvent.click(screen.getByRole('button', { name: zh['lab.inspectorPanel'] }))
+  return view
+}
 
 it('offers an apparatus-first page with all five engine-backed imaging conditions', () => {
   const {container} = mount()
@@ -76,7 +81,8 @@ it('offers a new lens appearance explicitly and retains the saved version until 
   const save = vi.fn()
   const view = render(<ConvexLensPage runtime={createOpticsWorkspaceRuntime(scene)} onSceneChange={save} t={key => zh[key]} />)
   await waitFor(() => { expect(view.getByRole('button', { name: '使用新版实验外观' })).toBeTruthy() })
-  fireEvent.click(view.getByRole('button', { name: '记录本次' }))
+  fireEvent.click(screen.getByRole('button', { name: zh['lab.tab.data'] }))
+  fireEvent.click(screen.getByRole('button', { name: '记录本次' }))
   const before = save.mock.calls.at(-1)![0]
   fireEvent.click(view.getByRole('button', { name: '使用新版实验外观' }))
   await waitFor(() => { expect(view.container.querySelector('iframe')?.src).toContain('/active/') })

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { revealFullWorkbenchInspector } from './workbench-interaction-fixture.client.ts'
 import { useStudentAuth } from './student-auth-fixture.client.ts'
 import { withOfficialRenderer } from './official-renderer-fixture.client.ts'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -245,6 +246,7 @@ describe('acoustics Lab surface', () => {
     const { container } = mountLab('echo-ranging')
 
     fireEvent.click(screen.getByRole('button', { name: '检查器' }))
+    revealFullWorkbenchInspector()
     const distanceInput = screen.getByRole('textbox', { name: '峭壁距离' })
     if (!(distanceInput instanceof HTMLInputElement)) throw new Error('Expected 峭壁距离 input.')
     fireEvent.change(distanceInput, { target: { value: '680' } })

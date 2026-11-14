@@ -399,6 +399,7 @@ export function PhysicsWorkspace({
        with no parts to place — open it for them. On a wide window the panel is
        a permanent track and this costs nothing (the backdrop only exists under
        the drawer breakpoint). */
+    setSceneCollapsed(false)
     sceneDrawer.reveal()
     const frame = runtime.enterBuilder?.()
     if (frame === undefined) return
@@ -552,7 +553,11 @@ export function PhysicsWorkspace({
             <h1 className={codeCss.title}>{title}</h1>
           </div>
           <div className={codeCss.labHeaderActions}>
-          <button type="button" className={codeCss.open} aria-pressed={!inspectorCollapsed} onClick={() => { setInspectorCollapsed(value => !value); inspector.reveal() }}>{t('lab.inspectorPanel')}</button>
+          <button type="button" className={codeCss.open} aria-pressed={!inspectorCollapsed} onClick={() => {
+            if (inspectorCollapsed) { setInspectorCollapsed(false); inspector.reveal(); return }
+            if (inspector.open || (coverRef.current?.clientWidth ?? 0) >= 1080) { setInspectorCollapsed(true); inspector.close() }
+            else inspector.reveal()
+          }}>{t('lab.inspectorPanel')}</button>
           {onAddToCanvas === undefined ? null : <WorkbenchAction label={t('canvas.addToCanvas')} onClick={onAddToCanvas} />}
           {onReturnToChat === undefined ? null : <button type="button" className={codeCss.open} onClick={onReturnToChat}>
             <IconChatBubble size={14} />{t('lab.backToChat')}
@@ -582,7 +587,7 @@ export function PhysicsWorkspace({
             options={PLAYBACK_RATES.map(rate => ({ value: String(rate), label: `${rate}×` }))}
             onChange={(value) => { commit(runtime.setRate(Number(value))) }} />
         </div>
-        {inspectorCollapsed ? null : <WorkbenchFloatPanel title={t('lab.inspectorPanel')} closeLabel={t('lab.closeInspector')} onClose={() => { setInspectorCollapsed(true); inspector.close() }} placement="bottom-right" width={320} height={350} expanded={inspector.open}>
+        {inspectorCollapsed ? null : <WorkbenchFloatPanel id={inspector.id} title={t('lab.inspectorPanel')} closeLabel={t('lab.closeInspector')} onClose={() => { setInspectorCollapsed(true); inspector.close() }} placement="bottom-right" width={320} height={350} expanded={inspector.open}>
           <QuestionCodeControls session={session} snapshot={snapshot} />
         </WorkbenchFloatPanel>}
         {questionCodeVisualization.status === 'ready' && !independent ? <p className={clsx(codeCss.labHint, sceneCss.questionHint)}>
@@ -730,6 +735,8 @@ export function PhysicsWorkspace({
                      live flag is the only case where the toggle means that. */
                   if (sceneCollapsed) {
                     setSceneCollapsed(false)
+                    if (inspector.open) inspector.close()
+                    if (agentOpen) setAgentOpen(false)
                     sceneDrawer.reveal()
                     return
                   }

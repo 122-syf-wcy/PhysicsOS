@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { revealFullWorkbenchInspector } from './workbench-interaction-fixture.client.ts'
 import { useStudentAuth } from './student-auth-fixture.client.ts'
 import { withOfficialRenderer } from './official-renderer-fixture.client.ts'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -264,6 +265,7 @@ describe('thermal Lab surface', () => {
     const { container } = mountLab('crystal-melting')
 
     fireEvent.click(screen.getByRole('button', { name: '检查器' }))
+    revealFullWorkbenchInspector()
     const powerInput = screen.getByRole('textbox', { name: '加热功率' })
     if (!(powerInput instanceof HTMLInputElement)) throw new Error('Expected 加热功率 input.')
     fireEvent.change(powerInput, { target: { value: '100' } })

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { revealFullWorkbenchInspector } from './workbench-interaction-fixture.client.ts'
 import { useStudentAuth } from './student-auth-fixture.client.ts'
 import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -126,6 +127,7 @@ describe('experimental branch', () => {
 
     expect(container.querySelector('[data-physicsos-branch="experimental"]')).toBeNull()
 
+    revealFullWorkbenchInspector()
     const height = screen.getByRole('textbox', { name: '初始高度' })
     fireEvent.change(height, { target: { value: '30' } })
     fireEvent.blur(height)

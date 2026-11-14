@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { revealFullWorkbenchInspector } from './workbench-interaction-fixture.client.ts'
 import { useStudentAuth } from './student-auth-fixture.client.ts'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -99,11 +100,13 @@ describe('Electric product slice', () => {
     const inspectorToggle = screen.getByRole('button', { name: '检查器' })
     expect(inspectorToggle.getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(inspectorToggle)
+    revealFullWorkbenchInspector()
     expect(inspectorToggle.getAttribute('aria-expanded')).toBe('true')
     expect(document.activeElement).toBe(screen.getByRole('button', { name: '关闭检查器' }))
     expect(screen.getByRole('combobox', { name: '电场方向' })).toBeTruthy()
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(inspectorToggle.getAttribute('aria-expanded')).toBe('false')
+    revealFullWorkbenchInspector()
     const fieldInput = screen.getByRole('textbox', { name: '场强' })
     if (!(fieldInput instanceof HTMLInputElement)) throw new Error('Expected electric field input.')
     fireEvent.change(fieldInput, { target: { value: '1.2' } })

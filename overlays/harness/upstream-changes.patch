@@ -15122,7 +15122,7 @@ index ac1116f04c..c9870fb203 100644
 +.productHeaderActions { gap: 6px; }
 +@media(max-width:600px) { .productHeaderActions .historyButton span { display: none; } }
 diff --git a/packages/client/ui-sidebar/src/client/SidebarRoot.tsx b/packages/client/ui-sidebar/src/client/SidebarRoot.tsx
-index fed580320c..e9ab4c7f94 100644
+index fed580320c..37486036a1 100644
 --- a/packages/client/ui-sidebar/src/client/SidebarRoot.tsx
 +++ b/packages/client/ui-sidebar/src/client/SidebarRoot.tsx
 @@ -19,7 +19,7 @@
@@ -15164,7 +15164,7 @@ index fed580320c..e9ab4c7f94 100644
 +        <div className={css.productRail}>
 +          {renderSlot('sidebar.nav', { wide: false, panels, selectPanel })}
 +        </div>
-+        <Modal open={historyOpen} onClose={() => { setHistoryOpen(false) }} title={t('history.title')} closeLabel={t('history.close')} className={css.historyDrawer}>
++        <Modal open={historyOpen} onClose={() => { setHistoryOpen(false) }} title={t('history.title')} closeLabel={t('history.close')} className={clsx(css.historyDrawer)}>
 +          <div className={css.productHistory} onClick={event => {
 +            if ((event.target as HTMLElement).closest('[data-physicsos-history-open]') !== null) setHistoryOpen(false)
 +          }}>
