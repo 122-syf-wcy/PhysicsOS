@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { LoadingState } from '../LoadingState.tsx'
 import type { PhysicsWorkspaceProps } from '../PhysicsWorkspace.tsx'
 import { AgentDrawer } from '../AgentDrawer.tsx'
 import { WorkbenchAction } from '../WorkbenchAction.tsx'
@@ -309,8 +310,8 @@ export function ConvexLensPage({
                 </button>
               </div>
             ) : release === undefined ? (
-              <div className={css.threeStatus} role="status">
-                正在读取实验版本…
+              <div className={css.threeStatus}>
+                <LoadingState inline>正在读取实验版本…</LoadingState>
               </div>
             ) : release?.entryUrl ? (
               <CommunityExperimentFrame

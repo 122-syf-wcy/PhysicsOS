@@ -1,4 +1,5 @@
 import { useEffect, useState, type ComponentType } from 'react'
+import { LoadingState } from '../LoadingState.tsx'
 import { loadOptics3DModule } from '../optional-modules.ts'
 import type { LensBenchProps } from './lens-bench.ts'
 import css from './ExperimentPage.module.css'
@@ -26,8 +27,8 @@ export function OptionalLensBench(props: Props) {
   }, [attempt])
   if (View) return <View {...props} />
   return (
-    <div role={failed ? 'alert' : 'status'} className={css.threeStatus}>
-      <strong>{failed ? '三维装置未能加载' : '正在准备三维光具座'}</strong>
+    <div role={failed ? 'alert' : undefined} className={css.threeStatus}>
+      {failed ? <strong>三维装置未能加载</strong> : <LoadingState inline>正在准备三维光具座</LoadingState>}
       <span>
         {failed
           ? '检查网络后重试，当前参数和实验记录已保留。'

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import { Button, Input } from '@deepseek-ai/dsh-client-ui-primitives'
+import { LoadingState } from '../LoadingState.tsx'
 import { completeExportSvg } from './export.ts'
 import { sceneBounds } from './editor-model.ts'
 import { WhiteboardGenerationStatus } from './GenerationStatus.tsx'
@@ -136,10 +137,10 @@ export function WhiteboardWorkspace(props: WhiteboardFactoryProps) {
     {error || state.error ? <div className={css.notice} role="alert">{error ?? state.error}<button type="button" onClick={() => { void perform(async () => { await controller.save(); await controller.poll() }) }}>{t('whiteboard.retry')}</button></div> : null}
     <WhiteboardGenerationStatus job={state.job} t={t} onCancel={() => { void perform(() => controller.cancelGeneration()) }} />
     <div className={css.body}>
-      {record ? <NativeEditor key={`${state.namespace}:${whiteboardId}`} documentId={whiteboardId} scene={record.document.scene} history={record.document.history ?? { undo: [], redo: [] }} onUndo={controller.undo} onRedo={controller.redo} onChange={controller.edit} images={images} t={t} revealId={state.revealId} clearRequest={clearRequest} onSave={() => { void perform(() => controller.save()) }} toolbarExtras={toolbarExtras} /> : <p role="status">{t('whiteboard.editorLoading')}</p>}
+      {record ? <NativeEditor key={`${state.namespace}:${whiteboardId}`} documentId={whiteboardId} scene={record.document.scene} history={record.document.history ?? { undo: [], redo: [] }} onUndo={controller.undo} onRedo={controller.redo} onChange={controller.edit} images={images} t={t} revealId={state.revealId} clearRequest={clearRequest} onSave={() => { void perform(() => controller.save()) }} toolbarExtras={toolbarExtras} /> : <LoadingState inline>{t('whiteboard.editorLoading')}</LoadingState>}
       {sourceVisible ? <aside className={css.sourcePanel}><header><strong>{t('whiteboard.source')}</strong><button type="button" onClick={() => setSourceVisible(false)} aria-label={t('whiteboard.close')}>×</button></header>
         {!selectedSource ? <p>{t('whiteboard.sourceEmpty')}</p> : <><select aria-label={t('whiteboard.source')} value={imageId} onChange={event => setImageId(event.target.value)}>{record?.document.sourceImages.map((source, index) => <option key={source.id} value={source.id}>{t('whiteboard.source')} {index + 1} · {source.width} × {source.height}</option>)}</select>
-          {sourceLoading ? <p role="status">{t('whiteboard.sourceLoading')}</p> : images[selectedSource.id] ? <a href={images[selectedSource.id]} target="_blank" rel="noreferrer"><img src={images[selectedSource.id]} alt={t('whiteboard.source')} width={selectedSource.width} height={selectedSource.height} /></a> : null}
+          {sourceLoading ? <LoadingState inline>{t('whiteboard.sourceLoading')}</LoadingState> : images[selectedSource.id] ? <a href={images[selectedSource.id]} target="_blank" rel="noreferrer"><img src={images[selectedSource.id]} alt={t('whiteboard.source')} width={selectedSource.width} height={selectedSource.height} /></a> : null}
         </>}
       </aside> : null}
     </div>

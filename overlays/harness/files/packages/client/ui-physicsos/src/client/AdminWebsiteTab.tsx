@@ -5,6 +5,7 @@ import {
   AdminCard, AdminCardActions, AdminCardHead, AdminCardMeta,
   AdminCardTitle, AdminEmpty, AdminToolbar,
 } from './AdminPrimitives.tsx'
+import { LoadingState } from './LoadingState.tsx'
 import { GlassSelect } from './GlassSelect.tsx'
 import type { FeedbackStatus } from './notice-api.ts'
 import type { PhysicsosKey } from './locales.ts'
@@ -208,7 +209,7 @@ export function AdminWebsiteTab({ api, t }: { api: WebsiteApi; t: Translate }): 
       </AdminToolbar>
       {error !== undefined && <p className={shared.error} role="alert">{error}</p>}
       {note !== undefined && <p className={css.notice} role="status">{note}</p>}
-      {loading && <p role="status">{t('admin.loading')}</p>}
+      {loading && <LoadingState inline>{t('admin.loading')}</LoadingState>}
       {draft !== undefined && !contentValid(draft) && <p className={css.hint}>{t('admin.website.invalid')}</p>}
     </AdminCard>
     {draft !== undefined && section !== 'inbox' && <>

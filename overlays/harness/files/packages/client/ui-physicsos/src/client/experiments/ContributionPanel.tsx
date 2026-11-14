@@ -1,5 +1,6 @@
 import { createPortal } from 'react-dom'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { LoadingState } from '../LoadingState.tsx'
 import type { CommunityFrameStatus } from './CommunityExperimentFrame.tsx'
 import { ExperimentCandidatePreview } from './ExperimentCandidatePreview.tsx'
 import { ContributionFilePicker } from './ContributionFilePicker.tsx'
@@ -529,7 +530,7 @@ export function ContributionPanel({
             </p>
           )}
           {catalog === undefined ? (
-            <p role="status">{error ? '未能读取投稿，请点击刷新重试。' : '正在读取版本…'}</p>
+            error ? <p role="status">未能读取投稿，请点击刷新重试。</p> : <LoadingState inline>正在读取版本…</LoadingState>
           ) : (
             <p>
               当前默认：

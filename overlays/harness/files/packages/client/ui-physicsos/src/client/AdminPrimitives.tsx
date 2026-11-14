@@ -6,6 +6,7 @@ import type {
 } from 'react'
 import clsx from 'clsx'
 
+import { LoadingState } from './LoadingState.tsx'
 import css from './AdminWorkspace.module.css'
 
 type AdminDataAttributes = {
@@ -222,9 +223,12 @@ export function AdminEmpty({
 }: HTMLAttributes<HTMLElement> & {
   readonly as?: ElementType
 }): ReactNode {
+  // Every admin panel spells a wait with the same copy. Recognize it once so the
+  // startup artwork is used everywhere instead of a bare sentence.
+  const waiting = typeof children === 'string' && /^(加载中|Loading)[.…]*$/i.test(children.trim())
   return (
     <Tag className={clsx(css.empty, className)} data-admin-empty="" {...rest}>
-      {children}
+      {waiting ? <LoadingState inline>{children}</LoadingState> : children}
     </Tag>
   )
 }

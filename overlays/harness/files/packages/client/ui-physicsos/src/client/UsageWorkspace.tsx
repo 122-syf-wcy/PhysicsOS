@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { LoadingState } from './LoadingState.tsx'
 import type { UsageApi, UsageSummary } from './usage-api.ts'
 import type { PhysicsosKey } from './locales.ts'
 import css from './UsageWorkspace.module.css'
@@ -65,7 +66,7 @@ export function UsageWorkspace({ api, admin = false, t }: UsageWorkspaceProps) {
           {t('usage.refresh')}
         </button>
       </header>
-      {loading && summary === undefined ? <p role="status">{t('usage.loading')}</p> : null}
+      {loading && summary === undefined ? <LoadingState inline label={t('usage.loading')}>{t('usage.loading')}</LoadingState> : null}
       {error === undefined ? null : (
         <p role="alert" className={css.error}>
           {error}

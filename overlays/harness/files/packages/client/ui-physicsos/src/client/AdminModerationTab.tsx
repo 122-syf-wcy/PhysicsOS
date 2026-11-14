@@ -256,7 +256,7 @@ export function AdminModerationTab({ api }: { api: ModerationApi }) {
             changeQuery({ page: 1, limit: 20, ...(status === '' ? {} : { status }) })
           }}><option value="">全部状态</option>{moderationStatuses.map(status => <option key={status} value={status}>{labels[status]}</option>)}</select>
         </label></AdminToolbar>
-        {listLoading ? <AdminEmpty>正在加载审核记录…</AdminEmpty>
+        {listLoading ? <AdminEmpty>加载中…</AdminEmpty>
           : page?.cases.length === 0 ? <AdminEmpty>没有符合条件的记录。</AdminEmpty>
             : page && <AdminTable>
               <thead><tr><th>账号 / 学校</th><th>状态 / 时间</th><th>查看</th></tr></thead>
@@ -273,7 +273,7 @@ export function AdminModerationTab({ api }: { api: ModerationApi }) {
         </AdminToolbar>
       </AdminCard>
       <AdminCard testId="moderation-detail">
-        {detail === undefined ? <AdminEmpty>{selected === undefined ? '选择一条记录查看证据与人工审核。' : '正在加载记录详情…'}</AdminEmpty> : <>
+        {detail === undefined ? <AdminEmpty>{selected === undefined ? '选择一条记录查看证据与人工审核。' : '加载中…'}</AdminEmpty> : <>
           <AdminCardHead><div><AdminCardTitle>{detail.sessionTitle || '对话证据'}</AdminCardTitle>
             <AdminCardMeta>{labels[detail.status]} · <span>版本 {detail.version}</span></AdminCardMeta></div>
           <span className={detail.accountStatus === 'disabled' ? css.warning : css.meta}>

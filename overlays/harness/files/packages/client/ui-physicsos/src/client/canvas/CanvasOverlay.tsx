@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { Button, Input, Modal, StateDot, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, Input, Modal, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
+import { LoadingState } from '../LoadingState.tsx'
 import type { CanvasOverlayProps } from './contract.ts'
 import { ExperimentPicker } from '../ExperimentPicker.tsx'
 import { starterDraft, draftToScene } from '../physics/circuit-builder.ts'
@@ -160,7 +161,7 @@ export function CanvasOverlay(props: CanvasOverlayProps) {
         disabled={pendingBusy} onChange={event => { setSearch(event.target.value) }} />
       {pendingError === undefined && pending?.error === undefined && roster.error === undefined ? null :
         <p className={css.notice} role="alert">{pendingError ?? pending?.error ?? roster.error?.message}</p>}
-      {roster.loading && workbenches.length === 0 ? <div className={css.loading} role="status" aria-label={t('canvas.sync.loading')}><StateDot state="ongoing" /></div> : null}
+      {roster.loading && workbenches.length === 0 ? <div className={css.loading}><LoadingState inline>{t('canvas.sync.loading')}</LoadingState></div> : null}
       {!roster.loading && workbenches.length === 0 ? <p className={css.notice}>{search.trim() ? t('canvas.noMatches') : t('canvas.emptyHint')}</p> : null}
       <div className={css.locateResults}>
         {workbenches.map(item => <Button variant="outline" key={item.id} disabled={pendingBusy}

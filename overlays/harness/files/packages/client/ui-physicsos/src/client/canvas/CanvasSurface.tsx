@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Button, Input, Menu, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
+import { LoadingState } from '../LoadingState.tsx'
 import type { CanvasDocumentSummary } from './types.ts'
 import type { CanvasSurfaceProps } from './contract.ts'
 import { downloadCanvasFile } from './download.ts'
@@ -98,7 +99,7 @@ export function CanvasSurface(props: CanvasSurfaceProps) {
       <Button variant="ghost" onClick={() => { void perform(() => canvasCommands.retry()) }}>{t('canvas.refresh')}</Button>
     </div>
     {error === undefined && roster.error === undefined ? null : <div className={css.notice} role="alert">{error ?? roster.error?.message}</div>}
-    {roster.loading && documents.length === 0 ? <div className={css.loading} role="status">{t('canvas.sync.loading')}</div> : null}
+    {roster.loading && documents.length === 0 ? <div className={css.loading}><LoadingState inline>{t('canvas.sync.loading')}</LoadingState></div> : null}
     {!roster.loading && documents.length === 0 ? <div className={css.empty}>
       <h2>{t('canvas.empty')}</h2><p>{t('canvas.emptyHint')}</p>
       <Button variant="primary" onClick={() => { begin({ kind: 'new' }) }}>{t('canvas.new')}</Button>

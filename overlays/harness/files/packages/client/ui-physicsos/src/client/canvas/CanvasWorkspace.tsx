@@ -10,6 +10,7 @@ import {
 import { readCanvasAnnotations, type CanvasAnnotationPrimitive, type CanvasAnnotationScene } from '@physicsos/physics-whiteboard'
 import type { CanvasLayout, CanvasNode, ComparisonMember } from '@physicsos/physics-workbench/types'
 
+import { LoadingState } from '../LoadingState.tsx'
 import type { CanvasFlowNode, CanvasWorkbenchProps } from './contract.ts'
 import type { CanvasNodePatch } from './types.ts'
 import { CanvasComparisonNode, CanvasExperimentNode, CanvasGroupNode, CanvasNoteNode, CanvasResultNode } from './CanvasNodes.tsx'
@@ -498,7 +499,7 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
     </div> : null}
     <div className={css.canvasBody}>
     <div ref={board} className={css.board}>
-      {manifest === undefined && document?.loading !== false ? <div className={css.loading} role="status" aria-label={t('canvas.sync.loading')}><StateDot state="ongoing" /></div> :
+      {manifest === undefined && document?.loading !== false ? <div className={css.loading}><LoadingState inline>{t('canvas.sync.loading')}</LoadingState></div> :
         <ReactFlow<CanvasFlowNode, Edge> className={css.flow} nodes={flowNodes} edges={flowEdges} nodeTypes={nodeTypes} viewport={viewport}
           onInit={(instance: ReactFlowInstance<CanvasFlowNode, Edge>) => { flow.current = instance }}
           onNodesChange={changes}

@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import { LoadingState } from '../LoadingState.tsx'
 import { CommunityExperimentFrame } from './CommunityExperimentFrame.tsx'
 import { contributionApi, contributionReleaseIdentity, selectContributionRelease,
   type ExperimentPackageView } from './contribution-api.ts'
@@ -67,7 +68,7 @@ export function CommunityWorkspaceCanvas({ experimentId, session, fallback }: Pr
   if (officialPin && displayed === null && !appearance.available && !appearance.error) return fallback
   if (error) return <div className={css.status} role="alert"><strong>{error}</strong>
     <button type="button" onClick={() => { setAttempt(value => value + 1) }}>重试载入实验版本</button></div>
-  if (displayed === undefined) return <div className={css.status} role="status">正在读取实验版本…</div>
+  if (displayed === undefined) return <div className={css.status}><LoadingState inline>正在读取实验版本…</LoadingState></div>
   if (displayed === null) return appearance.available || appearance.error
     ? <div className={css.community}><div className={css.viewport}>{fallback}</div>{footer}</div> : fallback
   if (displayed.entryUrl === undefined) return <div className={css.status} role="alert">实验版本暂时无法载入。</div>

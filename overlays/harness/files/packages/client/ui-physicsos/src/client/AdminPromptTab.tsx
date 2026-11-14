@@ -252,7 +252,7 @@ export function AdminPromptTab({ api }: { api: DeveloperPromptApi }): ReactNode 
             {notice}
           </p>
         )}
-        {!view && <AdminEmpty>{busy ? '正在加载提示词…' : '请重新加载提示词管理。'}</AdminEmpty>}
+        {!view && <AdminEmpty>{busy ? '加载中…' : '请重新加载提示词管理。'}</AdminEmpty>}
       </AdminCard>
       {view && (
         <>

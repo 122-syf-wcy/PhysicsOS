@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Button, MarkdownText, Modal, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { KeyboardEvent } from 'react'
+import { LoadingState } from '../LoadingState.tsx'
 import type { CanvasFrameProps, CanvasInstanceProps } from './contract.ts'
 import { PLAYBACK_RATES } from '../animation-clock.ts'
 import type { CanvasInstanceActionArguments, CanvasInstanceActionName } from './types.ts'
@@ -103,7 +104,7 @@ export function CanvasFrameStage(props: CanvasFrameProps) {
     commit: (id: string, value: number) => { if (!readOnly) act('commitParameter', id, value) },
     cancel: () => { props.cancelCanvasRendererPreview(instanceKey, displayKey) },
   }
-  const platform = frame === undefined ? <div className={css.loading} role="status">{props.t('canvas.loadingExperiment')}</div>
+  const platform = frame === undefined ? <div className={css.loading}><LoadingState inline>{props.t('canvas.loadingExperiment')}</LoadingState></div>
     : showBench && benchProps !== undefined && lensMode !== 'native'
       ? lensMode === '2d' ? <LensBench2D {...benchProps} /> : <OptionalLensBench {...benchProps} />
       :
@@ -197,7 +198,7 @@ export function CanvasInstanceView(props: CanvasInstanceProps) {
       event.preventDefault(); act(event.shiftKey ? 'redo' : 'undo')
     }
   }
-  if (summary === undefined) return <div className={css.loading} role="status">{t('canvas.loadingExperiment')}</div>
+  if (summary === undefined) return <div className={css.loading}><LoadingState inline>{t('canvas.loadingExperiment')}</LoadingState></div>
   const snapshot = summary.workspace
   const constructing = summary.buildMode === 'construct' && summary.draft !== undefined
   const selectedComponent = snapshot.view.highlighted?.[0]
