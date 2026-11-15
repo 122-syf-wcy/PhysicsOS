@@ -635,6 +635,15 @@ export function apply(ctx: ClientContext): void {
     }),
   }, PhysicsProfileSeat))
 
+  ctx.slots.inject('conversation.input.profile', () => ctx.slots.register({
+    name: 'conversation.input.profile',
+    locale: NS,
+    inject: () => ({
+      hooks: { physicsProfile: controller.store },
+      select: (id: Parameters<typeof controller.select>[0]) => controller.select(id),
+    }),
+  }, PhysicsProfileSeat))
+
   ctx.slots.inject('settings.section', () => ctx.slots.register({
     name: 'settings.section', id: 'agent-presets', priority: -1, order: 20,
     label: () => ctx.locale.bind(NS)('profile.settings.title'), locale: NS,

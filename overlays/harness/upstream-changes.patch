@@ -13873,7 +13873,7 @@ index 9028a48508..b833a707c5 100644
    },
    "scripts": {
 diff --git a/packages/client/ui-conversation/src/client/apply.ts b/packages/client/ui-conversation/src/client/apply.ts
-index 942444d3b7..b8e99f758c 100644
+index 942444d3b7..7ec37753a2 100644
 --- a/packages/client/ui-conversation/src/client/apply.ts
 +++ b/packages/client/ui-conversation/src/client/apply.ts
 @@ -314,6 +314,8 @@ export function apply(ctx: Context, config: Config = Config({})): void {
@@ -13889,15 +13889,23 @@ index 942444d3b7..b8e99f758c 100644
      name: 'conversation.composer.bar',
      locale: NS,
      children: {
-+      'conversation.hero.agentPreset': { kind: 'single', scope: 'session-maybe' },
++      'conversation.input.profile': { kind: 'single', scope: 'session-maybe' },
        'conversation.input.attachments': { kind: 'single', scope: 'session-maybe' },
        'conversation.input.overlay': { kind: 'list', scope: 'session' },
        'conversation.input.permission': { kind: 'single', scope: 'session' },
 diff --git a/packages/client/ui-conversation/src/client/contract/slots.ts b/packages/client/ui-conversation/src/client/contract/slots.ts
-index 61f7d8ff8b..12d2e78218 100644
+index 61f7d8ff8b..b4ca0713d1 100644
 --- a/packages/client/ui-conversation/src/client/contract/slots.ts
 +++ b/packages/client/ui-conversation/src/client/contract/slots.ts
-@@ -197,6 +197,19 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
+@@ -191,12 +191,27 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
+     'conversation.hero.brand.mark': { kind: 'single'; scope: 'root'; owner: HeroBrandMarkOwnerProps }
+     /** Agent-preset control staged for a New Session. */
+     'conversation.hero.agentPreset': { kind: 'single'; scope: 'session-maybe'; owner: HeroAgentPresetOwnerProps }
++    /** Product learning-mode control owned by the composer toolbar. */
++    'conversation.input.profile': { kind: 'single'; scope: 'session-maybe'; owner: HeroAgentPresetOwnerProps }
+     /** Full-width entries above the composer card. */
+     'conversation.input.dock': { kind: 'list'; scope: 'session'; owner: InputZone }
+     /** Floating entries rendered inside the resident composer card. */
      'conversation.input.overlay': { kind: 'list'; scope: 'session' }
      /** Ambient entries below the composer card. */
      'conversation.composer.dock': { kind: 'list'; scope: 'session' }
@@ -13917,7 +13925,7 @@ index 61f7d8ff8b..12d2e78218 100644
      /** Compact controls at the left of the composer tool row. */
      'conversation.input.left': { kind: 'list'; scope: 'session' }
      /** Compact controls before the composer submit action. */
-@@ -233,6 +246,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
+@@ -233,6 +248,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
          'conversation.composer': { kind: 'chain'; scope: 'session' }
          'conversation.composer.bar': { kind: 'single'; scope: 'session-maybe' }
          'conversation.input.dock': { kind: 'list'; scope: 'session' }
@@ -13926,12 +13934,12 @@ index 61f7d8ff8b..12d2e78218 100644
          'conversation.hero.brand.mark': { kind: 'single'; scope: 'root' }
          'conversation.hero.workspace': { kind: 'single'; scope: 'root' }
          'conversation.hero.agentPreset': { kind: 'single'; scope: 'session-maybe' }
-@@ -426,7 +441,7 @@ export type ComposerBarProps =
+@@ -426,7 +443,7 @@ export type ComposerBarProps =
      | 'conversation.input.permission'
      | 'conversation.input.left' | 'conversation.input.plan'
      | 'conversation.input.right' | 'conversation.input.model' | 'conversation.input.activity'
 -    | 'conversation.composer.dock'
-+    | 'conversation.composer.dock' | 'conversation.hero.agentPreset'
++    | 'conversation.composer.dock' | 'conversation.input.profile'
    >
    & InjectFace<ComposerBarInjected>
    & PropsLocale<'conversation'>
@@ -14067,7 +14075,7 @@ index 4676f4cd7d..db9f3eb005 100644
 +  :global(html[data-physicsos-ui]) .hero .input { min-height: 66px; }
 +}
 diff --git a/packages/client/ui-conversation/src/client/skeleton/InputBar.tsx b/packages/client/ui-conversation/src/client/skeleton/InputBar.tsx
-index f004aba1e9..a154fecf36 100644
+index f004aba1e9..6a3a405977 100644
 --- a/packages/client/ui-conversation/src/client/skeleton/InputBar.tsx
 +++ b/packages/client/ui-conversation/src/client/skeleton/InputBar.tsx
 @@ -1,3 +1,4 @@
@@ -14088,10 +14096,39 @@ index f004aba1e9..a154fecf36 100644
                {sessionId === undefined ? null : renderSlot('conversation.input.permission', { locked })}
                {sessionId === undefined ? null : renderSlot('conversation.input.plan', { locked })}
              </div>
-+            {variant === 'hero' && document.documentElement.hasAttribute('data-physicsos-ui') && renderSlot('conversation.hero.agentPreset', {})}
++            {variant === 'hero' && document.documentElement.hasAttribute('data-physicsos-ui') && renderSlot('conversation.input.profile', {})}
              {input === undefined || sessionId === undefined
                ? null
                : renderSlot('conversation.input.left', {})}
+diff --git a/packages/client/ui-conversation/tests/apply-wiring.client.spec.tsx b/packages/client/ui-conversation/tests/apply-wiring.client.spec.tsx
+index 138436b764..e5431bf8ce 100644
+--- a/packages/client/ui-conversation/tests/apply-wiring.client.spec.tsx
++++ b/packages/client/ui-conversation/tests/apply-wiring.client.spec.tsx
+@@ -44,6 +44,24 @@ function entry(
+ }
+
+ describe('target-neutral Conversation apply wiring', () => {
++  it('activates the product composer without redeclaring the hero preset slot', async () => {
++    const previous = document.documentElement.hasAttribute('data-physicsos-ui')
++    document.documentElement.setAttribute('data-physicsos-ui', '')
++    try {
++      const b = await bench()
++      try {
++        expect(b.runtime.ctx.get('uiConversation')).toBeDefined()
++        expect(b.runtime.slots.spec('conversation.hero.agentPreset')).toEqual({ kind: 'single', scope: 'session-maybe' })
++        expect(b.runtime.slots.spec('conversation.input.profile')).toEqual({ kind: 'single', scope: 'session-maybe' })
++        const composer = b.runtime.slots.entries('conversation.composer.bar')[0]!
++        expect(composer.children).toHaveProperty('conversation.input.profile')
++        expect(composer.children).not.toHaveProperty('conversation.hero.agentPreset')
++      } finally { await b.runtime.dispose() }
++    } finally {
++      if (!previous) document.documentElement.removeAttribute('data-physicsos-ui')
++    }
++  })
++
+   it('hides only the Trajectory View while developer tools are disabled and restores it when enabled', async () => {
+     const b = await bench()
+     const header = b.runtime.slots.entries('conversation.session.header')[0]!
 diff --git a/packages/client/ui-layout/src/client/AppFrame.module.css b/packages/client/ui-layout/src/client/AppFrame.module.css
 index 4f450df3c9..b417d55183 100644
 --- a/packages/client/ui-layout/src/client/AppFrame.module.css
