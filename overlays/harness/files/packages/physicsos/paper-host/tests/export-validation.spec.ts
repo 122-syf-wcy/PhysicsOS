@@ -35,6 +35,17 @@ describe('real PDF byte/page validation', () => {
     expect(validated.text).toContain('Synthetic physics paper text')
     expect(validated.pages[1]?.number).toBe(2)
   })
+  it('proves visible formula text ink and exposes invisible PDF text as zero ink', async () => {
+    const path = join(root, 'visible-formula.pdf')
+    await writeFile(path, pdf([{ width: 595.28, height: 841.89, content: 'BT /F1 12 Tf 40 100 Td (m=2 kg) Tj ET' }]))
+    const visible = await inspectPdf(path, { proveTextInk: true })
+    expect(visible.textProofs.find((proof) => proof.text === 'm=2 kg')?.inkPixels).toBeGreaterThan(0)
+    await writeFile(path, pdf([{ width: 595.28, height: 841.89, content: 'BT /F1 12 Tf 3 Tr 40 100 Td (m=2 kg) Tj ET' }]))
+    const invisible = await inspectPdf(path, { proveTextInk: true })
+    expect(invisible.text).toContain('m=2 kg')
+    expect(invisible.textProofs.find((proof) => proof.text === 'm=2 kg')?.inkPixels).toBe(0)
+  })
+
   it('rejects a later Letter-sized page and empty/broken/truncated content', async () => {
     const mixed = join(root, 'mixed.pdf'); await writeFile(mixed, pdf([{ width: 595.28, height: 841.89 }, { width: 612, height: 792 }]))
     await expect(inspectPdf(mixed)).rejects.toThrow('第 2 页不是纵向 A4')

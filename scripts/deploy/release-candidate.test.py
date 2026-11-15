@@ -124,9 +124,10 @@ class CandidateSafety(unittest.TestCase):
                     'network': 'private-network', 'mounts': [], 'environment': {},
                     'command': ['node', 'scripts/docker-entrypoint.mjs', 'node', 'vendor/deepseek-harness/apps/cli/lib/bin.js', '--port', str(port)],
                 }
-                running = {'State': {'Running': True}, 'Image': 'sha256:candidate'}
+                running = {'Id': 'a' * 64, 'State': {'Running': True}, 'Image': 'sha256:candidate'}
                 with patch.object(candidate, 'lifecycle', return_value=contextlib.nullcontext()), patch.object(candidate, 'prepare', return_value=({}, spec, [])), patch.object(candidate, 'metadata', side_effect=[None, running]), patch.object(candidate.subprocess, 'run') as run:
-                    candidate.start(config, 'candidate-image')
+                    result = candidate.start(config, 'candidate-image')
+                self.assertEqual(result['containerId'], running['Id'])
                 creates = [call.args[0] for call in run.call_args_list if call.args[0][:2] == ['docker', 'create']]
                 self.assertEqual(len(creates), 1)
                 args = creates[0]
@@ -284,6 +285,115 @@ class IsolatedCandidateNetwork(unittest.TestCase):
         with patch.object(candidate, 'lifecycle', return_value=contextlib.nullcontext()), patch.object(candidate, 'production_services', return_value=production), patch.object(candidate, 'ensure_isolated_network', return_value=network), patch.object(candidate.subprocess, 'run') as run:
             result = candidate.prepare_network(config)
             self.assertFalse(result['candidateStarted']); self.assertFalse(result['databaseStarted']); run.assert_not_called()
+
+
+class NativeValidationWorker(unittest.TestCase):
+    @contextlib.contextmanager
+    def fixture(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / 'candidate'; (root / 'secrets').mkdir(parents=True)
+            token = root / 'secrets/ui_validation_app_token'
+            token.write_bytes(b'mock-private-material-not-a-real-secret\n'); token.chmod(0o400)
+            home = root / 'home'; home.mkdir(); (home / 'fixture').write_text('retained')
+            production = Path(tmp) / 'production'; production.mkdir()
+            (production / 'fixture').write_text('protected')
+            config = CandidateSafety().config(root)
+            config.update({'requireIsolatedNetwork': True, 'network': 'physicsos-worker-test', 'databaseOwner': config['task'],
+                           'validationWorker': {'port': 13187, 'url': 'http://127.0.0.1:13187', 'tokenFile': str(token),
+                                                'mountDestination': '/run/secrets/ui_validation_token',
+                                                'publicOrigin': 'http://127.0.0.1:13188'}})
+            original_stat = Path.stat
+            def app_owned(path, *args, **kwargs):
+                info = original_stat(path, *args, **kwargs)
+                if path == token:
+                    fields = list(info); fields[4] = 999; fields[5] = 999
+                    return os.stat_result(fields)
+                return info
+            with patch.object(Path, 'stat', app_owned):
+                yield config, token, home, production
+
+    def test_safe_extension_adds_only_real_consumer_env_and_readonly_existing_token(self):
+        with self.fixture() as (config, token, home, production):
+            before = token.read_bytes(), token.stat().st_ino, token.stat().st_mode
+            environment = {'DSH_HOME': '/var/lib/physicsos', 'PHYSICSOS_VALIDATION_TOKEN': 'mock-stale-value'}
+            mounts = [{'Source': str(home), 'Destination': '/var/lib/physicsos', 'ReadOnly': False}]
+            with patch.object(Path, 'read_bytes', side_effect=AssertionError('extension must not read tokens')):
+                candidate.apply_validation_worker(config, environment, mounts, [{'Source': str(production)}])
+            self.assertEqual(environment, {
+                'DSH_HOME': '/var/lib/physicsos', 'PHYSICSOS_VALIDATION_URL': 'http://127.0.0.1:13187',
+                'PHYSICSOS_VALIDATION_TOKEN_FILE': '/run/secrets/ui_validation_token',
+                'PHYSICSOS_VALIDATION_PUBLIC_ORIGIN': 'http://127.0.0.1:13188'})
+            self.assertEqual(mounts[-1], {'Source': str(token), 'Destination': '/run/secrets/ui_validation_token', 'ReadOnly': True})
+            self.assertEqual(before, (token.read_bytes(), token.stat().st_ino, token.stat().st_mode))
+            self.assertEqual((home / 'fixture').read_text(), 'retained')
+            self.assertEqual((production / 'fixture').read_text(), 'protected')
+            self.assertEqual(mounts[0], {'Source': str(home), 'Destination': '/var/lib/physicsos', 'ReadOnly': False})
+
+    def test_explicit_browser_trusted_authority_is_the_only_second_origin(self):
+        with self.fixture() as (config, token, home, production):
+            config['validationWorker']['publicOrigin'] = 'http://physicsos-validation.invalid:13188'
+            settings = candidate.validation_worker_settings(config)
+            self.assertEqual(settings['environment']['PHYSICSOS_VALIDATION_PUBLIC_ORIGIN'], 'http://physicsos-validation.invalid:13188')
+
+    def test_old_config_has_no_extension_or_changed_behavior(self):
+        config = CandidateSafety().config(Path('/candidate'))
+        environment, mounts = {'existing': 'retained'}, []
+        candidate.apply_validation_worker(config, environment, mounts)
+        self.assertEqual(environment, {'existing': 'retained'}); self.assertEqual(mounts, [])
+
+    def test_unknown_fields_unsafe_routes_origins_and_destinations_are_rejected(self):
+        changes = [
+            {'extra': 'not-an-env-extension'}, {'url': 'http://physicsos-app-1:13187'},
+            {'url': 'http://host.docker.internal:13187'}, {'url': 'https://provider.example:13187'},
+            {'url': 'http://127.0.0.1:13187/path'}, {'url': 'http://localhost:13187'},
+            {'url': 'http://127.0.0.1:3972'}, {'url': 'http://user:pass@127.0.0.1:13187'},
+            {'publicOrigin': 'http://127.0.0.1:3080'}, {'publicOrigin': 'http://physicsos-validation.invalid:3080'},
+            {'publicOrigin': 'http://localhost:13188'}, {'publicOrigin': 'http://127.0.0.1:13188/path'},
+            {'publicOrigin': 'http://user:pass@127.0.0.1:13188'}, {'publicOrigin': 'https://127.0.0.1:13188'},
+            {'mountDestination': '/run/secrets/database_url'}, {'port': True}, {'port': 13188}, {'port': 13982},
+        ]
+        with self.fixture() as (config, token, home, production):
+            for changed in changes:
+                with self.subTest(changed=changed), self.assertRaises(RuntimeError):
+                    candidate.apply_validation_worker({**config, 'validationWorker': {**config['validationWorker'], **changed}}, {}, [], [{'Source': str(production)}])
+            self.assertEqual((home / 'fixture').read_text(), 'retained')
+            self.assertEqual((production / 'fixture').read_text(), 'protected')
+            self.assertEqual(token.stat().st_mode & 0o777, 0o400)
+
+    def test_escape_symlink_hardlink_missing_and_nonprivate_token_are_rejected(self):
+        with self.fixture() as (config, token, home, production):
+            for path in [str(production / 'fixture'), str(token.parent / '../home/fixture'), str(token) + ',readonly', str(token.parent / 'missing')]:
+                with self.subTest(path=path), self.assertRaises(RuntimeError):
+                    candidate.validation_worker_settings({**config, 'validationWorker': {**config['validationWorker'], 'tokenFile': path}})
+            link = token.parent / 'link'; link.symlink_to(token)
+            with self.assertRaisesRegex(RuntimeError, 'symlinks'):
+                candidate.validation_worker_settings({**config, 'validationWorker': {**config['validationWorker'], 'tokenFile': str(link)}})
+            hardlink = token.parent / 'linked'; os.link(token, hardlink)
+            with self.assertRaisesRegex(RuntimeError, 'hard-linked'):
+                candidate.validation_worker_settings(config)
+            hardlink.unlink(); token.chmod(0o644)
+            with self.assertRaisesRegex(RuntimeError, 'private regular'):
+                candidate.validation_worker_settings(config)
+            self.assertEqual((home / 'fixture').read_text(), 'retained')
+            self.assertEqual((production / 'fixture').read_text(), 'protected')
+
+    def test_duplicate_or_covering_mount_refuses_before_env_or_mount_mutation(self):
+        with self.fixture() as (config, token, home, production):
+            for destination in ['/run/secrets/ui_validation_token', '/run/secrets', '/run', '/run/secrets/ui_validation_token/child']:
+                environment = {'unchanged': 'value'}
+                mounts = [{'Source': '/different-file', 'Destination': destination, 'ReadOnly': True}]
+                original = [dict(mount) for mount in mounts]
+                with self.subTest(destination=destination), self.assertRaisesRegex(RuntimeError, 'overlap'):
+                    candidate.apply_validation_worker(config, environment, mounts)
+                self.assertEqual(environment, {'unchanged': 'value'}); self.assertEqual(mounts, original)
+
+    def test_worker_extension_requires_isolation_and_never_accepts_production_data(self):
+        with self.fixture() as (config, token, home, production):
+            for changed in [{'network': ''}, {'requireIsolatedNetwork': False}, {'databaseOwner': 'other'}]:
+                with self.assertRaisesRegex(RuntimeError, 'isolated'):
+                    candidate.validation_worker_settings({**config, **changed})
+            with self.assertRaisesRegex(RuntimeError, 'production'):
+                candidate.validation_worker_settings(config, [{'Source': str(token.parent)}])
 
 
 if __name__ == '__main__': unittest.main()

@@ -10,7 +10,17 @@ export const EXPORT_VALIDATOR_VERSION = 'paper-four-files-validation-v1'
 export const EXPORT_LIMITS = { fileBytes: 48 * 1024 * 1024, xmlBytes: 16 * 1024 * 1024, zipEntries: 2048, pages: 120, operatorsPerPage: 200_000, imagePixels: 8_000_000, timeoutMs: 120_000 } as const
 export interface PdfPageValidation { readonly number: number; readonly width: number; readonly height: number; readonly textCharacters: number }
 export interface PdfValidation { readonly pageCount: number; readonly pages: readonly PdfPageValidation[] }
-export interface PdfInspection extends PdfValidation { readonly text: string }
+export interface PdfTextProof {
+  readonly text: string
+  readonly page: number
+  /** Bounds in actual rendered pixels, with a 1px inset to avoid neighbor ink. */
+  readonly left: number
+  readonly top: number
+  readonly width: number
+  readonly height: number
+  readonly inkPixels?: number
+}
+export interface PdfInspection extends PdfValidation { readonly text: string; readonly textProofs: readonly PdfTextProof[] }
 
 /** Limits are checked before reading a tool's generated file into memory. */
 export async function readExportFile(path: string, max = EXPORT_LIMITS.fileBytes): Promise<Buffer> {
@@ -70,7 +80,7 @@ export function assertA4PdfPage(width: number, height: number, number: number): 
  * Uint8Array, never a URL. PDF JS/actions/attachments are inspected, not run.
  * This walks every page, its operators and text, with strict parse failures.
  */
-export async function inspectPdf(path: string): Promise<PdfInspection> {
+export async function inspectPdf(path: string, options: { readonly proveTextInk?: boolean } = {}): Promise<PdfInspection> {
   const bytes = await readExportFile(path)
   if (!bytes.subarray(0, 8).toString('ascii').startsWith('%PDF-') || !/%%EOF\s*$/.test(bytes.subarray(-2048).toString('latin1'))) throw new Error('PDF 文件头或结束标记不完整')
   const require = createRequire(import.meta.url)
@@ -102,7 +112,7 @@ export async function inspectPdf(path: string): Promise<PdfInspection> {
     const [actions, attachments, fields] = await Promise.all([document.getJSActions(), document.getAttachments(), document.hasJSActions()])
     const hasEntries = (value: unknown): boolean => value instanceof Map ? value.size > 0 : value !== null && typeof value === 'object' && Object.keys(value).length > 0
     if (hasEntries(actions) || hasEntries(attachments) || fields) throw new Error('导出 PDF 不允许脚本或嵌入附件')
-    const pages: PdfPageValidation[] = []; const text: string[] = []
+    const pages: PdfPageValidation[] = []; const text: string[] = []; const textProofs: PdfTextProof[] = []
     for (let number = 1; number <= document.numPages; number++) {
       if (timedOut) throw new Error('PDF 验证超过时限')
       const page = await document.getPage(number)
@@ -121,6 +131,38 @@ export async function inspectPdf(path: string): Promise<PdfInspection> {
         const pageText = content.items.flatMap((item) => 'str' in item ? [item.str] : []).join(' ')
         if (pageText.trim() === '') throw new Error(`PDF 第 ${number} 页没有可读卷面文字`)
         if (pageText.includes('�')) throw new Error(`PDF 第 ${number} 页包含无法解码的文字`)
+        const textItems = content.items.filter((item) => 'str' in item)
+        const renderedViewport = page.getViewport({ scale: 2, rotation: 0 })
+        const proofs = textItems.map((item): PdfTextProof => {
+          const transform = pdfjs.Util.transform(renderedViewport.transform, item.transform)
+          const fontHeight = Math.hypot(transform[2]!, transform[3]!)
+          const font = content.styles[item.fontName]
+          const ascent = font?.ascent === undefined ? (font?.descent === undefined ? fontHeight : (1 + font.descent) * fontHeight) : font.ascent * fontHeight
+          return { text: item.str, page: number, left: transform[4]! + 1, top: transform[5]! - ascent + 1,
+            width: Math.max(0, item.width * 2 - 2), height: Math.max(0, fontHeight - 2) }
+        })
+        if (options.proveTextInk) {
+          const width = Math.ceil(renderedViewport.width); const height = Math.ceil(renderedViewport.height)
+          if (width * height > EXPORT_LIMITS.imagePixels) throw new Error('PDF 可见性验证像素超过限额')
+          const factory = document.canvasFactory
+          const surface = factory.create(width, height)
+          let rendering: ReturnType<typeof page.render> | undefined
+          try {
+            rendering = page.render({ canvasContext: surface.context, canvas: surface.canvas, viewport: renderedViewport, background: '#ffffff', annotationMode: pdfjs.AnnotationMode.DISABLE })
+            await rendering.promise
+            const pixels = surface.context.getImageData(0, 0, width, height).data
+            for (const proof of proofs) {
+              const left = Math.max(0, Math.ceil(proof.left)); const top = Math.max(0, Math.ceil(proof.top))
+              const right = Math.min(width, Math.floor(proof.left + proof.width)); const bottom = Math.min(height, Math.floor(proof.top + proof.height))
+              let inkPixels = 0
+              for (let y = top; y < bottom; y++) for (let x = left; x < right; x++) {
+                const at = (y * width + x) * 4
+                if (pixels[at + 3]! > 32 && Math.min(pixels[at]!, pixels[at + 1]!, pixels[at + 2]!) < 220) inkPixels++
+              }
+              textProofs.push({ ...proof, inkPixels })
+            }
+          } finally { rendering?.cancel(); factory.destroy(surface) }
+        } else textProofs.push(...proofs)
         pages.push({ number, width: viewport.width, height: viewport.height, textCharacters: pageText.length })
         text.push(pageText)
       } finally {
@@ -128,7 +170,7 @@ export async function inspectPdf(path: string): Promise<PdfInspection> {
       }
     }
     await document.cleanup()
-    return { pageCount: pages.length, pages, text: text.join('\n') }
+    return { pageCount: pages.length, pages, text: text.join('\n'), textProofs }
   }
   try {
     return await Promise.race([walk(), new Promise<never>((_resolve, reject) => {
@@ -140,7 +182,7 @@ export async function inspectPdf(path: string): Promise<PdfInspection> {
   }
 }
 export async function validatePdf(path: string): Promise<PdfValidation> {
-  const { text: _text, ...validation } = await inspectPdf(path)
+  const { text: _text, textProofs: _proofs, ...validation } = await inspectPdf(path)
   return validation
 }
 export async function validateDocx(path: string): Promise<void> { await inspectDocx(path) }

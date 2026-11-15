@@ -40,9 +40,13 @@ describe.runIf(real)('real Pandoc/LibreOffice A4 output regression', () => {
       expect(paperDocx.documentXml).not.toContain('INTERNALDRAWINGONLY')
       expect(paperDocx.documentXml).not.toContain('TEACHERANSWERONLY')
       expect(paperDocx.documentXml).not.toContain('answer-force')
-      expect(answerDocx.documentXml).toContain('w:br w:type="page"')
-      const paper = await inspectPdf(join(root, 'synthetic-only', bundle.paperPdf))
-      const answers = await inspectPdf(join(root, 'synthetic-only', bundle.answerPdf))
+      expect(answerDocx.documentXml).not.toContain('w:br w:type="page"')
+      const ommlText = (xml: string): string => [...xml.matchAll(/<m:t\b[^>]*>([\s\S]*?)<\/m:t>/g)].map((match) => match[1]!).join('').replace(/\s+/g, '')
+      expect(ommlText(paperDocx.documentXml)).toContain('m=2kg')
+      expect(ommlText(paperDocx.documentXml)).toContain('g=10m/s2')
+      expect(ommlText(answerDocx.documentXml)).toContain('G=mg=20N')
+      const paper = await inspectPdf(join(root, 'synthetic-only', bundle.paperPdf), { proveTextInk: true })
+      const answers = await inspectPdf(join(root, 'synthetic-only', bundle.answerPdf), { proveTextInk: true })
       expect(paper.pageCount).toBeGreaterThan(1)
       for (const file of [paper, answers]) for (const page of file.pages) {
         expect(page.width).toBeCloseTo(595.28, 0)
@@ -57,6 +61,29 @@ describe.runIf(real)('real Pandoc/LibreOffice A4 output regression', () => {
       expect(paperText).not.toContain('INTERNALDRAWINGONLY')
       expect(answerText).toContain('TEACHERANSWERONLY20N')
       expect(answerText).toContain('参考答案')
+      /* The previous OMML-tag check passed when Writer omitted every formula
+         in PDF. Require the original symbols/values/units for each question,
+         and nonwhite rendered pixels inside their actual text-run boxes. */
+      const compact = (value: string): string => value.normalize('NFKC').replace(/[\s​⁠]/g, '')
+      const assertVisibleFormula = (inspection: typeof paper, formula: string, expected: number): void => {
+        const runs = inspection.textProofs.filter((proof) => compact(proof.text) !== '')
+        const text = runs.map((proof) => compact(proof.text)).join('')
+        let start = 0; let found = 0
+        while ((start = text.indexOf(formula, start)) >= 0) {
+          let offset = 0
+          const matched = runs.filter((proof) => { const end = offset + compact(proof.text).length; const overlaps = offset < start + formula.length && end > start; offset = end; return overlaps })
+          expect(matched.length).toBeGreaterThan(0)
+          for (const proof of matched) expect(proof.inkPixels, `formula ${formula} must be visible on page ${proof.page}`).toBeGreaterThan(0)
+          found++; start += formula.length
+        }
+        expect(found, `actual PDF must retain all ${expected} copies of ${formula}`).toBe(expected)
+      }
+      assertVisibleFormula(paper, 'm=2kg', questions.length)
+      assertVisibleFormula(paper, 'g=10m/s2', questions.length)
+      assertVisibleFormula(answers, 'G=mg=20N', questions.length)
+      const firstAnswerPage = compact(answers.textProofs.filter((proof) => proof.page === 1).map((proof) => proof.text).join(''))
+      expect(firstAnswerPage).toContain('1.(8分)')
+      expect(firstAnswerPage).toContain('G=mg=20N')
       for (const digest of [...Object.values(bundle.manifest.files), ...bundle.manifest.assets, ...bundle.manifest.inputs]) expect(sha(await readFile(join(root, 'synthetic-only', digest.path)))).toBe(digest.sha256)
       const original = await readFile(join(root, 'synthetic-only', bundle.paperPdf))
       const revised = await exportPaper(tools, 'synthetic-only', { ...doc, title: '合成 A4 修订卷' })

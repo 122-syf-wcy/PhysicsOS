@@ -11,7 +11,7 @@
 import { coefficientLabel, paperCoefficient } from './difficulty.ts'
 import type { PaperDocument, PaperQuestion, SolveResult } from './paper.ts'
 import { studentFigureCaption } from './print-diagram.ts'
-import { wordAnswerSpace, wordPageBreak } from './print-layout.ts'
+import { wordAnswerSpace } from './print-layout.ts'
 
 /** Section-order group the answer key needs for its own headings and rules. */
 const questionsOf = (doc: PaperDocument): { title: string; note?: string; items: PaperQuestion[] }[] =>
@@ -201,7 +201,6 @@ export function renderAnswerMarkdown(doc: PaperDocument, solves?: readonly Solve
     '',
     '教师用参考答案及解析（不得随学生卷发放）',
     '',
-    wordPageBreak(),
     `整卷预估：${coefficientLabel(paperCoefficient(doc))}`,
     '',
   ]

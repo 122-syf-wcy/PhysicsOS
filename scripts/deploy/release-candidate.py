@@ -231,6 +231,13 @@ def check_isolated_resources(config, details=None, current=None, create=False, c
         live_env = dict(entry.split('=', 1) for entry in app.get('Config', {}).get('Env', []) if '=' in entry)
         old_port = int(live_env.get('PHYSICSOS_MODEL_POOL_PORT', '3972'))
         reject_production_model_routes(config, environment.values(), production, network, old_port)
+        settings = validation_worker_settings(config, protected)
+        if settings is not None:
+            token_mounts = [mount for mount in current.get('Mounts', []) if mount.get('Destination') == VALIDATION_WORKER_TOKEN_DESTINATION]
+            if (any(environment.get(key) != value for key, value in settings['environment'].items())
+                    or 'PHYSICSOS_VALIDATION_TOKEN' in environment or len(token_mounts) != 1
+                    or token_mounts[0].get('Source') != settings['mount']['Source'] or token_mounts[0].get('RW') is not False):
+                raise RuntimeError('Candidate private worker environment/token mount binding changed')
     return ensure_isolated_network(config, production), pg
 
 
@@ -261,6 +268,71 @@ def prepare_network(config):
         network = ensure_isolated_network(config, production, create=True)
         return {'network': config['network'], 'networkId': network['Id'], 'task': config['task'], 'databaseStarted': False, 'candidateStarted': False}
 
+VALIDATION_WORKER_TOKEN_DESTINATION = '/run/secrets/ui_validation_token'
+
+
+def validation_worker_settings(config, protected=()):
+    """The only task-private extension: a loopback worker and one existing token.
+
+    This is deliberately not an arbitrary environment/mount override. No token
+    contents are read, copied or changed here, including on candidate refresh.
+    """
+    if 'validationWorker' not in config:
+        return None
+    worker = config['validationWorker']
+    fields = {'port', 'url', 'tokenFile', 'mountDestination', 'publicOrigin'}
+    if not isinstance(worker, dict) or set(worker) != fields:
+        raise RuntimeError('Validation worker configuration has unknown or missing fields')
+    if config.get('requireIsolatedNetwork') is not True or not config.get('network') or config.get('databaseOwner') != config['task']:
+        raise RuntimeError('Validation worker requires a task-owned isolated network/database')
+    port = worker['port']
+    if type(port) is not int or not 1024 <= port <= 65535 or port in {config['httpPort'], config['modelPoolPort']}:
+        raise RuntimeError('Validation worker requires a separate private port')
+    if not isinstance(worker['url'], str) or worker['url'] != f'http://127.0.0.1:{port}':
+        raise RuntimeError('Validation worker URL must be its exact private loopback endpoint')
+    # Numeric loopback is the verified worker-internal origin; the .invalid
+    # authority is separately useful for browser/CLI trusted-host checks.
+    origins = {f'http://127.0.0.1:{config["httpPort"]}', f'http://physicsos-validation.invalid:{config["httpPort"]}'}
+    if not isinstance(worker['publicOrigin'], str) or worker['publicOrigin'] not in origins:
+        raise RuntimeError('Validation worker public origin must be an exact candidate authority')
+    if worker['mountDestination'] != VALIDATION_WORKER_TOKEN_DESTINATION:
+        raise RuntimeError('Validation worker token mount destination is fixed')
+    raw = worker['tokenFile']
+    if not isinstance(raw, str) or not raw or ',' in raw or '\x00' in raw:
+        raise RuntimeError('Validation worker token path is invalid')
+    token, root = Path(raw), Path(config['root'])
+    if not token.is_absolute() or str(token) != raw or '..' in token.parts or root / 'secrets' not in token.parents:
+        raise RuntimeError('Validation worker token must stay inside candidate secrets')
+    owned_path(root, token, protected)
+    if not token.exists():
+        raise RuntimeError('Validation worker token must already exist')
+    info = token.stat()
+    if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_uid != 999
+            or info.st_gid != 999 or stat.S_IMODE(info.st_mode) not in {0o400, 0o600}
+            or not 24 <= info.st_size <= 4096):
+        raise RuntimeError('Validation worker token must be an app-readable private regular file')
+    return {'port': port, 'environment': {
+        'PHYSICSOS_VALIDATION_URL': worker['url'],
+        'PHYSICSOS_VALIDATION_TOKEN_FILE': VALIDATION_WORKER_TOKEN_DESTINATION,
+        'PHYSICSOS_VALIDATION_PUBLIC_ORIGIN': worker['publicOrigin'],
+    }, 'mount': {'Source': str(token), 'Destination': VALIDATION_WORKER_TOKEN_DESTINATION, 'ReadOnly': True}}
+
+
+def apply_validation_worker(config, environment, mounts, protected=()):
+    settings = validation_worker_settings(config, protected)
+    if settings is None:
+        return
+    target = Path(VALIDATION_WORKER_TOKEN_DESTINATION)
+    for mount in mounts:
+        destination = Path(mount['Destination'])
+        if (destination == target or destination in target.parents or target in destination.parents
+                or mount.get('Source') == settings['mount']['Source']):
+            raise RuntimeError('Validation worker token would overlap an existing mount')
+    environment.pop('PHYSICSOS_VALIDATION_TOKEN', None)
+    environment.update(settings['environment'])
+    mounts.append(settings['mount'])
+
+
 def seed_profile_file(source, destination):
     if destination.exists() or destination.is_symlink():
         if destination.is_symlink() or not destination.is_file() or destination.stat().st_nlink != 1:
@@ -287,6 +359,7 @@ def prepare(config, image_name):
     protected = [mount for source in [app, production_pg, redis] if source for mount in source['Mounts'] if mount.get('Destination', '').startswith(('/var/lib/physicsos', '/var/lib/postgresql', '/data'))]
     if not production_pg or pg['Id'] == production_pg['Id'] or any(same_data(a, b) for a in pg['Mounts'] if a.get('RW', True) for b in protected):
         raise RuntimeError('Validation database shares production data')
+    validation_worker_settings(config, [mount for source in [app, production_pg, redis] if source for mount in source['Mounts']])
     root = Path(config['root'])
     writable = ['owner', 'metadata.json', 'home', 'state', 'secrets', 'tools', 'home/profiles', 'home/profiles/web', 'home/profiles/web/node_modules', 'tools/candidate.patch.yml', 'secrets/database_url', 'secrets/admin_password', 'state/launch-spec.json', 'state/logger.json', 'state/launcher.json', 'state/launcher.log', 'state/runtime.log', 'state/auth-url', 'state/lifecycle.lock', 'state/intent.json']
     for path in [root, *(root / name for name in writable), *(root / 'home/profiles/web' / name for name in ['cordis.yml', 'cordis.patch.yml', 'package.json', 'pnpm-workspace.yaml'])]: owned_path(root, path, protected)
@@ -386,6 +459,7 @@ def prepare(config, image_name):
         source = paths['secrets'] / destination.rsplit('/', 1)[-1] if destination in ['/run/secrets/database_url', '/run/secrets/admin_password'] else Path(mount['Source'])
         mounts.append({'Source': str(source), 'Destination': destination, 'ReadOnly': True})
         if source.is_file(): private_values.append(source.read_text().strip())
+    apply_validation_worker(config, environment, mounts, [mount for service in [app, production_pg, redis] if service for mount in service['Mounts']])
     name = 'physicsos-validation-' + config['task']
     details = {'task': config['task'], 'container': name, 'image': image['Id'], 'productionImage': app['Image'], 'port': port, 'schema': config['schema'], 'home': str(paths['home']), 'root': str(root), 'username': config['username'], 'productionDataWritable': False, 'nativePreload': False}
     if isolated:
@@ -429,7 +503,7 @@ def start(config, image):
             except BaseException:
                 remove_owned(config)
                 raise
-        return {**spec['metadata'], 'url': f'http://physicsos-validation.invalid:{port}', 'logDriver': 'none'}
+        return {**spec['metadata'], 'containerId': actual['Id'], 'url': f'http://physicsos-validation.invalid:{port}', 'logDriver': 'none'}
 
 
 def stop(config):

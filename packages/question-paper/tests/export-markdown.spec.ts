@@ -35,12 +35,13 @@ describe('Word-ready student and teacher exports', () => {
     expect(() => renderPaperMarkdown(doc, new Map([['f', '../secret.png']]))).toThrow('已验证的内容文件')
   })
 
-  it('keeps the answer key separate, with marking rules and a native Word page break', () => {
+  it('keeps the answer key separate, without forcing a mostly empty cover page', () => {
     const markdown = renderAnswerMarkdown(doc)
     expect(markdown).toContain('ANSWERS-ONLY-SENTINEL')
     expect(markdown).toContain('TEACHER-ONLY-RUBRIC')
     expect(markdown).toContain('只写结果不得分')
-    expect(markdown).toContain('w:br w:type="page"')
+    expect(markdown).not.toContain('w:br w:type="page"')
+    expect(markdown).not.toContain('\\newpage')
     expect(markdown).not.toContain('内部指令')
     expect(markdown).not.toContain('作答区（在本卷作答')
   })
