@@ -140,6 +140,35 @@ const cardProps = (
 }) as unknown as Parameters<typeof SceneChatCard>[0]
 
 describe('physics scene chat card', () => {
+  it('keeps verified chat attachments compact while preserving the full derivation on demand', () => {
+    const data = solvedCardData('01-proton-basic')
+    const before = JSON.stringify(data)
+    const openScenePreview = vi.fn()
+    const view = render(<SceneCardBody data={data} presentation="attachment" openSceneInLab={vi.fn()} openScenePreview={openScenePreview} t={t} />)
+    const details = view.container.querySelector<HTMLDetailsElement>('[data-solve-section]')
+    expect(details).not.toBeNull()
+    expect(details?.open).toBe(false)
+    expect(view.container.querySelector('iframe, [data-code-experiment-shell]')).toBeNull()
+    fireEvent.click(details!.querySelector('summary')!)
+    expect(details?.open).toBe(true)
+    expect(view.getByText(zh['sceneCard.solveKnowns'])).toBeTruthy()
+    expect(JSON.stringify(data)).toBe(before)
+    fireEvent.click(view.getByRole('button', { name: /预览实验/ }))
+    expect(openScenePreview).toHaveBeenCalledWith(data.sceneId)
+  })
+
+  it('does not collapse failed physical verification into a successful-looking attachment', () => {
+    const data = solvedCardData('01-proton-basic')
+    const solve = data.solve, verification = solve?.verification
+    if (solve === undefined || verification === undefined) throw new Error('Missing published verification fixture')
+    const failed: PhysicsSceneCardData = { ...data, solve: { ...solve, verification: {
+      ...verification, status: 'failed', checks: verification.checks.map(check => ({ ...check, passed: false })),
+    } } }
+    const view = render(<SceneCardBody data={failed} presentation="attachment" openSceneInLab={vi.fn()} openScenePreview={vi.fn()} t={t} />)
+    expect(view.container.querySelector<HTMLDetailsElement>('[data-solve-section]')?.open).toBe(true)
+    expect(view.container.querySelector('[data-solve-section] [data-level]')).toBeNull()
+  })
+
   it('materializes one inline card at the snapshot event position', () => {
     const value = snapshot([
       entry(1, 'turn/start', { turn: 1 }),

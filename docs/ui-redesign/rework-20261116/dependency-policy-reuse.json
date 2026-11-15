@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "baselineRevision": "018463310fb5862b415705e25ae96811ef21543c",
+  "baselineLockSha256": "7b7dcf8b43dacb9cd95b727a6b7ded83145cb740346db47fc4eebcc063711ee5",
+  "newLockSha256": "3a4ce6fda52d4bf8097a0cdc1ee7b3ab0ea035a003886c95f2593acb09821ab4",
+  "packagesAndPoliciesUnchanged": true,
+  "allOtherImportersUnchanged": true,
+  "changes": {
+    "pdfjs-dist": {
+      "specifier": "6.3.289",
+      "version": "6.3.289"
+    },
+    "sharp": {
+      "specifier": "0.35.4",
+      "version": "0.35.4(@types/node@22.20.0)"
+    }
+  },
+  "securityConfigChecksums": {
+    "pnpm-workspace.yaml": "1f42216b9545ad12506bc85848d9c33a5cd49af4f160825879fb3eb79cc4ad00",
+    "vendor/deepseek-harness/pnpm-workspace.yaml": "b416b44c2df462cfbdb52e326e8d0e348af92f6e601fa28ddca9d2613c6d1467",
+    ".npmrc": "3e1b918a22f4bdd47d207816db24bcd33f3b5ed639ee661bc9fa91ac1d5a72d7",
+    "pnpm-lock.yaml": "720dc5ef32eb17c95d019346649ced7a5f50957ef2ac052c5afb054909591d45"
+  },
+  "basis": "The first frozen offline install and exact source check passed for this baseline lock. Every resolution, integrity, snapshot and supply-chain policy is identical; only two existing direct references are added.",
+  "exception": "The following single offline frozen install may reuse this verified package graph with --trust-lockfile. No persistent trust policy is changed and no new package or version is admitted."
+}

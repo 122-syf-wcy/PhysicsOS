@@ -107,7 +107,7 @@ function SceneAttachment({ data, t, openScenePreview, recordAttempt }: SceneCard
     </button>
     {data.visualization?.status === 'failed' ? <p className={css.attachmentFailure} role="status">{data.visualization.message}</p> : null}
     {data.solve === undefined ? null : <SolveSection solve={data.solve} verification={verification} domain={data.domain}
-      bodyId={undefined} drawn={EMPTY_DRAWN} activeToken={null} onToggle={() => {}}
+      initiallyExpanded={false} bodyId={undefined} drawn={EMPTY_DRAWN} activeToken={null} onToggle={() => {}}
       sceneTitle={data.title} revision={data.revision} recordAttempt={recordAttempt} t={t} />}
   </div>
 }
@@ -367,6 +367,7 @@ const formatKnownValue = (value: number | null, unit: string): string => {
 function SolveSection({
   solve,
   verification,
+  initiallyExpanded = true,
   domain,
   bodyId,
   drawn,
@@ -380,6 +381,7 @@ function SolveSection({
   solve: PhysicsSceneSolveSummary
   /** Named checks the LOCAL runtime already derived — same list the Lab shows. */
   verification: WorkspaceSnapshot['verification']
+  initiallyExpanded?: boolean
   domain: string | undefined
   bodyId: string | undefined
   drawn: ReadonlySet<string>
@@ -407,7 +409,7 @@ function SolveSection({
   const goldenId = solve.goldenQuestionId
   const selfCheckItems = goldenId === undefined ? [] : selfChecksOfQuestion(goldenId)
   return (
-    <details className={css.solve} open data-solve-section>
+    <details className={css.solve} open={initiallyExpanded || !verified} data-solve-section>
       <summary className={css.solveSummary}>
         {t('sceneCard.solveTitle')}
         <span className={css.solveSummaryMeta}>
