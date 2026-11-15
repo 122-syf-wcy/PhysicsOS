@@ -107,7 +107,7 @@ def normalize_manifest(value):
         if target in files and files[target] != checksum:
             raise ValueError('Conflicting legacy ownership aliases')
         files[target] = checksum
-    return {'schemaVersion': 2, 'ownership': 'physicsos-runtime/2', 'files': dict(sorted(files.items())), 'codeDigest': sha(canonical(files)), 'revision': value.get('revision', value.get('mainRevision')), 'sourceDigest': value.get('sourceDigest'), 'pluginTrust': value.get('pluginTrust', DEFAULT_TRUST), 'legacyFileCount': len(source), 'originSchema': value['schemaVersion'], **{key: value[key] for key in ['filesystem', 'filesystemDigest', 'runtimeConfigDigest'] if key in value}}
+    return {'schemaVersion': 2, 'ownership': 'physicsos-runtime/2', 'files': dict(sorted(files.items())), 'codeDigest': sha(canonical(files)), 'revision': value.get('revision', value.get('mainRevision')), 'sourceDigest': value.get('sourceDigest'), 'pluginTrust': value.get('pluginTrust', DEFAULT_TRUST), 'legacyFileCount': len(source), 'originSchema': value['schemaVersion'], **{key: value[key] for key in ['filesystem', 'filesystemDigest', 'runtimeConfigDigest', 'systemFilesystem', 'systemFSdigest'] if key in value}}
 
 
 def compute_delta(base, candidate, owned):
@@ -213,6 +213,7 @@ def validate_image_labels(metadata, record):
     expected = {'org.opencontainers.image.revision': record['revision'], 'physicsos.source.digest': record['sourceDigest'], 'physicsos.code.digest': record['codeDigest']}
     if record.get('filesystemDigest'):
         expected.update({'physicsos.filesystem.digest': record['filesystemDigest'], 'physicsos.runtime-config.digest': record['runtimeConfigDigest']})
+        if record.get('systemFSdigest'): expected['physicsos.system-fs.digest'] = record['systemFSdigest']
     if not IMAGE_ID.fullmatch(metadata.get('id', '')) or any(labels.get(name) != value for name, value in expected.items()):
         raise ValueError('Candidate image identity or source/code labels differ')
     return metadata['id']
@@ -564,7 +565,13 @@ def verify_image(image, expected=None):
             raise ValueError('Cold image files, modes, owners or symlinks differ from the audited full builder')
         if sha(canonical(t.runtime_config(image_config(exact)))) != manifest.get('runtimeConfigDigest') or labels.get('physicsos.runtime-config.digest') != manifest.get('runtimeConfigDigest'):
             raise ValueError('Cold runtime configuration proof changed')
-    return {'verified': True, 'image': exact, 'revision': manifest['revision'], 'sourceDigest': manifest['sourceDigest'], 'codeDigest': manifest['codeDigest'], 'checkedFiles': checks['checked'], 'signedPluginEntries': proof['entries'], 'network': 'none', 'readOnly': True, **{key: manifest[key] for key in ['filesystemDigest', 'runtimeConfigDigest'] if key in manifest}}
+    if manifest.get('systemFSdigest') or labels.get('physicsos.system-fs.digest'):
+        t = transport_module()
+        expected_system = manifest.get('systemFilesystem')
+        if not expected_system or sha(canonical(expected_system)) != manifest.get('systemFSdigest') or labels.get('physicsos.system-fs.digest') != manifest.get('systemFSdigest'):
+            raise ValueError('Complete cold system filesystem proof missing or changed')
+        t.require_same_system_fs(t.system_filesystem(exact), expected_system)
+    return {'verified': True, 'image': exact, 'revision': manifest['revision'], 'sourceDigest': manifest['sourceDigest'], 'codeDigest': manifest['codeDigest'], 'checkedFiles': checks['checked'], 'signedPluginEntries': proof['entries'], 'network': 'none', 'readOnly': True, **{key: manifest[key] for key in ['filesystemDigest', 'runtimeConfigDigest', 'systemFSdigest'] if key in manifest}}
 
 
 def build_runtime(args):
@@ -655,7 +662,7 @@ def validate_full_record(source, marker, receipt, record, image):
         if [row.get('command') for row in evidence] != ['pnpm run build:lib', 'pnpm run build:web'] or any(row.get('exitCode') != 0 for row in evidence):
             raise ValueError('Seed must run both complete build stages successfully')
         if record.get('runtimeTransport') == 'verified-overlay':
-            if record.get('transportBaseImage') != receipt.get('seedImage') or not IMAGE_ID.fullmatch(record.get('runtimeConfigImage', '')) or any(not HEX64.fullmatch(record.get(key, '')) for key in ['filesystemDigest', 'runtimeConfigDigest', 'configOnlyDockerfileSha256']):
+            if record.get('transportBaseImage') != receipt.get('seedImage') or not IMAGE_ID.fullmatch(record.get('runtimeConfigImage', '')) or any(not HEX64.fullmatch(record.get(key, '')) for key in ['filesystemDigest', 'runtimeConfigDigest', 'systemFSdigest', 'configOnlyDockerfileSha256']):
                 raise ValueError('Complete verified filesystem/config transport evidence is required')
         elif not IMAGE_ID.fullmatch(record.get('builderSnapshot', '')):
             raise ValueError('Reviewed runtime stage and immutable seed snapshot evidence are required')
@@ -788,7 +795,12 @@ def export_full_runtime(args):
         for name, item in desired['entries'].items():
             if name in source['files'] and (item['type'] == 'file' and item['sha256'] != source['files'][name] or item['type'] == 'symlink' and sha(item['target']) != source['files'][name]):
                 raise ValueError('Complete filesystem source differs from the frozen commit')
-        manifest.update({'filesystem': desired, 'filesystemDigest': record['filesystemDigest'], 'runtimeConfigDigest': config_digest})
+        system_expected = t.system_filesystem(config_image)
+        system_digest = t.require_same_system_fs(t.system_filesystem(args.image), system_expected)
+        if system_digest != record['systemFSdigest']:
+            raise ValueError('Full system filesystem changed after transport')
+        manifest.update({'filesystem': desired, 'filesystemDigest': record['filesystemDigest'], 'runtimeConfigDigest': config_digest,
+                         'systemFilesystem': system_expected, 'systemFSdigest': system_digest})
     output = pathlib.Path(args.output_dir)
     owner = {'format': 'physicsos-full-runtime-export/1', 'baseImage': args.image,
              'revision': source['revision'], 'sourceDigest': source['sourceDigest']}
@@ -810,9 +822,11 @@ def export_full_runtime(args):
                           'LABEL physicsos.role=verified-full-runtime', ''])
     if manifest.get('filesystemDigest'):
         dockerfile += 'ARG FILESYSTEM_DIGEST\nARG RUNTIME_CONFIG_DIGEST\nLABEL physicsos.filesystem.digest=$FILESYSTEM_DIGEST\nLABEL physicsos.runtime-config.digest=$RUNTIME_CONFIG_DIGEST\n'
+    if manifest.get('systemFSdigest'):
+        dockerfile += 'ARG SYSTEM_FS_DIGEST\nLABEL physicsos.system-fs.digest=$SYSTEM_FS_DIGEST\n'
     dockerfile += 'ARG MANIFEST_DIGEST\nLABEL physicsos.manifest.digest=$MANIFEST_DIGEST\n'
     (context / 'Dockerfile').write_text(dockerfile)
-    result = {**owner, **{key: manifest[key] for key in ['filesystemDigest', 'runtimeConfigDigest'] if key in manifest}, 'codeDigest': manifest['codeDigest'], 'checkedFiles': len(manifest['files']),
+    result = {**owner, **{key: manifest[key] for key in ['filesystemDigest', 'runtimeConfigDigest', 'systemFSdigest'] if key in manifest}, 'codeDigest': manifest['codeDigest'], 'checkedFiles': len(manifest['files']),
               'manifestSha256': sha((context / 'physicsos-runtime-manifest.json').read_bytes()),
               'dockerfileSha256': sha(dockerfile), 'context': str(context.resolve())}
     atomic_json(output / 'export.json', result)
@@ -855,6 +869,8 @@ def build_full_runtime(args):
                   '--build-arg', 'REVISION=' + record['revision'], '--build-arg', 'SOURCE_DIGEST=' + record['sourceDigest'],
                   '--build-arg', 'CODE_DIGEST=' + record['codeDigest']]
     build_args.extend(['--build-arg', 'MANIFEST_DIGEST=' + record['manifestSha256']])
+    if record.get('systemFSdigest'):
+        build_args.extend(['--build-arg', 'SYSTEM_FS_DIGEST=' + record['systemFSdigest']])
     if record.get('filesystemDigest'):
         build_args.extend(['--build-arg', 'FILESYSTEM_DIGEST=' + record['filesystemDigest'], '--build-arg', 'RUNTIME_CONFIG_DIGEST=' + record['runtimeConfigDigest']])
     command([*build_args, '--tag', args.image_tag, str(context)], log=True)
@@ -955,6 +971,8 @@ def build_verified_transport(args):
         raise ValueError('Immutable transport identities changed')
     config = image_config(args.config_image)
     config_digest = t.require_same_config(image_config(args.base_image), config)
+    system_expected = t.system_filesystem(args.config_image)
+    system_digest = t.require_same_system_fs(t.system_filesystem(args.base_image), system_expected)
     node_operation(args.base_image, "const f=require('fs');if(f.existsSync('/run/physicsos-full-transport'))throw Error('Transport staging path already exists in base');console.log(JSON.stringify({verified:true}));")
     proof_labels = image_metadata(args.config_image).get('labels') or {}
     if proof_labels.get('physicsos.role') != 'runtime-config-proof' or proof_labels.get('physicsos.full-build.source-digest') != source['sourceDigest']:
@@ -992,11 +1010,12 @@ def build_verified_transport(args):
              '--tag', args.image_tag, str(context)], log=True)
     exact = image_metadata(args.image_tag)['id']
     t.require_same_config(image_config(exact), config)
+    t.require_same_system_fs(t.system_filesystem(exact), system_expected)
     after = full_filesystem(exact, {})
     if after != desired:
         raise ValueError('Cold raw transport image differs from the complete audited builder filesystem')
     result = {'image': exact, 'transportBaseImage': args.base_image, 'runtimeConfigImage': args.config_image,
-              'runtimeConfigDigest': config_digest, 'filesystemDigest': sha(canonical(desired)),
+              'runtimeConfigDigest': config_digest, 'filesystemDigest': sha(canonical(desired)), 'systemFSdigest': system_digest,
               'runtimeStageSha256': sha(layout['stage']), 'runtimeDockerfileSha256': sha(dockerfile),
               'configOnlyDockerfileSha256': sha(layout['dockerfile']), 'payloadBytes': payload_bytes,
               'changedEntries': len(changed), 'filesystemEntries': len(desired['entries']), 'payloadEstimateBytes': estimate}

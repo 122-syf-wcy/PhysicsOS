@@ -110,4 +110,62 @@ class FullTransportContracts(unittest.TestCase):
             self.assertTrue((before / 'obsolete').exists())
 
 
+
+
+
+class SystemImageFilesystemProof(unittest.TestCase):
+    def archive(self, certificate='certificate-v1', helper_mode=0o755, uid=0, target='/usr/bin/node', app='any-app', capability='caps-v1', mtime=1):
+        import io
+        import tarfile
+        data = io.BytesIO()
+        rows = [('etc/ssl/certs/ca-bundle.crt', certificate, 0o644), ('usr/local/bin/helper', 'helper', helper_mode),
+                ('app/index.js', app, 0o644), ('.dockerenv', '', 0o755), ('etc/hosts', 'image-hosts', 0o644)]
+        with tarfile.open(fileobj=data, mode='w', format=tarfile.PAX_FORMAT) as archive:
+            root = tarfile.TarInfo('.'); root.type = tarfile.DIRTYPE; root.mode = 0o755; root.uid = uid; root.gid = 0; archive.addfile(root)
+            for name, content, mode in rows:
+                value = content.encode(); item = tarfile.TarInfo(name); item.size = len(value); item.mode = mode; item.uid = uid; item.gid = 0; item.mtime = mtime
+                if name == 'usr/local/bin/helper': item.pax_headers = {'SCHILY.xattr.security.capability': capability}
+                archive.addfile(item, io.BytesIO(value))
+            link = tarfile.TarInfo('usr/local/bin/node-link'); link.type = tarfile.SYMTYPE; link.linkname = target; link.mode = 0o777; link.uid = uid; archive.addfile(link)
+        data.seek(0)
+        return data
+
+    def test_runtime_run_system_file_change_is_rejected_even_when_config_and_app_are_equal(self):
+        baseline = t.exported_system_tree(self.archive(), [])
+        rebuilt = t.exported_system_tree(self.archive(certificate='new-certificate-from-reviewed-RUN'), [])
+        t.require_same_config({'User': 'physicsos'}, {'User': 'physicsos'})
+        with self.assertRaisesRegex(ValueError, 'outside /app'): t.require_same_system_fs(baseline, rebuilt)
+        self.assertEqual(baseline, t.exported_system_tree(self.archive(app='different-frozen-app', mtime=99), []))
+
+    def test_mode_owner_symlink_and_capability_changes_are_all_bound_by_the_system_proof(self):
+        baseline = t.exported_system_tree(self.archive(), [])
+        for patch in [{'helper_mode': 0o644}, {'uid': 999}, {'target': '/bin/false'}, {'capability': 'different-capabilities'}]:
+            with self.subTest(change=patch), self.assertRaises(ValueError):
+                t.require_same_system_fs(baseline, t.exported_system_tree(self.archive(**patch), []))
+        self.assertIn('.dockerenv', baseline['entries'])
+        self.assertIn('etc/hosts', baseline['entries'])
+        with self.assertRaises(ValueError): t.exported_system_tree(self.archive(), ['etc/hosts'])
+
+    def test_unstarted_export_audit_has_no_mounts_start_or_persisted_gigabyte_tar(self):
+        from unittest.mock import patch, Mock
+        image = 'sha256:' + 'a' * 64
+        identifier = 'b' * 64
+        details = {'Id': identifier, 'Image': image, 'Mounts': [], 'Network': 'none', 'Readonly': True, 'Privileged': False,
+                   'State': {'Status': 'created', 'Pid': 0}, 'Labels': {'io.physicsos.role': 'ui-system-fs-audit', 'io.physicsos.task': 'ui-full-transport'}}
+        calls = []
+        def output(args, **kwargs):
+            calls.append(args)
+            if args[:3] == ['docker', 'image', 'inspect']: return 'null'
+            if args[:2] == ['docker', 'create']: return identifier + '\n'
+            return json.dumps(details)
+        export = Mock(stdout=self.archive()); export.wait.return_value = 0; export.poll.return_value = 0
+        with patch.object(t.subprocess, 'check_output', side_effect=output), patch.object(t.subprocess, 'Popen', return_value=export), patch.object(t, 'image_root_metadata', return_value={'type': 'dir', 'mode': 0o755, 'uid': 0, 'gid': 0}), patch.object(t.subprocess, 'run') as cleanup:
+            proof = t.system_filesystem(image)
+        self.assertEqual(proof['excludedDaemonFiles'], [])
+        self.assertFalse(any(args[:2] == ['docker', 'start'] for args in calls))
+        create = next(args for args in calls if args[:2] == ['docker', 'create'])
+        self.assertIn('--read-only', create); self.assertIn('none', create); self.assertNotIn('--mount', create)
+        self.assertEqual(cleanup.call_args.args[0], ['docker', 'rm', '-f', identifier])
+
+
 if __name__ == '__main__': unittest.main()

@@ -360,10 +360,12 @@ class FullRuntimeProvenanceTests(unittest.TestCase):
         record.update({'runtimeTransport': 'verified-overlay', 'seedReceiptOrigin': 'audited-runtime-seed',
                        'transportBaseImage': receipt['seedImage'], 'runtimeConfigImage': 'sha256:' + 'f' * 64,
                        'runtimeStageSha256': '1' * 64, 'runtimeDockerfileSha256': '2' * 64,
-                       'configOnlyDockerfileSha256': '3' * 64, 'filesystemDigest': '4' * 64, 'runtimeConfigDigest': '5' * 64})
+                       'configOnlyDockerfileSha256': '3' * 64, 'filesystemDigest': '4' * 64, 'runtimeConfigDigest': '5' * 64, 'systemFSdigest': '6' * 64})
         runtime.validate_full_record(source, marker, receipt, record, image)
         with self.assertRaisesRegex(ValueError, 'filesystem/config'):
             runtime.validate_full_record(source, marker, receipt, {**record, 'filesystemDigest': ''}, image)
+        with self.assertRaisesRegex(ValueError, 'filesystem/config'):
+            runtime.validate_full_record(source, marker, receipt, {**record, 'systemFSdigest': ''}, image)
         with self.assertRaisesRegex(ValueError, 'filesystem/config'):
             runtime.validate_full_record(source, marker, receipt, {**record, 'transportBaseImage': 'sha256:' + '9' * 64}, image)
 

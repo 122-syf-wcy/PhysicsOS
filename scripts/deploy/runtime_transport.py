@@ -58,7 +58,7 @@ def config_only_dockerfile(source):
 
 def allowed_label(key):
     return key in ['org.opencontainers.image.revision', 'physicsos.source.digest', 'physicsos.code.digest',
-                   'physicsos.role', 'physicsos.filesystem.digest', 'physicsos.runtime-config.digest', 'physicsos.manifest.digest',
+                   'physicsos.role', 'physicsos.filesystem.digest', 'physicsos.runtime-config.digest', 'physicsos.manifest.digest', 'physicsos.system-fs.digest',
                    'physicsos.full-build.revision', 'physicsos.full-build.source-digest', 'physicsos.full-build.dependency-fingerprint']
 
 
@@ -202,3 +202,129 @@ def write_payload(builder, changed, desired, destination):
     size = archive.stat().st_size
     archive.unlink()
     return size
+
+
+def exported_system_tree(stream, excluded):
+    """Hash an unstarted container export without materializing a tar or following links.
+
+    mtimes/ctimes/atimes are not part of the proof. All other PAX metadata,
+    including xattrs/capabilities/ACLs, is bound byte-for-byte as base64.
+    """
+    import base64
+    if excluded:
+        raise ValueError('System IMAGE proof does not permit filesystem exclusions')
+    entries = {}
+    temporal = {'mtime', 'atime', 'ctime', 'LIBARCHIVE.creationtime'}
+    represented = {'path', 'linkpath', 'size', 'uid', 'gid', 'uname', 'gname'}
+    with tarfile.open(fileobj=stream, mode='r|*') as archive:
+        for member in archive:
+            name = member.name
+            while name.startswith('./'):
+                name = name[2:]
+            name = name.rstrip('/') or '.'
+            if name != '.': safe_path(name)
+            if name == 'app' or name.startswith('app/') or name in excluded:
+                continue
+            if name in entries:
+                raise ValueError('Duplicate image export path is not auditable')
+            record = {'uid': member.uid, 'gid': member.gid, 'mode': member.mode}
+            pax = {key: base64.b64encode(value.encode('utf-8', 'surrogateescape')).decode('ascii')
+                   for key, value in member.pax_headers.items() if key not in temporal | represented}
+            if pax: record['pax'] = pax
+            if member.isfile():
+                checksum = hashlib.sha256()
+                with archive.extractfile(member) as data:
+                    while True:
+                        chunk = data.read(1024 * 1024)
+                        if not chunk: break
+                        checksum.update(chunk)
+                record.update({'type': 'file', 'sha256': checksum.hexdigest(), 'bytes': member.size})
+            elif member.isdir(): record['type'] = 'dir'
+            elif member.issym(): record.update({'type': 'symlink', 'target': member.linkname})
+            elif member.islnk(): record.update({'type': 'hardlink', 'target': member.linkname})
+            elif member.ischr(): record.update({'type': 'char', 'major': member.devmajor, 'minor': member.devminor})
+            elif member.isblk(): record.update({'type': 'block', 'major': member.devmajor, 'minor': member.devminor})
+            elif member.isfifo(): record['type'] = 'fifo'
+            else: raise ValueError('Unsupported image export filesystem type')
+            entries[name] = record
+    return {'format': 'physicsos-system-fs/1', 'excludedDaemonFiles': sorted(excluded), 'entries': entries}
+
+
+def require_same_system_fs(left, right):
+    if left != right:
+        # Never echo file contents or certificate/key material.
+        raise ValueError('Image system filesystem differs outside /app; verified overlay is refused')
+    return digest(canonical(right))
+
+
+
+def image_root_metadata(identifier):
+    # docker export may omit the archive-root directory header. The archive API
+    # for container:/. emits that header first, without starting a process.
+    process = subprocess.Popen(['docker', 'cp', identifier + ':/.', '-'], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    try:
+        with tarfile.open(fileobj=process.stdout, mode='r|*') as archive:
+            member = archive.next()
+            if member is None or member.name.rstrip('/') not in ['.', ''] or not member.isdir():
+                raise ValueError('Cannot prove image filesystem root metadata')
+            # The same metadata normalization is used for the whole export.
+            import io
+            buffer = io.BytesIO()
+            with tarfile.open(fileobj=buffer, mode='w') as output:
+                output.addfile(member)
+            buffer.seek(0)
+            return exported_system_tree(buffer, [])['entries']['.']
+    finally:
+        if process.poll() is None:
+            process.kill()
+        process.wait()
+        process.stdout.close()
+
+def system_filesystem(image):
+    """Inspect immutable IMAGE filesystem using a never-started, unmounted disposable container."""
+    import secrets
+    def inspect(arguments):
+        return json.loads(subprocess.check_output(['docker', *arguments], text=True))
+    volumes = inspect(['image', 'inspect', '--format', '{{json (index .Config "Volumes")}}', image])
+    if volumes:
+        raise ValueError('Image volumes would hide system filesystem entries')
+    name = 'physicsos-system-fs-' + secrets.token_hex(8)
+    identifier = None
+    process = None
+    def details():
+        template = '{"Id":{{json .Id}},"Image":{{json .Image}},"Mounts":{{json .Mounts}},"State":{{json .State}},"Labels":{{json .Config.Labels}},"Network":{{json .HostConfig.NetworkMode}},"Readonly":{{json .HostConfig.ReadonlyRootfs}},"Privileged":{{json .HostConfig.Privileged}},"HostsPath":{{json .HostsPath}},"HostnamePath":{{json .HostnamePath}},"ResolvConfPath":{{json .ResolvConfPath}}}'
+        return inspect(['inspect', '--format', template, identifier])
+    try:
+        identifier = subprocess.check_output(['docker', 'create', '--name', name, '--network', 'none', '--read-only',
+            '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges:true', '--entrypoint', '/bin/true',
+            '--hostname', 'physicsos-system-fs-audit', '--label', 'io.physicsos.role=ui-system-fs-audit',
+            '--label', 'io.physicsos.task=ui-full-transport', image], text=True).strip()
+        if not re.fullmatch(r'[a-f0-9]{64}', identifier):
+            raise ValueError('Invalid disposable audit container identity')
+        metadata = details()
+        if metadata['Image'] != image or metadata['Mounts'] or metadata['Network'] != 'none' or not metadata['Readonly'] or metadata['Privileged'] or metadata['State'].get('Status') != 'created' or metadata['State'].get('Pid', 0) != 0:
+            raise ValueError('System filesystem audit container is not unstarted and isolated')
+        excluded = []  # Never-started image exports have no permitted path exclusions.
+        process = subprocess.Popen(['docker', 'export', identifier], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        result = exported_system_tree(process.stdout, excluded)
+        # Drain tar padding so a successful exporter never sees an early EPIPE.
+        while process.stdout.read(1024 * 1024):
+            pass
+        process.stdout.close()
+        if process.wait() != 0:
+            raise ValueError('Complete system filesystem export failed')
+        root_record = image_root_metadata(identifier)
+        if '.' in result['entries'] and result['entries']['.'] != root_record:
+            raise ValueError('Image root metadata changed during export')
+        result['entries']['.'] = root_record
+        if details()['State'].get('Status') != 'created':
+            raise ValueError('Audit container was unexpectedly started')
+        return result
+    finally:
+        if process and process.poll() is None:
+            process.kill(); process.wait()
+        if identifier:
+            metadata = details()
+            if metadata['Id'] != identifier or metadata['Image'] != image or metadata['Labels'].get('io.physicsos.role') != 'ui-system-fs-audit' or metadata['Labels'].get('io.physicsos.task') != 'ui-full-transport':
+                raise ValueError('Refusing to clean a system audit resource with changed ownership')
+            subprocess.run(['docker', 'rm', '-f', identifier], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
