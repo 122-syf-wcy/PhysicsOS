@@ -1,0 +1,15 @@
+.root { color: var(--physics-ink-strong); }
+.root h2 { margin: 0 0 12px; font-size: 20px; font-weight: 600; }
+.intro { margin: 0 0 26px; color: var(--physics-ink-muted); line-height: 1.7; }
+.modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.mode { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; padding: 22px 18px; border: 1px solid var(--physics-glass-border); border-radius: 18px; color: inherit; background: var(--physics-glass-fill); text-align: left; font: inherit; cursor: pointer; }
+.mode svg { width: 24px; height: 24px; color: var(--physics-accent-strong); }
+.mode strong { font-size: 15px; }
+.mode span { color: var(--physics-ink-muted); font-size: 13px; line-height: 1.7; }
+.mode:hover, .selected { border-color: var(--physics-accent); background: var(--physics-accent-soft); }
+.mode:focus-visible { outline: 2px solid var(--physics-accent); outline-offset: 3px; }
+.mode:disabled { cursor: progress; opacity: .7; }
+.policy { margin-top: 28px; padding: 20px 22px; border: 1px solid var(--physics-glass-border); border-radius: 18px; background: var(--physics-glass-fill); }
+.policy h3 { margin: 0 0 12px; font-size: 14px; }
+.policy p { margin: 8px 0 0; color: var(--physics-ink-muted); font-size: 13px; line-height: 1.8; }
+@media (max-width: 760px) { .modes { grid-template-columns: 1fr; } .mode { padding: 18px; gap: 10px; } }

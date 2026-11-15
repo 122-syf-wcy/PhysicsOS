@@ -6,6 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WorkbenchFloatPanel, fitWorkbenchFloat } from '../src/client/WorkbenchFloatPanel.tsx'
 import { ResponsiveInspector, useResponsiveInspector } from '../src/client/ResponsiveInspector.tsx'
 import { Chart } from '../src/client/workspace-parts.tsx'
+import { PhysicsCanvas } from '../src/client/physics/PhysicsCanvas.tsx'
+import { createMagneticRuntime } from '../src/client/physics-runtime-bridge.ts'
+import { MAGNETIC_SCENE_INPUT } from '../src/client/prototype/magnetic-scene.ts'
 
 beforeEach(() => {
   vi.stubGlobal('innerWidth', 1360)
@@ -192,6 +195,54 @@ it('supports a zero-based usage trend while retaining hover inspection and its o
   expect(screen.getByText('4 · requests')).toBeTruthy()
   fireEvent.mouseLeave(chart)
   expect(hover).toHaveBeenLastCalledWith(null)
+})
+
+it.each([2e6, 2e-13])('shows a nearly constant quantity at %s without amplifying numerical roundoff', (value) => {
+  const series = { id: 'speed', title: 'Speed', xLabel: 'time', yLabel: 'speed', role: 'trajectory' as const,
+    points: [{ t: 0, value }, { t: 1, value: value * (1 + 1e-14) }, { t: 2, value }] }
+  render(<Chart series={series} time={0} total={2} />)
+  const chart = screen.getByRole('img')
+  const path = chart.querySelector('path')!.getAttribute('d')!
+  const heights = [...path.matchAll(/[ML][\d.-]+\s([\d.-]+)/g)].map(match => match[1])
+  expect(heights).toHaveLength(3)
+  expect(new Set(heights).size).toBe(1)
+  const ticks = [...chart.querySelectorAll('text')].slice(0, 2).map(tick => tick.textContent)
+  expect(ticks[0]).not.toBe(ticks[1])
+})
+
+it('parks the real canvas readout below its toolbar and follows a wrapped toolbar', () => {
+  let toolbarHeight = 64
+  const rect = (top: number, width: number, height: number): DOMRect => ({
+    x: 0, y: top, left: 0, top, width, height, right: width, bottom: top + height, toJSON: () => ({}),
+  })
+  const boxes = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+    return this.tagName === 'HEADER' ? rect(64, 1200, toolbarHeight) : rect(58, 1200, 710)
+  })
+  const observers: { callback: ResizeObserverCallback; targets: Set<Element> }[] = []
+  class Observer {
+    readonly targets = new Set<Element>()
+    constructor(readonly callback: ResizeObserverCallback) { observers.push(this) }
+    observe(target: Element): void { this.targets.add(target) }
+    unobserve(target: Element): void { this.targets.delete(target) }
+    disconnect(): void { this.targets.clear() }
+  }
+  vi.stubGlobal('ResizeObserver', Observer)
+  try {
+    const runtime = createMagneticRuntime(MAGNETIC_SCENE_INPUT)
+    const revision = runtime.getSnapshot().sceneRevision
+    const view = render(<div data-physicsos-surface="lab"><header>Playback and reports</header>
+      <PhysicsCanvas view={runtime.getSnapshot().visual} ariaLabel="Magnetic field" />
+    </div>)
+    const readout = view.container.querySelector('[data-physics-readout="overlay"] rect')!
+    expect(Number(readout.getAttribute('y'))).toBeGreaterThanOrEqual(64 + toolbarHeight - 58 + 12)
+    const header = screen.getByText('Playback and reports')
+    const observer = observers.find(item => item.targets.has(header))
+    expect(observer).toBeDefined()
+    toolbarHeight = 110
+    act(() => { observer!.callback([], observer as unknown as ResizeObserver) })
+    expect(Number(readout.getAttribute('y'))).toBeGreaterThanOrEqual(64 + toolbarHeight - 58 + 12)
+    expect(runtime.getSnapshot().sceneRevision).toBe(revision)
+  } finally { boxes.mockRestore() }
 })
 
 it('keeps floating editors inside the existing focused experiment modal', () => {

@@ -329,7 +329,9 @@ export function ExperimentPicker({
 
         {/* ------------------------------------------------------- focus row */}
         {hasFocusRow ? (
-          <div className={clsx(css.focusRow, catalogCss.focusRow, continueCard === undefined && css.focusRowNoContinue)}>
+          <div className={clsx(css.focusRow, catalogCss.focusRow,
+            continueCard === undefined && css.focusRowNoContinue,
+            continueCard === undefined && catalogCss.focusRowNoContinue)}>
             {continueCard === undefined ? null : (
               <button
                 type="button"

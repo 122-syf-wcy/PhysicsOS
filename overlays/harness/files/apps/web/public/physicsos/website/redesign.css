@@ -54,3 +54,10 @@ body{background:var(--paper);color:var(--ink)}
   .story-mascot { width: 96px; bottom: 17px; right: 22px; }
   .heritage-note { font-size: 11px; }
 }
+
+/* Keep the demonstration transport consistent across native range renderers. */
+.stage-transport input[type="range"] { appearance: none; -webkit-appearance: none; height: 4px; border-radius: 4px; background: #dfe6df; cursor: pointer; }
+.stage-transport input[type="range"]::-webkit-slider-runnable-track { height: 4px; border-radius: 4px; background: #dfe6df; }
+.stage-transport input[type="range"]::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; width: 11px; height: 11px; margin-top: -3.5px; border: 0; border-radius: 50%; background: #64bf94; }
+.stage-transport input[type="range"]::-moz-range-track { height: 4px; border-radius: 4px; background: #dfe6df; }
+.stage-transport input[type="range"]::-moz-range-thumb { width: 11px; height: 11px; border: 0; border-radius: 50%; background: #64bf94; }

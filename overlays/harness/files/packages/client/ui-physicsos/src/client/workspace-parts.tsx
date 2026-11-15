@@ -507,8 +507,11 @@ export function Chart({
   const finite = values.filter(value => Number.isFinite(value))
   const rawMin = finite.length === 0 ? 0 : Math.min(...finite)
   const rawMax = finite.length === 0 ? 1 : Math.max(...finite)
-  /* A constant series (vx of a projectile) still needs a band to draw inside. */
-  const span = rawMax - rawMin || Math.max(Math.abs(rawMax), 1)
+  /* Keep numerical roundoff in a constant quantity from looking like an
+     oscillation. This only widens the display domain; samples stay unchanged. */
+  const magnitude = Math.max(Math.abs(rawMin), Math.abs(rawMax))
+  const variation = rawMax - rawMin
+  const span = variation <= magnitude * 1e-9 ? magnitude || 1 : variation
   const min = zeroBased && rawMin >= 0 ? 0 : rawMin - span * 0.12
   const max = zeroBased && rawMin >= 0 ? Math.max(rawMax * 1.1, 1) : rawMax + span * 0.12
   const tEnd = series.points.at(-1)?.t ?? 1
@@ -590,7 +593,7 @@ export function Chart({
 const formatTick = (value: number): string => {
   if (!Number.isFinite(value)) return '—'
   const absolute = Math.abs(value)
-  if (absolute !== 0 && (absolute < 0.01 || absolute >= 1e4)) return value.toExponential(0)
+  if (absolute !== 0 && (absolute < 0.01 || absolute >= 1e4)) return value.toExponential(1)
   return absolute >= 100 ? value.toFixed(0) : value.toFixed(1)
 }
 

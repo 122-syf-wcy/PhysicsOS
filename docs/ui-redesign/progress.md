@@ -1,5 +1,13 @@
 # UI redesign progress — 2026-11-14
 
+## Browser acceptance updates — 2026-11-15
+
+- Complete frozen f0059416 image sha256:ce2ca5150d8eb8e5b8e8c7f6e939679a9e8e8d16d25ffec54d8e6a75d629952b passed final read-only cold verification: 19,614 regular code files, complete filesystem/config/system proofs, 12 signed plugins. Owned isolated candidate runs it with a separate network and fresh PostgreSQL database.
+- Real candidate five-role API checks: 36 passed, including school boundaries, protected website screenshots, and a real reviewed synthetic paper job. Website configuration PUT persistence, 409 draft retention, row identity after keyboard reorder, and a real feedback reply were exercised. Browser paper/PDF flows are still in progress.
+- Real candidate magnetic workbench: parameter preview does not increment revision; blur commits once (0→1) and preserves verification. Play/pause/reset/report/focus and 390px overflow checks passed. Other lab/canvas flows remain in progress.
+- Browser fixes in this freeze address the website demo tabs/transport and feedback success controls; real source-controller website tests 21/21 passed on server Docker. Home composer geometry/mode placement, the empty recommendation grid, canvas readout/header bounds and constant-series graph display are being validated. The displayed raw physics samples and physical calculations are unchanged.
+- User explicitly requested retaining the existing cat startup image on 2026-11-15. This freeze restores the original three boot source/test files from the verified f005 source; the other system mascot assets remain the approved Guizhou-inspired girl variants.
+
 ## Latest verified integration — 2026-11-15
 
 - UI source is frozen at fe5ad96a5556bd1f4bf2fef0538edec7a15b3777. Complete server Docker build:lib (134s) and build:web (58s) succeeded. Raw runtime sha256:8bf4b02749cccd2677621da09134878bdd964e27766cb401834fad7f306d0d02 passed full filesystem, runtime configuration and system filesystem transport proofs. Final provenance export then correctly rejected one stale signed tool entry inherited from main; this freeze refreshes only its digest/signature using the existing private key and unchanged public trust root.

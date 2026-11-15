@@ -143,6 +143,7 @@ export function PhysicsCanvas({
      it is chrome, not physics, so the student may drag it anywhere inside the
      canvas. readoutPos stays undefined until the card is first moved. */
   const [readoutPos, setReadoutPos] = useState<{ x: number; y: number } | undefined>(undefined)
+  const [readoutTop, setReadoutTop] = useState<number>(PAD.top + 8)
   const readoutDragRef = useRef<{
     pointerId: number
     grabX: number
@@ -160,9 +161,14 @@ export function PhysicsCanvas({
   useEffect(() => {
     const host = hostRef.current
     if (host === null || typeof ResizeObserver === 'undefined') return
+    const owner = host.closest('[data-physicsos-surface], [data-physicsos-canvas-workspace]')
+    const toolbar = owner?.querySelector<HTMLElement>(':scope > header')
     const apply = () => {
       const rect = host.getBoundingClientRect()
       if (rect.width < 1 || rect.height < 1) return
+      const toolbarRect = toolbar?.getBoundingClientRect()
+      setReadoutTop(toolbarRect !== undefined && toolbarRect.width > 0 && toolbarRect.height > 0
+        ? Math.max(PAD.top + 8, toolbarRect.bottom - rect.top + 12) : PAD.top + 8)
       setBox(current =>
         Math.abs(current.width - rect.width) < 0.5 && Math.abs(current.height - rect.height) < 0.5
           ? current
@@ -172,6 +178,7 @@ export function PhysicsCanvas({
     apply()
     const observer = new ResizeObserver(apply)
     observer.observe(host)
+    if (toolbar !== null && toolbar !== undefined) observer.observe(toolbar)
     return () => { observer.disconnect() }
   }, [])
 
@@ -380,14 +387,15 @@ export function PhysicsCanvas({
   const readout = layoutReadout(view.overlay.readout, plotWidth - 24)
   const readoutWidth = readout.width
   const readoutHeight = readout.height
+  const readoutMinY = Math.max(4, Math.min(readoutTop, height - readoutHeight - 4))
   /* Render-time clamp too: a parked card must stay inside when the lines grow
      wider or the canvas shrinks after it was dragged. */
   const readoutOrigin =
     readoutPos === undefined
-      ? { x: PAD.left + 8, y: PAD.top + 8 }
+      ? { x: PAD.left + 8, y: readoutMinY }
       : {
         x: Math.min(Math.max(readoutPos.x, 4), width - readoutWidth - 4),
-        y: Math.min(Math.max(readoutPos.y, 4), height - readoutHeight - 4),
+        y: Math.max(readoutMinY, Math.min(readoutPos.y, height - readoutHeight - 4)),
       }
 
   const viewPoint = (event: { clientX: number; clientY: number }) => {
@@ -426,7 +434,7 @@ export function PhysicsCanvas({
     }
     setReadoutPos({
       x: Math.min(Math.max(at.x - drag.grabX, 4), width - readoutWidth - 4),
-      y: Math.min(Math.max(at.y - drag.grabY, 4), height - readoutHeight - 4),
+      y: Math.max(readoutMinY, Math.min(at.y - drag.grabY, height - readoutHeight - 4)),
     })
     event.stopPropagation()
   }

@@ -14918,6 +14918,43 @@ index 74502b5cb3..a758b0f3d5 100644
 +:global(html[data-physicsos-ui]) .navCell.active { background: var(--physics-accent-soft); color: var(--physics-accent-strong); }
 +:global(html[data-physicsos-ui]) .options { padding: 0 32px 26px; }
 +@media(max-width:600px) { :global(html[data-physicsos-ui]) .panel { max-width: calc(100vw - 20px); height: calc(100dvh - 40px); } :global(html[data-physicsos-ui]) .nav { width: 130px; padding: 20px 8px; } :global(html[data-physicsos-ui]) .options { padding: 0 14px 20px; } }
+diff --git a/packages/client/ui-settings-models/src/client/ModelsSection.tsx b/packages/client/ui-settings-models/src/client/ModelsSection.tsx
+index c3eae4041b..56aa451a3c 100644
+--- a/packages/client/ui-settings-models/src/client/ModelsSection.tsx
++++ b/packages/client/ui-settings-models/src/client/ModelsSection.tsx
+@@ -385,8 +385,8 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
+   return (
+     <div className={styles['section']}>
+       <h2 className={styles['title']}>{t('title')}</h2>
+-      <p className={styles['intro']}>{t('intro')}</p>
+-      {!state.writable && state.status === 'ready' ? <p className={styles['notice']}>{t('readOnly')}</p> : null}
++      <p className={styles['intro']}>{t(document.documentElement.hasAttribute('data-physicsos-ui') ? 'physicsosIntro' : 'intro')}</p>
++      {!state.writable && state.status === 'ready' ? <p className={styles['notice']}>{t(document.documentElement.hasAttribute('data-physicsos-ui') ? 'physicsosReadOnly' : 'readOnly')}</p> : null}
+       {savedIdentity === undefined
+         ? null
+         : (
+diff --git a/packages/client/ui-settings-models/src/client/locales.ts b/packages/client/ui-settings-models/src/client/locales.ts
+index bba0b85288..3cbf20d6ff 100644
+--- a/packages/client/ui-settings-models/src/client/locales.ts
++++ b/packages/client/ui-settings-models/src/client/locales.ts
+@@ -6,6 +6,8 @@ export const en = {
+   deepSeekAccount: 'DeepSeek Account',
+   title: 'Models',
+   intro: 'Enter your API keys to use models from the following providers.',
++  physicsosIntro: 'PhysicsOS provides the models used for learning and experiments.',
++  physicsosReadOnly: 'Model configuration is managed by the platform. You do not need to enter a personal API key.',
+   edit: 'Edit',
+   editProvider: 'Edit {provider}',
+   remove: 'Delete',
+@@ -126,6 +128,8 @@ export const zh: { [Key in keyof typeof en]: string } = {
+   deepSeekAccount: 'DeepSeek 账号',
+   title: '模型',
+   intro: '填入各提供商的 API 密钥即可使用其模型。',
++  physicsosIntro: '查看 PhysicsOS 提供的学习与实验模型。',
++  physicsosReadOnly: '模型配置由平台统一管理，无需填写个人密钥。',
+   edit: '编辑',
+   editProvider: '编辑 {provider}',
+   remove: '删除',
 diff --git a/packages/client/ui-settings-models/src/client/store.ts b/packages/client/ui-settings-models/src/client/store.ts
 index 34a20107e3..67c502a9c8 100644
 --- a/packages/client/ui-settings-models/src/client/store.ts
@@ -15517,13 +15554,16 @@ index 45d5410a37..e648afed7a 100644
      expect(declarations('.brandName')?.get('font-size')).toBe('18px')
      expect(declarations('.fallbackBrandName')?.get('font-size')).toBe('17px')
 diff --git a/packages/client/web/src/boot-page.module.css b/packages/client/web/src/boot-page.module.css
-index f154c42761..7f9c468cc1 100644
+index f154c42761..6540713fc1 100644
 --- a/packages/client/web/src/boot-page.module.css
 +++ b/packages/client/web/src/boot-page.module.css
-@@ -1,72 +1,267 @@
+@@ -1,72 +1,260 @@
  /* The framework-free boot page cannot depend on theme delivery succeeding. */
 
-+/* Independent brand surface available before client theme delivery. */
++/* A full-bleed white scene, not a themed card: it must look identical before
++   any theme/alias delivery runs. Dark mode keeps the white canvas on purpose —
++   the artwork is a lit campus morning, and a night variant would need a second
++   illustration for a page that lives for under a second. */
  .boot {
 -  --dsh-boot-label-primary: #0f1115;
 -  --dsh-boot-label-secondary: #61666b;
@@ -15540,7 +15580,7 @@ index f154c42761..7f9c468cc1 100644
 +  position: relative;
 +  height: 100%;
 +  overflow: hidden;
-+  background: radial-gradient(ellipse at 80% 65%, #e8f0e7, transparent 55%), #fbfaf6;
++  background: #fff;
 +  /* A text stack that reads as designed rather than system-default: a
 +     geometric-ish grotesque for the wordmark where the OS has one, falling
 +     back through the platform UI faces. No webfont — this page paints before
@@ -15571,10 +15611,7 @@ index f154c42761..7f9c468cc1 100644
 +   picture itself takes the full bleed and the img inside fills it. */
 +.boot > picture {
 +  position: absolute;
-+  top: 12%;
-+  bottom: 12%;
-+  right: 8%;
-+  width: 36%;
++  inset: 0;
 +  display: block;
 +}
 +
@@ -15584,8 +15621,8 @@ index f154c42761..7f9c468cc1 100644
 -  display: grid;
 -  place-items: center;
 -  background: var(--dsw-alias-bg-base, var(--dsh-boot-bg, Canvas));
-+  object-fit: contain;
-+  object-position: center;
++  object-fit: cover;
++  object-position: right center;
 +  animation: cover-in 900ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
  }
 
@@ -15652,8 +15689,8 @@ index f154c42761..7f9c468cc1 100644
 +  margin-top: 18px;
 +  border-radius: 2px;
 +  background: linear-gradient(90deg, var(--dsh-boot-accent-from), var(--dsh-boot-accent-to));
- }
-
++}
++
 +.tagline {
 +  margin-top: 22px;
 +  /* Wide enough that the sentence breaks at its own comma, not mid-word;
@@ -15677,8 +15714,8 @@ index f154c42761..7f9c468cc1 100644
 +    opacity: 1;
 +    transform: none;
 +  }
-+}
-+
+ }
+
 +/* Progress read-out. The width comes from the real plugin ratio
 +   (--dsh-boot-progress); a light sweep travels across it so a slow plugin
 +   never looks like a hang. */
@@ -15724,10 +15761,8 @@ index f154c42761..7f9c468cc1 100644
 +  inset: 0;
 +  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 55%), transparent);
 +  animation: sweep 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
- }
-
--@keyframes spin {
--  to { transform: rotate(360deg); }
++}
++
 +@keyframes sweep {
 +  from {
 +    transform: translateX(-100%);
@@ -15736,8 +15771,10 @@ index f154c42761..7f9c468cc1 100644
 +  to {
 +    transform: translateX(100%);
 +  }
-+}
-+
+ }
+
+-@keyframes spin {
+-  to { transform: rotate(360deg); }
 +.hint {
 +  margin-top: 14px;
 +  font-size: 12.5px;
@@ -15751,13 +15788,6 @@ index f154c42761..7f9c468cc1 100644
 +   carries its own white headroom, so the copy goes there — above the figures
 +   rather than over them — and the artwork needs no wash at all. */
 +@media (width <= 860px) {
-+  .boot > picture {
-+    top: 35%;
-+    bottom: 16%;
-+    right: 10%;
-+    width: 80%;
-+  }
-+
 +  .cover {
 +    object-position: 50% center;
 +  }
@@ -15827,7 +15857,7 @@ index f154c42761..7f9c468cc1 100644
  }
 
  .failed {
-@@ -80,7 +275,7 @@
+@@ -80,7 +268,7 @@
    font-size: 14px;
    line-height: 22px;
    font-weight: 600;
@@ -15836,7 +15866,7 @@ index f154c42761..7f9c468cc1 100644
  }
 
  .failedItem {
-@@ -98,6 +293,6 @@
+@@ -98,6 +286,6 @@
    );
    font-size: 12px;
    line-height: 18px;
@@ -15845,30 +15875,50 @@ index f154c42761..7f9c468cc1 100644
    white-space: pre-wrap;
  }
 diff --git a/packages/client/web/src/boot-page.ts b/packages/client/web/src/boot-page.ts
-index 23b27ad4bc..dc9771730b 100644
+index 23b27ad4bc..c9b4bfa6a8 100644
 --- a/packages/client/web/src/boot-page.ts
 +++ b/packages/client/web/src/boot-page.ts
-@@ -14,34 +14,122 @@ function div(className: string | undefined, text?: string): HTMLDivElement {
+@@ -14,34 +14,142 @@ function div(className: string | undefined, text?: string): HTMLDivElement {
    return el
  }
 
-+/** Create a responsive original Guizhou-inspired girl illustration. */
++/**
++ * Create the cover picture. A `<picture>` rather than a bare `<img>` because
++ * the composition is orientation-specific: the wide art puts the figures right
++ * and the copy left, while a portrait viewport needs a crop that keeps all
++ * three characters. `source` swaps between them at the same breakpoint the
++ * stylesheet uses, so no script has to react to a resize.
++ * @param className - module class applied to the img.
++ * @param alt - accessible name; empty because the page states the product name in text.
++ * @returns the picture element carrying both orientations.
++ */
 +function coverPicture(className: string, alt: string): HTMLPictureElement {
 +  const picture = document.createElement('picture')
-+  for (const [media, state] of [['(max-width: 860px)', 'complete'], ['(min-width: 861px)', 'wave']] as const) {
-+    const source = document.createElement('source')
-+    source.media = media
-+    source.type = 'image/avif'
-+    source.srcset = [160, 320, 640].map(size => `/physicsos/mascot/guizhou/v1/mascot-${state}-${String(size)}.avif ${String(size)}w`).join(', ')
-+    source.sizes = '(max-width: 860px) 80vw, 36vw'
-+    picture.append(source)
-+  }
++
++  const portrait = document.createElement('source')
++  portrait.media = '(max-width: 860px)'
++  portrait.srcset = [
++    '/physicsos/splash/splash-portrait-720.webp 720w',
++    '/physicsos/splash/splash-portrait-1080.webp 1080w',
++  ].join(', ')
++  portrait.sizes = '100vw'
++
++  const wide = document.createElement('source')
++  wide.media = '(min-width: 861px)'
++  wide.srcset = [
++    '/physicsos/splash/splash-1280.webp 1280w',
++    '/physicsos/splash/splash-1920.webp 1920w',
++    '/physicsos/splash/splash-2560.webp 2560w',
++  ].join(', ')
++  wide.sizes = '100vw'
++
 +  const fallback = document.createElement('img')
 +  fallback.className = className
-+  fallback.src = '/physicsos/mascot/guizhou/v1/mascot-wave-320.png'
++  fallback.src = '/physicsos/splash/splash-1920.webp'
 +  fallback.alt = alt
 +  fallback.decoding = 'async'
-+  picture.append(fallback)
++
++  picture.append(portrait, wide, fallback)
 +  return picture
 +}
 +
@@ -15976,7 +16026,7 @@ index 23b27ad4bc..dc9771730b 100644
    }
 
    /**
-@@ -71,33 +159,63 @@ export class BootPage {
+@@ -71,33 +179,63 @@ export class BootPage {
     */
    fail(message: string): void {
      this.failure = message
@@ -16060,10 +16110,10 @@ index 6602223c4c..b167712d44 100644
        console.error(reason)
        if (onFailure !== undefined) onFailure(reason)
 diff --git a/packages/client/web/tests/boot-page.client.spec.ts b/packages/client/web/tests/boot-page.client.spec.ts
-index 33612e8a47..807e590259 100644
+index 33612e8a47..aaa08bfde5 100644
 --- a/packages/client/web/tests/boot-page.client.spec.ts
 +++ b/packages/client/web/tests/boot-page.client.spec.ts
-@@ -1,21 +1,42 @@
+@@ -1,21 +1,41 @@
  // @vitest-environment jsdom
 -import { afterEach, describe, expect, it } from 'vitest'
 +import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -16101,18 +16151,17 @@ index 33612e8a47..807e590259 100644
 +      '(max-width: 860px)',
 +      '(min-width: 861px)',
 +    ])
-+    // Approved no-cat IP poses remain legible in both viewport orientations.
++    // The portrait crop and the wide crop are different files: the wide art
++    // puts the figures right, so reusing it on a phone would cut two of them.
 +    const portrait = sources[0]?.getAttribute('srcset') ?? ''
 +    const wide = sources[1]?.getAttribute('srcset') ?? ''
-+    expect(portrait).toContain('mascot-complete-320.avif')
-+    expect(wide).toContain('mascot-wave-640.avif')
++    expect(portrait).toContain('splash-portrait-')
++    expect(wide).toContain('splash-1920.webp')
 +    expect(portrait).not.toBe(wide)
-+    expect(el.querySelector('img')?.getAttribute('src')).toContain('/mascot/guizhou/v1/mascot-wave-320.png')
-+    expect(el.innerHTML).not.toContain('/physicsos/splash/')
    })
 
    it('keeps loading while entries are active or loading', () => {
-@@ -29,8 +50,35 @@ describe('BootPage', () => {
+@@ -29,8 +49,35 @@ describe('BootPage', () => {
      expect(el.querySelector('[data-dsh-boot-spinner]')).toBe(spinner)
      page.setState('b', 'active')
      expect(spinner?.style.getPropertyValue('--dsh-boot-arc')).toBe('288deg')
@@ -16150,7 +16199,7 @@ index 33612e8a47..807e590259 100644
    })
 
    it('lists failed entries', () => {
-@@ -41,7 +89,7 @@ describe('BootPage', () => {
+@@ -41,7 +88,7 @@ describe('BootPage', () => {
      expect(el.textContent).toContain('@deepseek-ai/dsh-client-ui-layout')
      expect(el.textContent).toContain('@deepseek-ai/dsh-client-ui-tool')
      expect(el.textContent).not.toContain('ok')
@@ -16159,7 +16208,7 @@ index 33612e8a47..807e590259 100644
    })
 
    it('shows the complete sweep report', () => {
-@@ -50,7 +98,7 @@ describe('BootPage', () => {
+@@ -50,7 +97,7 @@ describe('BootPage', () => {
      page.fail(report)
      page.setState('a', 'active')
      expect(el.textContent).toContain(report)

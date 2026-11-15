@@ -46,6 +46,7 @@ import { createAgentSceneSync } from './physics/agent-scene-sync.ts'
 import { intermediatesToPrune, watchTurnEdges } from './lab-return.ts'
 import { PhysicsProfileLabel } from './PhysicsProfileLabel.tsx'
 import { PhysicsProfileSeat } from './PhysicsProfileSeat.tsx'
+import { PhysicsProfileSettings } from './PhysicsProfileSettings.tsx'
 import { createPhysicsProfileController } from './profile-store.ts'
 import { RecentSpaces } from './RecentSpaces.tsx'
 import { OptionalSceneChatCard as SceneChatCard } from './optional-surfaces.tsx'
@@ -633,6 +634,15 @@ export function apply(ctx: ClientContext): void {
       select: (id: Parameters<typeof controller.select>[0]) => controller.select(id),
     }),
   }, PhysicsProfileSeat))
+
+  ctx.slots.inject('settings.section', () => ctx.slots.register({
+    name: 'settings.section', id: 'agent-presets', priority: -1, order: 20,
+    label: () => ctx.locale.bind(NS)('profile.settings.title'), locale: NS,
+    inject: () => ({
+      hooks: { physicsProfile: controller.store },
+      select: (id: Parameters<typeof controller.select>[0]) => controller.select(id),
+    }),
+  }, PhysicsProfileSettings))
 
   /** The Session the main view currently holds, per the Controller's own
       reference counts — the selection lives with the Workspace UI now. */
