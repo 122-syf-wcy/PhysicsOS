@@ -13,7 +13,7 @@ beforeEach(async () => { root = await mkdtemp(join(tmpdir(), 'physicsos-syntheti
 afterEach(async () => { vi.unstubAllGlobals(); await rm(root, { recursive: true, force: true }) })
 
 /** Fault injection tests prove publication/identity rules, not real LO rendering. */
-function fakeTools(mode: { missingPdf?: boolean; emptyPdf?: boolean; corruptPdf?: boolean; failAnswer?: boolean; outputSalt?: string; failFigure?: boolean } = {}) {
+function fakeTools(mode: { missingPdf?: boolean; emptyPdf?: boolean; corruptPdf?: boolean; failAnswer?: boolean; outputSalt?: string; failFigure?: boolean; stockSection?: 'self-closing' | 'missing' } = {}) {
   const calls: { command: string; args: readonly string[]; cwd: string }[] = []
   const runProcess = vi.fn(async (command: string, args: readonly string[], cwd: string) => {
     calls.push({ command, args, cwd })
@@ -21,7 +21,8 @@ function fakeTools(mode: { missingPdf?: boolean; emptyPdf?: boolean; corruptPdf?
     if (command === 'unzip') {
       const destination = args[args.indexOf('-d') + 1]!
       await mkdir(join(destination, 'word'), { recursive: true })
-      await writeFile(join(destination, 'word', 'document.xml'), '<w:document><w:body><w:p/><w:sectPr></w:sectPr></w:body></w:document>')
+      const section = mode.stockSection === 'self-closing' ? '<w:sectPr />' : mode.stockSection === 'missing' ? '' : '<w:sectPr></w:sectPr>'
+      await writeFile(join(destination, 'word', 'document.xml'), `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p/>${section}</w:body></w:document>`)
       await writeFile(join(destination, 'word', 'styles.xml'), '<w:styles><w:rFonts w:eastAsiaTheme="minorEastAsia"/></w:styles>')
     } else if (command === 'zip') {
       await writeFile(args[2]!, 'DOCX::REFERENCE_A4')
@@ -46,6 +47,14 @@ function fakeTools(mode: { missingPdf?: boolean; emptyPdf?: boolean; corruptPdf?
 const temps = async (path: string) => (await readdir(path)).filter((name) => name.startsWith('.export-') || name.startsWith('.office-') || name.startsWith('.reference-'))
 
 describe('four-file immutable export transaction', () => {
+  it.each(['self-closing', 'missing'] as const)('supports valid Pandoc stock section shape: %s', async (stockSection) => {
+    const { tools } = fakeTools({ stockSection })
+    const bundle = await exportPaper(tools, 'job-a', exportFixture())
+    expect(bundle.paperPdf).toBeDefined()
+    expect(bundle.answerPdf).toBeDefined()
+    expect(await temps(join(root, '_template'))).toEqual([])
+  })
+
   it('publishes four files plus manifest, each byte digest independently verifiable', async () => {
     const { tools } = fakeTools()
     const doc = exportFixture()

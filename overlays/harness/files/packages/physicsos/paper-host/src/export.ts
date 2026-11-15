@@ -16,6 +16,7 @@ import {
 import { DIAGRAM_RASTERIZER_VERSION, normalizeSourceFigure, rasterizePaperDiagram, validateFigurePng } from './diagram-rasterizer.ts'
 import { EXPORT_LIMITS, EXPORT_VALIDATOR_VERSION, readExportFile, validateDocx, validatePdf, type PdfValidation } from './export-validation.ts'
 import { runPrintProcess, type PrintProcessResult } from './print-process.ts'
+import { patchReferenceA4Xml } from './reference-layout.ts'
 
 /** Deployment tools plus narrow deterministic seams used by failure tests. */
 export interface ExportTools {
@@ -107,11 +108,7 @@ async function ensureReferenceDocx(tools: ExportTools): Promise<string> {
       await run('unzip', ['-q', join(temp, 'stock.docx'), '-d', unzipped], temp, 30_000)
       const docXml = join(unzipped, 'word', 'document.xml')
       const stockDoc = await readFile(docXml, 'utf8')
-      if (!stockDoc.includes('</w:sectPr>')) throw new Error('pandoc 参考模板缺少 Word sectPr')
-      const page = '<w:pgSz w:w="11906" w:h="16838"/>'
-      const margin = '<w:pgMar w:top="1021" w:right="1021" w:bottom="1021" w:left="1021" w:header="720" w:footer="720" w:gutter="0"/>'
-      const geometry = stockDoc.replace(/<w:pgSz\b[^>]*\/>/g, '').replace(/<w:pgMar\b[^>]*\/>/g, '').replace('</w:sectPr>', `${page}${margin}</w:sectPr>`)
-      await writeFile(docXml, geometry)
+      await writeFile(docXml, patchReferenceA4Xml(stockDoc))
       const stylesXml = join(unzipped, 'word', 'styles.xml')
       const restyle = (xml: string, id: string, halfPoints: string): string => xml.replace(new RegExp(`<w:style [^>]*w:styleId="${id}"[\\s\\S]*?</w:style>`), (block) => block.replace(/<w:sz w:val="\d+"\/>/, `<w:sz w:val="${halfPoints}"/>`).replace(/<w:szCs w:val="\d+"\/>/, `<w:szCs w:val="${halfPoints}"/>`))
       /* Noto Serif CJK SC is installed by the server image. Keep the original

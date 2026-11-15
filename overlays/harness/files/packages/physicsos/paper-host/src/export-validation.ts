@@ -4,6 +4,7 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { A4_PAGE_POINTS, A4_PAGE_TWIPS } from '@physicsos/question-paper'
 import { runPrintProcess } from './print-process.ts'
+import { assertA4WordGeometryXml } from './reference-layout.ts'
 
 export const EXPORT_VALIDATOR_VERSION = 'paper-four-files-validation-v1'
 export const EXPORT_LIMITS = { fileBytes: 48 * 1024 * 1024, xmlBytes: 16 * 1024 * 1024, zipEntries: 2048, pages: 120, operatorsPerPage: 200_000, imagePixels: 8_000_000, timeoutMs: 120_000 } as const
@@ -47,6 +48,7 @@ export async function inspectDocx(path: string): Promise<{ documentXml: string; 
   if (pages.some(([tag]) => attr(tag, 'w') !== A4_PAGE_TWIPS.width || attr(tag, 'h') !== A4_PAGE_TWIPS.height
     || /w:orient="landscape"/.test(tag))) throw new Error('DOCX 实际页幅不是纵向 A4')
   if (margins.some(([tag]) => ['top', 'right', 'bottom', 'left'].some((side) => !Number.isFinite(attr(tag, side)) || Math.abs(attr(tag, side) - A4_PAGE_TWIPS.margin) > 1))) throw new Error('DOCX 实际页边距不是 18mm')
+  assertA4WordGeometryXml(documentXml)
   if (documentXml.includes('\\vspace')) throw new Error('DOCX 含无效 TeX 作答空间')
   for (const entry of entries.filter((name) => name.endsWith('.rels'))) {
     const rels = await xmlPart(entry)
