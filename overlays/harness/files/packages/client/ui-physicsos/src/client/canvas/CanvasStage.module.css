@@ -11,5 +11,8 @@
 .workspace .zoomShelf { bottom: 18px; left: 14px; padding: 7px 10px; border-radius: 999px; background: var(--physics-glass-fill); box-shadow: var(--physics-glass-rim), var(--physics-glass-lift); backdrop-filter: var(--physics-glass-blur); }
 .floatAgent > * { position: static; width: 100%; height: 100%; box-sizing: border-box; border: 0; padding: 0; background: transparent; box-shadow: none; }
 @container physics-canvas (max-width: 1000px) { .workspace .zoomShelf { bottom: 90px; } .workspace .toolDock { border-radius: 26px; } }
-@container physics-canvas (max-width: 600px) { .workspace .toolbar { padding: 6px 8px; } .workspace .dockShelf { bottom: 10px; padding: 0 8px; } .workspace .toolDock { max-width: 100%; padding: 6px; } .workspace .zoomShelf { bottom: 105px; } }
+@container physics-canvas (max-width: 600px) { .workspace .toolbar { padding: 6px 8px; } .workspace .dockShelf { bottom: 10px; padding: 0 8px; } .workspace .toolDock { max-width: 100%; padding: 6px; } }
+/* The workspace's container name belongs to another CSS Module. Use its size
+   query so these controls stay clear of a wrapping touch dock. */
+@container (max-width: 600px) { .workspace .zoomShelf { top: 12px; bottom: auto; } }
 @media (prefers-reduced-transparency: reduce) { .workspace .toolDock, .workspace .zoomShelf { background: var(--physics-glass-fill-strong); backdrop-filter: none; } }
