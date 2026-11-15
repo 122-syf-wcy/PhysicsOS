@@ -1,4 +1,5 @@
 /** Pandoc stock references use paired, self-closing or absent section properties. */
+import { posix } from 'node:path'
 import { A4_PAGE_TWIPS } from '@physicsos/question-paper'
 
 interface XmlElement {
@@ -132,4 +133,127 @@ export function patchReferenceA4Xml(xml: string): string {
      after this pure patch; this is not a substitute for those output gates. */
   assertA4WordGeometryXml(result)
   return result
+}
+
+interface XmlAttribute { readonly name: string; readonly value: string }
+const decodeXmlAttribute = (value: string): string => value.replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos);/gi, (_match, entity: string) => {
+  const literals: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" }
+  if (!entity.startsWith('#')) return literals[entity.toLowerCase()]!
+  const number = entity.toLowerCase().startsWith('#x') ? Number.parseInt(entity.slice(2), 16) : Number.parseInt(entity.slice(1), 10)
+  if (!Number.isSafeInteger(number) || number < 0 || number > 0x10ffff || (number >= 0xd800 && number <= 0xdfff)) return fail('属性字符实体无效')
+  return String.fromCodePoint(number)
+})
+function attributes(xml: string, element: XmlElement): XmlAttribute[] {
+  const tag = xml.slice(element.start, element.openEnd)
+  return [...tag.matchAll(/\s+([A-Za-z_][\w:.-]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/g)].map((match) => ({ name: match[1]!, value: decodeXmlAttribute(match[2] ?? match[3] ?? '') }))
+}
+function namespaceOf(xml: string, element: XmlElement, prefix: string): string | undefined {
+  const name = prefix === '' ? 'xmlns' : `xmlns:${prefix}`
+  for (let current: XmlElement | undefined = element; current !== undefined; current = current.parent) {
+    const value = attributes(xml, current).find((attribute) => attribute.name === name)?.value
+    if (value !== undefined) return value
+  }
+  return undefined
+}
+function relationshipReferences(xml: string): { element: XmlElement; id: string; attribute: string }[] {
+  const result: { element: XmlElement; id: string; attribute: string }[] = []
+  const visit = (element: XmlElement): void => {
+    for (const attribute of attributes(xml, element)) {
+      const split = attribute.name.indexOf(':')
+      if (split < 0 || !['id', 'embed', 'link'].includes(attribute.name.slice(split + 1))) continue
+      const namespace = namespaceOf(xml, element, attribute.name.slice(0, split))
+      if (namespace === 'http://schemas.openxmlformats.org/officeDocument/2006/relationships' || namespace === 'http://purl.oclc.org/ooxml/officeDocument/relationships') result.push({ element, id: attribute.value, attribute: attribute.name.slice(split + 1) })
+    }
+    for (const child of element.children) visit(child)
+  }
+  for (const root of elements(xml)) visit(root)
+  return result
+}
+
+/** Reference contents are style samples, not exam questions; discard them. */
+export function safeReferenceBodyXml(xml: string): string {
+  const patched = patchReferenceA4Xml(xml)
+  const root = elements(patched)[0]!
+  const prefix = root.name.includes(':') ? root.name.slice(0, root.name.indexOf(':')) : ''
+  const q = (name: string): string => prefix === '' ? name : `${prefix}:${name}`
+  const body = root.children.find((element) => element.name === q('body'))!
+  const section = body.children.find((element) => element.name === q('sectPr'))!
+  const result = patched.slice(0, body.openEnd) + `<${q('p')}/>` + patched.slice(section.start, section.end) + patched.slice(body.closeStart)
+  assertA4WordGeometryXml(result)
+  return result
+}
+
+/**
+ * Pure cleanup for the freshly generated stock reference ONLY. A hyperlink
+ * sample may be removed; an external image, missing target or dangling r:id
+ * is never accepted as a successful cleanup. Styles/header/footer targets
+ * remain byte-identical and are checked against the actual package entries.
+ */
+export function sanitizeReferencePackageXml(parts: ReadonlyMap<string, string>, entries: readonly string[]): Map<string, string> {
+  const output = new Map(parts)
+  const documentXml = output.get('word/document.xml')
+  if (documentXml === undefined) return fail('缺少 document.xml')
+  output.set('word/document.xml', safeReferenceBodyXml(documentXml))
+  const available = new Set(entries)
+  const owners = new Map<string, Set<string>>()
+  const sourcePartOf = (path: string): string => {
+    if (path === '_rels/.rels') return ''
+    const match = /^(.*\/)?_rels\/([^/]+)\.rels$/.exec(path)
+    if (match === null) return fail('关系部件路径无效')
+    return `${match[1] ?? ''}${match[2]}`
+  }
+  for (const [path, rels] of output) {
+    if (!path.endsWith('.rels')) continue
+    const owner = sourcePartOf(path)
+    if (owner !== '' && !available.has(owner)) return fail('关系部件的所有者不存在')
+    const root = elements(rels)[0]!
+    const prefix = root.name.includes(':') ? root.name.slice(0, root.name.indexOf(':')) : ''
+    const q = (name: string): string => prefix === '' ? name : `${prefix}:${name}`
+    if (root.name !== q('Relationships') || namespaceOf(rels, root, prefix) !== 'http://schemas.openxmlformats.org/package/2006/relationships') return fail('关系主命名空间无效')
+    const kept = new Set<string>(); const seen = new Set<string>(); const removed = new Set<string>()
+    const patches: { start: number; end: number; replacement: string }[] = []
+    for (const relationship of root.children) {
+      if (relationship.name !== q('Relationship')) return fail('关系部件包含未知节点')
+      const attrs = attributes(rels, relationship)
+      const attr = (name: string): string | undefined => attrs.find((value) => value.name === name)?.value
+      const id = attr('Id'); const type = attr('Type'); const target = attr('Target'); const mode = attr('TargetMode')
+      if (id === undefined || id === '' || type === undefined || type === '' || target === undefined || target === '' || seen.has(id)) return fail('关系 Id/Type/Target 缺失或重复')
+      seen.add(id)
+      if (mode === 'External') {
+        if (type !== 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink' && type !== 'http://purl.oclc.org/ooxml/officeDocument/relationships/hyperlink') return fail('参考模板含外部图片或不允许的外部资源')
+        removed.add(id); patches.push({ start: relationship.start, end: relationship.end, replacement: '' })
+        continue
+      }
+      if (mode !== undefined && mode !== 'Internal') return fail('不支持的 TargetMode')
+      if (/^[A-Za-z][A-Za-z0-9+.-]*:|^\/\/|[\\\u0000-\u001f\u007f]/.test(target)) return fail('内部关系不得指向外部路径')
+      const withoutFragment = target.split('#', 1)[0]!
+      let decoded: string
+      try { decoded = decodeURIComponent(withoutFragment) } catch { return fail('关系 Target 转义无效') }
+      if (decoded === '' || decoded.includes('\\') || /^[A-Za-z][A-Za-z0-9+.-]*:|^\/\//.test(decoded)) return fail('内部关系 Target 无效')
+      const targetPart = decoded.startsWith('/') ? posix.normalize(decoded.slice(1)) : posix.normalize(posix.join(posix.dirname(owner), decoded))
+      if (targetPart === '..' || targetPart.startsWith('../') || !available.has(targetPart)) return fail('内部关系指向缺失部件')
+      kept.add(id)
+    }
+    let cleanRels = rels
+    for (const patch of patches.sort((a, b) => b.start - a.start)) cleanRels = cleanRels.slice(0, patch.start) + patch.replacement + cleanRels.slice(patch.end)
+    output.set(path, cleanRels); owners.set(owner, kept)
+    if (removed.size === 0 || owner === '') continue
+    const sourceXml = output.get(owner)
+    if (sourceXml === undefined) return fail('关系所有者 XML 未提供，不能移除其外部引用')
+    const links = new Map<number, XmlElement>()
+    for (const reference of relationshipReferences(sourceXml)) {
+      if (!removed.has(reference.id)) continue
+      if (reference.element.name.split(':').at(-1) !== 'hyperlink' || reference.attribute !== 'id') return fail('外部样例关系被非 hyperlink 资源引用')
+      links.set(reference.element.start, reference.element)
+    }
+    let cleanSource = sourceXml
+    for (const element of [...links.values()].sort((a, b) => b.start - a.start)) cleanSource = cleanSource.slice(0, element.start) + cleanSource.slice(element.end)
+    output.set(owner, cleanSource)
+  }
+  for (const [path, xml] of output) {
+    if (!path.endsWith('.xml')) continue
+    for (const reference of relationshipReferences(xml)) if (!owners.get(path)?.has(reference.id)) return fail('XML 引用断裂或未打包的关系')
+  }
+  assertA4WordGeometryXml(output.get('word/document.xml')!)
+  return output
 }

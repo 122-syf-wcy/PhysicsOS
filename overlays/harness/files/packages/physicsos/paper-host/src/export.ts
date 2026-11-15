@@ -5,7 +5,7 @@
  * generated image, empty exit-0 output or mutable legacy filename is success.
  */
 import { createHash } from 'node:crypto'
-import { copyFile, link, lstat, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { copyFile, link, lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import {
@@ -16,7 +16,7 @@ import {
 import { DIAGRAM_RASTERIZER_VERSION, normalizeSourceFigure, rasterizePaperDiagram, validateFigurePng } from './diagram-rasterizer.ts'
 import { EXPORT_LIMITS, EXPORT_VALIDATOR_VERSION, readExportFile, validateDocx, validatePdf, type PdfValidation } from './export-validation.ts'
 import { runPrintProcess, type PrintProcessResult } from './print-process.ts'
-import { patchReferenceA4Xml } from './reference-layout.ts'
+import { sanitizeReferencePackageXml } from './reference-layout.ts'
 
 /** Deployment tools plus narrow deterministic seams used by failure tests. */
 export interface ExportTools {
@@ -106,9 +106,25 @@ async function ensureReferenceDocx(tools: ExportTools): Promise<string> {
       await writeFile(join(temp, 'stock.docx'), stock.stdout)
       const unzipped = join(temp, 'ref')
       await run('unzip', ['-q', join(temp, 'stock.docx'), '-d', unzipped], temp, 30_000)
-      const docXml = join(unzipped, 'word', 'document.xml')
-      const stockDoc = await readFile(docXml, 'utf8')
-      await writeFile(docXml, patchReferenceA4Xml(stockDoc))
+      /* Pandoc stock content demonstrates styles, including an external
+         hyperlink sample. Keep its styles and valid package relationships,
+         but never propagate samples or external resources into paper output. */
+      const entries: string[] = []; const parts = new Map<string, string>()
+      const collect = async (relative = ''): Promise<void> => {
+        for (const entry of await readdir(join(unzipped, relative), { withFileTypes: true })) {
+          const path = relative === '' ? entry.name : `${relative}/${entry.name}`
+          if (entry.isSymbolicLink()) throw new Error('参考模板不允许符号链接部件')
+          if (entry.isDirectory()) await collect(path)
+          else if (entry.isFile()) {
+            entries.push(path)
+            if (entries.length > EXPORT_LIMITS.zipEntries) throw new Error('参考模板部件超过限额')
+            if (path.endsWith('.xml') || path.endsWith('.rels')) parts.set(path, (await readExportFile(join(unzipped, path), EXPORT_LIMITS.xmlBytes)).toString('utf8'))
+          } else throw new Error('参考模板包含无效部件')
+        }
+      }
+      await collect()
+      const cleanParts = sanitizeReferencePackageXml(parts, entries)
+      for (const [path, xml] of cleanParts) if (parts.get(path) !== xml) await writeFile(join(unzipped, path), xml)
       const stylesXml = join(unzipped, 'word', 'styles.xml')
       const restyle = (xml: string, id: string, halfPoints: string): string => xml.replace(new RegExp(`<w:style [^>]*w:styleId="${id}"[\\s\\S]*?</w:style>`), (block) => block.replace(/<w:sz w:val="\d+"\/>/, `<w:sz w:val="${halfPoints}"/>`).replace(/<w:szCs w:val="\d+"\/>/, `<w:szCs w:val="${halfPoints}"/>`))
       /* Noto Serif CJK SC is installed by the server image. Keep the original

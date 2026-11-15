@@ -22,9 +22,14 @@ function fakeTools(mode: { missingPdf?: boolean; emptyPdf?: boolean; corruptPdf?
       const destination = args[args.indexOf('-d') + 1]!
       await mkdir(join(destination, 'word'), { recursive: true })
       const section = mode.stockSection === 'self-closing' ? '<w:sectPr />' : mode.stockSection === 'missing' ? '' : '<w:sectPr></w:sectPr>'
-      await writeFile(join(destination, 'word', 'document.xml'), `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p/>${section}</w:body></w:document>`)
+      await writeFile(join(destination, 'word', 'document.xml'), `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body><w:p><w:hyperlink r:id="rId30"><w:r><w:t>STOCK_HYPERLINK_SAMPLE</w:t></w:r></w:hyperlink></w:p>${section}</w:body></w:document>`)
+      await mkdir(join(destination, 'word', '_rels'), { recursive: true })
+      await writeFile(join(destination, 'word', '_rels', 'document.xml.rels'), '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId30" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://synthetic-not-requested.invalid/" TargetMode="External"/></Relationships>')
       await writeFile(join(destination, 'word', 'styles.xml'), '<w:styles><w:rFonts w:eastAsiaTheme="minorEastAsia"/></w:styles>')
     } else if (command === 'zip') {
+      const referenceXml = await readFile(join(cwd, 'word', 'document.xml'), 'utf8')
+      const referenceRels = await readFile(join(cwd, 'word', '_rels', 'document.xml.rels'), 'utf8')
+      if (referenceXml.includes('STOCK_HYPERLINK_SAMPLE') || referenceRels.includes('TargetMode="External"')) throw new Error('reference sample cleanup was not applied')
       await writeFile(args[2]!, 'DOCX::REFERENCE_A4')
     } else if (command === 'pandoc-test') {
       const name = args[args.indexOf('-o') + 1]!
