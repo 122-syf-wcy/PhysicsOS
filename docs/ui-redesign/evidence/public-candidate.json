@@ -1,0 +1,119 @@
+{
+  "image": "sha256:3deef6e8aff7ffb08c4ec50e1a7e54c1253e03d71bf397b9933c354be07544ae",
+  "revision": "E271 (operator verified source; tool444)",
+  "imageVerificationAuthority": "release_operator exact candidate verification",
+  "origin": "http://physicsos-validation.invalid:3199",
+  "runId": "public-final-1115",
+  "feedbackPosts": 1,
+  "items": [
+    {
+      "designId": 50,
+      "title": "最终官网首屏",
+      "screenshot": "/tmp/physicsos-ui-public-final-screens/50-1360.png",
+      "url": "http://physicsos-validation.invalid:3199/physicsos/website/index.html",
+      "horizontalOverflow": false,
+      "heroVisible": true,
+      "heroImage": {
+        "complete": true,
+        "width": 405,
+        "height": 510
+      }
+    },
+    {
+      "designId": 51,
+      "title": "最终官网功能切换",
+      "screenshot": "/tmp/physicsos-ui-public-final-screens/51-1360.png",
+      "url": "http://physicsos-validation.invalid:3199/physicsos/website/index.html",
+      "horizontalOverflow": false,
+      "chat": true,
+      "create": true,
+      "experiment": true
+    },
+    {
+      "designId": 52,
+      "title": "最终官网公开内容",
+      "screenshot": "/tmp/physicsos-ui-public-final-screens/52-1360.png",
+      "url": "http://physicsos-validation.invalid:3199/physicsos/website/index.html",
+      "horizontalOverflow": false,
+      "publicGetStatus": 200,
+      "publicTestimonialCount": 0,
+      "publicContributorCount": 0
+    },
+    {
+      "designId": 53,
+      "title": "最终官网真实PNG反馈表单",
+      "screenshot": "/tmp/physicsos-ui-public-final-screens/53-1360.png",
+      "url": "http://physicsos-validation.invalid:3199/physicsos/website/index.html",
+      "horizontalOverflow": false,
+      "pngPreviewDecoded": true
+    },
+    {
+      "designId": 54,
+      "title": "最终官网真实提交成功",
+      "screenshot": "/tmp/physicsos-ui-public-final-screens/54-1360.png",
+      "url": "http://physicsos-validation.invalid:3199/physicsos/website/index.html",
+      "horizontalOverflow": false,
+      "receiptVisible": "反馈编号：wf_MkJHhDj0NMAyLwMx",
+      "actualPostStatus": 201,
+      "actualId": "wf_MkJHhDj0NMAyLwMx"
+    },
+    {
+      "designId": 55,
+      "title": "最终开发文档搜索、正文锚点与真实模板ZIP",
+      "url": "http://physicsos-validation.invalid:3199/physicsos/developers/index.html#/package/tree",
+      "screenshot": "/tmp/physicsos-ui-public-final-screens/55-1360.png",
+      "searchResults": 3,
+      "heading": "实验包格式",
+      "horizontalOverflow": false,
+      "zip": {
+        "status": 200,
+        "contentType": "application/octet-stream",
+        "bytes": 232146,
+        "magic": [
+          80,
+          75,
+          3,
+          4
+        ],
+        "sha256": "f9165baa152c62ad73c1d51f9e62e68abe53e480d642bd5a655393f25061b936",
+        "matchesSource": true,
+        "sourceZipCrcPassed": true
+      }
+    }
+  ],
+  "errors": [],
+  "feedbackReceipt": {
+    "status": 201,
+    "id": "wf_MkJHhDj0NMAyLwMx",
+    "createdAt": "2026-11-15T12:35:25.329Z"
+  },
+  "privateFeedback": {
+    "loginStatus": 200,
+    "inboxStatus": 200,
+    "found": true,
+    "feedbackId": "wf_MkJHhDj0NMAyLwMx",
+    "imageStatus": 200,
+    "imageContentType": "image/png",
+    "imageBytes": 18901,
+    "decodedWidth": 128,
+    "decodedHeight": 128
+  },
+  "adminUi": {
+    "status": "not claimed; system plugin cold-start blocker reported by release operator",
+    "apiInboxChecked": true
+  },
+  "status": "public-checks-passed",
+  "mobile": {
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "screenshot": "/tmp/physicsos-ui-public-final-screens/50-390.png",
+    "horizontalOverflow": false,
+    "navigationExpanded": true
+  },
+  "sourceRevision": "e271ff2f8d31d55606db67b42f06584b10561328",
+  "feedbackPostCount": 1,
+  "scope": "Final isolated candidate public50–55 only; no system-admin UI success claimed",
+  "closedOwnedBrowser": true
+}

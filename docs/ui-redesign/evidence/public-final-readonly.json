@@ -1,0 +1,138 @@
+{
+  "image": "sha256:93cb03a815a86fa85a5997bbd907471e53dbc8ae10c94c756f1c1b8c0d5d2376",
+  "imageVerificationAuthority": "release_operator exact candidate verification",
+  "origin": "http://physicsos-validation.invalid:3199",
+  "status": "passed",
+  "verifiedAssets": 17,
+  "sourceManifest": "/tmp/physicsos-ui-public-get-manifest.json",
+  "feedbackPosts": 0,
+  "inheritedEvidence": "/tmp/physicsos-ui-public-final-coverage.json",
+  "existingFeedbackId": "wf_MkJHhDj0NMAyLwMx",
+  "assets": [
+    {
+      "path": "/physicsos/website/app.js",
+      "status": 200,
+      "bytes": 29583,
+      "sha256Matches": true
+    },
+    {
+      "path": "/physicsos/website/assets/logo.png",
+      "status": 200,
+      "bytes": 18901,
+      "sha256Matches": true
+    },
+    {
+      "path": "/physicsos/website/assets/mascot-complete-160.avif",
+      "status": 200,
+      "bytes": 9233,
+      "sha256Matches": true
+    },
+    {
+      "path": "/physicsos/website/assets/mascot-complete-320.avif",
+      "status": 200,
+      "bytes": 24789,
+      "sha256Matches": true
+    },
+    {
+      "path": "/physicsos/website/assets/mascot-complete-320.png",
+      "status": 200,
+      "bytes": 102340,
+      "sha256Matches": true
+    },
+    {
+      "path": "/physicsos/website/assets/mascot-think-320.avif",
+      "status": 200,
+      "bytes": 25240,
+      "sha256Matches": true
+    },
+    {
+      "path": "/physicsos/website/assets/mascot-think-320.png",
+      "status": 200,
+      "bytes": 119681,
+      "sha256Matches": true
+    },
+    {
+      "path": "/physicsos/website/assets/mascot-wave-320.avif",
+      "status": 200,
+      "bytes": 21204,
+      "sha256Matches": true
+    },
+    {
+      "path": "/physicsos/website/assets/mascot-wave-320.png",
+      "status": 200,
+      "bytes": 94108,
+      "sha256Matches": true
+    },
+    {
+      "path": "/physicsos/website/assets/mascot-wave-640.avif",
+      "status": 200,
+      "bytes": 61251,
+      "sha256Matches": true
+    },
+    {
+      "path": "/physicsos/website/content.js",
+      "status": 200,
+      "bytes": 6261,
+      "sha256Matches": true
+    },
+    {
+      "path": "/physicsos/website/legacy-routing.js",
+      "status": 200,
+      "bytes": 373,
+      "sha256Matches": true
+    },
+    {
+      "path": "/physicsos/website/motion.css",
+      "status": 200,
+      "bytes": 15494,
+      "sha256Matches": true
+    },
+    {
+      "path": "/physicsos/website/motion.js",
+      "status": 200,
+      "bytes": 10791,
+      "sha256Matches": true
+    },
+    {
+      "path": "/physicsos/website/orbit-field.js",
+      "status": 200,
+      "bytes": 11067,
+      "sha256Matches": true
+    },
+    {
+      "path": "/physicsos/website/redesign.css",
+      "status": 200,
+      "bytes": 27326,
+      "sha256Matches": true
+    },
+    {
+      "path": "/physicsos/website/style.css",
+      "status": 200,
+      "bytes": 42315,
+      "sha256Matches": true
+    }
+  ],
+  "at": 1794749533.239032,
+  "revision": "f4a646a654cd8cd00591f20b3867d0917911322a",
+  "readback": {
+    "status": 200,
+    "feedbackId": "wf_MkJHhDj0NMAyLwMx",
+    "found": true,
+    "attachmentCount": null,
+    "method": "single genuine authenticated GET /physicsos/notice/website-feedback"
+  },
+  "adminUi": {
+    "visible": true,
+    "heading": 1,
+    "configVersion": 5,
+    "containsPersistedSyntheticEntries": true,
+    "horizontalOverflow": false,
+    "pageErrors": [],
+    "screenshot": "/tmp/physicsos-ui-public-final-screens/f4-admin-website.png"
+  },
+  "notes": [
+    "Prior real feedback POST and PNG/ZIP proofs inherited; no repeat POST in this revision validation.",
+    "Candidate image identity supplied by unique release operator; production not touched."
+  ],
+  "completedAt": "2026-11-15T13:34:35.153Z"
+}

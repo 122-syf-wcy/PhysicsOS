@@ -1,0 +1,476 @@
+{
+  "schemaVersion": 1,
+  "owner": "lab_canvas_redesign",
+  "recordedAt": "2026-11-15T06:58:22.818263+00:00",
+  "candidate": {
+    "image": "sha256:ce2ca5150d8eb8e5b8e8c7f6e939679a9e8e8d16d25ffec54d8e6a75d629952b",
+    "imageRevision": "f005941663f760dfb46da2ac6ec13a3df7beee24",
+    "productionTouched": false,
+    "final9c2VisualRetestPending": true
+  },
+  "environment": {
+    "browser": "Chrome157 own CDP9230",
+    "desktop": "1360x768",
+    "mobile": "390x844",
+    "secureContext": "Only owned candidate HTTP origin treated secure in QA Chrome, to match production HTTPS WebCrypto; no server/product security changes"
+  },
+  "notes": [
+    "截图文件中的数字为初始短名，designId以本fragment映射为准",
+    "不把raw预览、source-only、单纯CSS或no-overflow当全部通过",
+    "未改shared coverage.json；由root统一合并",
+    "最新窄屏fit修复的source-preview证据单独标明，不合并成最终镜像通过。"
+  ],
+  "cases": {
+    "magnetic": {
+      "phase": "final-candidate",
+      "image": "sha256:ce2ca5150d8eb8e5b8e8c7f6e939679a9e8e8d16d25ffec54d8e6a75d629952b",
+      "role": "TEACHER",
+      "school": "B fixture",
+      "revision0": 0,
+      "revision1": 1,
+      "typingDidNotCommit": true,
+      "parameterCommit": true,
+      "verification": "verified",
+      "playbackAdvanced": true,
+      "resetTime": 0,
+      "report": true,
+      "focus": true,
+      "mobile390": {
+        "horizontalOverflow": false
+      },
+      "screenshots": [
+        "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-03-center-ce2-1360.png",
+        "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-04-magnetic-committed-ce2-1360.png",
+        "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-05-report-ce2-1360.png",
+        "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-04-focus-ce2-1360.png",
+        "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-04-magnetic-ce2-390.png"
+      ],
+      "errors": [],
+      "failedRequests": [],
+      "knownVisualDeviations": [
+        "recommendations narrow without continue card",
+        "initial SVG readout overlaps workbench header",
+        "floating-point noise amplified in near-constant chart"
+      ],
+      "resultPath": "/tmp/physicsos-ui-lab-magnetic-result.json"
+    },
+    "lens": {
+      "phase": "final-candidate",
+      "case": "convex-lens",
+      "revisionBefore": 0,
+      "revisionAfter": 1,
+      "previewValue": 30.5,
+      "committedOnKeyUp": true,
+      "previewDidNotCommit": true,
+      "verified": true,
+      "images": [
+        "lab-06-lens-ce2-1360.png",
+        "lab-06-lens-commit-ce2-1360.png",
+        "lab-06-lens-ce2-dark.png"
+      ],
+      "resultPath": "/tmp/physicsos-ui-lab-lens-result.json"
+    },
+    "canvas": {
+      "phase": "final-candidate",
+      "case": "canvas",
+      "title": "UI 验收 · 光学探究",
+      "experimentFromCommittedLens": true,
+      "experimentCount": 1,
+      "noteSaved": true,
+      "reopenedFromAccountList": true,
+      "noteBodyRestored": true,
+      "mobile390": {
+        "horizontalOverflow": false
+      },
+      "errors": [],
+      "images": [
+        "lab-19-canvas-experiment-ce2-1360.png",
+        "lab-19-canvas-note-saved-ce2-1360.png",
+        "lab-18-canvas-list-ce2-1360.png",
+        "lab-19-canvas-ce2-390.png"
+      ],
+      "resultPath": "/tmp/physicsos-ui-lab-canvas-result.json"
+    },
+    "whiteboard": {
+      "phase": "final-candidate",
+      "case": "whiteboard",
+      "realPointerRectangle": true,
+      "undo": true,
+      "redo": true,
+      "savedToAccount": true,
+      "reopenedElementCount": 1,
+      "historyRetained": true,
+      "mobile390": {
+        "horizontalOverflow": false
+      },
+      "errors": [],
+      "images": [
+        "lab-20-whiteboard-list-ce2-1360.png",
+        "lab-20-whiteboard-saved-ce2-1360.png",
+        "lab-20-whiteboard-ce2-dark.png",
+        "lab-20-whiteboard-ce2-390.png"
+      ],
+      "resultPath": "/tmp/physicsos-ui-lab-whiteboard-result.json"
+    },
+    "circuit": {
+      "phase": "final-candidate",
+      "case": "free-circuit",
+      "solvableStarter": true,
+      "typingDidNotCommit": true,
+      "resistanceCommitted": 20,
+      "revisionBefore": 0,
+      "revisionAfter": 1,
+      "trueEngineCurrent": "0.3 A",
+      "undoResistance": 10,
+      "redoResistance": 20,
+      "mobile390": {
+        "horizontalOverflow": false
+      },
+      "errors": [],
+      "images": [
+        "lab-09-circuit-20ohm-ce2-1360.png",
+        "lab-09-circuit-ce2-390.png"
+      ],
+      "resultPath": "/tmp/physicsos-ui-lab-circuit-result.json"
+    },
+    "projects": {
+      "phase": "final-candidate",
+      "case": "projects",
+      "createdAccountProject": true,
+      "renamed": true,
+      "createdAssociatedCanvas": true,
+      "reopenedAssociation": true,
+      "mobile390": {
+        "horizontalOverflow": false
+      },
+      "errors": [],
+      "images": [
+        "lab-56-project-detail-ce2-1360.png",
+        "lab-56-project-list-ce2-1360.png",
+        "lab-56-project-ce2-390.png"
+      ],
+      "resultPath": "/tmp/physicsos-ui-lab-projects-result.json"
+    }
+  },
+  "items": [
+    {
+      "designId": 3,
+      "validationPhase": "final-candidate-ce2",
+      "role": "TEACHER",
+      "schoolFixture": "B",
+      "interactionValidation": "部分真实闭环通过",
+      "visualValidation": "截图已取，含明确待复验/缺口",
+      "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
+      "checks": [
+        "真实模板磁场/透镜/自由电路入口可达"
+      ],
+      "evidence": [
+        "/tmp/physicsos-ui-lab-magnetic-result.json",
+        "/tmp/physicsos-ui-lab-lens-result.json",
+        "/tmp/physicsos-ui-lab-circuit-result.json"
+      ],
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-03-center-ce2-1360.png",
+          "sha256": "22aae7430d18c0cc72ce2d1e421f39b86b78d7853d803b453e19311fbedf1ef8"
+        }
+      ],
+      "deviations": [
+        "9c2单栏推荐宽度修复需最终镜像复验"
+      ]
+    },
+    {
+      "designId": 4,
+      "validationPhase": "final-candidate-ce2",
+      "role": "TEACHER",
+      "schoolFixture": "B",
+      "interactionValidation": "部分真实闭环通过",
+      "visualValidation": "截图已取，含明确待复验/缺口",
+      "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
+      "checks": [
+        "磁场输入draft不提交，Tab后revision 0→1且verified",
+        "真实播放前进、暂停、重置至0",
+        "focus切换",
+        "透镜slider keydown预览revision不变，keyup提交0→1且verified",
+        "390px文档无横溢"
+      ],
+      "evidence": [
+        "/tmp/physicsos-ui-lab-magnetic-result.json",
+        "/tmp/physicsos-ui-lab-lens-result.json"
+      ],
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-04-magnetic-committed-ce2-1360.png",
+          "sha256": "8fc3dc727d60be4b2df799db559916be25151116c15369b14cd51dcc65476648"
+        },
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-04-focus-ce2-1360.png",
+          "sha256": "e09deb20a4414b3ac45e075c238d078ed5423e4e0bd337e4b6fb647ac5cb0bca"
+        },
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-04-magnetic-ce2-390.png",
+          "sha256": "6491213a12797d4f529783cb3a14c0de6e74f8130c4c403751bf71981e30c264"
+        },
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-06-lens-commit-ce2-1360.png",
+          "sha256": "b4af0a448bb6f7f1342635399c803041931bc59af63cbf4b1b5f6ba7d3f09235"
+        },
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-06-lens-ce2-dark.png",
+          "sha256": "8c5367fc87da0f7cc34f8423cb2ff5f83293cce1027477a0bc3225983f64a2bc"
+        }
+      ],
+      "deviations": [
+        "9c2 readout避让header与恒定曲线显示域修复需最终镜像复验",
+        "独立代码冷验证与社区分支仍待worker连接验收"
+      ]
+    },
+    {
+      "designId": 5,
+      "validationPhase": "final-candidate-ce2",
+      "role": "TEACHER",
+      "schoolFixture": "B",
+      "interactionValidation": "部分真实闭环通过",
+      "visualValidation": "截图已取，含明确待复验/缺口",
+      "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
+      "checks": [
+        "真实实验快照报告打开与关闭"
+      ],
+      "evidence": [
+        "/tmp/physicsos-ui-lab-magnetic-result.json"
+      ],
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-05-report-ce2-1360.png",
+          "sha256": "a65ed5bfe122dd53036c70da83a57c00fd71e5a351ba02daf25fabcf6e7f088b"
+        }
+      ],
+      "deviations": [
+        "Markdown下载与打印未在本轮浏览器单独触发"
+      ]
+    },
+    {
+      "designId": 6,
+      "validationPhase": "final-candidate-ce2",
+      "role": "TEACHER",
+      "schoolFixture": "B",
+      "interactionValidation": "部分真实闭环通过",
+      "visualValidation": "截图已取，含明确待复验/缺口",
+      "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
+      "checks": [
+        "账号项目创建、重命名、列表重开"
+      ],
+      "evidence": [
+        "/tmp/physicsos-ui-lab-projects-result.json"
+      ],
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-56-project-list-ce2-1360.png",
+          "sha256": "25fba2341d41c2e5d6c337a22fb2ba1c1c1e1a00d92659869d4ac9497ef744fa"
+        }
+      ],
+      "deviations": [
+        "项目拖拽整理不在现有StudyProjects交互中，未伪称新增"
+      ]
+    },
+    {
+      "designId": 7,
+      "validationPhase": "final-candidate-ce2",
+      "role": "TEACHER",
+      "schoolFixture": "B",
+      "interactionValidation": "部分真实闭环通过",
+      "visualValidation": "截图已取，含明确待复验/缺口",
+      "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
+      "checks": [
+        "账号工作台列表打开真实保存条目"
+      ],
+      "evidence": [
+        "/tmp/physicsos-ui-lab-canvas-result.json"
+      ],
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-18-canvas-list-ce2-1360.png",
+          "sha256": "83a326b8f15537219bef1fa961e70caa64e95a8a480ecf06f435d980d68fcd80"
+        }
+      ],
+      "deviations": [
+        "导入导出、删除恢复尚未在本轮浏览器单独验"
+      ]
+    },
+    {
+      "designId": 8,
+      "validationPhase": "final-candidate-ce2",
+      "role": "TEACHER",
+      "schoolFixture": "B",
+      "interactionValidation": "部分真实闭环通过",
+      "visualValidation": "截图已取，含明确待复验/缺口",
+      "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
+      "checks": [
+        "加入已提交物距30.5cm透镜实验",
+        "Markdown笔记保存到账号并从列表重开",
+        "实验与笔记各1个，文字恢复",
+        "390px文档无横溢"
+      ],
+      "evidence": [
+        "/tmp/physicsos-ui-lab-canvas-result.json",
+        "/tmp/physicsos-ui-lab-mobile-controls-source-preview.json"
+      ],
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-19-canvas-experiment-ce2-1360.png",
+          "sha256": "be29950cbf9b81a94f5ce7b986468f512746b225df26bf5c96259933962bc1d7"
+        },
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-19-canvas-note-saved-ce2-1360.png",
+          "sha256": "e3530162614c64f0765be60673efe95f7c5115020d0413b34bd20e744df976de"
+        },
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-19-canvas-ce2-390.png",
+          "sha256": "c0dd8ccde4cf567bfa09aa205cb4ebdcb8c463ef9bbc19a832db6a62b01efc45"
+        },
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-08-canvas-mobile-controls-source-preview.png",
+          "sha256": "dfa3326ab81738e919e2c5512d21b32cddf102200ede9e1c498ada1d7fe455c4",
+          "phase": "source-preview-not-final-built-image"
+        }
+      ],
+      "deviations": [
+        "390px fit/缩放遮挡已由CanvasStage单文件CSS修复；实际source-preview真click/touch与box避让通过，最终构建镜像待复验",
+        "分组、导入导出、CAS冲突副本未在本轮浏览器单独验"
+      ]
+    },
+    {
+      "designId": 9,
+      "validationPhase": "final-candidate-ce2",
+      "role": "TEACHER",
+      "schoolFixture": "B",
+      "interactionValidation": "部分真实闭环通过",
+      "visualValidation": "截图已取，含明确待复验/缺口",
+      "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
+      "checks": [
+        "账号白板列表新建与打开"
+      ],
+      "evidence": [
+        "/tmp/physicsos-ui-lab-whiteboard-result.json"
+      ],
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-20-whiteboard-list-ce2-1360.png",
+          "sha256": "5f6419cbce256ac566dffae577d8684cefd13b736e81e98c93cad8e1bfe8e66e"
+        }
+      ],
+      "deviations": []
+    },
+    {
+      "designId": 18,
+      "validationPhase": "final-candidate-ce2",
+      "role": "TEACHER",
+      "schoolFixture": "B",
+      "interactionValidation": "未验",
+      "visualValidation": "未验",
+      "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
+      "checks": [],
+      "evidence": [],
+      "screenshots": [],
+      "deviations": [
+        "合法release ZIP构建未完成：owned Docker builder缺固定es-module-lexer2.1.0，未安装/替换依赖，未上传源码ZIP",
+        "投稿/校验预览未验"
+      ]
+    },
+    {
+      "designId": 19,
+      "validationPhase": "final-candidate-ce2",
+      "role": "TEACHER",
+      "schoolFixture": "B",
+      "interactionValidation": "部分真实闭环通过",
+      "visualValidation": "截图已取，含明确待复验/缺口",
+      "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
+      "checks": [
+        "从项目创建关联工作台",
+        "重新进入项目详情后关联仍存在"
+      ],
+      "evidence": [
+        "/tmp/physicsos-ui-lab-projects-result.json"
+      ],
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-56-project-detail-ce2-1360.png",
+          "sha256": "b04b05ad8c6c74df8110ac3981401824317739c649b37be6725b104db52f9369"
+        },
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-56-project-ce2-390.png",
+          "sha256": "637fd19c96992c1a9306d1a73ff42889bf7b289eb2c577becb8b2abb0acc1578"
+        }
+      ],
+      "deviations": []
+    },
+    {
+      "designId": 20,
+      "validationPhase": "final-candidate-ce2",
+      "role": "TEACHER",
+      "schoolFixture": "B",
+      "interactionValidation": "部分真实闭环通过",
+      "visualValidation": "截图已取，含明确待复验/缺口",
+      "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
+      "checks": [
+        "真实指针矩形绘制",
+        "撤销0图元、重做1图元",
+        "保存到账号、列表重开1图元且undo history保留",
+        "暗色与390px截图，文档无横溢"
+      ],
+      "evidence": [
+        "/tmp/physicsos-ui-lab-whiteboard-result.json"
+      ],
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-20-whiteboard-saved-ce2-1360.png",
+          "sha256": "169770ae8b4b71cc6f9c96ded67908de2f2ab8bb4bf13b6c332fb60f18851fc0"
+        },
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-20-whiteboard-ce2-dark.png",
+          "sha256": "a57bca39aa256e7a4f9026175e519c4c088e6f76bedba46f7fe36bbc054dcc5b"
+        },
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-20-whiteboard-ce2-390.png",
+          "sha256": "6602241320e09efe1ef6990924c5c799d2ed50ce3fff229b90a5bf7023ee8c43"
+        }
+      ],
+      "deviations": [
+        "AI图元生成、源图导入导出、离线与CAS冲突未在本轮浏览器单独验"
+      ]
+    },
+    {
+      "designId": 56,
+      "validationPhase": "final-candidate-ce2",
+      "role": "TEACHER",
+      "schoolFixture": "B",
+      "interactionValidation": "部分真实闭环通过",
+      "visualValidation": "截图已取，含明确待复验/缺口",
+      "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
+      "checks": [
+        "真实可解starter circuit",
+        "阻值draft不提交，Enter 10→20Ω revision0→1",
+        "引擎电流0.6→0.3A",
+        "撤销10Ω、重做20Ω",
+        "390px文档无横溢"
+      ],
+      "evidence": [
+        "/tmp/physicsos-ui-lab-circuit-result.json"
+      ],
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-09-circuit-20ohm-ce2-1360.png",
+          "sha256": "c1958aca78525f2d799c0eb360298520c34c913e3e29048165976e3c128607eb"
+        },
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-09-circuit-ce2-390.png",
+          "sha256": "d7d7d48e7decc846c7c7b7711190cfc7b11127e917bd37a5a35ce1d6d53cc1cf"
+        }
+      ],
+      "deviations": [
+        "初次截图在sprite资源加载前可能呈空器材，应在最终镜像等资源完成再取视觉证据",
+        "器材放置/接线完整链路未在本轮浏览器重做，已保留源码行为测试"
+      ]
+    }
+  ]
+}

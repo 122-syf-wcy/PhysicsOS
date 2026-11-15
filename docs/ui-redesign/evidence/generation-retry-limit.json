@@ -1,0 +1,16 @@
+{
+  "candidateImage": "sha256:93cb03a815a86fa85a5997bbd907471e53dbc8ae10c94c756f1c1b8c0d5d2376",
+  "sourceRevision": "f4a646a654cd8cd00591f20b3867d0917911322a",
+  "sceneId": "question-golden-mech-07-uniform-distance",
+  "revision": 0,
+  "newConversationCreated": false,
+  "retryClicks": 1,
+  "newJobId": "gen_mwhvvqnj_z7kgzp0d",
+  "result": "failed",
+  "failureCode": "MAX_TOKENS",
+  "previousJobFailureCode": "MAX_TOKENS",
+  "generatedAnimationVerified": false,
+  "originalQuestionPreserved": true,
+  "receiptSha256": "728d952c69bd9ea9f58ccff2d67026550e4260dcdb1da904f26599e215a4fe4a",
+  "limitation": "Existing model generation limit persists; actual failure/retry UI was exercised. Worker cold dynamic validation is separate evidence."
+}

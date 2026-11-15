@@ -1,5 +1,14 @@
 # UI redesign progress — 2026-11-14
 
+## Final integration and release gates — 2026-11-15
+
+- The UI source checkpoint is b734b5e1. Its complete server build passed build:lib and build:web; client TypeScript and 118 focused regression tests passed. The approved cat startup splash is retained.
+- The branch integrates remote main through 1b36e39d (self-hosted search, address retry, and read-parameter fixes). Commit 9b52e449 re-signs the integrated tool entry using the unchanged project trust root. These later fixes must be included in the final image rather than overwritten.
+- The validation worker f77ec31d image b179e714 passed actual sandboxed cold HTTP validation, including a dynamic positive, static-fake rejection and strict request-boundary negative probes. This is a compiled-image regression, not a claim that the entire Vitest suite ran.
+- A real isolated restore drill verified the original paired backup, all 103 table counts, 194 session files, four locally decrypted model keys, readiness, authentication, protected access and the unique writer. The original recovery point was never modified. Derived drill containers, network and volumes were removed only after preserving the verification receipt.
+- Deployment inventory fixes 48bd7f14/e271ff2f separate known repository-guidance/test-snapshot links from actual runtime code and explicitly reject dangling runtime links. All 23 server Docker inventory tests passed; the preserved builder, snapshot and raw-image link targets were independently checked against the pinned source.
+- The final f4 image passed cold validation, aggregate client typecheck and 125 focused startup/input/profile/workspace tests. Actual candidate UI boot/login/home/mode linkage/readonly models/mobile/dark checks, final display fixes and website asset/feedback checks passed. Publication is pending; no production switch or blanket 62/62 pixel-perfect visual acceptance is claimed by these notes. Historical candidate images were removed for space only after preserving their evidence and all candidate data.
+
 ## Browser acceptance updates — 2026-11-15
 
 - Complete frozen f0059416 image sha256:ce2ca5150d8eb8e5b8e8c7f6e939679a9e8e8d16d25ffec54d8e6a75d629952b passed final read-only cold verification: 19,614 regular code files, complete filesystem/config/system proofs, 12 signed plugins. Owned isolated candidate runs it with a separate network and fresh PostgreSQL database.

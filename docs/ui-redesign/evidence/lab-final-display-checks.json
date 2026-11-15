@@ -1,0 +1,92 @@
+{
+  "phase": "final-actual-built-f4-candidate",
+  "operatorAttestedImage": "sha256:93cb03a815a86fa85a5997bbd907471e53dbc8ae10c94c756f1c1b8c0d5d2376",
+  "sourceRevision": "f4a646a654cd8cd00591f20b3867d0917911322a",
+  "recommendationsNoContinue": {
+    "passed": true,
+    "width": 1166,
+    "rowWidth": 1166,
+    "x": 135,
+    "rowX": 135,
+    "columns": "1166px"
+  },
+  "readoutBelowHeader": {
+    "passed": true,
+    "header": {
+      "x": 100,
+      "y": 64,
+      "width": 1242,
+      "height": 83,
+      "top": 64,
+      "right": 1342,
+      "bottom": 147,
+      "left": 100
+    },
+    "readout": {
+      "x": 136,
+      "y": 159,
+      "width": 127.5,
+      "height": 52,
+      "top": 159,
+      "right": 263.5,
+      "bottom": 211,
+      "left": 136
+    },
+    "revision": 0,
+    "verification": "verified"
+  },
+  "constantChart": {
+    "passed": true,
+    "label": "|v| - t（t / s / |v| / (m/s)）",
+    "yRange": 0,
+    "sampleCount": 65,
+    "ticks": [
+      "2.2e+6",
+      "1.8e+6"
+    ]
+  },
+  "mobileCanvas": {
+    "passed": true,
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "zoom": {
+      "x": 14,
+      "y": 140,
+      "width": 201,
+      "height": 44,
+      "top": 140,
+      "right": 215,
+      "bottom": 184,
+      "left": 14
+    },
+    "dock": {
+      "x": 33.46875,
+      "y": 708,
+      "width": 323.046875,
+      "height": 54,
+      "top": 708,
+      "right": 356.515625,
+      "bottom": 762,
+      "left": 33.46875
+    },
+    "coarse": true,
+    "reachable": true,
+    "realTouchZoomOut": {
+      "before": 100,
+      "after": 33
+    },
+    "realTouchFit": {
+      "enlarged": 48,
+      "fitted": 33
+    },
+    "horizontalOverflow": false
+  },
+  "errors": [],
+  "screenshots": [
+    "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-final-f4-center-full-recommendations.png",
+    "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-final-f4-magnetic-readout-flat-chart.png",
+    "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-final-f4-canvas-mobile-real-touch.png"
+  ]
+}

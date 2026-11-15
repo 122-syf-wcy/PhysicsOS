@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "scope": "Actual compiled worker cold acceptance only; final App integration pending",
+  "accepted": true,
+  "image": "sha256:b179e714b47d2571c4c146894a96fe0014661e76f5948f0f2e85f2f847a3d950",
+  "sourceRevision": "f77ec31d9c42eee8977ccc0f3f7d60fda6fbeaf2",
+  "inputArchiveSha256": "bb9ee12b62f8fb6a28b0689127a120745c3209e2739fb654d6f8a9d654c3cbab",
+  "conditions": {
+    "memoryLimitBytes": 536870912,
+    "cpus": 1,
+    "network": "none",
+    "uid": 1001,
+    "readonlyRootfs": true,
+    "tmpfsMiB": 256,
+    "capDrop": [
+      "ALL"
+    ],
+    "noNewPrivileges": true,
+    "seccompSha256": "f6abd6f17210fed3ff978fc557b7f8780ed6fa20e8f28fd09dfbfe5dfd94cbcd",
+    "mainChrome": [
+      {
+        "pid": 18,
+        "noSandbox": false,
+        "capEff": "0000000000000000",
+        "noNewPrivs": "1"
+      }
+    ],
+    "singleRunner": true,
+    "rebuiltImage": false
+  },
+  "results": {
+    "coldValidateHTTP": 200,
+    "goodVerdict": true,
+    "passedChecks": [
+      "scene-binding",
+      "first-frame",
+      "runtime-error",
+      "subject-drawn",
+      "geometry-follows-engine",
+      "motion-sampled",
+      "parameter-change",
+      "mobile-layout"
+    ],
+    "actualFrames": [
+      {
+        "time": 0,
+        "opaquePixels": 8560,
+        "distinctColors": 4,
+        "paintHash": "96817c9a269f03d008c55b50acf42174f05d451407d5edd7b764596e825bf795"
+      },
+      {
+        "time": 1.2,
+        "opaquePixels": 8560,
+        "distinctColors": 14,
+        "paintHash": "401296714e89c61e2b37933757073a7a811876a025daa8a0e4e18f7dfb8ce2ab"
+      },
+      {
+        "time": 2.4,
+        "opaquePixels": 8560,
+        "distinctColors": 8,
+        "paintHash": "659f0abf9559bb77cda3d967090cfd3c35868703fc2c0e7c7b4e7c95a919077d"
+      }
+    ],
+    "mobile": {
+      "viewportWidth": 219,
+      "scrollWidth": 219,
+      "overflow": false
+    },
+    "staticFakeHTTP": 200,
+    "staticFakeVerdict": false,
+    "staticFakeRejectedChecks": [
+      "subject-drawn",
+      "geometry-follows-engine",
+      "motion-sampled",
+      "parameter-change"
+    ],
+    "hostBoundary": {
+      "exactMainHostGetRequests": 1,
+      "otherRequests": 0
+    },
+    "unauthenticatedHTTP": 401,
+    "malformedHTTP": 400,
+    "durationMs": 5258,
+    "exitCode": 0,
+    "oomKilled": false,
+    "runnerRemoved": true,
+    "memAvailableBeforeMiB": 2561,
+    "memAvailableAfterMiB": 2564
+  },
+  "method": "Standalone assertions against actual compiled image; not Vitest suite",
+  "notYetVerified": [
+    "Final App plus worker existing student A job retry",
+    "Final App mobile Canvas controls and three display fixes"
+  ],
+  "productionMutated": false,
+  "serviceState": "No candidate App started; old service worker stopped; runner removed",
+  "receiptSha256": "fd8cd93c3d8dd367d57979d4b603d5c74a2100daa89220273caa28714b5601f9"
+}

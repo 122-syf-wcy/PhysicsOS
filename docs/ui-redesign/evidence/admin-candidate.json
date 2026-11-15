@@ -1,0 +1,523 @@
+{
+  "image": "sha256:ce2ca5150d8eb8e5b8e8c7f6e939679a9e8e8d16d25ffec54d8e6a75d629952b",
+  "runId": "uic-1115",
+  "roleApiChecks": {
+    "passed": 36,
+    "report": "/opt/physicsos/.physicsos-release/ui-candidate-20261115/state/ui-content-uic-1115/role-checks.json"
+  },
+  "items": [
+    {
+      "designId": 33,
+      "title": "使用汇总",
+      "role": "SUPER_ADMIN",
+      "viewport": {
+        "width": 1360,
+        "height": 768
+      },
+      "screenshot": "/tmp/physicsos-ui-admin-screens/33-super-1360.png",
+      "browserVisited": true,
+      "visualValidation": "captured; pixel/design review pending",
+      "interactionValidation": "entry/render verified",
+      "alerts": [],
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "designId": 34,
+      "title": "运维",
+      "role": "SUPER_ADMIN",
+      "viewport": {
+        "width": 1360,
+        "height": 768
+      },
+      "screenshot": "/tmp/physicsos-ui-admin-screens/34-super-1360.png",
+      "browserVisited": true,
+      "visualValidation": "captured; pixel/design review pending",
+      "interactionValidation": "entry/render verified",
+      "alerts": [],
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "designId": 35,
+      "title": "审计",
+      "role": "SUPER_ADMIN",
+      "viewport": {
+        "width": 1360,
+        "height": 768
+      },
+      "screenshot": "/tmp/physicsos-ui-admin-screens/35-super-1360.png",
+      "browserVisited": true,
+      "visualValidation": "captured; pixel/design review pending",
+      "interactionValidation": "entry/render verified",
+      "alerts": [],
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "designId": 36,
+      "title": "用户",
+      "role": "SUPER_ADMIN",
+      "viewport": {
+        "width": 1360,
+        "height": 768
+      },
+      "screenshot": "/tmp/physicsos-ui-admin-screens/36-super-1360.png",
+      "browserVisited": true,
+      "visualValidation": "captured; pixel/design review pending",
+      "interactionValidation": "entry/render verified",
+      "alerts": [],
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "designId": 37,
+      "title": "密码重置",
+      "role": "SUPER_ADMIN",
+      "viewport": {
+        "width": 1360,
+        "height": 768
+      },
+      "screenshot": "/tmp/physicsos-ui-admin-screens/37-super-1360.png",
+      "browserVisited": true,
+      "visualValidation": "captured; pixel/design review pending",
+      "interactionValidation": "entry/render verified",
+      "alerts": [],
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "designId": 38,
+      "title": "设备",
+      "role": "SUPER_ADMIN",
+      "viewport": {
+        "width": 1360,
+        "height": 768
+      },
+      "screenshot": "/tmp/physicsos-ui-admin-screens/38-super-1360.png",
+      "browserVisited": true,
+      "visualValidation": "captured; pixel/design review pending",
+      "interactionValidation": "entry/render verified",
+      "alerts": [],
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "designId": 39,
+      "title": "学校申请",
+      "role": "SUPER_ADMIN",
+      "viewport": {
+        "width": 1360,
+        "height": 768
+      },
+      "screenshot": "/tmp/physicsos-ui-admin-screens/39-super-1360.png",
+      "browserVisited": true,
+      "visualValidation": "captured; pixel/design review pending",
+      "interactionValidation": "entry/render verified",
+      "alerts": [],
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "designId": 40,
+      "title": "学校",
+      "role": "SUPER_ADMIN",
+      "viewport": {
+        "width": 1360,
+        "height": 768
+      },
+      "screenshot": "/tmp/physicsos-ui-admin-screens/40-super-1360.png",
+      "browserVisited": true,
+      "visualValidation": "captured; pixel/design review pending",
+      "interactionValidation": "entry/render verified",
+      "alerts": [],
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "designId": 41,
+      "title": "对话审核",
+      "role": "SUPER_ADMIN",
+      "viewport": {
+        "width": 1360,
+        "height": 768
+      },
+      "screenshot": "/tmp/physicsos-ui-admin-screens/41-super-1360.png",
+      "browserVisited": true,
+      "visualValidation": "captured; pixel/design review pending",
+      "interactionValidation": "entry/render verified",
+      "alerts": [],
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "designId": 42,
+      "title": "实验投稿审核",
+      "role": "SUPER_ADMIN",
+      "viewport": {
+        "width": 1360,
+        "height": 768
+      },
+      "screenshot": "/tmp/physicsos-ui-admin-screens/42-super-1360.png",
+      "browserVisited": true,
+      "visualValidation": "captured; pixel/design review pending",
+      "interactionValidation": "entry/render verified",
+      "alerts": [],
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "designId": 43,
+      "title": "题目内容",
+      "role": "SUPER_ADMIN",
+      "viewport": {
+        "width": 1360,
+        "height": 768
+      },
+      "screenshot": "/tmp/physicsos-ui-admin-screens/43-super-1360.png",
+      "browserVisited": true,
+      "visualValidation": "captured; pixel/design review pending",
+      "interactionValidation": "entry/render verified",
+      "alerts": [],
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "designId": 44,
+      "title": "用户反馈",
+      "role": "SUPER_ADMIN",
+      "viewport": {
+        "width": 1360,
+        "height": 768
+      },
+      "screenshot": "/tmp/physicsos-ui-admin-screens/44-super-1360.png",
+      "browserVisited": true,
+      "visualValidation": "captured; pixel/design review pending",
+      "interactionValidation": "entry/render verified",
+      "alerts": [],
+      "horizontalOverflow": false,
+      "pageErrors": [],
+      "checks": {
+        "realReplyStatus": 200
+      }
+    },
+    {
+      "designId": 45,
+      "title": "公告",
+      "role": "SUPER_ADMIN",
+      "viewport": {
+        "width": 1360,
+        "height": 768
+      },
+      "screenshot": "/tmp/physicsos-ui-admin-screens/45-super-1360.png",
+      "browserVisited": true,
+      "visualValidation": "captured; pixel/design review pending",
+      "interactionValidation": "entry/render verified",
+      "alerts": [],
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "designId": 46,
+      "title": "官网展示反馈",
+      "role": "SUPER_ADMIN",
+      "viewport": {
+        "width": 1360,
+        "height": 768
+      },
+      "screenshot": "/tmp/physicsos-ui-admin-screens/46-super-1360.png",
+      "browserVisited": true,
+      "visualValidation": "captured; pixel/design review pending",
+      "interactionValidation": "entry/render verified",
+      "alerts": [],
+      "horizontalOverflow": false,
+      "pageErrors": [],
+      "checks": {
+        "staleVersionStatus": 409,
+        "draftRetained": true,
+        "keyboardEditMoveRetained": true,
+        "saveStatus": 200,
+        "persistedHidden": true
+      }
+    },
+    {
+      "designId": 47,
+      "title": "贡献者与项目",
+      "role": "SUPER_ADMIN",
+      "viewport": {
+        "width": 1360,
+        "height": 768
+      },
+      "screenshot": "/tmp/physicsos-ui-admin-screens/47-super-1360.png",
+      "browserVisited": true,
+      "visualValidation": "captured; pixel/design review pending",
+      "interactionValidation": "entry/render verified",
+      "alerts": [],
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "designId": 48,
+      "title": "官网反馈收件箱",
+      "role": "SUPER_ADMIN",
+      "viewport": {
+        "width": 1360,
+        "height": 768
+      },
+      "screenshot": "/tmp/physicsos-ui-admin-screens/48-super-1360.png",
+      "browserVisited": true,
+      "visualValidation": "captured; pixel/design review pending",
+      "interactionValidation": "entry/render verified",
+      "alerts": [],
+      "horizontalOverflow": false,
+      "pageErrors": [],
+      "checks": {
+        "imageHttpPermissionVerified": true,
+        "imageBrowserDecode": true,
+        "dimensions": {
+          "complete": true,
+          "width": 32,
+          "height": 32
+        }
+      }
+    },
+    {
+      "designId": 49,
+      "title": "平台模型号池",
+      "role": "SUPER_ADMIN",
+      "viewport": {
+        "width": 1360,
+        "height": 768
+      },
+      "screenshot": "/tmp/physicsos-ui-admin-screens/49-super-1360.png",
+      "browserVisited": true,
+      "visualValidation": "captured; pixel/design review pending",
+      "interactionValidation": "entry/render verified",
+      "alerts": [],
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "designId": 61,
+      "title": "轮询与冷却策略",
+      "role": "SUPER_ADMIN",
+      "viewport": {
+        "width": 1360,
+        "height": 768
+      },
+      "screenshot": "/tmp/physicsos-ui-admin-screens/61-super-1360.png",
+      "browserVisited": true,
+      "visualValidation": "captured; pixel/design review pending",
+      "interactionValidation": "entry/render verified",
+      "alerts": [],
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "designId": 10,
+      "title": "真实模板新建表单",
+      "role": "TEACHER",
+      "viewport": {
+        "width": 1360,
+        "height": 768
+      },
+      "screenshot": "/tmp/physicsos-ui-admin-screens/10-teacher-1360.png",
+      "browserVisited": true,
+      "headings": [
+        "出卷工作台",
+        "试卷结构",
+        "内容范围",
+        "试卷摘要"
+      ],
+      "alerts": [],
+      "horizontalOverflow": false,
+      "pageErrors": [],
+      "templateDerivedSummary": true
+    },
+    {
+      "designId": 11,
+      "title": "真实合成任务审核列表",
+      "role": "TEACHER",
+      "viewport": {
+        "width": 1360,
+        "height": 768
+      },
+      "screenshot": "/tmp/physicsos-ui-admin-screens/11-teacher-1360.png",
+      "browserVisited": true,
+      "headings": [
+        "出卷工作台"
+      ],
+      "alerts": [],
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "designId": 12,
+      "title": "真实逐题审核完成详情",
+      "role": "TEACHER",
+      "viewport": {
+        "width": 1360,
+        "height": 768
+      },
+      "screenshot": "/tmp/physicsos-ui-admin-screens/12-teacher-1360.png",
+      "browserVisited": true,
+      "headings": [
+        "出卷工作台",
+        "uic-1115 合成UI验收卷（非正式考试）已定稿",
+        "独立解题比对",
+        "逐题审核（1/1 已通过）"
+      ],
+      "alerts": [],
+      "horizontalOverflow": false,
+      "pageErrors": [],
+      "actualWorkflow": "real engine-consistent check, teacher review, approval and export",
+      "transientFetchRetried": true
+    },
+    {
+      "designId": 14,
+      "title": "真实已核验题库",
+      "role": "TEACHER",
+      "viewport": {
+        "width": 1360,
+        "height": 768
+      },
+      "screenshot": "/tmp/physicsos-ui-admin-screens/14-teacher-1360.png",
+      "browserVisited": true,
+      "headings": [
+        "出卷工作台",
+        "题目导入（粘贴 / 图片 / PDF）",
+        "待核验（0）",
+        "已入库（1）"
+      ],
+      "alerts": [],
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "designId": 62,
+      "title": "真实题库核验详情",
+      "role": "TEACHER",
+      "viewport": {
+        "width": 1360,
+        "height": 768
+      },
+      "screenshot": "/tmp/physicsos-ui-admin-screens/62-teacher-1360.png",
+      "browserVisited": true,
+      "headings": [
+        "出卷工作台",
+        "题目导入（粘贴 / 图片 / PDF）",
+        "待核验（0）",
+        "已入库（1）"
+      ],
+      "alerts": [],
+      "horizontalOverflow": false,
+      "pageErrors": [],
+      "status": "verified through genuine staff review API",
+      "synthetic": true
+    },
+    {
+      "designId": 15,
+      "title": "真实合成材料与标注",
+      "role": "TEACHER",
+      "viewport": {
+        "width": 1360,
+        "height": 768
+      },
+      "screenshot": "/tmp/physicsos-ui-admin-screens/15-teacher-1360.png",
+      "browserVisited": true,
+      "headings": [
+        "出卷工作台",
+        "原卷台账",
+        "录入原卷",
+        "逐题考点录入",
+        "CSV 批量导入",
+        "考点频次（已核验）",
+        "结构模板",
+        "考点记录（1）"
+      ],
+      "alerts": [],
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "designId": 13,
+      "title": "真实已定稿与下载",
+      "role": "TEACHER",
+      "viewport": {
+        "width": 1360,
+        "height": 768
+      },
+      "screenshot": "/tmp/physicsos-ui-admin-screens/13-teacher-1360.png",
+      "browserVisited": true,
+      "headings": [
+        "出卷工作台",
+        "已定稿试卷"
+      ],
+      "alerts": [],
+      "horizontalOverflow": false,
+      "pageErrors": [],
+      "actualExported": true
+    },
+    {
+      "designId": 21,
+      "title": "真实PDF内嵌预览",
+      "role": "TEACHER",
+      "viewport": {
+        "width": 1360,
+        "height": 768
+      },
+      "screenshot": "/tmp/physicsos-ui-admin-screens/21-teacher-1360.png",
+      "browserVisited": true,
+      "headings": [
+        "出卷工作台",
+        "已定稿试卷"
+      ],
+      "alerts": [],
+      "horizontalOverflow": false,
+      "pageErrors": [],
+      "actualPdfHttpStatus": 200,
+      "renderedPdfReview": "/tmp/physicsos-ui-paper-pdf",
+      "pageSizeLimitation": "Letter 612x792pt; existing backend, not UI regression"
+    }
+  ],
+  "paperWorkflow": {
+    "jobId": "paper-8f50227f7f8f",
+    "image": "sha256:ce2ca5150d8eb8e5b8e8c7f6e939679a9e8e8d16d25ffec54d8e6a75d629952b",
+    "status": "exported",
+    "engineConsistent": true,
+    "unresolvedErrors": 0,
+    "teacherReviewed": true,
+    "approvedThroughApi": true,
+    "exportedThroughApi": true,
+    "paperPdf": "/tmp/physicsos-ui-paper-pdf/paper.pdf",
+    "answerPdf": "/tmp/physicsos-ui-paper-pdf/answer.pdf",
+    "renderedPaper": "/tmp/physicsos-ui-paper-pdf/paper.png",
+    "renderedAnswer": "/tmp/physicsos-ui-paper-pdf/answer.png",
+    "pdfReview": "Chinese, question, 10.00m answer and grading points readable without clipping; each PDF one page",
+    "pageSize": "Letter 612x792pt; prior backend limitation accepted by root",
+    "evidence": "/opt/physicsos/.physicsos-release/ui-candidate-20261115/state/ui-content-uic-1115/paper-final-result.json"
+  },
+  "finalStatus": {
+    "adminStatesVisited": 18,
+    "paperStatesVisited": 8,
+    "roleApiChecksPassed": 36,
+    "realPaperExported": true,
+    "paperSubstantiveBlockers": [],
+    "existingLimitations": [
+      "PDF export is Letter 612x792pt instead of advertised A4; Root explicitly accepted as existing backend limitation."
+    ],
+    "notClaimed": [
+      "Pixel-perfect approval of every screenshot",
+      "All five roles for every administrator view",
+      "Fresh AI moderation decision/ban",
+      "Live model-key probes or arbitrary expensive operations",
+      "Mobile/dark recheck of these exact content screens"
+    ],
+    "transientHarnessNotes": [
+      "One bank seed request was correctly rejected for missing id; added id and resumed through genuine API.",
+      "Initial unacknowledged platform notice blocked teacher navigation; actual Continue acknowledgement resolved it.",
+      "A transient browser detail fetch failed; retry read actual exported job and old notice was dismissed through UI.",
+      "Early REPL timeout lost in-memory metadata; screenshots were preserved and metadata reconstructed from observed tool outputs."
+    ]
+  }
+}

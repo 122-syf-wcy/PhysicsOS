@@ -2,15 +2,17 @@
   "schemaVersion": 1,
   "createdAt": "2026-11-14",
   "sourceRoot": "/Users/dongsiwei/Desktop/PhysicsOS-UI",
-  "sourceRevision": "6f2f0dcd61b693f372b27fcbeba6a0eae19063b9",
+  "sourceRevision": "f4a646a654cd8cd00591f20b3867d0917911322a",
   "designManifest": "/Users/dongsiwei/Desktop/PhysicsOS/design-refs/ui-redesign-2026-11-14/manifest.json",
-  "status": "映射研究完成；62/62项待实现与验收确认；0项已验收",
+  "status": "ui-implemented-critical-candidate-checks-completed-awaiting-publication",
   "notes": [
     "Entry names describe existing product panels and local component states; only explicitly identified URL/hash entries are claimed as routes.",
     "Role sets are observed client entry gates and must still be checked against server scope/host guards in candidate tests.",
     "Source presence is not implementation completion. Screenshots/tests are intentionally empty.",
     "Settings, conversation and shell retain upstream packages through overlay projection; mapped product components are integration/action origins.",
-    "Some target overlay/menu/detail compositions may still need implementation. Known uncertainty is recorded per item."
+    "Some target overlay/menu/detail compositions may still need implementation. Known uncertainty is recorded per item.",
+    "Candidate evidence is tied to CE2/f005 or an explicitly identified source preview. It does not claim that every state has passed on the final deployed image.",
+    "All 62 design records are mapped. This is not a claim that every flow or every role was visually tested pixel-for-pixel. Historical/inherited limits and unexecuted checks remain explicit."
   ],
   "items": [
     {
@@ -40,12 +42,22 @@
         "发送/停止/排队"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
-      "interactionValidation": "待验收",
+      "implementationStatus": "已实现；最终f4候选必要复验通过",
+      "visualValidation": "最终候选实际Chrome复验；非逐像素自动比对",
+      "interactionValidation": "必要真实流程通过（见最终回执）",
       "permissionValidation": "待验收",
-      "screenshots": [],
-      "tests": [],
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-home-stable-1360.png",
+          "width": 1360,
+          "height": 768,
+          "sha256": "fe4840c8a9ff84a2b4a75763e0130e2f4567d2f76bb6ff26ed8c524d85bdc393"
+        }
+      ],
+      "tests": [
+        "docs/ui-redesign/evidence/root-candidate.json",
+        "docs/ui-redesign/evidence/root-final-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/HomeHero.tsx",
@@ -75,7 +87,24 @@
           "lineCount": 888,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "rootCandidateEvidence": {
+        "designId": 1,
+        "phase": "candidate-ce2",
+        "screenshots": [
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-home-stable-1360.png",
+            "width": 1360,
+            "height": 768,
+            "sha256": "fe4840c8a9ff84a2b4a75763e0130e2f4567d2f76bb6ff26ed8c524d85bdc393"
+          }
+        ],
+        "visualValidation": "候选截图；最终镜像待复验",
+        "notes": [
+          "Snapshot filenames may include intended size; width/height above are read from actual PNG bytes."
+        ]
+      },
+      "finalCandidateEvidence": "docs/ui-redesign/evidence/root-final-candidate.json"
     },
     {
       "designId": 2,
@@ -104,12 +133,21 @@
         "返回主实验"
       ],
       "mappingNotes": "对话主体由上游 ui-conversation 提供，不能另建 Agent Loop。",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "候选截图；最终镜像待复验",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
-      "screenshots": [],
-      "tests": [],
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-resource-practice-1360.png",
+          "width": 1360,
+          "height": 768,
+          "sha256": "fab1865760ca312f13475e0a915b7bf2d88ab05f2f9bba8e53472f32bc08c95e"
+        }
+      ],
+      "tests": [
+        "docs/ui-redesign/evidence/root-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/SceneChatCard.tsx",
@@ -139,7 +177,23 @@
           "lineCount": 888,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "rootCandidateEvidence": {
+        "designId": 2,
+        "phase": "candidate-ce2",
+        "screenshots": [
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-resource-practice-1360.png",
+            "width": 1360,
+            "height": 768,
+            "sha256": "fab1865760ca312f13475e0a915b7bf2d88ab05f2f9bba8e53472f32bc08c95e"
+          }
+        ],
+        "visualValidation": "候选截图；最终镜像待复验",
+        "notes": [
+          "Snapshot filenames may include intended size; width/height above are read from actual PNG bytes."
+        ]
+      }
     },
     {
       "designId": 3,
@@ -166,13 +220,23 @@
         "真实模板封面"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
-      "interactionValidation": "待验收",
-      "permissionValidation": "待验收",
-      "screenshots": [],
-      "tests": [],
-      "deviations": [],
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "截图已取，含明确待复验/缺口",
+      "interactionValidation": "部分真实闭环通过",
+      "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-03-center-ce2-1360.png",
+          "sha256": "22aae7430d18c0cc72ce2d1e421f39b86b78d7853d803b453e19311fbedf1ef8"
+        }
+      ],
+      "tests": [
+        "docs/ui-redesign/evidence/lab-candidate.json",
+        "docs/ui-redesign/evidence/lab-final-display-checks.json"
+      ],
+      "deviations": [
+        "9c2单栏推荐宽度修复需最终镜像复验"
+      ],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/LabWorkspace.tsx",
         "overlays/harness/files/packages/client/ui-physicsos/src/client/ExperimentPicker.tsx",
@@ -195,7 +259,34 @@
           "lineCount": 166,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 3,
+        "validationPhase": "final-candidate-ce2",
+        "role": "TEACHER",
+        "schoolFixture": "B",
+        "interactionValidation": "部分真实闭环通过",
+        "visualValidation": "截图已取，含明确待复验/缺口",
+        "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
+        "checks": [
+          "真实模板磁场/透镜/自由电路入口可达"
+        ],
+        "evidence": [
+          "/tmp/physicsos-ui-lab-magnetic-result.json",
+          "/tmp/physicsos-ui-lab-lens-result.json",
+          "/tmp/physicsos-ui-lab-circuit-result.json"
+        ],
+        "screenshots": [
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-03-center-ce2-1360.png",
+            "sha256": "22aae7430d18c0cc72ce2d1e421f39b86b78d7853d803b453e19311fbedf1ef8"
+          }
+        ],
+        "deviations": [
+          "9c2单栏推荐宽度修复需最终镜像复验"
+        ]
+      },
+      "finalCandidateEvidence": "docs/ui-redesign/evidence/lab-final-display-checks.json"
     },
     {
       "designId": 4,
@@ -225,13 +316,40 @@
         "社区及透镜独立分支"
       ],
       "mappingNotes": "包括PhysicsCanvas、透镜及社区/题目代码运行分支，不能仅按单个内置实验验收。",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
-      "interactionValidation": "待验收",
-      "permissionValidation": "待验收",
-      "screenshots": [],
-      "tests": [],
-      "deviations": [],
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "截图已取，含明确待复验/缺口",
+      "interactionValidation": "部分真实闭环通过",
+      "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-04-magnetic-committed-ce2-1360.png",
+          "sha256": "8fc3dc727d60be4b2df799db559916be25151116c15369b14cd51dcc65476648"
+        },
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-04-focus-ce2-1360.png",
+          "sha256": "e09deb20a4414b3ac45e075c238d078ed5423e4e0bd337e4b6fb647ac5cb0bca"
+        },
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-04-magnetic-ce2-390.png",
+          "sha256": "6491213a12797d4f529783cb3a14c0de6e74f8130c4c403751bf71981e30c264"
+        },
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-06-lens-commit-ce2-1360.png",
+          "sha256": "b4af0a448bb6f7f1342635399c803041931bc59af63cbf4b1b5f6ba7d3f09235"
+        },
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-06-lens-ce2-dark.png",
+          "sha256": "8c5367fc87da0f7cc34f8423cb2ff5f83293cce1027477a0bc3225983f64a2bc"
+        }
+      ],
+      "tests": [
+        "docs/ui-redesign/evidence/lab-candidate.json",
+        "docs/ui-redesign/evidence/lab-final-display-checks.json"
+      ],
+      "deviations": [
+        "9c2 readout避让header与恒定曲线显示域修复需最终镜像复验",
+        "独立代码冷验证与社区分支仍待worker连接验收"
+      ],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/LabWorkspace.tsx",
         "overlays/harness/files/packages/client/ui-physicsos/src/client/PhysicsWorkspace.tsx",
@@ -254,7 +372,54 @@
           "lineCount": 732,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 4,
+        "validationPhase": "final-candidate-ce2",
+        "role": "TEACHER",
+        "schoolFixture": "B",
+        "interactionValidation": "部分真实闭环通过",
+        "visualValidation": "截图已取，含明确待复验/缺口",
+        "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
+        "checks": [
+          "磁场输入draft不提交，Tab后revision 0→1且verified",
+          "真实播放前进、暂停、重置至0",
+          "focus切换",
+          "透镜slider keydown预览revision不变，keyup提交0→1且verified",
+          "390px文档无横溢"
+        ],
+        "evidence": [
+          "/tmp/physicsos-ui-lab-magnetic-result.json",
+          "/tmp/physicsos-ui-lab-lens-result.json"
+        ],
+        "screenshots": [
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-04-magnetic-committed-ce2-1360.png",
+            "sha256": "8fc3dc727d60be4b2df799db559916be25151116c15369b14cd51dcc65476648"
+          },
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-04-focus-ce2-1360.png",
+            "sha256": "e09deb20a4414b3ac45e075c238d078ed5423e4e0bd337e4b6fb647ac5cb0bca"
+          },
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-04-magnetic-ce2-390.png",
+            "sha256": "6491213a12797d4f529783cb3a14c0de6e74f8130c4c403751bf71981e30c264"
+          },
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-06-lens-commit-ce2-1360.png",
+            "sha256": "b4af0a448bb6f7f1342635399c803041931bc59af63cbf4b1b5f6ba7d3f09235"
+          },
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-06-lens-ce2-dark.png",
+            "sha256": "8c5367fc87da0f7cc34f8423cb2ff5f83293cce1027477a0bc3225983f64a2bc"
+          }
+        ],
+        "deviations": [
+          "9c2 readout避让header与恒定曲线显示域修复需最终镜像复验",
+          "独立代码冷验证与社区分支仍待worker连接验收"
+        ]
+      },
+      "finalCandidateEvidence": "docs/ui-redesign/evidence/lab-final-display-checks.json"
     },
     {
       "designId": 5,
@@ -283,13 +448,22 @@
         "关闭返回"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
-      "interactionValidation": "待验收",
-      "permissionValidation": "待验收",
-      "screenshots": [],
-      "tests": [],
-      "deviations": [],
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "截图已取，含明确待复验/缺口",
+      "interactionValidation": "部分真实闭环通过",
+      "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-05-report-ce2-1360.png",
+          "sha256": "a65ed5bfe122dd53036c70da83a57c00fd71e5a351ba02daf25fabcf6e7f088b"
+        }
+      ],
+      "tests": [
+        "docs/ui-redesign/evidence/lab-candidate.json"
+      ],
+      "deviations": [
+        "Markdown下载与打印未在本轮浏览器单独触发"
+      ],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/ExperimentReportPanel.tsx",
         "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/experiment-report.ts",
@@ -312,7 +486,31 @@
           "lineCount": 1145,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 5,
+        "validationPhase": "final-candidate-ce2",
+        "role": "TEACHER",
+        "schoolFixture": "B",
+        "interactionValidation": "部分真实闭环通过",
+        "visualValidation": "截图已取，含明确待复验/缺口",
+        "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
+        "checks": [
+          "真实实验快照报告打开与关闭"
+        ],
+        "evidence": [
+          "/tmp/physicsos-ui-lab-magnetic-result.json"
+        ],
+        "screenshots": [
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-05-report-ce2-1360.png",
+            "sha256": "a65ed5bfe122dd53036c70da83a57c00fd71e5a351ba02daf25fabcf6e7f088b"
+          }
+        ],
+        "deviations": [
+          "Markdown下载与打印未在本轮浏览器单独触发"
+        ]
+      }
     },
     {
       "designId": 6,
@@ -338,13 +536,22 @@
         "账户范围持久化"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
-      "interactionValidation": "待验收",
-      "permissionValidation": "待验收",
-      "screenshots": [],
-      "tests": [],
-      "deviations": [],
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "截图已取，含明确待复验/缺口",
+      "interactionValidation": "部分真实闭环通过",
+      "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-56-project-list-ce2-1360.png",
+          "sha256": "25fba2341d41c2e5d6c337a22fb2ba1c1c1e1a00d92659869d4ac9497ef744fa"
+        }
+      ],
+      "tests": [
+        "docs/ui-redesign/evidence/lab-candidate.json"
+      ],
+      "deviations": [
+        "项目拖拽整理不在现有StudyProjects交互中，未伪称新增"
+      ],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/StudyProjects.tsx"
       ],
@@ -355,7 +562,31 @@
           "lineCount": 77,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 6,
+        "validationPhase": "final-candidate-ce2",
+        "role": "TEACHER",
+        "schoolFixture": "B",
+        "interactionValidation": "部分真实闭环通过",
+        "visualValidation": "截图已取，含明确待复验/缺口",
+        "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
+        "checks": [
+          "账号项目创建、重命名、列表重开"
+        ],
+        "evidence": [
+          "/tmp/physicsos-ui-lab-projects-result.json"
+        ],
+        "screenshots": [
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-56-project-list-ce2-1360.png",
+            "sha256": "25fba2341d41c2e5d6c337a22fb2ba1c1c1e1a00d92659869d4ac9497ef744fa"
+          }
+        ],
+        "deviations": [
+          "项目拖拽整理不在现有StudyProjects交互中，未伪称新增"
+        ]
+      }
     },
     {
       "designId": 7,
@@ -381,13 +612,22 @@
         "离线草稿与同步状态"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
-      "interactionValidation": "待验收",
-      "permissionValidation": "待验收",
-      "screenshots": [],
-      "tests": [],
-      "deviations": [],
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "截图已取，含明确待复验/缺口",
+      "interactionValidation": "部分真实闭环通过",
+      "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-18-canvas-list-ce2-1360.png",
+          "sha256": "83a326b8f15537219bef1fa961e70caa64e95a8a480ecf06f435d980d68fcd80"
+        }
+      ],
+      "tests": [
+        "docs/ui-redesign/evidence/lab-candidate.json"
+      ],
+      "deviations": [
+        "导入导出、删除恢复尚未在本轮浏览器单独验"
+      ],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/canvas/CanvasSurface.tsx",
         "overlays/harness/files/packages/client/ui-physicsos/src/client/canvas/navigation.ts"
@@ -404,7 +644,31 @@
           "lineCount": 79,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 7,
+        "validationPhase": "final-candidate-ce2",
+        "role": "TEACHER",
+        "schoolFixture": "B",
+        "interactionValidation": "部分真实闭环通过",
+        "visualValidation": "截图已取，含明确待复验/缺口",
+        "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
+        "checks": [
+          "账号工作台列表打开真实保存条目"
+        ],
+        "evidence": [
+          "/tmp/physicsos-ui-lab-canvas-result.json"
+        ],
+        "screenshots": [
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-18-canvas-list-ce2-1360.png",
+            "sha256": "83a326b8f15537219bef1fa961e70caa64e95a8a480ecf06f435d980d68fcd80"
+          }
+        ],
+        "deviations": [
+          "导入导出、删除恢复尚未在本轮浏览器单独验"
+        ]
+      }
     },
     {
       "designId": 8,
@@ -434,13 +698,37 @@
         "保存重开"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
-      "interactionValidation": "待验收",
-      "permissionValidation": "待验收",
-      "screenshots": [],
-      "tests": [],
-      "deviations": [],
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "截图已取，含明确待复验/缺口",
+      "interactionValidation": "部分真实闭环通过",
+      "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-19-canvas-experiment-ce2-1360.png",
+          "sha256": "be29950cbf9b81a94f5ce7b986468f512746b225df26bf5c96259933962bc1d7"
+        },
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-19-canvas-note-saved-ce2-1360.png",
+          "sha256": "e3530162614c64f0765be60673efe95f7c5115020d0413b34bd20e744df976de"
+        },
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-19-canvas-ce2-390.png",
+          "sha256": "c0dd8ccde4cf567bfa09aa205cb4ebdcb8c463ef9bbc19a832db6a62b01efc45"
+        },
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-08-canvas-mobile-controls-source-preview.png",
+          "sha256": "dfa3326ab81738e919e2c5512d21b32cddf102200ede9e1c498ada1d7fe455c4",
+          "phase": "source-preview-not-final-built-image"
+        }
+      ],
+      "tests": [
+        "docs/ui-redesign/evidence/lab-candidate.json",
+        "docs/ui-redesign/evidence/lab-final-display-checks.json"
+      ],
+      "deviations": [
+        "390px fit/缩放遮挡已由CanvasStage单文件CSS修复；实际source-preview真click/touch与box避让通过，最终构建镜像待复验",
+        "分组、导入导出、CAS冲突副本未在本轮浏览器单独验"
+      ],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/canvas/CanvasWorkspace.tsx",
         "overlays/harness/files/packages/client/ui-physicsos/src/client/canvas/CanvasSurface.tsx",
@@ -463,7 +751,50 @@
           "lineCount": 79,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 8,
+        "validationPhase": "final-candidate-ce2",
+        "role": "TEACHER",
+        "schoolFixture": "B",
+        "interactionValidation": "部分真实闭环通过",
+        "visualValidation": "截图已取，含明确待复验/缺口",
+        "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
+        "checks": [
+          "加入已提交物距30.5cm透镜实验",
+          "Markdown笔记保存到账号并从列表重开",
+          "实验与笔记各1个，文字恢复",
+          "390px文档无横溢"
+        ],
+        "evidence": [
+          "/tmp/physicsos-ui-lab-canvas-result.json",
+          "/tmp/physicsos-ui-lab-mobile-controls-source-preview.json"
+        ],
+        "screenshots": [
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-19-canvas-experiment-ce2-1360.png",
+            "sha256": "be29950cbf9b81a94f5ce7b986468f512746b225df26bf5c96259933962bc1d7"
+          },
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-19-canvas-note-saved-ce2-1360.png",
+            "sha256": "e3530162614c64f0765be60673efe95f7c5115020d0413b34bd20e744df976de"
+          },
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-19-canvas-ce2-390.png",
+            "sha256": "c0dd8ccde4cf567bfa09aa205cb4ebdcb8c463ef9bbc19a832db6a62b01efc45"
+          },
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-08-canvas-mobile-controls-source-preview.png",
+            "sha256": "dfa3326ab81738e919e2c5512d21b32cddf102200ede9e1c498ada1d7fe455c4",
+            "phase": "source-preview-not-final-built-image"
+          }
+        ],
+        "deviations": [
+          "390px fit/缩放遮挡已由CanvasStage单文件CSS修复；实际source-preview真click/touch与box避让通过，最终构建镜像待复验",
+          "分组、导入导出、CAS冲突副本未在本轮浏览器单独验"
+        ]
+      },
+      "finalCandidateEvidence": "docs/ui-redesign/evidence/lab-final-display-checks.json"
     },
     {
       "designId": 9,
@@ -490,12 +821,19 @@
         "账号范围"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
-      "interactionValidation": "待验收",
-      "permissionValidation": "待验收",
-      "screenshots": [],
-      "tests": [],
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "截图已取，含明确待复验/缺口",
+      "interactionValidation": "部分真实闭环通过",
+      "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-20-whiteboard-list-ce2-1360.png",
+          "sha256": "5f6419cbce256ac566dffae577d8684cefd13b736e81e98c93cad8e1bfe8e66e"
+        }
+      ],
+      "tests": [
+        "docs/ui-redesign/evidence/lab-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/whiteboard/WhiteboardSurface.tsx",
@@ -519,7 +857,29 @@
           "lineCount": 79,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 9,
+        "validationPhase": "final-candidate-ce2",
+        "role": "TEACHER",
+        "schoolFixture": "B",
+        "interactionValidation": "部分真实闭环通过",
+        "visualValidation": "截图已取，含明确待复验/缺口",
+        "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
+        "checks": [
+          "账号白板列表新建与打开"
+        ],
+        "evidence": [
+          "/tmp/physicsos-ui-lab-whiteboard-result.json"
+        ],
+        "screenshots": [
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-20-whiteboard-list-ce2-1360.png",
+            "sha256": "5f6419cbce256ac566dffae577d8684cefd13b736e81e98c93cad8e1bfe8e66e"
+          }
+        ],
+        "deviations": []
+      }
     },
     {
       "designId": 10,
@@ -543,12 +903,14 @@
         "错误与未配置反馈"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
       "visualValidation": "待验收",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
       "screenshots": [],
-      "tests": [],
+      "tests": [
+        "docs/ui-redesign/evidence/admin-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/PaperWorkspace.tsx"
@@ -560,7 +922,28 @@
           "lineCount": 1888,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 10,
+        "title": "真实模板新建表单",
+        "role": "TEACHER",
+        "viewport": {
+          "width": 1360,
+          "height": 768
+        },
+        "screenshot": "/tmp/physicsos-ui-admin-screens/10-teacher-1360.png",
+        "browserVisited": true,
+        "headings": [
+          "出卷工作台",
+          "试卷结构",
+          "内容范围",
+          "试卷摘要"
+        ],
+        "alerts": [],
+        "horizontalOverflow": false,
+        "pageErrors": [],
+        "templateDerivedSummary": true
+      }
     },
     {
       "designId": 11,
@@ -585,12 +968,14 @@
         "失败重试"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
       "visualValidation": "待验收",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
       "screenshots": [],
-      "tests": [],
+      "tests": [
+        "docs/ui-redesign/evidence/admin-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/PaperWorkspace.tsx"
@@ -602,7 +987,24 @@
           "lineCount": 1888,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 11,
+        "title": "真实合成任务审核列表",
+        "role": "TEACHER",
+        "viewport": {
+          "width": 1360,
+          "height": 768
+        },
+        "screenshot": "/tmp/physicsos-ui-admin-screens/11-teacher-1360.png",
+        "browserVisited": true,
+        "headings": [
+          "出卷工作台"
+        ],
+        "alerts": [],
+        "horizontalOverflow": false,
+        "pageErrors": []
+      }
     },
     {
       "designId": 12,
@@ -628,12 +1030,14 @@
         "定稿门槛"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
       "visualValidation": "待验收",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
       "screenshots": [],
-      "tests": [],
+      "tests": [
+        "docs/ui-redesign/evidence/admin-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/PaperWorkspace.tsx"
@@ -645,7 +1049,29 @@
           "lineCount": 1888,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 12,
+        "title": "真实逐题审核完成详情",
+        "role": "TEACHER",
+        "viewport": {
+          "width": 1360,
+          "height": 768
+        },
+        "screenshot": "/tmp/physicsos-ui-admin-screens/12-teacher-1360.png",
+        "browserVisited": true,
+        "headings": [
+          "出卷工作台",
+          "uic-1115 合成UI验收卷（非正式考试）已定稿",
+          "独立解题比对",
+          "逐题审核（1/1 已通过）"
+        ],
+        "alerts": [],
+        "horizontalOverflow": false,
+        "pageErrors": [],
+        "actualWorkflow": "real engine-consistent check, teacher review, approval and export",
+        "transientFetchRetried": true
+      }
     },
     {
       "designId": 13,
@@ -670,12 +1096,14 @@
         "真实审核状态"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
       "visualValidation": "待验收",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
       "screenshots": [],
-      "tests": [],
+      "tests": [
+        "docs/ui-redesign/evidence/admin-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/PaperWorkspace.tsx"
@@ -687,7 +1115,26 @@
           "lineCount": 1888,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 13,
+        "title": "真实已定稿与下载",
+        "role": "TEACHER",
+        "viewport": {
+          "width": 1360,
+          "height": 768
+        },
+        "screenshot": "/tmp/physicsos-ui-admin-screens/13-teacher-1360.png",
+        "browserVisited": true,
+        "headings": [
+          "出卷工作台",
+          "已定稿试卷"
+        ],
+        "alerts": [],
+        "horizontalOverflow": false,
+        "pageErrors": [],
+        "actualExported": true
+      }
     },
     {
       "designId": 14,
@@ -713,12 +1160,14 @@
         "批量确认"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
       "visualValidation": "待验收",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
       "screenshots": [],
-      "tests": [],
+      "tests": [
+        "docs/ui-redesign/evidence/admin-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/PaperWorkspace.tsx"
@@ -730,7 +1179,27 @@
           "lineCount": 1888,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 14,
+        "title": "真实已核验题库",
+        "role": "TEACHER",
+        "viewport": {
+          "width": 1360,
+          "height": 768
+        },
+        "screenshot": "/tmp/physicsos-ui-admin-screens/14-teacher-1360.png",
+        "browserVisited": true,
+        "headings": [
+          "出卷工作台",
+          "题目导入（粘贴 / 图片 / PDF）",
+          "待核验（0）",
+          "已入库（1）"
+        ],
+        "alerts": [],
+        "horizontalOverflow": false,
+        "pageErrors": []
+      }
     },
     {
       "designId": 15,
@@ -755,12 +1224,14 @@
         "真实统计"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
       "visualValidation": "待验收",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
       "screenshots": [],
-      "tests": [],
+      "tests": [
+        "docs/ui-redesign/evidence/admin-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/PaperWorkspace.tsx"
@@ -772,7 +1243,31 @@
           "lineCount": 1888,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 15,
+        "title": "真实合成材料与标注",
+        "role": "TEACHER",
+        "viewport": {
+          "width": 1360,
+          "height": 768
+        },
+        "screenshot": "/tmp/physicsos-ui-admin-screens/15-teacher-1360.png",
+        "browserVisited": true,
+        "headings": [
+          "出卷工作台",
+          "原卷台账",
+          "录入原卷",
+          "逐题考点录入",
+          "CSV 批量导入",
+          "考点频次（已核验）",
+          "结构模板",
+          "考点记录（1）"
+        ],
+        "alerts": [],
+        "horizontalOverflow": false,
+        "pageErrors": []
+      }
     },
     {
       "designId": 16,
@@ -799,12 +1294,21 @@
         "公告读取"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "候选截图；最终镜像待复验",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
-      "screenshots": [],
-      "tests": [],
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-feedback-new-1360.png",
+          "width": 1360,
+          "height": 768,
+          "sha256": "591581e1b60e02a6e9ccd5415dbcd504f51859e6577ac140d3e5ced262cdc028"
+        }
+      ],
+      "tests": [
+        "docs/ui-redesign/evidence/root-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/NoticeBoard.tsx"
@@ -816,7 +1320,23 @@
           "lineCount": 152,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "rootCandidateEvidence": {
+        "designId": 16,
+        "phase": "candidate-ce2",
+        "screenshots": [
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-feedback-new-1360.png",
+            "width": 1360,
+            "height": 768,
+            "sha256": "591581e1b60e02a6e9ccd5415dbcd504f51859e6577ac140d3e5ced262cdc028"
+          }
+        ],
+        "visualValidation": "候选截图；最终镜像待复验",
+        "notes": [
+          "Snapshot filenames may include intended size; width/height above are read from actual PNG bytes."
+        ]
+      }
     },
     {
       "designId": 17,
@@ -842,12 +1362,21 @@
         "真实掌握记录"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "候选截图；最终镜像待复验",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
-      "screenshots": [],
-      "tests": [],
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-library-1360.png",
+          "width": 1360,
+          "height": 768,
+          "sha256": "f9d25582ae17ab1cc3529162eb57dededa36a9278a3ac571e31ace2705d018c8"
+        }
+      ],
+      "tests": [
+        "docs/ui-redesign/evidence/root-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/LibraryWorkspace.tsx"
@@ -859,7 +1388,23 @@
           "lineCount": 1026,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "rootCandidateEvidence": {
+        "designId": 17,
+        "phase": "candidate-ce2",
+        "screenshots": [
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-library-1360.png",
+            "width": 1360,
+            "height": 768,
+            "sha256": "f9d25582ae17ab1cc3529162eb57dededa36a9278a3ac571e31ace2705d018c8"
+          }
+        ],
+        "visualValidation": "候选截图；最终镜像待复验",
+        "notes": [
+          "Snapshot filenames may include intended size; width/height above are read from actual PNG bytes."
+        ]
+      }
     },
     {
       "designId": 18,
@@ -886,13 +1431,18 @@
         "失败重试"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
-      "interactionValidation": "待验收",
-      "permissionValidation": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "未验",
+      "interactionValidation": "未验",
+      "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
       "screenshots": [],
-      "tests": [],
-      "deviations": [],
+      "tests": [
+        "docs/ui-redesign/evidence/lab-candidate.json"
+      ],
+      "deviations": [
+        "合法release ZIP构建未完成：owned Docker builder缺固定es-module-lexer2.1.0，未安装/替换依赖，未上传源码ZIP",
+        "投稿/校验预览未验"
+      ],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/ContributeWorkspace.tsx",
         "overlays/harness/files/packages/client/ui-physicsos/src/client/experiments/experiment-navigation.ts"
@@ -909,7 +1459,23 @@
           "lineCount": 166,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 18,
+        "validationPhase": "final-candidate-ce2",
+        "role": "TEACHER",
+        "schoolFixture": "B",
+        "interactionValidation": "未验",
+        "visualValidation": "未验",
+        "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
+        "checks": [],
+        "evidence": [],
+        "screenshots": [],
+        "deviations": [
+          "合法release ZIP构建未完成：owned Docker builder缺固定es-module-lexer2.1.0，未安装/替换依赖，未上传源码ZIP",
+          "投稿/校验预览未验"
+        ]
+      }
     },
     {
       "designId": 19,
@@ -935,12 +1501,23 @@
         "重开真实内容"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
-      "interactionValidation": "待验收",
-      "permissionValidation": "待验收",
-      "screenshots": [],
-      "tests": [],
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "截图已取，含明确待复验/缺口",
+      "interactionValidation": "部分真实闭环通过",
+      "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-56-project-detail-ce2-1360.png",
+          "sha256": "b04b05ad8c6c74df8110ac3981401824317739c649b37be6725b104db52f9369"
+        },
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-56-project-ce2-390.png",
+          "sha256": "637fd19c96992c1a9306d1a73ff42889bf7b289eb2c577becb8b2abb0acc1578"
+        }
+      ],
+      "tests": [
+        "docs/ui-redesign/evidence/lab-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/StudyProjects.tsx"
@@ -952,7 +1529,34 @@
           "lineCount": 77,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 19,
+        "validationPhase": "final-candidate-ce2",
+        "role": "TEACHER",
+        "schoolFixture": "B",
+        "interactionValidation": "部分真实闭环通过",
+        "visualValidation": "截图已取，含明确待复验/缺口",
+        "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
+        "checks": [
+          "从项目创建关联工作台",
+          "重新进入项目详情后关联仍存在"
+        ],
+        "evidence": [
+          "/tmp/physicsos-ui-lab-projects-result.json"
+        ],
+        "screenshots": [
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-56-project-detail-ce2-1360.png",
+            "sha256": "b04b05ad8c6c74df8110ac3981401824317739c649b37be6725b104db52f9369"
+          },
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-56-project-ce2-390.png",
+            "sha256": "637fd19c96992c1a9306d1a73ff42889bf7b289eb2c577becb8b2abb0acc1578"
+          }
+        ],
+        "deviations": []
+      }
     },
     {
       "designId": 20,
@@ -980,13 +1584,30 @@
         "版本冲突与离线草稿"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
-      "interactionValidation": "待验收",
-      "permissionValidation": "待验收",
-      "screenshots": [],
-      "tests": [],
-      "deviations": [],
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "截图已取，含明确待复验/缺口",
+      "interactionValidation": "部分真实闭环通过",
+      "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-20-whiteboard-saved-ce2-1360.png",
+          "sha256": "169770ae8b4b71cc6f9c96ded67908de2f2ab8bb4bf13b6c332fb60f18851fc0"
+        },
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-20-whiteboard-ce2-dark.png",
+          "sha256": "a57bca39aa256e7a4f9026175e519c4c088e6f76bedba46f7fe36bbc054dcc5b"
+        },
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-20-whiteboard-ce2-390.png",
+          "sha256": "6602241320e09efe1ef6990924c5c799d2ed50ce3fff229b90a5bf7023ee8c43"
+        }
+      ],
+      "tests": [
+        "docs/ui-redesign/evidence/lab-candidate.json"
+      ],
+      "deviations": [
+        "AI图元生成、源图导入导出、离线与CAS冲突未在本轮浏览器单独验"
+      ],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/whiteboard/WhiteboardWorkspace.tsx",
         "overlays/harness/files/packages/client/ui-physicsos/src/client/whiteboard/WhiteboardSurface.tsx"
@@ -1003,7 +1624,42 @@
           "lineCount": 30,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 20,
+        "validationPhase": "final-candidate-ce2",
+        "role": "TEACHER",
+        "schoolFixture": "B",
+        "interactionValidation": "部分真实闭环通过",
+        "visualValidation": "截图已取，含明确待复验/缺口",
+        "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
+        "checks": [
+          "真实指针矩形绘制",
+          "撤销0图元、重做1图元",
+          "保存到账号、列表重开1图元且undo history保留",
+          "暗色与390px截图，文档无横溢"
+        ],
+        "evidence": [
+          "/tmp/physicsos-ui-lab-whiteboard-result.json"
+        ],
+        "screenshots": [
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-20-whiteboard-saved-ce2-1360.png",
+            "sha256": "169770ae8b4b71cc6f9c96ded67908de2f2ab8bb4bf13b6c332fb60f18851fc0"
+          },
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-20-whiteboard-ce2-dark.png",
+            "sha256": "a57bca39aa256e7a4f9026175e519c4c088e6f76bedba46f7fe36bbc054dcc5b"
+          },
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-20-whiteboard-ce2-390.png",
+            "sha256": "6602241320e09efe1ef6990924c5c799d2ed50ce3fff229b90a5bf7023ee8c43"
+          }
+        ],
+        "deviations": [
+          "AI图元生成、源图导入导出、离线与CAS冲突未在本轮浏览器单独验"
+        ]
+      }
     },
     {
       "designId": 21,
@@ -1028,12 +1684,14 @@
         "权限与失败态"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
       "visualValidation": "待验收",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
       "screenshots": [],
-      "tests": [],
+      "tests": [
+        "docs/ui-redesign/evidence/admin-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/PaperWorkspace.tsx"
@@ -1045,7 +1703,28 @@
           "lineCount": 1888,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 21,
+        "title": "真实PDF内嵌预览",
+        "role": "TEACHER",
+        "viewport": {
+          "width": 1360,
+          "height": 768
+        },
+        "screenshot": "/tmp/physicsos-ui-admin-screens/21-teacher-1360.png",
+        "browserVisited": true,
+        "headings": [
+          "出卷工作台",
+          "已定稿试卷"
+        ],
+        "alerts": [],
+        "horizontalOverflow": false,
+        "pageErrors": [],
+        "actualPdfHttpStatus": 200,
+        "renderedPdfReview": "/tmp/physicsos-ui-paper-pdf",
+        "pageSizeLimitation": "Letter 612x792pt; existing backend, not UI regression"
+      }
     },
     {
       "designId": 22,
@@ -1070,12 +1749,21 @@
         "关联实验"
       ],
       "mappingNotes": "设计稿为补充详情状态；现有 LibraryWorkspace 中是否已有完整详情容器待实现者核对。",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "候选截图；最终镜像待复验",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
-      "screenshots": [],
-      "tests": [],
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-library-detail-1360.png",
+          "width": 1360,
+          "height": 768,
+          "sha256": "f41472bf9db87c6b0bef70d53562795b8b36336563e4540f482576f074f64570"
+        }
+      ],
+      "tests": [
+        "docs/ui-redesign/evidence/root-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/LibraryWorkspace.tsx"
@@ -1087,7 +1775,23 @@
           "lineCount": 1026,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "rootCandidateEvidence": {
+        "designId": 22,
+        "phase": "candidate-ce2",
+        "screenshots": [
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-library-detail-1360.png",
+            "width": 1360,
+            "height": 768,
+            "sha256": "f41472bf9db87c6b0bef70d53562795b8b36336563e4540f482576f074f64570"
+          }
+        ],
+        "visualValidation": "候选截图；最终镜像待复验",
+        "notes": [
+          "Snapshot filenames may include intended size; width/height above are read from actual PNG bytes."
+        ]
+      }
     },
     {
       "designId": 23,
@@ -1111,12 +1815,21 @@
         "会话建立后按账户重载"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "候选截图；最终镜像待复验",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
-      "screenshots": [],
-      "tests": [],
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-auth-login-1360.png",
+          "width": 1360,
+          "height": 768,
+          "sha256": "1ca1b4ca9ae5edf72000e909140e1561425444fda492bb8b4d8438c2b5d52cd4"
+        }
+      ],
+      "tests": [
+        "docs/ui-redesign/evidence/root-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/AuthGate.tsx",
@@ -1134,7 +1847,23 @@
           "lineCount": 263,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "rootCandidateEvidence": {
+        "designId": 23,
+        "phase": "candidate-ce2",
+        "screenshots": [
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-auth-login-1360.png",
+            "width": 1360,
+            "height": 768,
+            "sha256": "1ca1b4ca9ae5edf72000e909140e1561425444fda492bb8b4d8438c2b5d52cd4"
+          }
+        ],
+        "visualValidation": "候选截图；最终镜像待复验",
+        "notes": [
+          "Snapshot filenames may include intended size; width/height above are read from actual PNG bytes."
+        ]
+      }
     },
     {
       "designId": 24,
@@ -1158,12 +1887,21 @@
         "待审核分支"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "候选截图；最终镜像待复验",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
-      "screenshots": [],
-      "tests": [],
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-auth-register-1360.png",
+          "width": 1360,
+          "height": 768,
+          "sha256": "4ced9049c1e400bdf0181dd5abdf9f3afcfff2235f4383b5421899993df9a1fc"
+        }
+      ],
+      "tests": [
+        "docs/ui-redesign/evidence/root-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/AuthGate.tsx",
@@ -1181,7 +1919,23 @@
           "lineCount": 263,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "rootCandidateEvidence": {
+        "designId": 24,
+        "phase": "candidate-ce2",
+        "screenshots": [
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-auth-register-1360.png",
+            "width": 1360,
+            "height": 768,
+            "sha256": "4ced9049c1e400bdf0181dd5abdf9f3afcfff2235f4383b5421899993df9a1fc"
+          }
+        ],
+        "visualValidation": "候选截图；最终镜像待复验",
+        "notes": [
+          "Snapshot filenames may include intended size; width/height above are read from actual PNG bytes."
+        ]
+      }
     },
     {
       "designId": 25,
@@ -1203,12 +1957,21 @@
         "真实回执与失败"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "候选截图；最终镜像待复验",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
-      "screenshots": [],
-      "tests": [],
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-auth-forgot-1360.png",
+          "width": 1360,
+          "height": 768,
+          "sha256": "d3601a5f719583b646348f769cd6916da0191365d7671571ad7ab2666a30d4ea"
+        }
+      ],
+      "tests": [
+        "docs/ui-redesign/evidence/root-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/AuthGate.tsx"
@@ -1220,7 +1983,23 @@
           "lineCount": 765,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "rootCandidateEvidence": {
+        "designId": 25,
+        "phase": "candidate-ce2",
+        "screenshots": [
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-auth-forgot-1360.png",
+            "width": 1360,
+            "height": 768,
+            "sha256": "d3601a5f719583b646348f769cd6916da0191365d7671571ad7ab2666a30d4ea"
+          }
+        ],
+        "visualValidation": "候选截图；最终镜像待复验",
+        "notes": [
+          "Snapshot filenames may include intended size; width/height above are read from actual PNG bytes."
+        ]
+      }
     },
     {
       "designId": 26,
@@ -1247,12 +2026,21 @@
         "不泄漏token"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "候选截图；最终镜像待复验",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
-      "screenshots": [],
-      "tests": [],
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-auth-reset-1360.png",
+          "width": 1360,
+          "height": 768,
+          "sha256": "ca984f8a2c0df3ae5cb660d4037de3c4d4f37b797454eeb953f95fb0222f56ec"
+        }
+      ],
+      "tests": [
+        "docs/ui-redesign/evidence/root-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/AuthGate.tsx"
@@ -1264,7 +2052,23 @@
           "lineCount": 765,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "rootCandidateEvidence": {
+        "designId": 26,
+        "phase": "candidate-ce2",
+        "screenshots": [
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-auth-reset-1360.png",
+            "width": 1360,
+            "height": 768,
+            "sha256": "ca984f8a2c0df3ae5cb660d4037de3c4d4f37b797454eeb953f95fb0222f56ec"
+          }
+        ],
+        "visualValidation": "候选截图；最终镜像待复验",
+        "notes": [
+          "Snapshot filenames may include intended size; width/height above are read from actual PNG bytes."
+        ]
+      }
     },
     {
       "designId": 27,
@@ -1286,12 +2090,21 @@
         "不得伪造已登录"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "候选截图；最终镜像待复验",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
-      "screenshots": [],
-      "tests": [],
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-auth-pending-1360.png",
+          "width": 1360,
+          "height": 768,
+          "sha256": "99e8998d3d0ba4613708b0b009d4ff206af3fca9cdc3adc2c2e6cf0610ea43da"
+        }
+      ],
+      "tests": [
+        "docs/ui-redesign/evidence/root-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/AuthGate.tsx"
@@ -1303,7 +2116,23 @@
           "lineCount": 765,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "rootCandidateEvidence": {
+        "designId": 27,
+        "phase": "candidate-ce2",
+        "screenshots": [
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-auth-pending-1360.png",
+            "width": 1360,
+            "height": 768,
+            "sha256": "99e8998d3d0ba4613708b0b009d4ff206af3fca9cdc3adc2c2e6cf0610ea43da"
+          }
+        ],
+        "visualValidation": "候选截图；最终镜像待复验",
+        "notes": [
+          "Snapshot filenames may include intended size; width/height above are read from actual PNG bytes."
+        ]
+      }
     },
     {
       "designId": 28,
@@ -1329,12 +2158,22 @@
         "深浅主题"
       ],
       "mappingNotes": "具体表单归 ui-settings 上游；本清单不把 chrome 样式视作实现完成。",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
-      "interactionValidation": "待验收",
+      "implementationStatus": "已实现；最终f4候选必要复验通过",
+      "visualValidation": "最终候选实际Chrome复验；非逐像素自动比对",
+      "interactionValidation": "必要真实流程通过（见最终回执）",
       "permissionValidation": "待验收",
-      "screenshots": [],
-      "tests": [],
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-settings-general-1360.png",
+          "width": 1360,
+          "height": 768,
+          "sha256": "62a9aaf836ac99d25cea302e9ba9d0a7aaac014d592ecccfb21f45811987e508"
+        }
+      ],
+      "tests": [
+        "docs/ui-redesign/evidence/root-candidate.json",
+        "docs/ui-redesign/evidence/root-final-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/chrome.ts",
@@ -1352,7 +2191,24 @@
           "lineCount": 888,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "rootCandidateEvidence": {
+        "designId": 28,
+        "phase": "candidate-ce2",
+        "screenshots": [
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-settings-general-1360.png",
+            "width": 1360,
+            "height": 768,
+            "sha256": "62a9aaf836ac99d25cea302e9ba9d0a7aaac014d592ecccfb21f45811987e508"
+          }
+        ],
+        "visualValidation": "候选截图；最终镜像待复验",
+        "notes": [
+          "Snapshot filenames may include intended size; width/height above are read from actual PNG bytes."
+        ]
+      },
+      "finalCandidateEvidence": "docs/ui-redesign/evidence/root-final-candidate.json"
     },
     {
       "designId": 29,
@@ -1377,12 +2233,22 @@
         "平台策略真实状态"
       ],
       "mappingNotes": "ui-settings-models/src/client/store.ts 的改动在 upstream-changes.patch；需投影后验证。",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
-      "interactionValidation": "待验收",
+      "implementationStatus": "已实现；最终f4候选必要复验通过",
+      "visualValidation": "最终候选实际Chrome复验；非逐像素自动比对",
+      "interactionValidation": "必要真实流程通过（见最终回执）",
       "permissionValidation": "待验收",
-      "screenshots": [],
-      "tests": [],
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-settings-models-1360.png",
+          "width": 1360,
+          "height": 768,
+          "sha256": "b4f334eb54f831d629175e9f5113c0df9cc4caff669c6172322b4597f8856417"
+        }
+      ],
+      "tests": [
+        "docs/ui-redesign/evidence/root-candidate.json",
+        "docs/ui-redesign/evidence/root-final-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/chrome.ts"
@@ -1394,7 +2260,24 @@
           "lineCount": 495,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "rootCandidateEvidence": {
+        "designId": 29,
+        "phase": "candidate-ce2",
+        "screenshots": [
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-settings-models-1360.png",
+            "width": 1360,
+            "height": 768,
+            "sha256": "b4f334eb54f831d629175e9f5113c0df9cc4caff669c6172322b4597f8856417"
+          }
+        ],
+        "visualValidation": "候选截图；最终镜像待复验",
+        "notes": [
+          "Snapshot filenames may include intended size; width/height above are read from actual PNG bytes."
+        ]
+      },
+      "finalCandidateEvidence": "docs/ui-redesign/evidence/root-final-candidate.json"
     },
     {
       "designId": 30,
@@ -1421,12 +2304,22 @@
         "保留平台控制"
       ],
       "mappingNotes": "预设设置表单由上游包持有；不可将首页预设席位误计成设置页面验收。",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
-      "interactionValidation": "待验收",
+      "implementationStatus": "已实现；最终f4候选必要复验通过",
+      "visualValidation": "最终候选实际Chrome复验；非逐像素自动比对",
+      "interactionValidation": "必要真实流程通过（见最终回执）",
       "permissionValidation": "待验收",
-      "screenshots": [],
-      "tests": [],
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-settings-agent-1360.png",
+          "width": 1360,
+          "height": 768,
+          "sha256": "678a1f8bed675796595946e399b1e76d00c05501765238980a3994bb3a610785"
+        }
+      ],
+      "tests": [
+        "docs/ui-redesign/evidence/root-candidate.json",
+        "docs/ui-redesign/evidence/root-final-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/PhysicsProfileSeat.tsx",
@@ -1450,7 +2343,24 @@
           "lineCount": 51,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "rootCandidateEvidence": {
+        "designId": 30,
+        "phase": "candidate-ce2",
+        "screenshots": [
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-settings-agent-1360.png",
+            "width": 1360,
+            "height": 768,
+            "sha256": "678a1f8bed675796595946e399b1e76d00c05501765238980a3994bb3a610785"
+          }
+        ],
+        "visualValidation": "候选截图；最终镜像待复验",
+        "notes": [
+          "Snapshot filenames may include intended size; width/height above are read from actual PNG bytes."
+        ]
+      },
+      "finalCandidateEvidence": "docs/ui-redesign/evidence/root-final-candidate.json"
     },
     {
       "designId": 31,
@@ -1478,12 +2388,21 @@
         "空/失败态"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "候选截图；最终镜像待复验",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
-      "screenshots": [],
-      "tests": [],
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-usage-1360.png",
+          "width": 1360,
+          "height": 768,
+          "sha256": "055642c288e0323ba61dc067ba5a472d5b3567a44d6c8bccc42a6b483ef9d658"
+        }
+      ],
+      "tests": [
+        "docs/ui-redesign/evidence/root-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/UsageWorkspace.tsx",
@@ -1507,7 +2426,23 @@
           "lineCount": 100,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "rootCandidateEvidence": {
+        "designId": 31,
+        "phase": "candidate-ce2",
+        "screenshots": [
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-usage-1360.png",
+            "width": 1360,
+            "height": 768,
+            "sha256": "055642c288e0323ba61dc067ba5a472d5b3567a44d6c8bccc42a6b483ef9d658"
+          }
+        ],
+        "visualValidation": "候选截图；最终镜像待复验",
+        "notes": [
+          "Snapshot filenames may include intended size; width/height above are read from actual PNG bytes."
+        ]
+      }
     },
     {
       "designId": 32,
@@ -1534,12 +2469,22 @@
         "键盘/焦点"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
-      "interactionValidation": "待验收",
+      "implementationStatus": "已实现；最终f4候选必要复验通过",
+      "visualValidation": "最终候选实际Chrome复验；非逐像素自动比对",
+      "interactionValidation": "必要真实流程通过（见最终回执）",
       "permissionValidation": "待验收",
-      "screenshots": [],
-      "tests": [],
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-account-student-1360.png",
+          "width": 1360,
+          "height": 768,
+          "sha256": "70c2695f11b1826dcd196f5e0d6e0dd98fea54ff9a6d670240f80c4cfb077d82"
+        }
+      ],
+      "tests": [
+        "docs/ui-redesign/evidence/root-candidate.json",
+        "docs/ui-redesign/evidence/root-final-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/SidebarFooter.tsx"
@@ -1551,7 +2496,24 @@
           "lineCount": 100,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "rootCandidateEvidence": {
+        "designId": 32,
+        "phase": "candidate-ce2",
+        "screenshots": [
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-account-student-1360.png",
+            "width": 1360,
+            "height": 768,
+            "sha256": "70c2695f11b1826dcd196f5e0d6e0dd98fea54ff9a6d670240f80c4cfb077d82"
+          }
+        ],
+        "visualValidation": "候选截图；最终镜像待复验",
+        "notes": [
+          "Snapshot filenames may include intended size; width/height above are read from actual PNG bytes."
+        ]
+      },
+      "finalCandidateEvidence": "docs/ui-redesign/evidence/root-final-candidate.json"
     },
     {
       "designId": 33,
@@ -1577,12 +2539,14 @@
         "保留运维/审计入口"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
-      "interactionValidation": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "captured; pixel/design review pending",
+      "interactionValidation": "entry/render verified",
       "permissionValidation": "待验收",
       "screenshots": [],
-      "tests": [],
+      "tests": [
+        "docs/ui-redesign/evidence/admin-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWorkspace.tsx",
@@ -1606,7 +2570,23 @@
           "lineCount": 149,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 33,
+        "title": "使用汇总",
+        "role": "SUPER_ADMIN",
+        "viewport": {
+          "width": 1360,
+          "height": 768
+        },
+        "screenshot": "/tmp/physicsos-ui-admin-screens/33-super-1360.png",
+        "browserVisited": true,
+        "visualValidation": "captured; pixel/design review pending",
+        "interactionValidation": "entry/render verified",
+        "alerts": [],
+        "horizontalOverflow": false,
+        "pageErrors": []
+      }
     },
     {
       "designId": 34,
@@ -1632,12 +2612,14 @@
         "确认与审计"
       ],
       "mappingNotes": "AdminOpsPanel指标区仅SUPER_ADMIN渲染，校管保留批量用户运维；具体写入能力仍以host guard为准。",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
-      "interactionValidation": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "captured; pixel/design review pending",
+      "interactionValidation": "entry/render verified",
       "permissionValidation": "待验收",
       "screenshots": [],
-      "tests": [],
+      "tests": [
+        "docs/ui-redesign/evidence/admin-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWorkspace.tsx",
@@ -1667,7 +2649,23 @@
           "lineCount": 330,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 34,
+        "title": "运维",
+        "role": "SUPER_ADMIN",
+        "viewport": {
+          "width": 1360,
+          "height": 768
+        },
+        "screenshot": "/tmp/physicsos-ui-admin-screens/34-super-1360.png",
+        "browserVisited": true,
+        "visualValidation": "captured; pixel/design review pending",
+        "interactionValidation": "entry/render verified",
+        "alerts": [],
+        "horizontalOverflow": false,
+        "pageErrors": []
+      }
     },
     {
       "designId": 35,
@@ -1692,12 +2690,14 @@
         "分页"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
-      "interactionValidation": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "captured; pixel/design review pending",
+      "interactionValidation": "entry/render verified",
       "permissionValidation": "待验收",
       "screenshots": [],
-      "tests": [],
+      "tests": [
+        "docs/ui-redesign/evidence/admin-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWorkspace.tsx",
@@ -1715,7 +2715,23 @@
           "lineCount": 23,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 35,
+        "title": "审计",
+        "role": "SUPER_ADMIN",
+        "viewport": {
+          "width": 1360,
+          "height": 768
+        },
+        "screenshot": "/tmp/physicsos-ui-admin-screens/35-super-1360.png",
+        "browserVisited": true,
+        "visualValidation": "captured; pixel/design review pending",
+        "interactionValidation": "entry/render verified",
+        "alerts": [],
+        "horizontalOverflow": false,
+        "pageErrors": []
+      }
     },
     {
       "designId": 36,
@@ -1740,12 +2756,14 @@
         "审计"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
-      "interactionValidation": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "captured; pixel/design review pending",
+      "interactionValidation": "entry/render verified",
       "permissionValidation": "待验收",
       "screenshots": [],
-      "tests": [],
+      "tests": [
+        "docs/ui-redesign/evidence/admin-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWorkspace.tsx",
@@ -1763,7 +2781,23 @@
           "lineCount": 24,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 36,
+        "title": "用户",
+        "role": "SUPER_ADMIN",
+        "viewport": {
+          "width": 1360,
+          "height": 768
+        },
+        "screenshot": "/tmp/physicsos-ui-admin-screens/36-super-1360.png",
+        "browserVisited": true,
+        "visualValidation": "captured; pixel/design review pending",
+        "interactionValidation": "entry/render verified",
+        "alerts": [],
+        "horizontalOverflow": false,
+        "pageErrors": []
+      }
     },
     {
       "designId": 37,
@@ -1788,12 +2822,14 @@
         "不泄漏重置凭据"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
-      "interactionValidation": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "captured; pixel/design review pending",
+      "interactionValidation": "entry/render verified",
       "permissionValidation": "待验收",
       "screenshots": [],
-      "tests": [],
+      "tests": [
+        "docs/ui-redesign/evidence/admin-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminAccountsTab.tsx",
@@ -1811,7 +2847,23 @@
           "lineCount": 765,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 37,
+        "title": "密码重置",
+        "role": "SUPER_ADMIN",
+        "viewport": {
+          "width": 1360,
+          "height": 768
+        },
+        "screenshot": "/tmp/physicsos-ui-admin-screens/37-super-1360.png",
+        "browserVisited": true,
+        "visualValidation": "captured; pixel/design review pending",
+        "interactionValidation": "entry/render verified",
+        "alerts": [],
+        "horizontalOverflow": false,
+        "pageErrors": []
+      }
     },
     {
       "designId": 38,
@@ -1835,12 +2887,14 @@
         "权限范围与确认"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
-      "interactionValidation": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "captured; pixel/design review pending",
+      "interactionValidation": "entry/render verified",
       "permissionValidation": "待验收",
       "screenshots": [],
-      "tests": [],
+      "tests": [
+        "docs/ui-redesign/evidence/admin-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminAccountsTab.tsx",
@@ -1858,7 +2912,23 @@
           "lineCount": 189,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 38,
+        "title": "设备",
+        "role": "SUPER_ADMIN",
+        "viewport": {
+          "width": 1360,
+          "height": 768
+        },
+        "screenshot": "/tmp/physicsos-ui-admin-screens/38-super-1360.png",
+        "browserVisited": true,
+        "visualValidation": "captured; pixel/design review pending",
+        "interactionValidation": "entry/render verified",
+        "alerts": [],
+        "horizontalOverflow": false,
+        "pageErrors": []
+      }
     },
     {
       "designId": 39,
@@ -1881,12 +2951,14 @@
         "真实状态/审计"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
-      "interactionValidation": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "captured; pixel/design review pending",
+      "interactionValidation": "entry/render verified",
       "permissionValidation": "待验收",
       "screenshots": [],
-      "tests": [],
+      "tests": [
+        "docs/ui-redesign/evidence/admin-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWorkspace.tsx"
@@ -1898,7 +2970,23 @@
           "lineCount": 646,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 39,
+        "title": "学校申请",
+        "role": "SUPER_ADMIN",
+        "viewport": {
+          "width": 1360,
+          "height": 768
+        },
+        "screenshot": "/tmp/physicsos-ui-admin-screens/39-super-1360.png",
+        "browserVisited": true,
+        "visualValidation": "captured; pixel/design review pending",
+        "interactionValidation": "entry/render verified",
+        "alerts": [],
+        "horizontalOverflow": false,
+        "pageErrors": []
+      }
     },
     {
       "designId": 40,
@@ -1921,12 +3009,14 @@
         "确认/审计"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
-      "interactionValidation": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "captured; pixel/design review pending",
+      "interactionValidation": "entry/render verified",
       "permissionValidation": "待验收",
       "screenshots": [],
-      "tests": [],
+      "tests": [
+        "docs/ui-redesign/evidence/admin-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWorkspace.tsx"
@@ -1938,7 +3028,23 @@
           "lineCount": 646,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 40,
+        "title": "学校",
+        "role": "SUPER_ADMIN",
+        "viewport": {
+          "width": 1360,
+          "height": 768
+        },
+        "screenshot": "/tmp/physicsos-ui-admin-screens/40-super-1360.png",
+        "browserVisited": true,
+        "visualValidation": "captured; pixel/design review pending",
+        "interactionValidation": "entry/render verified",
+        "alerts": [],
+        "horizontalOverflow": false,
+        "pageErrors": []
+      }
     },
     {
       "designId": 41,
@@ -1961,12 +3067,14 @@
         "审计"
       ],
       "mappingNotes": "前端当前仅SUPER_ADMIN可见，不擅自拓展给校管。",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
-      "interactionValidation": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "captured; pixel/design review pending",
+      "interactionValidation": "entry/render verified",
       "permissionValidation": "待验收",
       "screenshots": [],
-      "tests": [],
+      "tests": [
+        "docs/ui-redesign/evidence/admin-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWorkspace.tsx",
@@ -1984,7 +3092,23 @@
           "lineCount": 331,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 41,
+        "title": "对话审核",
+        "role": "SUPER_ADMIN",
+        "viewport": {
+          "width": 1360,
+          "height": 768
+        },
+        "screenshot": "/tmp/physicsos-ui-admin-screens/41-super-1360.png",
+        "browserVisited": true,
+        "visualValidation": "captured; pixel/design review pending",
+        "interactionValidation": "entry/render verified",
+        "alerts": [],
+        "horizontalOverflow": false,
+        "pageErrors": []
+      }
     },
     {
       "designId": 42,
@@ -2008,12 +3132,14 @@
         "确认审计"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
-      "interactionValidation": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "captured; pixel/design review pending",
+      "interactionValidation": "entry/render verified",
       "permissionValidation": "待验收",
       "screenshots": [],
-      "tests": [],
+      "tests": [
+        "docs/ui-redesign/evidence/admin-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWorkspace.tsx",
@@ -2031,7 +3157,23 @@
           "lineCount": 28,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 42,
+        "title": "实验投稿审核",
+        "role": "SUPER_ADMIN",
+        "viewport": {
+          "width": 1360,
+          "height": 768
+        },
+        "screenshot": "/tmp/physicsos-ui-admin-screens/42-super-1360.png",
+        "browserVisited": true,
+        "visualValidation": "captured; pixel/design review pending",
+        "interactionValidation": "entry/render verified",
+        "alerts": [],
+        "horizontalOverflow": false,
+        "pageErrors": []
+      }
     },
     {
       "designId": 43,
@@ -2056,12 +3198,14 @@
         "学校范围"
       ],
       "mappingNotes": "需paperApi可用；以服务端核验权限为准。",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
-      "interactionValidation": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "captured; pixel/design review pending",
+      "interactionValidation": "entry/render verified",
       "permissionValidation": "待验收",
       "screenshots": [],
-      "tests": [],
+      "tests": [
+        "docs/ui-redesign/evidence/admin-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWorkspace.tsx",
@@ -2079,7 +3223,23 @@
           "lineCount": 339,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 43,
+        "title": "题目内容",
+        "role": "SUPER_ADMIN",
+        "viewport": {
+          "width": 1360,
+          "height": 768
+        },
+        "screenshot": "/tmp/physicsos-ui-admin-screens/43-super-1360.png",
+        "browserVisited": true,
+        "visualValidation": "captured; pixel/design review pending",
+        "interactionValidation": "entry/render verified",
+        "alerts": [],
+        "horizontalOverflow": false,
+        "pageErrors": []
+      }
     },
     {
       "designId": 44,
@@ -2104,12 +3264,14 @@
         "失败重试"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
-      "interactionValidation": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "captured; pixel/design review pending",
+      "interactionValidation": "entry/render verified",
       "permissionValidation": "待验收",
       "screenshots": [],
-      "tests": [],
+      "tests": [
+        "docs/ui-redesign/evidence/admin-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWorkspace.tsx",
@@ -2127,7 +3289,26 @@
           "lineCount": 138,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 44,
+        "title": "用户反馈",
+        "role": "SUPER_ADMIN",
+        "viewport": {
+          "width": 1360,
+          "height": 768
+        },
+        "screenshot": "/tmp/physicsos-ui-admin-screens/44-super-1360.png",
+        "browserVisited": true,
+        "visualValidation": "captured; pixel/design review pending",
+        "interactionValidation": "entry/render verified",
+        "alerts": [],
+        "horizontalOverflow": false,
+        "pageErrors": [],
+        "checks": {
+          "realReplyStatus": 200
+        }
+      }
     },
     {
       "designId": 45,
@@ -2151,12 +3332,14 @@
         "持久化"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
-      "interactionValidation": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "captured; pixel/design review pending",
+      "interactionValidation": "entry/render verified",
       "permissionValidation": "待验收",
       "screenshots": [],
-      "tests": [],
+      "tests": [
+        "docs/ui-redesign/evidence/admin-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWorkspace.tsx",
@@ -2174,7 +3357,23 @@
           "lineCount": 145,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 45,
+        "title": "公告",
+        "role": "SUPER_ADMIN",
+        "viewport": {
+          "width": 1360,
+          "height": 768
+        },
+        "screenshot": "/tmp/physicsos-ui-admin-screens/45-super-1360.png",
+        "browserVisited": true,
+        "visualValidation": "captured; pixel/design review pending",
+        "interactionValidation": "entry/render verified",
+        "alerts": [],
+        "horizontalOverflow": false,
+        "pageErrors": []
+      }
     },
     {
       "designId": 46,
@@ -2198,12 +3397,14 @@
         "版本冲突处理"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
-      "interactionValidation": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "captured; pixel/design review pending",
+      "interactionValidation": "entry/render verified",
       "permissionValidation": "待验收",
       "screenshots": [],
-      "tests": [],
+      "tests": [
+        "docs/ui-redesign/evidence/admin-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWebsiteTab.tsx"
@@ -2215,7 +3416,30 @@
           "lineCount": 357,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 46,
+        "title": "官网展示反馈",
+        "role": "SUPER_ADMIN",
+        "viewport": {
+          "width": 1360,
+          "height": 768
+        },
+        "screenshot": "/tmp/physicsos-ui-admin-screens/46-super-1360.png",
+        "browserVisited": true,
+        "visualValidation": "captured; pixel/design review pending",
+        "interactionValidation": "entry/render verified",
+        "alerts": [],
+        "horizontalOverflow": false,
+        "pageErrors": [],
+        "checks": {
+          "staleVersionStatus": 409,
+          "draftRetained": true,
+          "keyboardEditMoveRetained": true,
+          "saveStatus": 200,
+          "persistedHidden": true
+        }
+      }
     },
     {
       "designId": 47,
@@ -2238,12 +3462,14 @@
         "持久化与冲突"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
-      "interactionValidation": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "captured; pixel/design review pending",
+      "interactionValidation": "entry/render verified",
       "permissionValidation": "待验收",
       "screenshots": [],
-      "tests": [],
+      "tests": [
+        "docs/ui-redesign/evidence/admin-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWebsiteTab.tsx"
@@ -2255,7 +3481,23 @@
           "lineCount": 357,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 47,
+        "title": "贡献者与项目",
+        "role": "SUPER_ADMIN",
+        "viewport": {
+          "width": 1360,
+          "height": 768
+        },
+        "screenshot": "/tmp/physicsos-ui-admin-screens/47-super-1360.png",
+        "browserVisited": true,
+        "visualValidation": "captured; pixel/design review pending",
+        "interactionValidation": "entry/render verified",
+        "alerts": [],
+        "horizontalOverflow": false,
+        "pageErrors": []
+      }
     },
     {
       "designId": 48,
@@ -2278,12 +3520,14 @@
         "可转展示但不自动公开"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
-      "interactionValidation": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "captured; pixel/design review pending",
+      "interactionValidation": "entry/render verified",
       "permissionValidation": "待验收",
       "screenshots": [],
-      "tests": [],
+      "tests": [
+        "docs/ui-redesign/evidence/admin-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminWebsiteTab.tsx"
@@ -2295,7 +3539,32 @@
           "lineCount": 357,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 48,
+        "title": "官网反馈收件箱",
+        "role": "SUPER_ADMIN",
+        "viewport": {
+          "width": 1360,
+          "height": 768
+        },
+        "screenshot": "/tmp/physicsos-ui-admin-screens/48-super-1360.png",
+        "browserVisited": true,
+        "visualValidation": "captured; pixel/design review pending",
+        "interactionValidation": "entry/render verified",
+        "alerts": [],
+        "horizontalOverflow": false,
+        "pageErrors": [],
+        "checks": {
+          "imageHttpPermissionVerified": true,
+          "imageBrowserDecode": true,
+          "dimensions": {
+            "complete": true,
+            "width": 32,
+            "height": 32
+          }
+        }
+      }
     },
     {
       "designId": 49,
@@ -2318,12 +3587,14 @@
         "缺加密配置禁止凭据写入"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
-      "interactionValidation": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "captured; pixel/design review pending",
+      "interactionValidation": "entry/render verified",
       "permissionValidation": "待验收",
       "screenshots": [],
-      "tests": [],
+      "tests": [
+        "docs/ui-redesign/evidence/admin-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminModelPoolTab.tsx"
@@ -2335,7 +3606,23 @@
           "lineCount": 715,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 49,
+        "title": "平台模型号池",
+        "role": "SUPER_ADMIN",
+        "viewport": {
+          "width": 1360,
+          "height": 768
+        },
+        "screenshot": "/tmp/physicsos-ui-admin-screens/49-super-1360.png",
+        "browserVisited": true,
+        "visualValidation": "captured; pixel/design review pending",
+        "interactionValidation": "entry/render verified",
+        "alerts": [],
+        "horizontalOverflow": false,
+        "pageErrors": []
+      }
     },
     {
       "designId": 50,
@@ -2362,12 +3649,15 @@
         "旧hash转系统域兼容"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
+      "implementationStatus": "已实现；真实官网候选交互与最终资产只读复验通过",
       "visualValidation": "待验收",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
       "screenshots": [],
-      "tests": [],
+      "tests": [
+        "docs/ui-redesign/evidence/public-candidate.json",
+        "docs/ui-redesign/evidence/public-final-readonly.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/apps/web/public/physicsos/website/index.html",
@@ -2385,7 +3675,20 @@
           "lineCount": 190,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 50,
+        "title": "最终官网首屏",
+        "screenshot": "/tmp/physicsos-ui-public-final-screens/50-1360.png",
+        "url": "http://physicsos-validation.invalid:3199/physicsos/website/index.html",
+        "horizontalOverflow": false,
+        "heroVisible": true,
+        "heroImage": {
+          "complete": true,
+          "width": 405,
+          "height": 510
+        }
+      }
     },
     {
       "designId": 51,
@@ -2413,12 +3716,15 @@
         "减少动效适配"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
+      "implementationStatus": "已实现；真实官网候选交互与最终资产只读复验通过",
       "visualValidation": "待验收",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
       "screenshots": [],
-      "tests": [],
+      "tests": [
+        "docs/ui-redesign/evidence/public-candidate.json",
+        "docs/ui-redesign/evidence/public-final-readonly.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/apps/web/public/physicsos/website/index.html",
@@ -2436,7 +3742,17 @@
           "lineCount": 190,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 51,
+        "title": "最终官网功能切换",
+        "screenshot": "/tmp/physicsos-ui-public-final-screens/51-1360.png",
+        "url": "http://physicsos-validation.invalid:3199/physicsos/website/index.html",
+        "horizontalOverflow": false,
+        "chat": true,
+        "create": true,
+        "experiment": true
+      }
     },
     {
       "designId": 52,
@@ -2464,12 +3780,15 @@
         "焦点刷新"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
+      "implementationStatus": "已实现；真实官网候选交互与最终资产只读复验通过",
       "visualValidation": "待验收",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
       "screenshots": [],
-      "tests": [],
+      "tests": [
+        "docs/ui-redesign/evidence/public-candidate.json",
+        "docs/ui-redesign/evidence/public-final-readonly.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/apps/web/public/physicsos/website/index.html",
@@ -2487,7 +3806,17 @@
           "lineCount": 190,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 52,
+        "title": "最终官网公开内容",
+        "screenshot": "/tmp/physicsos-ui-public-final-screens/52-1360.png",
+        "url": "http://physicsos-validation.invalid:3199/physicsos/website/index.html",
+        "horizontalOverflow": false,
+        "publicGetStatus": 200,
+        "publicTestimonialCount": 0,
+        "publicContributorCount": 0
+      }
     },
     {
       "designId": 53,
@@ -2516,12 +3845,15 @@
         "焦点与关闭"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
+      "implementationStatus": "已实现；真实官网候选交互与最终资产只读复验通过",
       "visualValidation": "待验收",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
       "screenshots": [],
-      "tests": [],
+      "tests": [
+        "docs/ui-redesign/evidence/public-candidate.json",
+        "docs/ui-redesign/evidence/public-final-readonly.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/apps/web/public/physicsos/website/index.html",
@@ -2539,7 +3871,15 @@
           "lineCount": 190,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 53,
+        "title": "最终官网真实PNG反馈表单",
+        "screenshot": "/tmp/physicsos-ui-public-final-screens/53-1360.png",
+        "url": "http://physicsos-validation.invalid:3199/physicsos/website/index.html",
+        "horizontalOverflow": false,
+        "pngPreviewDecoded": true
+      }
     },
     {
       "designId": 54,
@@ -2567,12 +3907,15 @@
         "失败不可展示成功"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
+      "implementationStatus": "已实现；真实官网候选交互与最终资产只读复验通过",
       "visualValidation": "待验收",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
       "screenshots": [],
-      "tests": [],
+      "tests": [
+        "docs/ui-redesign/evidence/public-candidate.json",
+        "docs/ui-redesign/evidence/public-final-readonly.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/apps/web/public/physicsos/website/index.html",
@@ -2590,7 +3933,17 @@
           "lineCount": 190,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 54,
+        "title": "最终官网真实提交成功",
+        "screenshot": "/tmp/physicsos-ui-public-final-screens/54-1360.png",
+        "url": "http://physicsos-validation.invalid:3199/physicsos/website/index.html",
+        "horizontalOverflow": false,
+        "receiptVisible": "反馈编号：wf_MkJHhDj0NMAyLwMx",
+        "actualPostStatus": 201,
+        "actualId": "wf_MkJHhDj0NMAyLwMx"
+      }
     },
     {
       "designId": 55,
@@ -2617,12 +3970,15 @@
         "保留技术规范"
       ],
       "mappingNotes": "共用生成器负责各章节；不是单一首页样式验收。",
-      "implementationStatus": "待验收",
+      "implementationStatus": "已实现；真实官网候选交互与最终资产只读复验通过",
       "visualValidation": "待验收",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
       "screenshots": [],
-      "tests": [],
+      "tests": [
+        "docs/ui-redesign/evidence/public-candidate.json",
+        "docs/ui-redesign/evidence/public-final-readonly.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/apps/web/public/physicsos/developers/index.html",
@@ -2640,7 +3996,30 @@
           "lineCount": 140,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 55,
+        "title": "最终开发文档搜索、正文锚点与真实模板ZIP",
+        "url": "http://physicsos-validation.invalid:3199/physicsos/developers/index.html#/package/tree",
+        "screenshot": "/tmp/physicsos-ui-public-final-screens/55-1360.png",
+        "searchResults": 3,
+        "heading": "实验包格式",
+        "horizontalOverflow": false,
+        "zip": {
+          "status": 200,
+          "contentType": "application/octet-stream",
+          "bytes": 232146,
+          "magic": [
+            80,
+            75,
+            3,
+            4
+          ],
+          "sha256": "f9165baa152c62ad73c1d51f9e62e68abe53e480d642bd5a655393f25061b936",
+          "matchesSource": true,
+          "sourceZipCrcPassed": true
+        }
+      }
     },
     {
       "designId": 56,
@@ -2670,13 +4049,27 @@
         "播放/测量"
       ],
       "mappingNotes": "电路沿用PhysicsCanvas与circuit-renderer/CircuitBuilderPanel独立逻辑，不能只修改通用三栏。",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
-      "interactionValidation": "待验收",
-      "permissionValidation": "待验收",
-      "screenshots": [],
-      "tests": [],
-      "deviations": [],
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "截图已取，含明确待复验/缺口",
+      "interactionValidation": "部分真实闭环通过",
+      "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-09-circuit-20ohm-ce2-1360.png",
+          "sha256": "c1958aca78525f2d799c0eb360298520c34c913e3e29048165976e3c128607eb"
+        },
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-09-circuit-ce2-390.png",
+          "sha256": "d7d7d48e7decc846c7c7b7711190cfc7b11127e917bd37a5a35ce1d6d53cc1cf"
+        }
+      ],
+      "tests": [
+        "docs/ui-redesign/evidence/lab-candidate.json"
+      ],
+      "deviations": [
+        "初次截图在sprite资源加载前可能呈空器材，应在最终镜像等资源完成再取视觉证据",
+        "器材放置/接线完整链路未在本轮浏览器重做，已保留源码行为测试"
+      ],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/PhysicsWorkspace.tsx",
         "overlays/harness/files/packages/client/ui-physicsos/src/client/physics/PhysicsCanvas.tsx",
@@ -2705,7 +4098,40 @@
           "lineCount": 1441,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 56,
+        "validationPhase": "final-candidate-ce2",
+        "role": "TEACHER",
+        "schoolFixture": "B",
+        "interactionValidation": "部分真实闭环通过",
+        "visualValidation": "截图已取，含明确待复验/缺口",
+        "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
+        "checks": [
+          "真实可解starter circuit",
+          "阻值draft不提交，Enter 10→20Ω revision0→1",
+          "引擎电流0.6→0.3A",
+          "撤销10Ω、重做20Ω",
+          "390px文档无横溢"
+        ],
+        "evidence": [
+          "/tmp/physicsos-ui-lab-circuit-result.json"
+        ],
+        "screenshots": [
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-09-circuit-20ohm-ce2-1360.png",
+            "sha256": "c1958aca78525f2d799c0eb360298520c34c913e3e29048165976e3c128607eb"
+          },
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/lab-09-circuit-ce2-390.png",
+            "sha256": "d7d7d48e7decc846c7c7b7711190cfc7b11127e917bd37a5a35ce1d6d53cc1cf"
+          }
+        ],
+        "deviations": [
+          "初次截图在sprite资源加载前可能呈空器材，应在最终镜像等资源完成再取视觉证据",
+          "器材放置/接线完整链路未在本轮浏览器重做，已保留源码行为测试"
+        ]
+      }
     },
     {
       "designId": 57,
@@ -2732,12 +4158,21 @@
         "收起/焦点"
       ],
       "mappingNotes": "新顶部抽屉是目标呈现，当前源码入口仍需壳层迁移后验收。",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "候选截图；最终镜像待复验",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
-      "screenshots": [],
-      "tests": [],
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-history-1360.png",
+          "width": 1360,
+          "height": 768,
+          "sha256": "3f8fc0269094b5a4ef544a71d545789e4863b4382f7d78948d4462a146a11aea"
+        }
+      ],
+      "tests": [
+        "docs/ui-redesign/evidence/root-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/RecentSpaces.tsx",
@@ -2755,7 +4190,23 @@
           "lineCount": 888,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "rootCandidateEvidence": {
+        "designId": 57,
+        "phase": "candidate-ce2",
+        "screenshots": [
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-history-1360.png",
+            "width": 1360,
+            "height": 768,
+            "sha256": "3f8fc0269094b5a4ef544a71d545789e4863b4382f7d78948d4462a146a11aea"
+          }
+        ],
+        "visualValidation": "候选截图；最终镜像待复验",
+        "notes": [
+          "Snapshot filenames may include intended size; width/height above are read from actual PNG bytes."
+        ]
+      }
     },
     {
       "designId": 58,
@@ -2782,12 +4233,21 @@
         "Escape/焦点"
       ],
       "mappingNotes": "更多菜单属于设计目标，原组件是现有动作来源；不能推断已实现。",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "候选截图；最终镜像待复验",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
-      "screenshots": [],
-      "tests": [],
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-more-1360.png",
+          "width": 1360,
+          "height": 768,
+          "sha256": "d5b50df6bd3db96e46bb4ada558defe6d5954848a762f70465f07a8854aba6c8"
+        }
+      ],
+      "tests": [
+        "docs/ui-redesign/evidence/root-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/SidebarNav.tsx",
@@ -2805,7 +4265,23 @@
           "lineCount": 100,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "rootCandidateEvidence": {
+        "designId": 58,
+        "phase": "candidate-ce2",
+        "screenshots": [
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-more-1360.png",
+            "width": 1360,
+            "height": 768,
+            "sha256": "d5b50df6bd3db96e46bb4ada558defe6d5954848a762f70465f07a8854aba6c8"
+          }
+        ],
+        "visualValidation": "候选截图；最终镜像待复验",
+        "notes": [
+          "Snapshot filenames may include intended size; width/height above are read from actual PNG bytes."
+        ]
+      }
     },
     {
       "designId": 59,
@@ -2832,12 +4308,21 @@
         "新反馈跳转"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "候选截图；最终镜像待复验",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
-      "screenshots": [],
-      "tests": [],
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-feedback-history-1360.png",
+          "width": 756,
+          "height": 413,
+          "sha256": "e543487a65ce08812a6e6307963a8daeebf2e567d0700cfb330fa2e78fe8c0ab"
+        }
+      ],
+      "tests": [
+        "docs/ui-redesign/evidence/root-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/NoticeBoard.tsx"
@@ -2849,7 +4334,23 @@
           "lineCount": 152,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "rootCandidateEvidence": {
+        "designId": 59,
+        "phase": "candidate-ce2",
+        "screenshots": [
+          {
+            "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-feedback-history-1360.png",
+            "width": 756,
+            "height": 413,
+            "sha256": "e543487a65ce08812a6e6307963a8daeebf2e567d0700cfb330fa2e78fe8c0ab"
+          }
+        ],
+        "visualValidation": "候选截图；最终镜像待复验",
+        "notes": [
+          "Snapshot filenames may include intended size; width/height above are read from actual PNG bytes."
+        ]
+      }
     },
     {
       "designId": 60,
@@ -2878,13 +4379,17 @@
         "不得显示矛盾成功"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
+      "implementationStatus": "已实现；实际失败与单次重试已验",
       "visualValidation": "待验收",
-      "interactionValidation": "待验收",
+      "interactionValidation": "同一原题真实发起一次重试，模型仍MAX_TOKENS；未虚称动画成功",
       "permissionValidation": "待验收",
       "screenshots": [],
-      "tests": [],
-      "deviations": [],
+      "tests": [
+        "docs/ui-redesign/evidence/generation-retry-limit.json"
+      ],
+      "deviations": [
+        "原有模型生成MAX_TOKENS限制仍在，独立动画未形成；物理数值求解和验证已通过，worker动态冷验证单列。"
+      ],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/SceneTurnCard.tsx",
         "overlays/harness/files/packages/client/ui-physicsos/src/client/SceneChatCard.tsx",
@@ -2931,12 +4436,14 @@
         "验证输入"
       ],
       "mappingNotes": "当前策略为同一modelPool页面区域，不是独立路由或假造标签。",
-      "implementationStatus": "待验收",
-      "visualValidation": "待验收",
-      "interactionValidation": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "visualValidation": "captured; pixel/design review pending",
+      "interactionValidation": "entry/render verified",
       "permissionValidation": "待验收",
       "screenshots": [],
-      "tests": [],
+      "tests": [
+        "docs/ui-redesign/evidence/admin-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/AdminModelPoolTab.tsx"
@@ -2948,7 +4455,23 @@
           "lineCount": 715,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 61,
+        "title": "轮询与冷却策略",
+        "role": "SUPER_ADMIN",
+        "viewport": {
+          "width": 1360,
+          "height": 768
+        },
+        "screenshot": "/tmp/physicsos-ui-admin-screens/61-super-1360.png",
+        "browserVisited": true,
+        "visualValidation": "captured; pixel/design review pending",
+        "interactionValidation": "entry/render verified",
+        "alerts": [],
+        "horizontalOverflow": false,
+        "pageErrors": []
+      }
     },
     {
       "designId": 62,
@@ -2974,12 +4497,14 @@
         "入库/恢复待核验"
       ],
       "mappingNotes": "",
-      "implementationStatus": "待验收",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
       "visualValidation": "待验收",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
       "screenshots": [],
-      "tests": [],
+      "tests": [
+        "docs/ui-redesign/evidence/admin-candidate.json"
+      ],
       "deviations": [],
       "componentPaths": [
         "overlays/harness/files/packages/client/ui-physicsos/src/client/PaperWorkspace.tsx"
@@ -2991,7 +4516,30 @@
           "lineCount": 1888,
           "evidenceKind": "source-present-only"
         }
-      ]
+      ],
+      "candidateEvidence": {
+        "designId": 62,
+        "title": "真实题库核验详情",
+        "role": "TEACHER",
+        "viewport": {
+          "width": 1360,
+          "height": 768
+        },
+        "screenshot": "/tmp/physicsos-ui-admin-screens/62-teacher-1360.png",
+        "browserVisited": true,
+        "headings": [
+          "出卷工作台",
+          "题目导入（粘贴 / 图片 / PDF）",
+          "待核验（0）",
+          "已入库（1）"
+        ],
+        "alerts": [],
+        "horizontalOverflow": false,
+        "pageErrors": [],
+        "status": "verified through genuine staff review API",
+        "synthetic": true
+      }
     }
-  ]
+  ],
+  "updatedAt": "2026-11-15T13:51:58.007561+00:00"
 }

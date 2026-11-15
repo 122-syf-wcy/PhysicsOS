@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "candidateImage": "sha256:93cb03a815a86fa85a5997bbd907471e53dbc8ae10c94c756f1c1b8c0d5d2376",
+  "sourceRevision": "f4a646a654cd8cd00591f20b3867d0917911322a",
+  "browser": "Independent Chrome, candidate-only secure-context simulation, reduced motion",
+  "role": "STUDENT",
+  "checks": {
+    "clientBootActive": true,
+    "pageErrors": [],
+    "errorConsole": [],
+    "realLogin": true,
+    "accountWorkspaceRestored": true,
+    "composerWidth": 950,
+    "composerHeight": 142,
+    "modeInsideComposer": true,
+    "duplicateWorkspaceChipVisible": false,
+    "learningSettingsAndPermissionsVisible": true,
+    "learningModeSelectionUpdatesComposer": true,
+    "modeRestoredToExplore": true,
+    "modelReadonlyCopyVisible": true,
+    "passwordInputsInModelSettings": 0,
+    "mobile390NoHorizontalOverflow": true,
+    "desktopNoHorizontalOverflow": true,
+    "darkThemeActualCssColorScheme": "dark",
+    "restoredTheme": "light"
+  },
+  "screenshots": [
+    {
+      "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-final-f4-home-1360.png",
+      "width": 1360,
+      "height": 768,
+      "sha256": "d20cf73c707af18793895e99fd15569a5dca970425aaa85948cf2ecad6c09175"
+    },
+    {
+      "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-final-f4-home-390.png",
+      "width": 390,
+      "height": 844,
+      "sha256": "1c9d423d95b4bc665cc35bee66c9ad0a65501e173db1fe700e1b9e9550145046"
+    },
+    {
+      "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-final-f4-home-dark.png",
+      "width": 1360,
+      "height": 768,
+      "sha256": "a820d2f5148dd85f4801349465cc6dc5c09fa58b9e53c87dec617907d243332c"
+    },
+    {
+      "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-final-f4-learning-1360.png",
+      "width": 1360,
+      "height": 768,
+      "sha256": "d5f420bdfd23eb32d11f0342b2b06f68573709fa37def226ec9c0550bdbcc163"
+    },
+    {
+      "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-final-f4-models-1360.png",
+      "width": 1360,
+      "height": 768,
+      "sha256": "13cd787031bc31559c58a2da8e7c8c03b1e7ad59740bb0f953c8d63771cebc9a"
+    }
+  ],
+  "deviations": [
+    {
+      "severity": "P2",
+      "detail": "Settings navigation retains the legacy Agent presets entry beside the product Learning modes entry; the product learning controls work."
+    }
+  ],
+  "productionMutation": false
+}

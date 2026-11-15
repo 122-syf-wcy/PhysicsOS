@@ -1,0 +1,25 @@
+{
+  "format": "physicsos-isolated-paired-drill/1",
+  "project": "physicsos-restore-ui-20261115-a",
+  "sourceBackup": "/opt/physicsos/backups/releases/20261114T031500Z-loading-art-b50232a4",
+  "runtimeImage": "sha256:ce2ca5150d8eb8e5b8e8c7f6e939679a9e8e8d16d25ffec54d8e6a75d629952b",
+  "productionMutation": false,
+  "sourceReadOnly": true,
+  "sourceRecoveryReceiptSha256": "e469d65f52b73c34273a1d7c138027c61cd40b51171221fb5d2e81f5d07fdbc9",
+  "sourceManifestSha256": "f94247b0567aa67f6c5784b3d89d5491a080f443545c0fae5da1682b24e4e903",
+  "backupIntegrityVerified": true,
+  "secretFilesVerified": 10,
+  "status": "core-restore-verified",
+  "completed": true,
+  "coreRestoreVerified": true,
+  "postgresCountsMatch": true,
+  "tablesChecked": 103,
+  "restoredSessionFiles": 194,
+  "modelKeysDecrypted": 4,
+  "retainedOwnedVolumes": [],
+  "receiptSha256": "8af40348afb6c16c0d49ec744d1314e67ca4e44a440269da261fbfd51530ea64",
+  "notes": [
+    "Original paired recovery point stayed read-only. Only its disposable, independently verified restore copies were cleaned after validation.",
+    "Internal HTTP readiness/authentication/protected reads passed; private host port was not reachable on the internal-only bridge and was not exposed by relaxing isolation."
+  ]
+}

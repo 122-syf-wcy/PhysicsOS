@@ -1,0 +1,301 @@
+{
+  "schemaVersion": 1,
+  "image": "sha256:ce2ca5150d8eb8e5b8e8c7f6e939679a9e8e8d16d25ffec54d8e6a75d629952b",
+  "sourceRevision": "f005941663f760dfb46da2ac6ec13a3df7beee24",
+  "facts": [
+    "Student login, account workspace creation, feedback submit/history read and real resource practice were performed through candidate UI.",
+    "The resource practice produced s=3000m and passed engine verification; independent code animation failed before the candidate worker was connected.",
+    "Unknown-school registration returned a real pending receipt; actual password reset completed and the new password successfully authenticated.",
+    "Final b734 home/mode/read-only copy and mobile CSS are awaiting final-image browser checks."
+  ],
+  "items": [
+    {
+      "designId": 1,
+      "phase": "candidate-ce2",
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-home-stable-1360.png",
+          "width": 1360,
+          "height": 768,
+          "sha256": "fe4840c8a9ff84a2b4a75763e0130e2f4567d2f76bb6ff26ed8c524d85bdc393"
+        }
+      ],
+      "visualValidation": "候选截图；最终镜像待复验",
+      "notes": [
+        "Snapshot filenames may include intended size; width/height above are read from actual PNG bytes."
+      ]
+    },
+    {
+      "designId": 2,
+      "phase": "candidate-ce2",
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-resource-practice-1360.png",
+          "width": 1360,
+          "height": 768,
+          "sha256": "fab1865760ca312f13475e0a915b7bf2d88ab05f2f9bba8e53472f32bc08c95e"
+        }
+      ],
+      "visualValidation": "候选截图；最终镜像待复验",
+      "notes": [
+        "Snapshot filenames may include intended size; width/height above are read from actual PNG bytes."
+      ]
+    },
+    {
+      "designId": 16,
+      "phase": "candidate-ce2",
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-feedback-new-1360.png",
+          "width": 1360,
+          "height": 768,
+          "sha256": "591581e1b60e02a6e9ccd5415dbcd504f51859e6577ac140d3e5ced262cdc028"
+        }
+      ],
+      "visualValidation": "候选截图；最终镜像待复验",
+      "notes": [
+        "Snapshot filenames may include intended size; width/height above are read from actual PNG bytes."
+      ]
+    },
+    {
+      "designId": 17,
+      "phase": "candidate-ce2",
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-library-1360.png",
+          "width": 1360,
+          "height": 768,
+          "sha256": "f9d25582ae17ab1cc3529162eb57dededa36a9278a3ac571e31ace2705d018c8"
+        }
+      ],
+      "visualValidation": "候选截图；最终镜像待复验",
+      "notes": [
+        "Snapshot filenames may include intended size; width/height above are read from actual PNG bytes."
+      ]
+    },
+    {
+      "designId": 22,
+      "phase": "candidate-ce2",
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-library-detail-1360.png",
+          "width": 1360,
+          "height": 768,
+          "sha256": "f41472bf9db87c6b0bef70d53562795b8b36336563e4540f482576f074f64570"
+        }
+      ],
+      "visualValidation": "候选截图；最终镜像待复验",
+      "notes": [
+        "Snapshot filenames may include intended size; width/height above are read from actual PNG bytes."
+      ]
+    },
+    {
+      "designId": 23,
+      "phase": "candidate-ce2",
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-auth-login-1360.png",
+          "width": 1360,
+          "height": 768,
+          "sha256": "1ca1b4ca9ae5edf72000e909140e1561425444fda492bb8b4d8438c2b5d52cd4"
+        }
+      ],
+      "visualValidation": "候选截图；最终镜像待复验",
+      "notes": [
+        "Snapshot filenames may include intended size; width/height above are read from actual PNG bytes."
+      ]
+    },
+    {
+      "designId": 24,
+      "phase": "candidate-ce2",
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-auth-register-1360.png",
+          "width": 1360,
+          "height": 768,
+          "sha256": "4ced9049c1e400bdf0181dd5abdf9f3afcfff2235f4383b5421899993df9a1fc"
+        }
+      ],
+      "visualValidation": "候选截图；最终镜像待复验",
+      "notes": [
+        "Snapshot filenames may include intended size; width/height above are read from actual PNG bytes."
+      ]
+    },
+    {
+      "designId": 25,
+      "phase": "candidate-ce2",
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-auth-forgot-1360.png",
+          "width": 1360,
+          "height": 768,
+          "sha256": "d3601a5f719583b646348f769cd6916da0191365d7671571ad7ab2666a30d4ea"
+        }
+      ],
+      "visualValidation": "候选截图；最终镜像待复验",
+      "notes": [
+        "Snapshot filenames may include intended size; width/height above are read from actual PNG bytes."
+      ]
+    },
+    {
+      "designId": 26,
+      "phase": "candidate-ce2",
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-auth-reset-1360.png",
+          "width": 1360,
+          "height": 768,
+          "sha256": "ca984f8a2c0df3ae5cb660d4037de3c4d4f37b797454eeb953f95fb0222f56ec"
+        }
+      ],
+      "visualValidation": "候选截图；最终镜像待复验",
+      "notes": [
+        "Snapshot filenames may include intended size; width/height above are read from actual PNG bytes."
+      ]
+    },
+    {
+      "designId": 27,
+      "phase": "candidate-ce2",
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-auth-pending-1360.png",
+          "width": 1360,
+          "height": 768,
+          "sha256": "99e8998d3d0ba4613708b0b009d4ff206af3fca9cdc3adc2c2e6cf0610ea43da"
+        }
+      ],
+      "visualValidation": "候选截图；最终镜像待复验",
+      "notes": [
+        "Snapshot filenames may include intended size; width/height above are read from actual PNG bytes."
+      ]
+    },
+    {
+      "designId": 28,
+      "phase": "candidate-ce2",
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-settings-general-1360.png",
+          "width": 1360,
+          "height": 768,
+          "sha256": "62a9aaf836ac99d25cea302e9ba9d0a7aaac014d592ecccfb21f45811987e508"
+        }
+      ],
+      "visualValidation": "候选截图；最终镜像待复验",
+      "notes": [
+        "Snapshot filenames may include intended size; width/height above are read from actual PNG bytes."
+      ]
+    },
+    {
+      "designId": 29,
+      "phase": "candidate-ce2",
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-settings-models-1360.png",
+          "width": 1360,
+          "height": 768,
+          "sha256": "b4f334eb54f831d629175e9f5113c0df9cc4caff669c6172322b4597f8856417"
+        }
+      ],
+      "visualValidation": "候选截图；最终镜像待复验",
+      "notes": [
+        "Snapshot filenames may include intended size; width/height above are read from actual PNG bytes."
+      ]
+    },
+    {
+      "designId": 30,
+      "phase": "candidate-ce2",
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-settings-agent-1360.png",
+          "width": 1360,
+          "height": 768,
+          "sha256": "678a1f8bed675796595946e399b1e76d00c05501765238980a3994bb3a610785"
+        }
+      ],
+      "visualValidation": "候选截图；最终镜像待复验",
+      "notes": [
+        "Snapshot filenames may include intended size; width/height above are read from actual PNG bytes."
+      ]
+    },
+    {
+      "designId": 31,
+      "phase": "candidate-ce2",
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-usage-1360.png",
+          "width": 1360,
+          "height": 768,
+          "sha256": "055642c288e0323ba61dc067ba5a472d5b3567a44d6c8bccc42a6b483ef9d658"
+        }
+      ],
+      "visualValidation": "候选截图；最终镜像待复验",
+      "notes": [
+        "Snapshot filenames may include intended size; width/height above are read from actual PNG bytes."
+      ]
+    },
+    {
+      "designId": 32,
+      "phase": "candidate-ce2",
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-account-student-1360.png",
+          "width": 1360,
+          "height": 768,
+          "sha256": "70c2695f11b1826dcd196f5e0d6e0dd98fea54ff9a6d670240f80c4cfb077d82"
+        }
+      ],
+      "visualValidation": "候选截图；最终镜像待复验",
+      "notes": [
+        "Snapshot filenames may include intended size; width/height above are read from actual PNG bytes."
+      ]
+    },
+    {
+      "designId": 57,
+      "phase": "candidate-ce2",
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-history-1360.png",
+          "width": 1360,
+          "height": 768,
+          "sha256": "3f8fc0269094b5a4ef544a71d545789e4863b4382f7d78948d4462a146a11aea"
+        }
+      ],
+      "visualValidation": "候选截图；最终镜像待复验",
+      "notes": [
+        "Snapshot filenames may include intended size; width/height above are read from actual PNG bytes."
+      ]
+    },
+    {
+      "designId": 58,
+      "phase": "candidate-ce2",
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-more-1360.png",
+          "width": 1360,
+          "height": 768,
+          "sha256": "d5b50df6bd3db96e46bb4ada558defe6d5954848a762f70465f07a8854aba6c8"
+        }
+      ],
+      "visualValidation": "候选截图；最终镜像待复验",
+      "notes": [
+        "Snapshot filenames may include intended size; width/height above are read from actual PNG bytes."
+      ]
+    },
+    {
+      "designId": 59,
+      "phase": "candidate-ce2",
+      "screenshots": [
+        {
+          "path": "/Users/dongsiwei/Desktop/PhysicsOS/.playwright-mcp/root-feedback-history-1360.png",
+          "width": 756,
+          "height": 413,
+          "sha256": "e543487a65ce08812a6e6307963a8daeebf2e567d0700cfb330fa2e78fe8c0ab"
+        }
+      ],
+      "visualValidation": "候选截图；最终镜像待复验",
+      "notes": [
+        "Snapshot filenames may include intended size; width/height above are read from actual PNG bytes."
+      ]
+    }
+  ]
+}
