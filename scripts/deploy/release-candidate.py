@@ -249,6 +249,19 @@ def prepare_network(config):
         network = ensure_isolated_network(config, production, create=True)
         return {'network': config['network'], 'networkId': network['Id'], 'task': config['task'], 'databaseStarted': False, 'candidateStarted': False}
 
+def seed_profile_file(source, destination):
+    if destination.exists() or destination.is_symlink():
+        if destination.is_symlink() or not destination.is_file() or destination.stat().st_nlink != 1:
+            raise RuntimeError('Existing candidate profile is not a private regular file')
+        return False
+    if not source.is_file():
+        return False
+    # Refreshes retain their own settings; a raced-in file must not be truncated.
+    with source.open('rb') as incoming, destination.open('xb') as outgoing:
+        shutil.copyfileobj(incoming, outgoing)
+    return True
+
+
 def prepare(config, image_name):
     app = metadata('container', 'physicsos-app-1')
     pg = metadata('container', config['databaseContainer'])
@@ -285,8 +298,7 @@ def prepare(config, image_name):
     profile.mkdir(parents=True, exist_ok=True, mode=0o700)
     for directory in [profile.parent, profile]: os.chown(directory, 999, 999)
     for name in ['cordis.yml', 'cordis.patch.yml', 'package.json', 'pnpm-workspace.yaml']:
-        if (profile_source / name).is_file():
-            shutil.copyfile(profile_source / name, profile / name)
+        if seed_profile_file(profile_source / name, profile / name):
             os.chown(profile / name, 999, 999); (profile / name).chmod(0o600)
     port = config['httpPort']
     health = subprocess.check_output(['docker', 'run', '--rm', '--network', 'none', '--entrypoint', 'cat', image['Id'], '/app/overlays/harness/files/packages/physicsos/health-host/deployment.patch.yml'], text=True)

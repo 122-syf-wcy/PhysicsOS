@@ -2022,3 +2022,163 @@ details[open] > .advancedSummary::before {
 @media (max-width: 600px) { .finalFilters { flex-wrap: wrap; } .finalRow { grid-template-columns: minmax(0, 1fr); padding: 16px; } .finalRow .fileLinks { grid-column: 1; grid-row: auto; justify-content: flex-start; max-width: none; } }
 
 .answerStep { margin: 6px 0; line-height: 1.8; }
+
+/* Local paper-workbench polish: readable content, bounded evidence and real states. */
+.root { font-size: 14px; line-height: 1.6; }
+.root :where(button, input, textarea, select) { box-sizing: border-box; }
+.hero { min-height: 94px; }
+.subtitle, .reviewer, .reviewer input, .back { font-size: 14px; }
+.title { font-weight: 600; }
+.steps { flex-wrap: wrap; column-gap: 12px; row-gap: 8px; }
+.step { min-height: 44px; font-size: 14px; }
+.stepWrap { flex: 1 1 auto; }
+.stepLine { flex: 1 1 24px; width: 42px; }
+.panel { min-height: 0; min-width: 0; overscroll-behavior: contain; }
+.panel h2 { font-size: 20px; line-height: 1.5; }
+.panel h3 { font-size: 16px; line-height: 1.5; }
+.workbenchMain, .summaryCard { padding: 24px; }
+.stepForm { display: flex; flex-direction: column; gap: 26px; }
+.stepCard { gap: 10px; }
+.stepCardTitle, .summaryTitle { margin-bottom: 8px; }
+.field, .fld, .field input, .field textarea, .fld input, .fld textarea { font-size: 14px; line-height: 1.6; }
+.field input, .fld input, .field select, .fld select { min-height: 42px; }
+.field textarea, .fld textarea { max-width: 100%; resize: vertical; }
+.templateMeta dt, .templateMeta dd { font-size: 14px; }
+.templateMeta { margin: 4px 0 0; }
+.structureDetails { border-top: 1px solid var(--dsw-alias-border-l1); padding-top: 12px; }
+.structureDetails summary { cursor: pointer; min-height: 38px; font-size: 14px; color: var(--physics-ink-muted); }
+.structureRow { flex-wrap: wrap; }
+.structureTitle, .structureMeta, .structureNote { font-size: 14px; }
+.structureNote { flex: 1 1 100%; line-height: 1.7; }
+.summaryList > div { font-size: 14px; padding: 9px 0; }
+.summaryList dd { overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+.summaryHint, .actionHint, .statusName, .statusPill { font-size: 14px; }
+.statusRow { padding: 6px 0; }
+.primary, .miniBtn, .link { min-height: 42px; font-size: 14px; }
+.primary { background: var(--physics-accent-strong, #286b42); color: #fff; border-radius: 999px; }
+.primary:hover:not(:disabled) { background: var(--physics-accent, #397c52); }
+.miniBtn { padding: 8px 16px; border-radius: 999px; }
+.miniBtn:disabled, .qActions button:disabled { opacity: 0.5; cursor: not-allowed; }
+.actions { flex-wrap: wrap; align-items: center; }
+.notice { font-size: 14px; gap: 14px; overflow-wrap: anywhere; }
+.notice button { min-width: 40px; min-height: 40px; }
+.jobMeta { font-size: 14px; flex-wrap: wrap; overflow-wrap: anywhere; }
+.jobRow { font-size: 14px; padding: 16px; }
+.jobProgress { height: 22px; }
+.jobProgressText, .chip { font-size: 12px; }
+.detailTitle { flex-wrap: wrap; }
+.split { grid-template-columns: minmax(220px, 280px) minmax(0, 1fr); }
+.splitCollapsed { grid-template-columns: minmax(0, 1fr); }
+.jobListToggle { font-size: 14px; min-height: 40px; }
+.stageRail { overflow: visible; flex-wrap: wrap; gap: 12px; padding: 12px 16px; }
+.stageItem { font-size: 14px; }
+.block { padding: 18px; }
+.block > summary { min-height: 38px; }
+.specSummary { font-size: 16px; flex-wrap: wrap; }
+.specSummaryHint { font-size: 14px; }
+.table { font-size: 14px; }
+.table th { font-size: 13px; }
+.specTable th, .specTable td { padding: 12px 8px; white-space: normal; overflow-wrap: anywhere; }
+.specTable input { display: block; min-width: 0; width: 100%; min-height: 42px; font: inherit; color: inherit; padding: 8px;
+  border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; background: var(--dsw-alias-bg-base, #fff); margin: 4px 0; }
+.specTable .cellText { min-width: 0; }
+.findings { font-size: 14px; gap: 8px; margin-top: 12px; }
+.planNotice, .analysisWarning { font-size: 14px; line-height: 1.7; border-radius: 10px; padding: 10px 12px; margin: 12px 0;
+  background: var(--physics-tint-warning, #f8f0dc); color: var(--physics-ink-warn, #72541b); overflow-wrap: anywhere; }
+.failureBox { padding: 16px 18px; border-radius: 12px; margin: 14px 0; color: var(--dsw-alias-state-error-primary, #a03a30);
+  background: var(--dsw-alias-state-error-secondary, #fbe9e7); border: 1px solid var(--dsw-alias-border-l1); }
+.failureBox p { margin: 6px 0; font-size: 14px; }
+.approvalBox { margin: 20px 0; padding: 20px; border-radius: 14px; background: var(--physics-accent-soft); border: 1px solid var(--physics-glass-border-soft); }
+.workerTitle { font-size: 16px; flex-wrap: wrap; }
+.workerDetail, .workerTimer, .workerPhases { font-size: 14px; }
+.workerDetail { white-space: normal; overflow: visible; }
+.reviewWorkspace { background: var(--physics-glass-fill); }
+.questionReader { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 18px; align-items: start; }
+.questionDirectory { display: flex; flex-direction: column; gap: 8px; position: sticky; top: 0; }
+.questionDirectory button { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; padding: 8px 10px;
+  font: inherit; color: var(--physics-ink); background: var(--dsw-alias-bg-base, #fff); border: 1px solid var(--physics-glass-border-soft); border-radius: 10px; cursor: pointer; }
+.questionDirectory button span { font-size: 12px; color: var(--physics-ink-muted); }
+.questionDirectory .questionSelected { border-color: var(--physics-accent); background: var(--physics-accent-soft); font-weight: 600; }
+.questionDirectory .questionReviewed::before { content: '✓'; color: var(--physics-accent-strong); }
+.question { margin: 0; min-width: 0; }
+.questionHeader { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 14px 18px; font-size: 16px; background: var(--dsw-alias-interactive-bg-hover); }
+.qBody { padding: 22px; font-size: 16px; line-height: 1.8; overflow-wrap: anywhere; }
+.qMeta, .qStatus, .note, .figure { font-size: 14px; }
+.answer { padding: 16px; font-size: 16px; }
+.questionEvidence { padding: 12px 0; margin-top: 16px; border-top: 1px solid var(--dsw-alias-border-l1); }
+.questionEvidence summary { font-size: 14px; cursor: pointer; }
+.qActions { flex-wrap: wrap; gap: 10px; }
+.qActions button { min-height: 42px; font-size: 14px; padding: 8px 18px; }
+.readerActions { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 18px; }
+.reviewCheck { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; margin-top: 14px; line-height: 1.6; }
+.reviewCheck input { flex: none; margin-top: 4px; }
+.modal { width: 540px; padding: 24px; }
+.modal h3 { font-size: 18px; }
+.modal textarea { font-size: 16px; }
+.figureBlock img { display: block; width: auto; height: auto; margin: auto; object-fit: contain; }
+.sectionIntro { margin: 0 0 20px; font-size: 14px; color: var(--physics-ink-muted); }
+.fileLinks a, .fileLinks button { min-height: 42px; padding: 9px 14px; font-size: 14px; border-radius: 999px; }
+.finalFilters > input { min-height: 44px; font-size: 14px; }
+.root :where(button, input, textarea, select, summary):focus-visible { outline: 2px solid var(--physics-accent-strong, #286b42); outline-offset: 3px; }
+
+@media (max-width: 1000px) {
+  .root { padding: 0 20px; }
+  .hero { min-height: 84px; }
+  .heroText { align-items: center; }
+  .split, .splitWide { grid-template-columns: minmax(0, 1fr); }
+  .jobList { position: static; }
+  .workbench { grid-template-columns: minmax(0, 1fr); }
+  .steps { justify-content: center; }
+  .stepWrap { flex: 1 1 28%; }
+  .stepSource, .stepSource + .stepSource { margin-left: 0; }
+}
+@media (max-width: 600px) {
+  .root { padding: 0 12px; }
+  .hero { padding: 12px 0; min-height: 88px; }
+  .heroText { align-items: center; flex: 1 1 100%; }
+  .title { font-size: 24px; }
+  .subtitle { text-align: center; font-size: 14px; white-space: normal; }
+  .back { position: absolute; top: 12px; left: 0; min-width: 44px; min-height: 44px; font-size: 0; }
+  .steps { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); overflow: visible; padding: 8px 0 18px; gap: 8px 4px; }
+  .stepWrap { grid-column: span 2; display: flex; }
+  .stepWrap .step { width: 100%; justify-content: center; padding: 8px 2px; font-size: 13px; gap: 4px; }
+  .stepNo { width: 22px; height: 22px; font-size: 12px; }
+  .tabCount { display: none; }
+  .stepSource { grid-column: span 3; justify-content: center; min-height: 44px; }
+  .stepLine { display: none; }
+  .workbenchMain, .summaryCard, .block, .approvalBox { padding: 16px; }
+  .stepForm { gap: 24px; }
+  .workbenchActions { flex-direction: column; align-items: stretch; }
+  .workbenchActions .primary { margin-left: 0; align-self: stretch; }
+  .workbenchActions .actionHint { order: -1; }
+  .root :where(button, input, select), .qActions button, .fileLinks a, .fileLinks button { min-height: 44px; }
+  .field input, .field textarea, .fld input, .fld textarea, .specTable input { font-size: 16px; }
+  .actions { flex-direction: column; align-items: stretch; }
+  .actions .primary, .actions .miniBtn { align-self: stretch; }
+  .stageRail { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 12px; }
+  .stageItem { font-size: 13px; white-space: normal; }
+  .stageItem + .stageItem::before { display: none; }
+  .questionReader { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .questionDirectory { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); position: static; }
+  .questionDirectory button { justify-content: center; }
+  .questionDirectory button span { display: none; }
+  .qBody { padding: 16px; }
+  .questionHeader { padding: 12px; }
+  .qStatus { margin-left: 0; }
+  .readerActions { gap: 8px; flex-wrap: wrap; }
+  .specTable, .specTable tbody { display: block; }
+  .specTable thead { display: none; }
+  .specTable tr { display: block; margin: 12px 0; border: 1px solid var(--dsw-alias-border-l1); border-radius: 12px; padding: 8px; }
+  .specTable td { display: grid; grid-template-columns: 86px minmax(0, 1fr); gap: 8px; border: 0; min-width: 0; }
+  .specTable td::before { content: attr(data-label); color: var(--physics-ink-muted); font-size: 14px; }
+  .specTable td input { grid-column: 2; margin: 0 0 4px; }
+  .specTable td .chip { white-space: normal; }
+  .modal { max-width: calc(100vw - 24px); max-height: calc(100dvh - 40px); padding: 18px; }
+  .summaryList > div { gap: 8px; }
+  .summaryList dd { max-width: 66%; }
+  .finalRow .jobTitle { overflow-wrap: anywhere; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mascot, .mascot *, .workerEllipsis *, .workerPhaseActive::after { animation: none !important; }
+  .jobProgressBar, .workerBarFill { transition: none; }
+}

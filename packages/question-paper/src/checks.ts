@@ -7,8 +7,10 @@
  * `error` findings block approval until resolved or rebutted in review.
  */
 
+import { chapterInScope, isExcludedKnowledge, scoresEqual, summarizeSpecTable } from './blueprints.ts'
 import { DIFFICULTY_COEFFICIENT } from './difficulty.ts'
 import type { BankItem, CheckFinding, PaperDocument, PaperQuestion } from './paper.ts'
+import { parsePaperFigure } from './print-diagram.ts'
 
 /** Normalize a stem for duplicate comparison: lowercase, strip markup/spaces. */
 const normalizeStem = (stem: string): string =>
@@ -56,16 +58,29 @@ export function runChecks(
     readonly usedRecently: (itemId: string) => boolean
   },
 ): CheckFinding[] {
-  const findings: CheckFinding[] = []
+  const findings: CheckFinding[] = [...summarizeSpecTable(doc.specTable, request).findings]
   const questions = allQuestions(doc)
+  const sectionByNo = new Map(doc.sections.flatMap((section) => section.items.map((question) => [question.number, section.title] as const)))
+
+  /* Coverage is bidirectional: a missing spec row or an unplanned question
+     cannot pass merely because the few delivered scores happen to add up. */
+  const specByNo = new Map(doc.specTable.map((row) => [row.questionNo, row]))
+  const countByNo = new Map<number, number>()
+  for (const question of questions) countByNo.set(question.number, (countByNo.get(question.number) ?? 0) + 1)
+  for (const row of doc.specTable) {
+    const count = countByNo.get(row.questionNo) ?? 0
+    if (count !== 1) findings.push({ questionNo: row.questionNo, severity: 'error', code: 'spec-mismatch', detail: `细目表第 ${row.questionNo} 题对应 ${count} 道卷面题，必须一行一题` })
+  }
+  if (questions.length !== doc.specTable.length) findings.push({ severity: 'error', code: 'spec-mismatch', detail: `卷面 ${questions.length} 题，确认细目表 ${doc.specTable.length} 题` })
 
   /* Score arithmetic: per-question vs spec, sub-question split, and total. */
-  const specByNo = new Map(doc.specTable.map((row) => [row.questionNo, row]))
   let total = 0
   for (const question of questions) {
     total += question.score
     const spec = specByNo.get(question.number)
-    if (spec !== undefined && spec.score !== question.score) {
+    if (!Number.isFinite(question.score) || question.score <= 0) findings.push({ questionNo: question.number, severity: 'error', code: 'score-mismatch', detail: '题面分值必须为有限正数' })
+    if (spec === undefined) findings.push({ questionNo: question.number, severity: 'error', code: 'spec-mismatch', detail: '题面没有对应的已确认细目表行' })
+    if (spec !== undefined && !scoresEqual(spec.score, question.score)) {
       findings.push({
         questionNo: question.number,
         severity: 'error',
@@ -75,7 +90,7 @@ export function runChecks(
     }
     if (question.subQuestions !== undefined && question.subQuestions.length > 0) {
       const subTotal = question.subQuestions.reduce((sum, sub) => sum + sub.score, 0)
-      if (subTotal !== question.score) {
+      if (!scoresEqual(subTotal, question.score) || question.subQuestions.some((sub) => !Number.isFinite(sub.score) || sub.score < 0)) {
         findings.push({
           questionNo: question.number,
           severity: 'error',
@@ -89,6 +104,7 @@ export function runChecks(
        off the 双向细目表 is off-spec even if it reads well. */
     if (spec !== undefined) {
       const drifts: string[] = []
+      if (spec.sectionTitle !== sectionByNo.get(question.number)) drifts.push(`板块 ${spec.sectionTitle}→${sectionByNo.get(question.number) ?? '缺失'}`)
       if (spec.kind !== question.kind) drifts.push(`题型 ${spec.kind}→${question.kind}`)
       if (spec.difficulty !== question.difficulty)
         drifts.push(`难度 ${spec.difficulty}→${question.difficulty}`)
@@ -105,16 +121,17 @@ export function runChecks(
       }
     }
   }
-  if (total !== request.totalScore) {
+  if (!scoresEqual(total, request.totalScore)) {
     findings.push({
       severity: 'error',
       code: 'score-mismatch',
       detail: `卷面合计 ${total} 分，目标总分 ${request.totalScore} 分`,
     })
   }
+  if (!scoresEqual(doc.header.totalScore, total) || !scoresEqual(doc.header.totalScore, request.totalScore)) findings.push({ severity: 'error', code: 'score-mismatch', detail: `卷首满分 ${doc.header.totalScore} 分、卷面 ${total} 分、目标 ${request.totalScore} 分不一致` })
 
-  /* Numbering: printed numbers must be a contiguous 1..N sequence. */
-  const numbers = questions.map((question) => question.number).sort((a, b) => a - b)
+  /* Numbering: printed order itself must be the contiguous 1..N sequence. */
+  const numbers = questions.map((question) => question.number)
   for (let index = 0; index < numbers.length; index++) {
     if (numbers[index] !== index + 1) {
       findings.push({
@@ -126,7 +143,18 @@ export function runChecks(
     }
   }
 
+  const figureRefs = new Set<string>()
   for (const question of questions) {
+    if (question.figure !== undefined) {
+      try {
+        const figure = parsePaperFigure(question.figure)
+        if (figureRefs.has(figure.ref)) findings.push({ questionNo: question.number, severity: 'error', code: 'format', detail: '题图 ref 重复，无法唯一核对图与题' })
+        figureRefs.add(figure.ref)
+        if ((figure.kind === 'line-diagram' && figure.diagram === undefined) || (figure.kind === 'image' && figure.sourceAsset === undefined)) findings.push({ questionNo: question.number, severity: 'error', code: 'missing-figure', detail: '必要题图缺少受控 diagram spec 或真实来源附件，不能用 AI 图片或图注占位' })
+      } catch (error) {
+        findings.push({ questionNo: question.number, severity: 'error', code: 'format', detail: error instanceof Error ? error.message : '题图规格无效' })
+      }
+    }
     /* Every scored question needs an answer with grading points. */
     if (question.answer === undefined || question.answer.gradingPoints.length === 0) {
       findings.push({
@@ -139,7 +167,7 @@ export function runChecks(
       /* Grading points must sum to the question score — the rubric IS the
          score, a mismatch makes marking impossible. */
       const pointTotal = question.answer.gradingPoints.reduce((sum, point) => sum + point.score, 0)
-      if (pointTotal !== question.score) {
+      if (!scoresEqual(pointTotal, question.score) || question.answer.gradingPoints.some((point) => !Number.isFinite(point.score) || point.score < 0)) {
         findings.push({
           questionNo: question.number,
           severity: 'error',
@@ -212,8 +240,9 @@ export function runChecks(
       })
     }
     /* Scope discipline: excluded content and out-of-range chapters. */
+    const printed = [question.stem, ...(question.options ?? []), ...(question.subQuestions ?? []).map((sub) => sub.text)]
     for (const banned of request.exclude) {
-      if (question.knowledge.includes(banned) || question.stem.includes(banned)) {
+      if ([...question.knowledge, ...printed].some((text) => isExcludedKnowledge(text, [banned]))) {
         findings.push({
           questionNo: question.number,
           severity: 'error',
@@ -222,6 +251,10 @@ export function runChecks(
         })
       }
     }
+    /* PaperQuestion has no legacy chapter field; the confirmed row anchors
+       it. Tagged bank provenance must also respect that taught range. */
+    const sourceItem = question.provenance?.bankItemId === undefined ? undefined : bank?.itemOf(question.provenance.bankItemId)
+    if (sourceItem?.chapter !== undefined && !chapterInScope(sourceItem.chapter, request.chapters)) findings.push({ questionNo: question.number, severity: 'error', code: 'out-of-scope', detail: `来源题库章节「${sourceItem.chapter}」不在已教范围内` })
     /* Choice format: options present, exactly one/multi answers as declared. */
     if (
       (question.kind === 'choice-single' || question.kind === 'choice-multi') &&

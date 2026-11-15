@@ -47,6 +47,7 @@ import { recommendExperiments } from './physics/experiment-recommendations.ts'
 import type { LearningRecordState } from './learning-record-store.ts'
 import type { PhysicsosKey } from './locales.ts'
 import { Mascot } from './Mascot.tsx'
+import { LabStudySection, type LabStudySectionProps } from './LabStudySection.tsx'
 import type { PhysicsSceneRef, PhysicsSurfaceId, RecentExperimentsState } from './surface-store.ts'
 import { formatUpdatedAt } from './workspaceMeta.ts'
 import { IconPhysicsPlay, IconCircuitSeries } from './icons/physics-icons.tsx'
@@ -145,6 +146,9 @@ export interface ExperimentPickerProps {
   readonly onAddScene?: (ref: PhysicsSceneRef) => void
   readonly onAddTemplate?: (template: ExperimentTemplate, ref: PhysicsSceneRef) => void
   readonly onNewCanvas?: () => void
+  /** Read-only study disclosures are omitted from the workbench's add-mode chooser. */
+  readonly practiceQuestion?: LabStudySectionProps['practiceQuestion']
+  readonly paperApi?: LabStudySectionProps['paperApi']
 }
 
 /** One shelf of the browse grid: a subject heading and its templates. */
@@ -166,6 +170,8 @@ export function ExperimentPicker({
   onAddScene,
   onAddTemplate,
   onNewCanvas,
+  practiceQuestion,
+  paperApi,
 }: ExperimentPickerProps) {
   const [query, setQuery] = useState('')
   const [tab, setTab] = useState<TabId>('all')
@@ -590,6 +596,10 @@ export function ExperimentPicker({
             ))}
           </div>
         )}
+
+        {mode === 'open' && <LabStudySection t={t}
+          {...(practiceQuestion === undefined ? {} : { practiceQuestion })}
+          {...(paperApi === undefined ? {} : { paperApi })} />}
 
         <footer className={clsx(css.footer, css.reveal)} style={revealAt(7)}>
           <span className={css.count}>

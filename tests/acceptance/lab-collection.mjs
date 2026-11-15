@@ -8,9 +8,14 @@ import { pathToFileURL } from 'node:url'
 import { chromium } from '@playwright/test'
 import { readArchive } from './downloaded-experiment-release.mjs'
 import { assertParameterRoundTrip } from '../../scripts/developers/lab-parameter-round-trip.mjs'
-const directory = process.env.PHYSICSOS_LAB_RELEASE_DIR ?? '/tmp/physicsos-lab-collection-20261105'
-const output = process.env.PHYSICSOS_LAB_SHOTS ?? '/tmp/physicsos-lab-collection-shots'
-const index = JSON.parse(await readFile(join(directory, 'index.json')))
+import { prepareRetainedProbe, checkRetainedFrame, checkRetainedDisposal } from '../../experiment-packages/lab-collection/renderer-retained.browser.mjs'
+const directory = process.env.PHYSICSOS_LAB_RELEASE_DIR ?? `/tmp/physicsos-lab-collection-${process.env.PHYSICSOS_LAB_VERSION ?? '2.3.0'}`
+const output = process.env.PHYSICSOS_LAB_SHOTS ?? `/tmp/physicsos-lab-collection-${process.env.PHYSICSOS_LAB_VERSION ?? '2.3.0'}-shots`
+const indexBytes = await readFile(join(directory, 'index.json'))
+const index = JSON.parse(indexBytes)
+const indexSha256 = createHash('sha256').update(indexBytes).digest('hex')
+const port = Number(process.env.PHYSICSOS_LAB_HTTP_PORT ?? 0)
+assert.ok(Number.isInteger(port) && port >= 0 && port <= 65535, 'Invalid private acceptance port')
 const { createExperiment, snapshotOf } = await import(pathToFileURL(process.env.PHYSICSOS_LAB_RUNTIME_MODULE ?? '/tmp/physicsos-lab-runtimes.mjs'))
 await mkdir(output, { recursive: true })
 let activeFiles, activeId
@@ -24,11 +29,24 @@ const server = createServer((req, res) => {
   res.setHeader('access-control-allow-origin', '*')
   res.setHeader('content-type', mime[extname(path)] ?? 'application/octet-stream'); res.end(bytes)
 })
-await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+await new Promise(resolve => server.listen(port, '127.0.0.1', resolve))
 const origin = `http://127.0.0.1:${server.address().port}`
-const browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] })
+const cdp = process.env.PHYSICSOS_LAB_CDP
+// Computation and the private archive server stay in Docker; a forwarded CDP browser may draw elsewhere.
+let browser
+if (cdp) {
+  const endpoint = new URL(cdp)
+  assert.equal(endpoint.protocol, 'http:'); assert.equal(endpoint.hostname, '127.0.0.1')
+  const response = await fetch(new URL('/json/version', endpoint), { signal: AbortSignal.timeout(30_000) })
+  assert.ok(response.ok, 'Private browser endpoint is unavailable')
+  const websocket = new URL((await response.json()).webSocketDebuggerUrl)
+  websocket.host = endpoint.host
+  browser = await chromium.connectOverCDP(websocket.href, { noDefaults: true })
+} else browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] })
 const context = await browser.newContext({ viewport: { width: 1180, height: 820 }, deviceScaleFactor: 1 })
 const programProbe = process.env.PHYSICSOS_LAB_PROGRAM_PROBE === '1'
+const retainedProbe = process.env.PHYSICSOS_LAB_RETAINED_PROBE === '1'
+if (retainedProbe) await prepareRetainedProbe(context)
 if (programProbe) await context.addInitScript(() => {
   const createProgram = WebGL2RenderingContext.prototype.createProgram
   WebGL2RenderingContext.prototype.createProgram = function (...args) {
@@ -118,6 +136,12 @@ try {
     }
     await ack('first')
     const frame = page.frames().find(f => f.url().includes(`/package/${id}/`))
+    let retained
+    if (retainedProbe) retained = await checkRetainedFrame({
+      page, frame, snapshot: snapshotOf(runtime, id), ack, id,
+      send: async (frameId, snapshot) => page.evaluate(({ frameId, snapshot }) =>
+        window.port.postMessage({ type: 'experiment/snapshot', protocolVersion: 3, frameId, snapshot }), { frameId, snapshot }),
+    })
     const programCreations = []
     if (programProbe) {
       programCreations.push(await frame.evaluate(() => window.__labProgramCreates ?? 0))
@@ -276,9 +300,11 @@ try {
       await page.screenshot({ path: join(output, `${id}-embedded-${viewport.width}.png`) })
     }
     results.push({ id, domain: item.domain, sha256: item.sha256, ...evidence, embeddedLayouts, parameterChecked, parameterApplicable: parameters.length > 0, parameterCount: parameters.length, parameterNotApplicableReason: parameters.length ? null : 'The platform runtime exposes no editable parameters', parameterVisualChanged, playbackChecked, visibilityChanged, visibilityChecked, visibilityApplicable, visibilityDrawableLayers, visibilityKeys: keys, visibilityAssessmentVersion: 1, visibilityNotApplicableReason: visibilityApplicable ? null : 'No enabled nonempty drawable layer in the tested runtime snapshot', buoyancyDisplacementChecked, ...(programProbe ? { programCreations } : {}) })
+    if (retainedProbe) results[results.length - 1].retained = { ...retained, disposal: await checkRetainedDisposal(frame) }
+    await writeFile(join(output, 'result.partial.json'), JSON.stringify({ count: results.length, expected: index.count, complete: false, indexSha256, instrumented: retainedProbe, errors, external, failures, results }, null, 2) + '\n')
     await page.close(); console.log(`PASS ${results.length}/${index.count} ${id}: WebGL + SDK + parameter/time + mobile`)
   }
   assert.deepEqual(errors, []); assert.deepEqual(external, []); assert.deepEqual(failures, [])
-  await writeFile(join(output, 'result.json'), JSON.stringify({ count: results.length, domains: new Set(results.map(r => r.domain)).size, errors, external, failures, results }, null, 2) + '\n')
+  await writeFile(join(output, 'result.json'), JSON.stringify({ count: results.length, domains: new Set(results.map(r => r.domain)).size, indexSha256, version: index.version, sourceRevision: index.sourceRevision ?? null, sourceDigest: index.sourceDigest ?? null, browserConnection: cdp ? 'private-cdp' : 'launched', instrumented: retainedProbe, errors, external, failures, results }, null, 2) + '\n')
 } catch (error) { console.error(JSON.stringify({ errors, external, failures })); throw error }
-finally { await browser.close(); await new Promise(resolve => server.close(resolve)) }
+finally { await context.close(); await browser.close(); await new Promise(resolve => server.close(resolve)) }

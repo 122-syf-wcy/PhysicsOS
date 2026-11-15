@@ -6,20 +6,32 @@ import { join } from 'node:path'
 const args = process.argv.slice(2)
 const option = (name, fallback) => { const at = args.indexOf(name); return at < 0 ? fallback : args[at + 1] }
 const base = option('--base', 'https://physics.dongsiwei.com')
-const directory = option('--directory', '/tmp/physicsos-lab-collection-20261105')
+const directory = option('--directory', `/tmp/physicsos-lab-collection-${process.env.PHYSICSOS_LAB_VERSION ?? '2.3.0'}`)
 const passwordFile = option('--password-file', process.env.PHYSICSOS_ADMIN_PASSWORD_FILE)
+const usernameFile = option('--username-file', process.env.PHYSICSOS_ADMIN_USERNAME_FILE)
 const username = option('--username', process.env.PHYSICSOS_ADMIN_USERNAME ?? 'admin')
 const publish = args.includes('--publish')
 const evidenceFile = option('--evidence')
 const output = option('--output', join(directory, new URL(base).hostname === 'physics.dongsiwei.com' ? 'production-publication.json' : 'candidate-publication.json'))
 const index = JSON.parse(await readFile(join(directory, 'index.json')))
 assert.equal(index.count, 76)
+assert.equal(index.packages.length, 76)
+assert.equal(new Set(index.packages.map(item => item.experimentId)).size, 76, 'Publication requires 76 distinct experiment identities')
 let evidence
 if (publish) {
   assert.ok(evidenceFile, 'Publication requires exact-archive acceptance evidence')
   evidence = JSON.parse(await readFile(evidenceFile))
   const registry = JSON.parse(await readFile(new URL('../../overlays/harness/files/packages/physicsos/experiment-host/src/experiment-registry.json', import.meta.url)))
   assert.equal(evidence.count, 76); assert.equal(evidence.errors.length, 0); assert.equal(evidence.external.length, 0); assert.equal(evidence.failures.length, 0)
+  assert.equal(evidence.results.length, 76)
+  assert.notEqual(evidence.instrumented, true, 'Publication requires the unmodified archive pass, not an instrumented lifecycle probe')
+  assert.equal(new Set(evidence.results.map(row => row.id)).size, 76, 'Acceptance must cover 76 distinct experiments')
+  if (index.sourceRevision !== undefined) {
+    assert.match(index.sourceRevision, /^[0-9a-f]{40}$/)
+    assert.equal(evidence.sourceRevision, index.sourceRevision, 'Acceptance belongs to a different frozen source')
+    assert.equal(evidence.sourceDigest, index.sourceDigest, 'Acceptance belongs to a different source inventory')
+    assert.equal(evidence.version, index.version, 'Acceptance belongs to a different collection version')
+  }
   for (const item of index.packages) {
     const row = evidence.results.find(row => row.id === item.experimentId && row.sha256 === item.sha256)
     assert.ok(row, `No accepted archive for ${item.experimentId}`)
@@ -29,8 +41,8 @@ if (publish) {
     assert.ok(row.visibilityChanged === true || noDrawableLayer, `No verified visibility change for ${item.experimentId}`)
     const profile = registry.find(profile => profile.id === item.experimentId)
     assert.ok(profile, `No registered parameter contract for ${item.experimentId}`)
-    // The modern target exposes no editable parameters. Other targets must
-    // prove the round-trip even when an edit legitimately leaves geometry unchanged.
+    // Applicability comes from the regenerated runtime contract, including modern physics.
+    // An edit must round-trip even when it legitimately leaves geometry unchanged.
     if (profile.parameters.length > 0) assert.equal(row.parameterChecked, true, `No verified parameter round-trip for ${item.experimentId}`)
     else {
       assert.equal(row.parameterApplicable, false, `Missing no-parameter evidence for ${item.experimentId}`)
@@ -43,7 +55,13 @@ if (publish) {
 assert.ok(passwordFile, 'Use an existing private credential file')
 const info = await stat(passwordFile); assert.ok(info.isFile() && (info.mode & 0o077) === 0, 'Credential file must be private')
 const password = (await readFile(passwordFile, 'utf8')).trim()
-const login = await fetch(base + '/physicsos/auth/login', { method: 'POST', headers: { 'content-type': 'application/json', origin: new URL(base).origin }, body: JSON.stringify({ username, password, schoolId: 'PHYSICSOS-OPEN' }) })
+let loginUsername = username
+if (usernameFile) {
+  const info = await stat(usernameFile); assert.ok(info.isFile() && (info.mode & 0o077) === 0, 'Username file must be private')
+  loginUsername = (await readFile(usernameFile, 'utf8')).trim()
+}
+assert.ok(loginUsername && password, 'Credentials must not be empty')
+const login = await fetch(base + '/physicsos/auth/login', { method: 'POST', headers: { 'content-type': 'application/json', origin: new URL(base).origin }, body: JSON.stringify({ username: loginUsername, password, schoolId: 'PHYSICSOS-OPEN' }) })
 assert.equal(login.status, 200, 'Authenticated login failed')
 const cookie = login.headers.getSetCookie().map(value => value.split(';')[0]).join('; ')
 assert.ok(cookie, 'No authenticated session')

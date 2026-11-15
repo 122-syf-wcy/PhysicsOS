@@ -25,7 +25,6 @@ import type { AuthState } from './auth-store.ts'
 import { LabEmptyState } from './LabEmptyState.tsx'
 import { UsageWorkspace } from './UsageWorkspace.tsx'
 import type { UsageApi } from './usage-api.ts'
-import { LibraryWorkspace } from './LibraryWorkspace.tsx'
 import { ContributeWorkspace } from './ContributeWorkspace.tsx'
 import { PaperWorkspace } from './PaperWorkspace.tsx'
 import type { PaperApi } from './paper-api.ts'
@@ -83,7 +82,7 @@ export interface PhysicsSurfaceInjected {
   /**
    * Send a golden question's stem to the current session's tutor as one queued
    * prompt, then return to the conversation so the solve card streams in.
-   * Powers both 学习记录 → 重新练习 and the record page's 题库练习.
+   * Powers the experiment chooser's inline question practice.
    */
   practiceQuestion?: (
     questionId: string,
@@ -121,6 +120,10 @@ export function PhysicsSurface({
   questionCodeOwner,
 }: PhysicsSurfaceProps) {
   const principal = useAuth(state => state.user)
+  const paperReads = useMemo(() => paperApi === undefined ? undefined : {
+    listSources: paperApi.listSources,
+    listAnnotations: paperApi.listAnnotations,
+  }, [paperApi])
   const surfaceState = usePhysicsSurface(snapshot => snapshot)
   const surface = surfaceState.surface
   const scene = surfaceState.sceneRef?.scene
@@ -170,22 +173,7 @@ export function PhysicsSurface({
         />
       )
   }
-  /* 资源库 is a catalog surface like 学习记录: no physics runtime, it reads
-     the curriculum catalog and hands actions off to the Lab / the tutor. */
   if (surface === 'contribute') return <ContributeWorkspace t={t} />
-  if (surface === 'library') {
-    return (
-      <LibraryWorkspace
-        t={t}
-        useLearningRecord={useLearningRecord}
-        useSessions={useSessions}
-        useWorkspaces={useWorkspaces}
-        {...(openSurface === undefined ? {} : { openSurface })}
-        {...(practiceQuestion === undefined ? {} : { practiceQuestion })}
-        {...(paperApi === undefined ? {} : { paperApi })}
-      />
-    )
-  }
   /* 管理后台 is role-gated twice: the sidebar only offers the entry to
      SCHOOL_ADMIN/SUPER_ADMIN and the host re-checks every admin call, so a
      missing role or api simply renders nothing actionable. */
@@ -229,6 +217,8 @@ export function PhysicsSurface({
         openSurface={openSurface ?? (() => {})}
         useRecentExperiments={useRecentExperiments}
         useLearningRecord={useLearningRecord}
+        {...(practiceQuestion === undefined ? {} : { practiceQuestion })}
+        {...(paperReads === undefined ? {} : { paperApi: paperReads })}
         {...(newCanvas === undefined ? {} : { onNewCanvas: () => { void newCanvas(t('canvas.untitled')).catch(() => undefined) } })}
         {...(requestSceneInCanvas === undefined ? {} : { onAddScene: requestSceneInCanvas })}
         {...(requestCanvasSource === undefined ? {} : { onAddTemplate: (template, ref) => {

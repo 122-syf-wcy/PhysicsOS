@@ -1,4 +1,5 @@
-import { useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
+import { observeComposition } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { LensBenchProps } from './lens-bench.ts'
 import { lensParameter } from './lens-bench.ts'
 import css from './ExperimentPage.module.css'
@@ -14,7 +15,9 @@ function Parameter({
   preview,
   commit,
   cancel,
+  guardKey,
 }: LensBenchProps & {
+  guardKey: (event: KeyboardEvent) => boolean
   id: string
   label: string
   symbol: string
@@ -73,6 +76,11 @@ function Parameter({
             }}
             onBlur={settle}
             onKeyDown={(event) => {
+              if (event.key !== 'Enter' && event.key !== 'Escape') return
+              if (event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
+              if (guardKey(event.nativeEvent)) { event.stopPropagation(); return }
+              event.preventDefault()
+              event.stopPropagation()
               if (event.key === 'Enter') event.currentTarget.blur()
               if (event.key === 'Escape') {
                 cancelBlur.current = true
@@ -120,10 +128,18 @@ function Parameter({
 }
 
 export function LensControls(props: LensBenchProps) {
+  const composition = useRef<ReturnType<typeof observeComposition> | undefined>(undefined)
+  useEffect(() => {
+    const watcher = observeComposition(document)
+    composition.current = watcher
+    return () => { composition.current = undefined; watcher.dispose() }
+  }, [])
+  const guardKey = (event: KeyboardEvent): boolean => composition.current?.guards(event) ?? event.isComposing
   return (
     <div className={css.controls}>
       <Parameter
         {...props}
+        guardKey={guardKey}
         id="object-distance"
         label="物距"
         symbol="u"
@@ -133,6 +149,7 @@ export function LensControls(props: LensBenchProps) {
       />
       <Parameter
         {...props}
+        guardKey={guardKey}
         id="screen-distance"
         label="光屏到镜距离"
         symbol="d"
@@ -143,6 +160,7 @@ export function LensControls(props: LensBenchProps) {
       <div className={css.controlDivider} />
       <Parameter
         {...props}
+        guardKey={guardKey}
         id="focal-length"
         label="焦距"
         symbol="f"

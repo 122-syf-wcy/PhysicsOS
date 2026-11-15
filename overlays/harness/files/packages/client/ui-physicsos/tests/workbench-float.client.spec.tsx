@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { useState } from 'react'
+import { Profiler, useState } from 'react'
 import { Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -130,6 +130,22 @@ describe('workbench floating controls', () => {
     expect({ width: panel.style.width, height: panel.style.height }).toEqual(settled)
   })
 
+  it('changes only the requested axis of deliberately resized geometry', () => {
+    const props = { title: 'Parameters', closeLabel: 'Close parameters', onClose: () => {}, expanded: true, width: 310, height: 210 }
+    const view = render(<WorkbenchFloatPanel {...props}><input aria-label="Mass" /></WorkbenchFloatPanel>)
+    const panel = document.querySelector<HTMLElement>('[data-dockkit-float]')!
+    const resize = panel.querySelector<HTMLElement>('[data-dockkit-float-resize]')!
+    pointer(resize, 'pointerdown', 100, 100)
+    pointer(window, 'pointerup', 190, 150)
+    const resizedWidth = panel.style.width
+    view.rerender(<WorkbenchFloatPanel {...props} height={380}><input aria-label="Mass" /></WorkbenchFloatPanel>)
+    expect(panel.style.width).toBe(resizedWidth)
+    expect(panel.style.height).toBe('380px')
+    view.rerender(<WorkbenchFloatPanel {...props} width={340} height={380}><input aria-label="Mass" /></WorkbenchFloatPanel>)
+    expect(panel.style.width).toBe('340px')
+    expect(panel.style.height).toBe('380px')
+  })
+
   it('switches compact panels without discarding an unfinished field and restores stacking when space returns', () => {
     function Fixture({ height }: { height: number }) {
       const [active, setActive] = useState('chart')
@@ -196,6 +212,123 @@ describe('workbench floating controls', () => {
     const panel = document.querySelector<HTMLElement>('[data-dockkit-float]')!
     expect(Number.parseFloat(panel.style.top)).toBe(192)
     expect(Number.parseFloat(panel.style.top) + Number.parseFloat(panel.style.height)).toBe(548)
+  })
+
+  it('preserves component drafts and the focused input through fullscreen reparenting', () => {
+    function Editor() {
+      const [draft, setDraft] = useState('1')
+      return <input aria-label="Fullscreen draft" value={draft} onChange={event => { setDraft(event.target.value) }} />
+    }
+    const view = render(<div data-physicsos-surface="lab"><WorkbenchFloatPanel title="Parameters" closeLabel="Close parameters" onClose={() => {}} expanded><Editor /></WorkbenchFloatPanel></div>)
+    const owner = view.container.querySelector<HTMLElement>('[data-physicsos-surface]')!
+    const field = screen.getByRole('textbox', { name: 'Fullscreen draft' }) as HTMLInputElement
+    field.focus()
+    fireEvent.change(field, { target: { value: '2.' } })
+    let fullscreen: Element | null = null
+    vi.spyOn(document, 'fullscreenElement', 'get').mockImplementation(() => fullscreen)
+    fullscreen = owner
+    fireEvent(document, new Event('fullscreenchange'))
+    expect(screen.getByRole('textbox', { name: 'Fullscreen draft' })).toBe(field)
+    expect(owner.contains(field)).toBe(true)
+    expect(field.value).toBe('2.')
+    expect(document.activeElement).toBe(field)
+    fullscreen = null
+    fireEvent(document, new Event('fullscreenchange'))
+    expect(screen.getByRole('textbox', { name: 'Fullscreen draft' })).toBe(field)
+    expect(owner.contains(field)).toBe(false)
+    expect(field.value).toBe('2.')
+    expect(document.activeElement).toBe(field)
+  })
+
+  it('keeps the close control and a scrollable content track in a very short safe rectangle', () => {
+    const bounds = { x: 12, y: 130, width: 296, height: 20 }
+    render(<WorkbenchFloatPanel title="Short panel" closeLabel="Close short panel" onClose={() => {}} expanded layout={{ bounds, rect: bounds, visible: true }}>
+      <input aria-label="Short field" />
+    </WorkbenchFloatPanel>)
+    const layer = screen.getByRole('region', { name: 'Short panel' })
+    expect(layer.hasAttribute('data-workbench-short')).toBe(true)
+    expect(layer.querySelector<HTMLElement>('[data-dockkit-float]')?.style.height).toBe('20px')
+    expect(within(layer).getByRole('button', { name: 'Close short panel' })).toBeTruthy()
+    expect(within(layer).getByRole('textbox', { name: 'Short field' })).toBeTruthy()
+  })
+
+  it('hides a zero-area retained panel until measurable space returns', () => {
+    const bounds = { x: 12, y: 130, width: 296, height: 0 }
+    const props = { title: 'Measured panel', closeLabel: 'Close measured panel', onClose: () => {}, expanded: true }
+    const view = render(<WorkbenchFloatPanel {...props} layout={{ bounds, rect: bounds, visible: true }}><input aria-label="Retained field" defaultValue="draft" /></WorkbenchFloatPanel>)
+    expect(screen.queryByRole('region', { name: 'Measured panel' })).toBeNull()
+    const field = document.querySelector<HTMLInputElement>('[aria-label="Retained field"]')!
+    const next = { ...bounds, height: 200 }
+    view.rerender(<WorkbenchFloatPanel {...props} layout={{ bounds: next, rect: next, visible: true }}><input aria-label="Retained field" defaultValue="draft" /></WorkbenchFloatPanel>)
+    expect(screen.getByRole('textbox', { name: 'Retained field' })).toBe(field)
+    expect(field.value).toBe('draft')
+  })
+
+  it('does not rerender content when scroll reports the same workbench rectangle', () => {
+    const rendered = vi.fn()
+    render(<Profiler id="stable-float" onRender={rendered}>
+      <WorkbenchFloatPanel title="Stable" closeLabel="Close stable" onClose={() => {}} expanded><input aria-label="Stable geometry" /></WorkbenchFloatPanel>
+    </Profiler>)
+    const baseline = rendered.mock.calls.length
+    const field = screen.getByRole('textbox', { name: 'Stable geometry' })
+    fireEvent.scroll(field)
+    fireEvent.scroll(window)
+    expect(rendered).toHaveBeenCalledTimes(baseline)
+  })
+
+  it('retains the focused editor when widening and does not reclaim focus from another control', () => {
+    vi.stubGlobal('innerWidth', 390)
+    function Fixture({ open }: { open: boolean }) {
+      return <><button>External opener</button><button>Other control</button>
+        <WorkbenchFloatPanel title="Parameters" closeLabel="Close parameters" onClose={() => {}} expanded={open} desktopDefault={false}><input aria-label="Mass" /></WorkbenchFloatPanel></>
+    }
+    const view = render(<Fixture open={false} />)
+    const opener = screen.getByRole('button', { name: 'External opener' })
+    opener.focus()
+    view.rerender(<Fixture open />)
+    const field = screen.getByRole('textbox', { name: 'Mass' })
+    field.focus()
+    vi.stubGlobal('innerWidth', 1360)
+    fireEvent(window, new Event('resize'))
+    expect(document.activeElement).toBe(field)
+    const other = screen.getByRole('button', { name: 'Other control' })
+    other.focus()
+    view.rerender(<Fixture open={false} />)
+    expect(document.activeElement).toBe(other)
+  })
+
+  it('does not return focus out of a newer modal when the floating owner closes', () => {
+    vi.stubGlobal('innerWidth', 390)
+    function Fixture({ open }: { open: boolean }) {
+      const [help, setHelp] = useState(false)
+      return <><button>External opener</button>
+        {open ? <WorkbenchFloatPanel title="Parameters" closeLabel="Close parameters" onClose={() => {}} expanded><button onClick={() => { setHelp(true) }}>Open newer help</button></WorkbenchFloatPanel> : null}
+        <Modal open={help} title="Newer help" closeLabel="Close newer help" onClose={() => { setHelp(false) }}><input data-modal-autofocus aria-label="Help search" /></Modal></>
+    }
+    const view = render(<Fixture open={false} />)
+    screen.getByRole('button', { name: 'External opener' }).focus()
+    view.rerender(<Fixture open />)
+    fireEvent.click(screen.getByRole('button', { name: 'Open newer help' }))
+    const search = screen.getByRole('textbox', { name: 'Help search' })
+    expect(document.activeElement).toBe(search)
+    view.rerender(<Fixture open={false} />)
+    expect(document.activeElement).toBe(search)
+  })
+
+  it('honors composition lifetime, modified Escape and repeated keys', () => {
+    const close = vi.fn()
+    render(<WorkbenchFloatPanel title="Parameters" closeLabel="Close parameters" onClose={close} expanded><input aria-label="Mass" /></WorkbenchFloatPanel>)
+    const field = screen.getByRole('textbox', { name: 'Mass' })
+    fireEvent.compositionStart(field)
+    fireEvent.keyDown(field, { key: 'Escape' })
+    fireEvent.compositionEnd(field)
+    fireEvent.keyDown(field, { key: 'Escape' })
+    fireEvent.keyUp(field, { key: 'Escape' })
+    fireEvent.keyDown(field, { key: 'Escape', shiftKey: true })
+    fireEvent.keyDown(field, { key: 'Escape', repeat: true })
+    expect(close).not.toHaveBeenCalled()
+    fireEvent.keyDown(field, { key: 'Escape' })
+    expect(close).toHaveBeenCalledTimes(1)
   })
 
   it('leaves IME and modal Escape with their owner while closing the focused inspector normally', () => {

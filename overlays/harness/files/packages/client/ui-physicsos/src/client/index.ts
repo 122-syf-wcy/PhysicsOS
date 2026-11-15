@@ -913,7 +913,7 @@ export function apply(ctx: ClientContext): void {
       return submitToTutor(`请为当前学习会话中已保存的物理场景 ${JSON.stringify(sceneId)} 生成或重新生成本题代码实验。调用 physics_generate_experiment，sceneId 必须为 ${JSON.stringify(sceneId)}；从已保存场景读取本题条件，保留题目理解、解题步骤和物理验证，使用最新代码实验视图。`, ownerSessionId)
     }
 
-    /* 重新练习 / 题库练习 → the golden stem goes to the tutor; on success the
+    /* 实验中心 → 题目练习: the golden stem goes to the tutor; on success the
        surface returns to the conversation so the student watches the solve
        card stream in where the answer lives. */
     const practiceQuestion = async (
@@ -931,7 +931,7 @@ export function apply(ctx: ClientContext): void {
     }
 
     /* The product surfaces are global panels: 物理实验室 / 出卷专区 / 反馈 /
-       资源库 / 学习记录 / 管理后台 each occupy a `main` key, and the sidebar's
+       实验上传 / 访问与用量 / 管理后台 each occupy a `main` key, and the sidebar's
        panellist rows select them. One component renders whichever surface the
        store says is current, so scene hand-over and the picker survive every
        switch. */
@@ -973,8 +973,8 @@ export function apply(ctx: ClientContext): void {
         openBuilder: (sceneRef: Parameters<typeof surface.openBuilder>[0]) => {
           surface.openBuilder(sceneRef)
         },
-        /* Lab 自测 / golden-card self-checks → 学习记录;
-           学习记录 → 重新练习 → tutor prompt in the conversation. */
+        /* Lab 自测 / golden-card self-checks → persisted learning records;
+           the chooser's practice action sends the golden stem to the tutor. */
         recordAttempt: (attempt: Parameters<typeof learningRecord.record>[0]) => {
           learningRecord.record(attempt)
           reportLearning(attempt)

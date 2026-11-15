@@ -92,10 +92,22 @@ describe('ExperimentCapabilities manifest', () => {
     }
   })
 
-  it('marks only the two non-forking runtimes unbranchable', () => {
+  it('marks only the magnetic non-forking runtime unbranchable', () => {
     expect(
       manifest.filter(entry => !entry.branchable).map(entry => entry.id).sort(),
-    ).toEqual(['magnetic-circular', 'photoelectric-effect'])
+    ).toEqual(['magnetic-circular'])
+  })
+
+  it('reports the six real photoelectric editors without inventing playback or measurement tools', () => {
+    const template = findExperimentTemplate('photoelectric-effect')!
+    const snapshot = runtimeOf(template).getSnapshot()
+    expect(snapshot.inspector.flatMap(section => section.parameters ?? []).map(parameter => parameter.id)).toEqual([
+      'workFunction', 'photonWavelength', 'photonFrequency', 'lightIntensity', 'cathodeArea', 'quantumEfficiency',
+    ])
+    expect(entryOf('photoelectric-effect')).toMatchObject({
+      model: 'static', branchable: true, editable: true, timeline: false, seek: false,
+      replay: false, measurable: false, measurements: [],
+    })
   })
 
   it('lists the observable layers the runtime actually exposes', () => {

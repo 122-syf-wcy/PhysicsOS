@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
-import { createPhysicsSurfaceController, PHYSICS_PANEL_IDS, sceneRefOf as restoreSceneRef } from '../src/client/surface-store.ts'
+import { createPhysicsSurfaceController, PHYSICS_PANEL_IDS, physicsSurfaceOfPanel, sceneRefOf as restoreSceneRef } from '../src/client/surface-store.ts'
 import {
   createExperimentSceneRef, findExperimentTemplate,
 } from '../src/client/physics/experiment-templates.ts'
@@ -10,6 +10,40 @@ const sceneRefOf = (id: string, title: string) => {
   if (template === undefined) throw new Error(`no experiment template named ${id}`)
   return createExperimentSceneRef(template, title)
 }
+
+describe('removed resource-panel recovery', () => {
+  it('has no library panel and resolves only its legacy identity to Home', () => {
+    expect(Object.keys(PHYSICS_PANEL_IDS)).not.toContain('library')
+    expect(Object.values(PHYSICS_PANEL_IDS)).not.toContain('physicsos-library')
+    expect(physicsSurfaceOfPanel('physicsos-library')).toBe('home')
+    expect(physicsSurfaceOfPanel('foreign-library')).toBeUndefined()
+  })
+
+  it('replaces a restored library selection with Home while keeping the lab resumable', () => {
+    const selectSurface = vi.fn()
+    const surface = createPhysicsSurfaceController(undefined, undefined, { selectSurface })
+    const ref = sceneRefOf('uniform-acceleration', '匀变速运动')
+    surface.openBuilder(ref)
+    surface.openExperimentPicker()
+    const previous = surface.store.getSnapshot()
+    selectSurface.mockClear()
+    surface.adoptPanel('physicsos-library')
+    expect(surface.store.getSnapshot()).toEqual({ ...previous, surface: 'home' })
+    expect(selectSurface).toHaveBeenCalledWith('home')
+    surface.adoptPanel(PHYSICS_PANEL_IDS.lab)
+    expect(surface.store.getSnapshot()).toEqual(previous)
+    expect(surface.recent.getSnapshot().items[0]?.sceneId).toBe(ref.sceneId)
+  })
+
+  it('clears the legacy shell selection even when the product already shows Home', () => {
+    const selectSurface = vi.fn()
+    const surface = createPhysicsSurfaceController(undefined, undefined, { selectSurface })
+    surface.adoptPanel('physicsos-library')
+    expect(surface.store.getSnapshot().surface).toBe('home')
+    expect(selectSurface).toHaveBeenCalledOnce()
+    expect(selectSurface).toHaveBeenCalledWith('home')
+  })
+})
 
 describe('what 最近空间 remembers', () => {
   it.each([false, true])('retains verified solution scope %s through an edit and recent-space restore', (hasVerifiedSolution) => {
@@ -73,7 +107,7 @@ it('keeps transient handovers and shell panel adoption separate from persisted e
   const edited = { ...ref.scene, revision: ref.scene.revision + 1 }
   surface.updateScene(edited)
   surface.openExperimentPicker()
-  surface.adoptPanel(PHYSICS_PANEL_IDS.library)
+  surface.adoptPanel(PHYSICS_PANEL_IDS.notice)
   surface.adoptPanel(PHYSICS_PANEL_IDS.lab)
   const resumed = surface.store.getSnapshot()
   expect(resumed.sceneGeneration).toBe(buildGeneration)

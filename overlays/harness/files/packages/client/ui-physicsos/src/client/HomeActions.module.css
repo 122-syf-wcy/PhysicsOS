@@ -422,12 +422,21 @@
 .emptyTitle { margin: 0; }
 @media (max-width: 600px) { .portals { grid-template-columns: 1fr; } }
 
-.quickActions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; margin: 8px 0 20px; }
-.quickAction { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 40px; padding: 8px 17px; border: 1px solid var(--physics-glass-border-soft); border-radius: 999px; background: var(--physics-glass-fill); color: var(--physics-ink); font: inherit; font-size: 13px; cursor: pointer; }
+.quickActions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; margin: 8px 0 8px; }
+.quickAction { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 44px; padding: 8px 18px; border: 1px solid var(--physics-glass-border-soft); border-radius: 999px; background: var(--physics-glass-fill); box-shadow: var(--physics-glass-inset); color: var(--physics-ink); font: inherit; font-size: 15px; font-weight: 500; cursor: pointer; }
 .quickAction:hover { background: var(--physics-accent-soft); border-color: var(--physics-accent); }
-.recentTitle { font-size: 16px; font-weight: 500; }
-.list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
-.list > li { min-width: 0; border: 1px solid var(--physics-glass-border-soft); border-radius: 16px; background: var(--physics-glass-fill); padding: 12px; }
-.recentItem { width: 100%; min-width: 0; flex-wrap: wrap; }
+.quickAction:focus-visible, .recentAdd:focus-visible { outline: 2px solid var(--physicsos-focus); outline-offset: 3px; }
+.recentTitle { margin-bottom: 12px; font-size: 17px; line-height: 24px; font-weight: 550; }
+.list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
+.list > li { display: grid; grid-template-columns: minmax(0, 1fr) 40px; align-items: center; gap: 4px; min-width: 0; padding: 12px 10px 12px 14px; border: 1px solid var(--physics-glass-border-soft); border-radius: 18px; background: var(--physics-glass-fill); box-shadow: var(--physics-glass-inset); }
+.recentItem { grid-template-columns: 44px minmax(0, 1fr) 16px; grid-template-rows: auto auto; column-gap: 14px; row-gap: 3px; min-width: 0; min-height: 50px; padding: 2px; border-radius: 12px; }
+.recentItem:hover { background: transparent; }
+.recentIcon { grid-column: 1; grid-row: 1 / span 2; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; background: var(--physics-accent-soft); color: var(--physics-accent-strong); }
+.recentIcon[data-kind='question'] { background: color-mix(in srgb, var(--physics-ink-link) 12%, transparent); color: var(--physics-ink-link); }
+.recentName { font-size: 15px; font-weight: 500; line-height: 22px; }
+.recentTime { grid-column: 2; grid-row: 2; font-size: 12px; line-height: 18px; color: var(--physics-ink-muted); }
+.recentChevron { grid-column: 3; grid-row: 1 / span 2; color: var(--physics-ink-muted); }
+.recentAdd { display: grid; place-items: center; width: 40px; min-height: 44px; padding: 0; border: 0; border-radius: 12px; background: transparent; color: var(--physics-ink-muted); cursor: pointer; }
+.recentAdd:hover { background: var(--physics-accent-soft); color: var(--physics-accent-strong); }
 .recentMeta { display: none; }
-@media(max-width:600px) { .quickActions { gap: 8px; margin-bottom: 10px; } .quickAction { padding: 7px 11px; font-size: 12px; } .list { grid-template-columns: 1fr; } }
+@media(max-width:600px) { .quickActions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 8px; } .quickAction { gap: 7px; padding: 9px 12px; font-size: 14px; } .list { grid-template-columns: 1fr; gap: 10px; } .recentItem { column-gap: 10px; } }

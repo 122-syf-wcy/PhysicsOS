@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "sourceRevision": "018463310fb5862b415705e25ae96811ef21543c",
+  "server": "107.151.246.59",
+  "builder": "physicsos-ui-verify-8f5d9c9630ac",
+  "scope": "Initial recovered UI rework only; later paper, research, 3D and authentication changes are not included",
+  "evidenceDirectory": "/opt/physicsos/.physicsos-release/ui-check-01846331-20261116",
+  "steps": {
+    "fetch": 0,
+    "project": 0,
+    "sync": 0,
+    "rootFrozenOfflineInstall": 0,
+    "harnessFrozenOfflineInstall": 0,
+    "verifyExactSource": 0,
+    "aggregateClientTypecheck": 2,
+    "completeUiRuntimeTests": 1
+  },
+  "uiTests": {
+    "files": 180,
+    "filesPassed": 169,
+    "filesFailed": 11,
+    "tests": 2236,
+    "passed": 2184,
+    "failed": 52,
+    "durationSeconds": 2040.77,
+    "defaultTestTimeoutMs": 5000,
+    "status": "failed",
+    "failureGroups": [
+      "Test locale and slot injection typing",
+      "Old full-card and panel-default expectations after attachment/preview rework",
+      "Floating panel focus restoration",
+      "Ambiguous graph button in short viewport",
+      "Expensive numerical owner/capture assertions exceeded the default 5-second test timeout"
+    ],
+    "rerunRequired": true,
+    "assertionsOrScientificPrecisionReduced": false
+  },
+  "logs": {
+    "root-lock.log": { "bytes": 84, "sha256": "65ad9e16ca467688a36c4972c274ee2db9112c3518e3ef30fe21e41f20738996" },
+    "harness-lock.log": { "bytes": 628, "sha256": "904a964ef45bf7d4999d581daab253c50e8f87b4ed21587055a0afc7eb579b67" },
+    "source-check.log": { "bytes": 98, "sha256": "e7f25cd64353ce4ccfc3af23490f7171053a1dcc3b15b4365595007ecd5c56c8" },
+    "client-tsc.log": { "bytes": 6961, "sha256": "c416f7e15746d887d5df40a531fbc7cde776c21cc92c1e7684f452ef729462bf" },
+    "ui-runtime.log": { "bytes": 335037, "sha256": "e31851129bfc61d1a4f0f82e951d3f40543be3803835978701f9c80bd42e354a" }
+  },
+  "unchangedNumericalRerun": {
+    "exitCode": 0,
+    "files": 4,
+    "passed": 214,
+    "failed": 0,
+    "durationSeconds": 651.93,
+    "testTimeoutMs": 30000,
+    "assertionsOrPrecisionChanged": false,
+    "log": { "bytes": 128588, "sha256": "6c35781c5a26613cef8cf656c0b59fc472b3ac612794e9b323c50492a1ecb0a3" },
+    "scope": "Original owner/capture and timing assertions on the first frozen source; not a mobile performance benchmark"
+  },
+  "candidateAccepted": false,
+  "productionSwitched": false,
+  "claims": "A failed first check, not final acceptance. No private credentials or environment values are included. No production data rollback or cleanup was performed."
+}

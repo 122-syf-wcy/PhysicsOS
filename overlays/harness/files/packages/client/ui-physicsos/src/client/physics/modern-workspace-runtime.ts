@@ -330,20 +330,12 @@ export class ModernPhysicsWorkspaceRuntime implements WorkspaceRuntime {
         },
       }
     }
-    // The bridge labels SI magnitudes; only this presentation copy is canonicalized.
-    const visualScene = {
-      ...scene,
-      modernPhysicsBenches: (scene.modernPhysicsBenches ?? []).map(bench => ({
-        ...bench,
-        workFunction: quantity(canonicalValue(bench.workFunction), 'J', 'energy'),
-        photonWavelength: quantity(canonicalValue(bench.photonWavelength), 'm', 'length'),
-      })),
-    }
     return {
       ...base,
       status: error === undefined ? runtimeStatusOf(simulation.verification) : 'failed',
       view: {
-        ...modernSceneVisual(visualScene, simulation),
+        // The bridge canonicalizes labels without replacing the scene's quantities.
+        ...modernSceneVisual(scene, simulation),
         ...(this.highlighted.length === 0 ? {} : { highlighted: this.highlighted }),
       },
       ariaLabel: `${title}的可验证物理画布`,

@@ -142,8 +142,10 @@ describe('applyEngineAnswers: the engine value lands in the paper', () => {
 
     expect(corrected).toBeDefined()
     expect(corrected!.sections[0]!.items[0]!.answer!.result).toBe(result!.solvedAnswer)
-    /* The rest of the drafted answer survives. */
+    /* Original explanation survives as unverified evidence, never new scoring steps. */
     expect(corrected!.sections[0]!.items[0]!.answer!.steps).toEqual(['洛伦兹力提供向心力'])
+    expect(corrected!.sections[0]!.items[0]!.status).toBe('flagged')
+    expect(corrected!.sections[0]!.items[0]!.reviewNote).toContain('尚待人工复核')
   })
 
   it('reports no change when the draft already carries the engine answer', async () => {

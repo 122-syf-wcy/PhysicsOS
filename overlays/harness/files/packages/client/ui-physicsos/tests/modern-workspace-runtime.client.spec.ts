@@ -5,6 +5,11 @@ import { createPhotoelectricEffectScene, type PhysicsScene } from '@physicsos/ph
 import type { CapturedResult } from '@physicsos/physics-workbench/types'
 
 import { createModernPhysicsWorkspaceRuntime } from '../src/client/physics/modern-workspace-runtime.ts'
+import { modernSceneVisual } from '../src/client/physics/modern-visual-bridge.ts'
+import { createWorkbenchInstanceRuntime } from '../src/client/physics/workbench-instance-runtime.ts'
+import { universalContributionSnapshot } from '../src/client/experiments/contribution-protocol.ts'
+import { isUniversalSnapshot } from '../src/client/experiments/universal-contract.ts'
+import { formatSignificant } from '../src/client/physics/number-format.ts'
 
 const h = 6.62607015e-34
 const c = 2.99792458e8
@@ -297,5 +302,181 @@ describe('modern held raw capture', () => {
     expect(capture.result?.sceneRevision).not.toBe(capture.scene.revision)
     expect(capture.diagnostics).toContainEqual(expect.objectContaining({ code: 'MODERN_SIMULATION_IDENTITY_MISMATCH' }))
     expect(spy).toHaveBeenCalledTimes(1)
+  })
+})
+
+const schematicGeometry = (view: ReturnType<typeof modernSceneVisual>) => ({
+  origin: view.origin,
+  extent: view.extent,
+  id: view.photoelectricRig?.id,
+  cathodeAt: view.photoelectricRig?.cathodeAt,
+  collectorAt: view.photoelectricRig?.collectorAt,
+  sourceAt: view.photoelectricRig?.sourceAt,
+  halfHeight: view.photoelectricRig?.halfHeight,
+})
+
+describe('trusted photoelectric apparatus frame', () => {
+  it('keeps its fixed schematic electrodes and camera bounds when emission changes or efficiency is zero', () => {
+    const runtime = createModernPhysicsWorkspaceRuntime(createPhotoelectricEffectScene({ now }))
+    const first = runtime.getSnapshot().view
+    expect(first.photoelectricRig).toMatchObject({
+      id: 'modern-photoelectric-bench', cathodeAt: { x: 0, y: 0 },
+      collectorAt: { x: 160, y: 0 }, sourceAt: { x: -170, y: 0 }, halfHeight: 60,
+    })
+    const below = runtime.editParameter('photonWavelength', 700e-9).view
+    expect(schematicGeometry(below)).toEqual(schematicGeometry(first))
+    expect(below.trajectories.filter(path => path.id.startsWith('modern-electron-'))).toEqual([])
+    expect(below.photoelectricRig!.photocurrentText).toBe('光电流 I = 0 A')
+    expect(below.photoelectricRig!.stoppingPotentialText).toBe('遏止电压 Us = 0 V')
+    runtime.editParameter('photonWavelength', 300e-9)
+    const zeroEfficiency = runtime.editParameter('quantumEfficiency', 0).view
+    expect(schematicGeometry(zeroEfficiency)).toEqual(schematicGeometry(first))
+    expect(zeroEfficiency.photoelectricRig!.photocurrentText).toBe('光电流 I = 0 A')
+    const raw = runtime.captureRaw()
+    expect(scalar(raw, 'photocurrent')).toBe(0)
+    expect(scalar(raw, 'stopping_potential')).toBeGreaterThan(0)
+    expect(zeroEfficiency.overlay.readout).toContain(zeroEfficiency.photoelectricRig!.stoppingPotentialText)
+  })
+
+  it('formats tiny trusted current without rounding it to zero and retains all raw metadata', () => {
+    const runtime = createModernPhysicsWorkspaceRuntime(createPhotoelectricEffectScene({ now, lightIntensity: 1.234567890123456e-20 }))
+    const before = runtime.captureRaw()
+    const current = scalar(before, 'photocurrent')
+    expect(current).toBeGreaterThan(0)
+    expect(current).toBeLessThan(1e-20)
+    const snapshot = runtime.getSnapshot()
+    expect(snapshot.view.photoelectricRig!.photocurrentText).toBe(`光电流 I = ${formatSignificant(current)} A`)
+    expect(snapshot.view.photoelectricRig!.photocurrentText).not.toBe('光电流 I = 0 A')
+    expect(snapshot.view.overlay.readout).toContain(snapshot.view.photoelectricRig!.photocurrentText)
+    expect(snapshot.view.overlay.readout).toContain(snapshot.view.photoelectricRig!.stoppingPotentialText)
+    const serialized = universalContributionSnapshot(snapshot, 'photoelectric-effect')
+    expect(isUniversalSnapshot(serialized, 'photoelectric-effect')).toBe(true)
+    const legacy = structuredClone(serialized)
+    Reflect.deleteProperty(legacy.view, 'photoelectricRig')
+    expect(isUniversalSnapshot(legacy, 'photoelectric-effect')).toBe(true)
+    expect(runtime.captureRaw()).toEqual(before)
+    expect(before.request?.sceneRevision).toBe(before.scene.revision)
+    expect(before.result?.sceneRevision).toBe(before.scene.revision)
+    expect(before.state).toEqual(before.result?.states[0])
+  })
+
+  it('accepts equivalent non-SI input in the bridge itself without canonicalizing or mutating captured scene facts', () => {
+    const alternate = createPhotoelectricEffectScene({ now })
+    alternate.modernPhysicsBenches![0]!.workFunction = quantity(2, 'eV', 'energy')
+    alternate.modernPhysicsBenches![0]!.photonWavelength = quantity(0.00004, 'cm', 'length')
+    alternate.modernPhysicsBenches![0]!.cathodeArea = quantity(1, 'cm²', 'area')
+    const before = structuredClone(alternate)
+    const runtime = createModernPhysicsWorkspaceRuntime(alternate)
+    const capture = runtime.captureRaw()
+    if (capture.result === undefined) throw new Error('Expected verified non-SI photoelectric result.')
+    const direct = modernSceneVisual(alternate, capture.result)
+    expect(direct).toEqual(runtime.getSnapshot().view)
+    expect(direct.overlay.readout).toContain('λ = 4.000e-7 m')
+    expect(direct.overlay.readout).toContain(`逸出功 W = ${formatSignificant(2 * e)} J`)
+    expect(direct.photoelectricRig!.photocurrentText).toBe(`光电流 I = ${formatSignificant(scalar(capture, 'photocurrent'))} A`)
+    expect(capture.scene.modernPhysicsBenches).toEqual(before.modernPhysicsBenches)
+    expect(alternate).toEqual(before)
+  })
+
+  it('does not publish schematic apparatus on an unsupported or identity-mismatched runtime frame', () => {
+    const bad = createPhotoelectricEffectScene({ now })
+    bad.modernPhysicsBenches![0]!.workFunction = quantity(0, 'J', 'energy')
+    expect(createModernPhysicsWorkspaceRuntime(bad).getSnapshot().view.photoelectricRig).toBeUndefined()
+    const actual = ModernPhysicsEngine.prototype.simulate
+    vi.spyOn(ModernPhysicsEngine.prototype, 'simulate').mockImplementation(function(this: ModernPhysicsEngine, scene, request) {
+      const result = actual.call(this, scene, request)
+      result.sceneRevision += 1
+      return result
+    })
+    expect(createModernPhysicsWorkspaceRuntime(createPhotoelectricEffectScene({ now })).getSnapshot().view.photoelectricRig).toBeUndefined()
+  })
+})
+
+const preciseEdits = [
+  ['workFunction', 3.456789012345678e-19, 'J'],
+  ['photonWavelength', 3.456789012345678e-7, 'm'],
+  ['photonFrequency', 8.765432109876543e14, 'Hz'],
+  ['lightIntensity', 1.234567890123456e-20, 'W/m²'],
+  ['cathodeArea', 1.234567890123456e-12, 'm²'],
+  ['quantumEfficiency', 0.12345678901234566, ''],
+] as const
+
+const parameterOf = (runtime: ReturnType<typeof createWorkbenchInstanceRuntime>, id: string) =>
+  runtime.frames.getSnapshot().inspector.flatMap(section => section.parameters ?? []).find(parameter => parameter.id === id)!
+
+const expectPrecise = (actual: number, expected: number): void => {
+  expect(actual).toBeGreaterThan(0)
+  expect(Math.abs((actual - expected) / expected)).toBeLessThan(4 * Number.EPSILON)
+}
+
+describe('photoelectric six-parameter round trips', () => {
+  it.each(preciseEdits)('keeps %s SI precision through preview, cancel, commit, reopening and origin restore', (id, value, unit) => {
+    const source = sourceScene()
+    source.modernPhysicsBenches![0]!.workFunction = quantity(2, 'eV', 'energy')
+    source.modernPhysicsBenches![0]!.photonWavelength = quantity(0.00004, 'cm', 'length')
+    source.modernPhysicsBenches![0]!.cathodeArea = quantity(1, 'cm²', 'area')
+    const original = structuredClone(source)
+    const onCommitted = vi.fn()
+    const onPersist = vi.fn()
+    const owner = createWorkbenchInstanceRuntime({
+      scene: source, originScene: source, source: { kind: 'question', questionId: 'modern-question-1' },
+      templateId: 'photoelectric-effect', scheduler: null, onCommitted, onPersist,
+    })
+    let reopened: ReturnType<typeof createWorkbenchInstanceRuntime> | undefined
+    try {
+      const before = owner.serialize()
+      const rawBefore = owner.captureRaw()
+      expect(parameterOf(owner, id).unit).toBe(unit)
+      const initialGeometry = schematicGeometry(owner.frames.getSnapshot().view)
+      owner.previewParameter(id, value)
+      expect(owner.getSnapshot().previewing).toBe(true)
+      expectPrecise(parameterOf(owner, id).value, value)
+      expect(owner.serialize()).toEqual(before)
+      expect(onCommitted).not.toHaveBeenCalled()
+      expect(onPersist).not.toHaveBeenCalled()
+      expect(() => owner.captureRaw()).toThrow(/CAPTURE_UNAVAILABLE/)
+      owner.cancelParameterPreview()
+      expect(owner.captureRaw()).toEqual(rawBefore)
+      expect(owner.serialize()).toEqual(before)
+      owner.commitParameter(id, value)
+      expect(owner.getSnapshot().previewing).toBe(false)
+      expectPrecise(parameterOf(owner, id).value, value)
+      expect(onCommitted).toHaveBeenCalledTimes(1)
+      expect(onPersist).toHaveBeenCalledTimes(1)
+      const saved = owner.serialize()
+      expect(saved.history.past).toHaveLength(1)
+      expect(schematicGeometry(owner.frames.getSnapshot().view)).toEqual(initialGeometry)
+      const raw = owner.captureRaw()
+      expect(raw.result?.sceneRevision).toBe(raw.scene.revision)
+      expect(raw.request?.sceneRevision).toBe(raw.scene.revision)
+      expect(raw.result?.verification.status).toBe('passed')
+      if (id !== 'photonFrequency') {
+        const bench = raw.scene.modernPhysicsBenches![0]!
+        const fact = bench[id]
+        expect(typeof fact === 'number' ? fact : canonicalValue(fact)).toBe(value)
+      } else {
+        expectPrecise(c / canonicalValue(raw.scene.modernPhysicsBenches![0]!.photonWavelength), value)
+      }
+      const wire = universalContributionSnapshot(owner.frames.getSnapshot(), 'photoelectric-effect')
+      expect(isUniversalSnapshot(wire, 'photoelectric-effect')).toBe(true)
+      const wireParameter = wire.inspector.flatMap(section => (section as { parameters?: { id: string; value: number }[] }).parameters ?? []).find(parameter => parameter.id === id)!
+      expectPrecise(wireParameter.value, value)
+      const persisted = JSON.parse(JSON.stringify(saved)) as typeof saved
+      reopened = createWorkbenchInstanceRuntime({
+        instanceKey: persisted.instanceKey, sceneId: String(persisted.scene.id), scene: persisted.scene,
+        ...(persisted.originScene === undefined ? {} : { originScene: persisted.originScene }),
+        templateId: 'photoelectric-effect', source: persisted.source, buildMode: persisted.buildMode,
+        clock: persisted.clock, instanceEditRevision: persisted.instanceEditRevision,
+        persistedHistory: persisted.history, scheduler: null,
+      })
+      expectPrecise(parameterOf(reopened, id).value, value)
+      expect(reopened.captureRaw().scene.modernPhysicsBenches).toEqual(raw.scene.modernPhysicsBenches)
+      owner.restoreOrigin()
+      expect(owner.captureRaw().scene.modernPhysicsBenches).toEqual(original.modernPhysicsBenches)
+      expect(source).toEqual(original)
+    } finally {
+      reopened?.dispose()
+      owner.dispose()
+    }
   })
 })

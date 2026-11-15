@@ -532,6 +532,11 @@ const motorPicture = (
         .map(vector => ({ id: vector.id, from: vector.from, to: vector.to })),
       halfWidth,
       angle: reading.angle,
+      // This motor's end-on basis fixes the positive stator field along +x.
+      // Current reversal changes the couple, not the stator's direction.
+      statorDirection: { x: 1, y: 0 },
+      torque: reading.torque,
+      sideForce: reading.sideForce,
       sense: reading.sense,
       torqueText: `τ = ${fmtFluidValue(reading.torque, 4)} N·m`,
       forceText: `F = ${fmtFluidValue(reading.sideForce, 4)} N`,

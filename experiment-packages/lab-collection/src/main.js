@@ -62,4 +62,11 @@ document.getElementById('play').addEventListener('click', () => send({ type: 'pl
 document.getElementById('seek').addEventListener('input', event => send({ type: 'playback/seek', time: Number(event.target.value) }))
 const failure = () => { document.getElementById('status').textContent = '三维画面暂时无法显示，请刷新或使用支持 WebGL 的浏览器。'; connection.reportError('RENDER_FAILED') }
 addEventListener('error', failure); addEventListener('unhandledrejection', failure); document.addEventListener('lab-render-failed', failure)
-addEventListener('pagehide', () => { connection.dispose(); disposeRenderer() }, { once: true })
+const pageHidden = event => {
+  // BFCache suspends the existing port and trusted frame; pageshow restores the renderer.
+  if (event.persisted) return
+  connection.dispose(); disposeRenderer()
+  removeEventListener('error', failure); removeEventListener('unhandledrejection', failure)
+  document.removeEventListener('lab-render-failed', failure); removeEventListener('pagehide', pageHidden)
+}
+addEventListener('pagehide', pageHidden)

@@ -8,16 +8,25 @@
  * the current document hash.
  */
 
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import {
-  EXAM_BLUEPRINTS, blueprintById, documentHash, planPaper, proposeSpecTable, runChecks, stemFingerprint,
+  EXAM_BLUEPRINTS, blueprintById, documentHash, planPaper, proposePaperPlan, sectionNotesForSpec,
+  summarizeSpecTable, runChecks, stemFingerprint,
   type BankItem, type BankSelectionPolicy, type BankUsage, type CheckFinding,
   type ExamBlueprint, type ExportBundle, type KnowledgeAnnotation, type KnowledgePoolEntry,
-  type PaperApproval, type PaperDocument, type PaperJob, type PaperJobStatus,
-  type PaperRequest, type PaperVersion, type ReviewRecord, type ReviewStatus,
-  type RowPlan, type SolveResult, type SourcePaper, type SpecRow,
+  type PaperDocument, type PaperJobStatus,
+  type PaperRequest, type ReviewRecord, type ReviewStatus,
+  type RowPlan, type SourcePaper, type SpecRow,
 } from '@physicsos/question-paper'
 import type { PaperDomain } from './domain.ts'
+import type { ExportFileSet } from './export.ts'
+import {
+  ANALYSIS_FINDING_PREFIX, checkReportHash, currentChecks, fenceMatches, findingHash,
+  invalidateDocument, latestQuestionReview, needsAnalysisReview, operationFence,
+  questionCheckHash, questionContentHash, unresolvedFindings, workflowHash,
+  type BoundSolveResult, type CheckedFigureAsset, type ManagedPaperJob,
+  type PaperOperationFence, type PaperOperationKind,
+} from './workflow-state.ts'
 
 /** Structured failure the route layer maps to status codes. */
 export class PaperError extends Error {
@@ -68,6 +77,32 @@ export class PaperService {
     creationQueues.set(this.domain, pending)
     try { return await pending } finally {
       if (creationQueues.get(this.domain) === pending) creationQueues.delete(this.domain)
+    }
+  }
+
+  /** All job decisions run at the table's queue slot, never on a stale read. */
+  private updateJob(id: string, change: (job: ManagedPaperJob) => ManagedPaperJob): Promise<ManagedPaperJob> {
+    this.requireJob(id)
+    return this.domain.table('jobs').update(id, (job) => {
+      const next = change(job)
+      if (next === job) return job
+      return { ...next, rowVersion: (job.rowVersion ?? 0) + 1, updatedAt: now() }
+    })
+  }
+
+  private requireFence(job: ManagedPaperJob, fence?: PaperOperationFence): void {
+    if (fence !== undefined && !fenceMatches(job, fence)) {
+      throw new PaperError(409, 'STALE_OPERATION', '本次操作已过期，结果未覆盖当前试卷')
+    }
+    if (fence === undefined && job.operation?.state === 'running') {
+      throw new PaperError(409, 'JOB_RUNNING', '该试卷正在处理，请等待当前操作完成')
+    }
+  }
+
+  private requireExpectedVersion(job: ManagedPaperJob, expectedVersion?: number): void {
+    if (expectedVersion !== undefined && expectedVersion !== job.versions.length) {
+      throw new PaperError(409, 'VERSION_CONFLICT',
+        `job ${job.id} is at version ${job.versions.length}, caller assumed ${expectedVersion}`)
     }
   }
 
@@ -135,11 +170,9 @@ export class PaperService {
    * @returns the updated source row.
    */
   async reviewSource(id: string, status: ReviewStatus, reviewer: string): Promise<SourcePaper> {
-    const source = this.requireSource(id)
-    const next: SourcePaper = { ...source, status }
-    await this.domain.table('source_papers').put(id, next)
+    this.requireSource(id)
     void reviewer
-    return next
+    return this.domain.table('source_papers').update(id, source => ({ ...source, status }))
   }
 
   /**
@@ -151,9 +184,7 @@ export class PaperService {
   async reviewAnnotation(id: string, status: ReviewStatus): Promise<KnowledgeAnnotation> {
     const record = this.domain.table('annotations').get(id)
     if (record === undefined) throw new PaperError(404, 'NOT_FOUND', `annotation '${id}' not found`)
-    const next = { ...record, status }
-    await this.domain.table('annotations').put(id, next)
-    return next
+    return this.domain.table('annotations').update(id, current => ({ ...current, status }))
   }
 
   /**
@@ -202,17 +233,20 @@ export class PaperService {
    * @returns the blueprint now marked `verified`.
    */
   async verifyBlueprint(id: string): Promise<ExamBlueprint> {
-    const blueprint = this.domain.table('blueprints').get(id) ?? blueprintById(id)
-    if (blueprint === undefined) throw new PaperError(404, 'NOT_FOUND', `blueprint '${id}' not found`)
-    const unverified = blueprint.basedOn.filter(sourceId =>
-      this.domain.table('source_papers').get(sourceId)?.status !== 'verified')
-    if (unverified.length > 0) {
-      throw new PaperError(409, 'UNVERIFIED_SOURCES',
-        `blueprint '${id}' waits on unverified source papers: ${unverified.join(', ')}`)
-    }
-    const next: ExamBlueprint = { ...blueprint, status: 'verified' }
-    await this.domain.table('blueprints').put(id, next)
-    return next
+    return this.createExclusive(async () => {
+      if (this.domain.table('blueprints').get(id) === undefined) {
+        const builtin = blueprintById(id)
+        if (builtin === undefined) throw new PaperError(404, 'NOT_FOUND', `blueprint '${id}' not found`)
+        await this.domain.table('blueprints').put(id, builtin)
+      }
+      return this.domain.table('blueprints').update(id, (blueprint) => {
+        const unverified = blueprint.basedOn.filter(sourceId =>
+          this.domain.table('source_papers').get(sourceId)?.status !== 'verified')
+        if (unverified.length > 0) throw new PaperError(409, 'UNVERIFIED_SOURCES',
+          `blueprint '${id}' waits on unverified source papers: ${unverified.join(', ')}`)
+        return { ...blueprint, status: 'verified' }
+      })
+    })
   }
 
   /**
@@ -235,6 +269,13 @@ export class PaperService {
     return this.domain.table('bank_items').get(id)
   }
 
+  private bankIdFor(stemHash: string, schoolId?: string | null): string {
+    const scope = schoolId == null ? 'platform' : createHash('sha256').update(schoolId).digest('hex').slice(0, 12)
+    let id = `bank-${scope}-${stemHash.slice(0, 12)}`
+    while (this.bankItemById(id) !== undefined) id = `bank-${scope}-${stemHash.slice(0, 12)}-${randomUUID()}`
+    return id
+  }
+
   /**
    * Store one bank item (ingested draft or teacher-entered). The stem
    * fingerprint is computed here — the wire never supplies it — and a live
@@ -246,14 +287,14 @@ export class PaperService {
     return this.createExclusive(async () => {
       const stemHash = stemFingerprint(input.stem)
       const existing = [...this.domain.table('bank_items').entries()]
-        .find(([, item]) => item.stemHash === stemHash)
+        .find(([, item]) => item.stemHash === stemHash && recordInSchoolScope(item.schoolId, input.schoolId))
       if (existing !== undefined) {
         throw new PaperError(409, 'DUPLICATE_ITEM',
           `same stem already in bank as '${existing[0]}' (${existing[1].sourceLabel ?? 'no source'})`)
       }
       const record: BankItem = {
         ...input,
-        id: input.id ?? `bank-${stemHash.slice(0, 12)}`,
+        id: input.id ?? this.bankIdFor(stemHash, input.schoolId),
         stemHash,
         status: 'pending',
         enteredAt: now(),
@@ -278,14 +319,14 @@ export class PaperService {
       for (const draft of drafts) {
         const stemHash = stemFingerprint(draft.stem)
         const existing = [...this.domain.table('bank_items').entries()]
-          .find(([, item]) => item.stemHash === stemHash)
+          .find(([, item]) => item.stemHash === stemHash && recordInSchoolScope(item.schoolId, draft.schoolId))
         if (existing !== undefined) {
           duplicates.push(`${draft.sourceLabel ?? '无来源'} T${draft.stem.slice(0, 12)}… → 已在库 '${existing[0]}'`)
           continue
         }
         const record: BankItem = {
           ...draft,
-          id: `bank-${stemHash.slice(0, 12)}-${created.length}`,
+          id: this.bankIdFor(stemHash, draft.schoolId),
           stemHash,
           status: 'pending',
           enteredAt: now(),
@@ -336,25 +377,19 @@ export class PaperService {
    * @returns the updated item.
    */
   async updateBankItem(id: string, patch: Partial<Omit<BankItem, 'id' | 'stemHash' | 'status' | 'enteredAt' | 'enteredBy' | 'verifiedBy'>>): Promise<BankItem> {
-    const item = this.bankItemById(id)
-    if (item === undefined) throw new PaperError(404, 'NOT_FOUND', `bank item '${id}' not found`)
-    if (item.status === 'verified') {
-      throw new PaperError(409, 'FROZEN', `bank item '${id}' is verified — reject it to change it`)
-    }
-    const stemHash = patch.stem === undefined ? item.stemHash : stemFingerprint(patch.stem)
-    /* A stem edit re-fingerprints; the new hash must not collide with a
-       different stored item or the bank silently holds a duplicate. */
-    if (stemHash !== item.stemHash) {
-      const existing = [...this.domain.table('bank_items').entries()]
-        .find(([key, other]) => key !== id && other.stemHash === stemHash)
-      if (existing !== undefined) {
-        throw new PaperError(409, 'DUPLICATE_ITEM',
+    return this.createExclusive(async () => {
+      this.getBankItem(id)
+      return this.domain.table('bank_items').update(id, (item) => {
+        if (item.status === 'verified') throw new PaperError(409, 'FROZEN',
+          `bank item '${id}' is verified — reject it to change it`)
+        const stemHash = patch.stem === undefined ? item.stemHash : stemFingerprint(patch.stem)
+        const existing = [...this.domain.table('bank_items').entries()].find(([key, other]) =>
+          key !== id && other.stemHash === stemHash && recordInSchoolScope(other.schoolId, item.schoolId))
+        if (existing !== undefined) throw new PaperError(409, 'DUPLICATE_ITEM',
           `same stem already in bank as '${existing[0]}' (${existing[1].sourceLabel ?? 'no source'})`)
-      }
-    }
-    const next: BankItem = { ...item, ...patch, stemHash }
-    await this.domain.table('bank_items').put(id, next)
-    return next
+        return { ...item, ...patch, stemHash }
+      })
+    })
   }
 
   /**
@@ -365,14 +400,10 @@ export class PaperService {
    * @returns the updated item.
    */
   async reviewBankItem(id: string, status: ReviewStatus, reviewer: string): Promise<BankItem> {
-    const item = this.bankItemById(id)
-    if (item === undefined) throw new PaperError(404, 'NOT_FOUND', `bank item '${id}' not found`)
-    const next: BankItem = {
-      ...item, status,
-      verifiedBy: status === 'verified' ? reviewer : item.verifiedBy,
-    }
-    await this.domain.table('bank_items').put(id, next)
-    return next
+    this.getBankItem(id)
+    return this.domain.table('bank_items').update(id, item => ({
+      ...item, status, verifiedBy: status === 'verified' ? reviewer : item.verifiedBy,
+    }))
   }
 
   /**
@@ -448,21 +479,23 @@ export class PaperService {
    * @param detail - the engine's answer on a mismatch, truncated for the row.
    * @returns the updated item.
    */
-  async noteBankTriage(id: string, check: 'agreed' | 'mismatch' | 'unresolved', detail?: string): Promise<BankItem> {
-    const item = this.bankItemById(id)
-    if (item === undefined) throw new PaperError(404, 'NOT_FOUND', `bank item '${id}' not found`)
-    if (item.status !== 'pending') {
-      throw new PaperError(409, 'REVIEWED', `bank item '${id}' is already ${item.status} — triage annotates pending rows only`)
-    }
-    const tag = detail === undefined
-      ? `engine-check:${check}`
-      : `engine-check:${check}(${detail.slice(0, 60)})`
-    const next: BankItem = {
-      ...item,
-      anomalies: [...item.anomalies.filter(a => !a.startsWith('engine-check:')), tag],
-    }
-    await this.domain.table('bank_items').put(id, next)
-    return next
+  async noteBankTriage(id: string, check: 'agreed' | 'mismatch' | 'unresolved', detail?: string,
+    expectedContentHash?: string): Promise<BankItem> {
+    this.getBankItem(id)
+    return this.domain.table('bank_items').update(id, (item) => {
+      if (item.status !== 'pending') throw new PaperError(409, 'REVIEWED',
+        `bank item '${id}' is already ${item.status} — triage annotates pending rows only`)
+      if (expectedContentHash !== undefined && this.bankContentHash(item) !== expectedContentHash) {
+        throw new PaperError(409, 'STALE_OPERATION', '题目已修改，本次初筛结果未写入')
+      }
+      const tag = detail === undefined ? `engine-check:${check}` : `engine-check:${check}(${detail.slice(0, 60)})`
+      return { ...item, anomalies: [...item.anomalies.filter(a => !a.startsWith('engine-check:')), tag] }
+    })
+  }
+
+  bankContentHash(item: BankItem): string {
+    return workflowHash({ stem: item.stem, options: item.options, subQuestions: item.subQuestions,
+      figure: item.figure, answer: item.answer, subject: item.subject, kind: item.kind })
   }
 
   /**
@@ -544,17 +577,34 @@ export class PaperService {
    * @param id - the job id.
    * @param plans - the resolved plan rows from `bankPlanFor`.
    */
-  async stampBankPlan(id: string, plans: readonly RowPlan[]): Promise<void> {
-    const job = this.requireJob(id)
-    await this.domain.table('jobs').put(id, {
-      ...job,
-      bankPlan: plans.map(plan => ({
-        questionNo: plan.row.questionNo,
-        mode: plan.mode,
-        bankItemId: plan.item?.id,
-        candidates: plan.candidates,
-      })),
-      updatedAt: now(),
+  async stampBankPlan(id: string, plans: readonly RowPlan[], fence?: PaperOperationFence): Promise<void> {
+    await this.updateJob(id, (job) => {
+      this.requireFence(job, fence)
+      return { ...job, bankPlan: plans.map(plan => ({
+        questionNo: plan.row.questionNo, mode: plan.mode,
+        bankItemId: plan.item?.id, candidates: plan.candidates,
+      })) }
+    })
+  }
+
+  /** Each validated batch is durable, so a bounded explicit retry keeps finished work. */
+  async checkpointDraft(id: string, title: string, items: readonly import('@physicsos/question-paper').PaperQuestion[],
+    fence: PaperOperationFence): Promise<void> {
+    await this.updateJob(id, (job) => {
+      this.requireFence(job, fence)
+      const sections = [...(job.draftCheckpoint?.specHash === fence.specHash ? job.draftCheckpoint.sections : [])]
+      const index = sections.findIndex(section => section.title === title)
+      const section = { title, items: [...items] }
+      if (index < 0) sections.push(section); else sections[index] = section
+      return { ...job, draftCheckpoint: { specHash: fence.specHash, sections } }
+    })
+  }
+
+  async checkpointQuestion(id: string, checkpoint: NonNullable<ManagedPaperJob['questionCheckpoint']>,
+    fence: PaperOperationFence): Promise<void> {
+    await this.updateJob(id, (job) => {
+      this.requireFence(job, fence)
+      return { ...job, questionCheckpoint: structuredClone(checkpoint) }
     })
   }
 
@@ -566,7 +616,7 @@ export class PaperService {
     return source
   }
 
-  private requireJob(id: string): PaperJob {
+  private requireJob(id: string): ManagedPaperJob {
     const job = this.domain.table('jobs').get(id)
     if (job === undefined) throw new PaperError(404, 'NOT_FOUND', `job '${id}' not found`)
     return job
@@ -622,28 +672,37 @@ export class PaperService {
    * @param input - the request plus the blueprint it draws from.
    * @returns the new job in `spec` status.
    */
-  async createJob(input: JobCreateInput): Promise<PaperJob> {
+  planJob(input: JobCreateInput): ReturnType<typeof proposePaperPlan> {
     const blueprint = this.requireVerifiedBlueprint(input.blueprintId)
-    if (!recordInSchoolScope(blueprint.schoolId, input.schoolId)) {
-      throw new PaperError(404, 'NOT_FOUND', 'not found')
-    }
-    const job: PaperJob = {
-      id: `paper-${createHash('sha256').update(`${input.blueprintId}:${now()}`).digest('hex').slice(0, 12)}`,
+    if (!recordInSchoolScope(blueprint.schoolId, input.schoolId)) throw new PaperError(404, 'NOT_FOUND', 'not found')
+    return proposePaperPlan(blueprint, input.request, this.knowledgePoolFor(blueprint, input.request, input.schoolId))
+  }
+
+  async createJob(input: JobCreateInput): Promise<ManagedPaperJob> {
+    const plan = this.planJob(input)
+    const blueprint = this.requireVerifiedBlueprint(input.blueprintId)
+    const at = now()
+    const job: ManagedPaperJob = {
+      id: `paper-${randomUUID()}`,
       ...input.schoolId === undefined ? {} : { schoolId: input.schoolId },
       blueprintId: input.blueprintId,
-      request: input.request,
-      specTable: proposeSpecTable(blueprint, input.request, this.knowledgePoolFor(blueprint, input.request, input.schoolId)),
-      versions: [],
-      reviews: [],
-      findings: [],
-      solveReport: [],
-      repairRounds: 0,
-      status: 'spec',
-      createdAt: now(),
-      updatedAt: now(),
+      selectedBlueprint: structuredClone(blueprint),
+      request: plan.request,
+      specTable: plan.specTable,
+      planSummary: { requestedTotalScore: plan.requestedTotalScore, totalScore: plan.totalScore,
+        questionCount: plan.questionCount, scorePolicy: plan.scorePolicy, normalized: plan.normalized,
+        sections: plan.sections, unassignedQuestionNos: plan.scope.unassignedQuestionNos },
+      versions: [], reviews: [], findings: [], solveReport: [], repairRounds: 0,
+      rowVersion: 0, status: 'spec', createdAt: at, updatedAt: at,
     }
     await this.domain.table('jobs').put(job.id, job)
     return job
+  }
+
+  /** Use the selected stored template, not only a built-in id lookup. */
+  blueprintForJob(job: ManagedPaperJob): ExamBlueprint | undefined {
+    const blueprint = job.selectedBlueprint ?? this.domain.table('blueprints').get(job.blueprintId) ?? blueprintById(job.blueprintId)
+    return blueprint !== undefined && recordInSchoolScope(blueprint.schoolId, job.schoolId) ? blueprint : undefined
   }
 
   /**
@@ -651,7 +710,7 @@ export class PaperService {
    * @param id - the job id.
    * @returns the job; throws 404 when absent.
    */
-  getJob(id: string): PaperJob {
+  getJob(id: string): ManagedPaperJob {
     return this.requireJob(id)
   }
 
@@ -661,7 +720,7 @@ export class PaperService {
    * @param schoolId - narrow to one school and platform jobs; `null` or absence includes all.
    * @returns the matching job rows.
    */
-  listJobs(status?: PaperJobStatus, schoolId?: string | null): PaperJob[] {
+  listJobs(status?: PaperJobStatus, schoolId?: string | null): ManagedPaperJob[] {
     let all = [...this.domain.table('jobs').entries()].map(([, record]) => record)
     if (schoolId !== undefined && schoolId !== null) {
       all = all.filter(job => jobInSchoolScope(job.schoolId, schoolId))
@@ -675,20 +734,33 @@ export class PaperService {
    * @param specTable - the confirmed 双向细目表 rows.
    * @returns the updated job (repair budget reset).
    */
-  async confirmSpec(id: string, specTable: readonly SpecRow[]): Promise<PaperJob> {
-    const job = this.requireJob(id)
-    /* A failed draft goes back through spec so the teacher can retry. */
-    if (job.status !== 'spec' && job.status !== 'failed')
-      throw new PaperError(409, 'BAD_STATE', `job ${id} is '${job.status}', not 'spec'`)
-    const next: PaperJob = {
-      ...job, specTable, status: 'spec', lastError: undefined,
-      /* Re-confirming resets the repair budget — the cap binds one confirmed
-         spec, not the job's whole lifetime. */
-      repairRounds: 0,
-      updatedAt: now(),
-    }
-    await this.domain.table('jobs').put(id, next)
-    return next
+  async confirmSpec(id: string, specTable: readonly SpecRow[], expectedVersion?: number): Promise<ManagedPaperJob> {
+    return this.updateJob(id, (job) => {
+      this.requireFence(job)
+      this.requireExpectedVersion(job, expectedVersion)
+      if (job.status !== 'spec' && job.status !== 'failed') throw new PaperError(409, 'BAD_STATE',
+        `job ${id} is '${job.status}', not 'spec'`)
+      const totalScore = specTable.reduce((sum, row) => sum + row.score, 0)
+      const request = { ...job.request, totalScore }
+      const summary = summarizeSpecTable(specTable, request)
+      if (summary.findings.some(finding => finding.severity === 'error')) throw new PaperError(409, 'SPEC_INVALID',
+        summary.findings.map(finding => finding.detail).join('；'))
+      const unchanged = workflowHash(job.specTable) === workflowHash(specTable)
+      const blueprint = this.blueprintForJob(job)
+      const sections = (blueprint === undefined ? [] : sectionNotesForSpec(blueprint, specTable)).map(section => {
+        const rows = specTable.filter(row => row.sectionTitle === section.title)
+        return { ...section, questionCount: rows.length, totalScore: rows.reduce((sum, row) => sum + row.score, 0) }
+      })
+      const requestedTotalScore = job.planSummary?.requestedTotalScore ?? job.request.totalScore
+      return { ...job, request, specTable: structuredClone([...specTable]), status: 'spec', lastError: undefined,
+        approval: undefined, checkBinding: unchanged ? job.checkBinding : undefined,
+        findings: unchanged ? job.findings : [], solveReport: unchanged ? job.solveReport : [],
+        draftCheckpoint: unchanged ? job.draftCheckpoint : undefined,
+        repairRounds: unchanged ? job.repairRounds : 0,
+        planSummary: { requestedTotalScore, totalScore, questionCount: specTable.length,
+          scorePolicy: 'blueprint-slot-sum', normalized: requestedTotalScore !== totalScore,
+          sections, unassignedQuestionNos: [] } }
+    })
   }
 
   /**
@@ -699,35 +771,32 @@ export class PaperService {
    * @param expectedVersion - optimistic concurrency check against `versions.length`.
    * @returns the updated job in `review` status.
    */
-  async commitDocument(id: string, document: PaperDocument, summary: string, expectedVersion?: number): Promise<PaperJob> {
-    const job = this.requireJob(id)
-    if (job.status !== 'drafting' && job.status !== 'review') {
-      throw new PaperError(409, 'BAD_STATE', `job ${id} is '${job.status}', not editable`)
-    }
-    if (expectedVersion !== undefined && expectedVersion !== job.versions.length) {
-      throw new PaperError(409, 'VERSION_CONFLICT',
-        `job ${id} is at version ${job.versions.length}, caller assumed ${expectedVersion}`)
-    }
-    const version: PaperVersion = {
-      version: job.versions.length + 1,
-      hash: documentHash(document),
-      at: now(),
-      summary,
-    }
-    const next: PaperJob = {
-      ...job,
-      document,
-      versions: [...job.versions, version],
-      /* Any edit voids the previous approval — it bound an older hash — and
-         the check findings describe the superseded document, so they reset
-         too; the next /check run repopulates them for this version. */
-      approval: undefined,
-      findings: [],
-      status: 'review',
-      updatedAt: now(),
-    }
-    await this.domain.table('jobs').put(id, next)
-    return next
+  async commitDocument(id: string, document: PaperDocument, summary: string, expectedVersion?: number,
+    fence?: PaperOperationFence): Promise<ManagedPaperJob> {
+    return this.updateJob(id, (job) => {
+      this.requireFence(job, fence)
+      this.requireExpectedVersion(job, expectedVersion)
+      if (job.status !== 'drafting' && job.status !== 'review' && !(fence !== undefined && job.status === 'checking')
+        && job.status !== 'failed') throw new PaperError(409, 'BAD_STATE', `job ${id} is '${job.status}', not editable`)
+      if (document.id !== id) throw new PaperError(400, 'DOCUMENT_ID_MISMATCH', 'document must belong to this job')
+      const nextDocument = invalidateDocument(job, structuredClone(document))
+      const hashes = new Map(nextDocument.sections.flatMap(section => section.items)
+        .map(question => [question.number, questionContentHash(question)]))
+      const at = now()
+      return { ...job, document: nextDocument,
+        versions: [...job.versions, { version: job.versions.length + 1, hash: documentHash(nextDocument), at, summary }],
+        approval: undefined, checkBinding: undefined, findings: [],
+        solveReport: job.solveReport.filter(result => result.questionHash !== undefined
+          && hashes.get(result.questionNo) === result.questionHash),
+        answerCorrections: job.answerCorrections?.filter(correction => hashes.get(correction.questionNo) === correction.questionHash),
+        figureAssets: job.figureAssets?.filter(asset => hashes.get(asset.questionNo) === asset.questionHash),
+        draftCheckpoint: undefined, questionCheckpoint: undefined,
+        status: fence === undefined ? 'review' : 'checking',
+        operation: fence === undefined || job.operation === undefined ? job.operation
+          : { ...job.operation, phase: 'check', updatedAt: at },
+        lastError: undefined,
+      }
+    })
   }
 
   /**
@@ -737,23 +806,61 @@ export class PaperService {
    * @param solve - the per-question solve comparison report.
    * @returns the updated job in `review` status.
    */
-  async recordCheckResults(id: string, findings: readonly CheckFinding[], solve: readonly SolveResult[]): Promise<PaperJob> {
-    const job = this.requireJob(id)
-    if (job.status !== 'checking') {
-      throw new PaperError(409, 'BAD_STATE', `job ${id} is '${job.status}', not checking`)
-    }
-    const next: PaperJob = {
-      ...job,
-      findings: [...findings],
-      solveReport: [...solve],
-      /* Checks always hand the paper to the teacher: `findings` carries the
-         severities, so even an error-free run needs a human verdict before
-         approval. This was a ternary whose two branches were identical. */
-      status: 'review',
-      updatedAt: now(),
-    }
-    await this.domain.table('jobs').put(id, next)
-    return next
+  async recordCheckResults(id: string, findings: readonly CheckFinding[], solve: readonly BoundSolveResult[],
+    fence?: PaperOperationFence, assets: readonly CheckedFigureAsset[] = []): Promise<ManagedPaperJob> {
+    return this.updateJob(id, (job) => {
+      this.requireFence(job, fence)
+      if (job.status !== 'checking') throw new PaperError(409, 'BAD_STATE', `job ${id} is '${job.status}', not checking`)
+      if (job.document === undefined) throw new PaperError(409, 'NO_DOCUMENT', `job ${id} has no document`)
+      const document = job.document
+      const questions = document.sections.flatMap(section => section.items)
+      const version = job.versions.at(-1)
+      const hash = documentHash(document)
+      if (version === undefined || version.hash !== hash) throw new PaperError(409, 'VERSION_CONFLICT', '当前文档与版本记录不一致')
+      const numbers = new Set(questions.map(question => question.number))
+      if (numbers.size !== questions.length || questions.length === 0 || solve.length !== questions.length
+        || questions.some(question => solve.filter(result => result.questionNo === question.number).length !== 1)) {
+        throw new PaperError(409, 'CHECK_COVERAGE', '独立检查必须覆盖当前卷每一道且仅一道题')
+      }
+      const results = solve.map((result) => {
+        const question = questions.find(item => item.number === result.questionNo)
+        if (question === undefined) throw new PaperError(409, 'CHECK_COVERAGE', '检查报告含不存在的题号')
+        const questionHash = questionContentHash(question)
+        if (result.questionHash !== undefined && result.questionHash !== questionHash) throw new PaperError(409, 'STALE_OPERATION', '解题结果属于旧题目')
+        return { ...result, questionHash }
+      })
+      for (const question of questions) {
+        if (question.figure !== undefined && !assets.some(asset => asset.questionNo === question.number
+          && asset.questionHash === questionContentHash(question) && asset.sha256 !== '')) {
+          throw new PaperError(409, 'FIGURES_UNCHECKED', `第${question.number}题题图尚未验证，可仅重试检查`)
+        }
+      }
+      const analysisFindings: CheckFinding[] = questions.filter(question => needsAnalysisReview(job, question)).map(question => ({
+        questionNo: question.number, code: 'engine-mismatch', severity: 'error',
+        detail: `${ANALYSIS_FINDING_PREFIX}。请人工核对原解析、评分点及等价答案，不会自动编造步骤。`,
+      }))
+      const combined = [...findings, ...analysisFindings].filter((finding, index, all) =>
+        all.findIndex(other => findingHash(other) === findingHash(finding)) === index)
+      const at = now()
+      const binding = { documentHash: hash, version: version.version, requestHash: workflowHash(job.request),
+        specHash: workflowHash(job.specTable), reportHash: checkReportHash(document, job.request, job.specTable, combined, results, assets),
+        questionHashes: Object.fromEntries(questions.map(question => [String(question.number), questionContentHash(question)])),
+        questionReports: Object.fromEntries(questions.map(question => [String(question.number), questionCheckHash(question, combined, results, assets)])),
+        completedAt: at }
+      const checked: ManagedPaperJob = { ...job, findings: combined, solveReport: results,
+        figureAssets: [...assets], checkBinding: binding, approval: undefined, status: 'review',
+        operation: job.operation?.state === 'running' ? { ...job.operation, state: 'completed', updatedAt: at } : job.operation,
+        lastError: undefined, progress: { stage: 'review', done: questions.length, total: questions.length,
+          detail: '检查已完成，请逐题审核', updatedAt: at } }
+      return { ...checked, document: { ...document, sections: document.sections.map(section => ({ ...section,
+        items: section.items.map(question => {
+          const review = latestQuestionReview(checked, question, binding)
+          return { ...question, status: review?.verdict === 'approved' ? 'approved' as const
+            : review?.verdict === 'changes-requested' ? 'rejected' as const : 'checked' as const,
+          reviewNote: review?.note }
+        }),
+      })) } }
+    })
   }
 
   /**
@@ -765,24 +872,29 @@ export class PaperService {
    * @param document - the document carrying the engine's verified answers.
    * @returns the updated job, still in `checking`.
    */
-  async commitEngineAnswers(id: string, document: PaperDocument): Promise<PaperJob> {
-    const job = this.requireJob(id)
-    if (job.status !== 'checking') {
-      throw new PaperError(409, 'BAD_STATE', `job ${id} is '${job.status}', not checking`)
-    }
-    const next: PaperJob = {
-      ...job,
-      document,
-      versions: [...job.versions, {
-        version: job.versions.length + 1,
-        hash: documentHash(document),
-        at: now(),
-        summary: '引擎定案：答案取自 PhysicsOS 引擎',
-      }],
-      updatedAt: now(),
-    }
-    await this.domain.table('jobs').put(id, next)
-    return next
+  async commitEngineAnswers(id: string, document: PaperDocument, fence?: PaperOperationFence): Promise<ManagedPaperJob> {
+    return this.updateJob(id, (job) => {
+      this.requireFence(job, fence)
+      if (job.status !== 'checking') throw new PaperError(409, 'BAD_STATE', `job ${id} is '${job.status}', not checking`)
+      const at = now()
+      const corrected = invalidateDocument(job, structuredClone(document))
+      const previous = new Map(job.document?.sections.flatMap(section => section.items).map(question => [question.number, question]) ?? [])
+      const changes = corrected.sections.flatMap(section => section.items).filter(question =>
+        previous.get(question.number)?.answer?.result !== question.answer?.result).map(question => ({
+        questionNo: question.number, questionHash: questionContentHash(question),
+        originalResult: previous.get(question.number)?.answer?.result ?? '', engineResult: question.answer?.result ?? '', at,
+      }))
+      const hashes = new Map(corrected.sections.flatMap(section => section.items).map(question => [question.number, questionContentHash(question)]))
+      return { ...job, document: corrected,
+        versions: [...job.versions, { version: job.versions.length + 1, hash: documentHash(corrected), at,
+          summary: '引擎定案：答案取自 PhysicsOS 引擎，解析与评分点需重新复核' }],
+        approval: undefined, checkBinding: undefined, findings: [],
+        solveReport: job.solveReport.filter(result => result.questionHash !== undefined && hashes.get(result.questionNo) === result.questionHash),
+        answerCorrections: [...(job.answerCorrections ?? []).filter(correction =>
+          hashes.get(correction.questionNo) === correction.questionHash && !changes.some(change => change.questionNo === correction.questionNo)), ...changes],
+        figureAssets: job.figureAssets?.filter(asset => hashes.get(asset.questionNo) === asset.questionHash),
+      }
+    })
   }
 
   /**
@@ -794,33 +906,44 @@ export class PaperService {
    * @param note - optional verdict note stored on the question.
    * @returns the updated job.
    */
-  async reviewQuestion(id: string, questionNo: number, verdict: ReviewRecord['verdict'], reviewer: string, note?: string): Promise<PaperJob> {
-    const job = this.requireJob(id)
-    if (job.status !== 'review') throw new PaperError(409, 'BAD_STATE', `job ${id} is '${job.status}', not review`)
-    if (job.document === undefined) throw new PaperError(409, 'NO_DOCUMENT', `job ${id} has no document yet`)
-    const current = job.versions.at(-1)
-    if (current === undefined) throw new PaperError(409, 'NO_VERSION', `job ${id} has no committed version`)
-    const record: ReviewRecord = {
-      paperId: id, version: current.version, questionNo, verdict, note, reviewer, at: now(),
-    }
-    const question = job.document.sections.flatMap(s => s.items).find(q => q.number === questionNo)
-    if (question !== undefined) {
-      question.status = verdict === 'approved' ? 'approved' : 'rejected'
-      if (note !== undefined) question.reviewNote = note
-    }
-    /* Approving a question is the teacher's adjudication of its judgment-call
-       findings — solve/engine mismatches and spec drift the teacher accepts.
-       Mechanical facts (score totals, missing answers/knowledge, bad option
-       letters, duplicates, numbering) are not adjudicable this way and stay
-       until the document changes. */
-    const adjudicable = new Set(['solve-mismatch', 'engine-mismatch', 'spec-mismatch'])
-    const findings = verdict === 'approved'
-      ? job.findings.filter(f =>
-        !(f.questionNo === questionNo && adjudicable.has(f.code)))
-      : job.findings
-    const next: PaperJob = { ...job, reviews: [...job.reviews, record], findings, updatedAt: now() }
-    await this.domain.table('jobs').put(id, next)
-    return next
+  async reviewQuestion(id: string, questionNo: number, verdict: ReviewRecord['verdict'], reviewer: string, note?: string,
+    expected?: { version?: number; questionHash?: string; checkHash?: string; acknowledgeFindings?: boolean; analysisConfirmed?: boolean }): Promise<ManagedPaperJob> {
+    return this.updateJob(id, (job) => {
+      this.requireFence(job)
+      this.requireExpectedVersion(job, expected?.version)
+      if (job.status !== 'review') throw new PaperError(409, 'BAD_STATE', `job ${id} is '${job.status}', not review`)
+      if (job.document === undefined) throw new PaperError(409, 'NO_DOCUMENT', `job ${id} has no document yet`)
+      const question = job.document.sections.flatMap(section => section.items).find(item => item.number === questionNo)
+      if (question === undefined) throw new PaperError(404, 'NO_QUESTION', `job ${id} has no question ${questionNo}`)
+      const binding = currentChecks(job)
+      if (binding === undefined) throw new PaperError(409, 'CHECKS_REQUIRED', '请先对当前版本完成自动检查，审核不能引用旧报告')
+      const questionHash = questionContentHash(question)
+      const checkHash = binding.questionReports[String(questionNo)]
+      if (expected?.questionHash !== undefined && expected.questionHash !== questionHash
+        || expected?.checkHash !== undefined && expected.checkHash !== checkHash) {
+        throw new PaperError(409, 'VERSION_CONFLICT', '题目或检查报告已更新，请刷新后审核')
+      }
+      const blocking = job.findings.filter(finding => finding.questionNo === questionNo && finding.severity === 'error')
+      const structural = blocking.filter(finding => finding.code !== 'solve-mismatch' && finding.code !== 'engine-mismatch')
+      if (verdict === 'approved' && structural.length > 0) throw new PaperError(409, 'UNRESOLVED_FINDINGS',
+        `第${questionNo}题仍有不可豁免的结构/范围错误：${structural.map(finding => finding.detail).join('；')}`)
+      if (verdict === 'approved' && blocking.length > 0 && (!expected?.acknowledgeFindings || !note?.trim())) {
+        throw new PaperError(409, 'REVIEW_REASON_REQUIRED', '请明确确认检查分歧并填写人工裁定理由；不会删除检查证据')
+      }
+      if (verdict === 'approved' && needsAnalysisReview(job, question) && expected?.analysisConfirmed !== true) {
+        throw new PaperError(409, 'ANALYSIS_REVIEW_REQUIRED', '引擎已改答案，须核对解析、评分点及等价答案后再确认')
+      }
+      const record = { paperId: id, version: binding.version, documentHash: binding.documentHash,
+        questionNo, questionHash, checkHash, verdict, note: note?.trim() || undefined, reviewer, at: now(),
+        acknowledgedFindings: expected?.acknowledgeFindings ? blocking.map(findingHash) : [],
+        analysisConfirmed: expected?.analysisConfirmed === true }
+      return { ...job, approval: undefined, reviews: [...job.reviews, record],
+        document: { ...job.document, sections: job.document.sections.map(section => ({ ...section,
+          items: section.items.map(item => item.number === questionNo ? { ...item,
+            status: verdict === 'approved' ? 'approved' as const : 'rejected' as const,
+            reviewNote: record.note } : item),
+        })) } }
+    })
   }
 
   /**
@@ -832,42 +955,42 @@ export class PaperService {
    * @param subject - which half is being approved on a combined paper.
    * @returns the approved job.
    */
-  async approve(id: string, reviewer: string, subject?: 'physics' | 'chemistry'): Promise<PaperJob> {
-    const job = this.requireJob(id)
-    if (job.status !== 'review') throw new PaperError(409, 'BAD_STATE', `job ${id} is '${job.status}', not review`)
-    if (job.document === undefined) throw new PaperError(409, 'NO_DOCUMENT', `job ${id} has no document`)
-    const current = job.versions.at(-1)
-    if (current === undefined) throw new PaperError(409, 'NO_VERSION', `job ${id} has no version`)
-
-    const errors = job.findings.filter(f => f.severity === 'error')
-    if (errors.length > 0) {
-      throw new PaperError(409, 'UNRESOLVED_FINDINGS',
-        `${errors.length} error findings unresolved: ${errors.map(f => f.code).join(', ')}`)
-    }
-    const pending = job.document.sections.flatMap(s => s.items).filter(q => q.status !== 'approved')
-    if (pending.length > 0) {
-      throw new PaperError(409, 'QUESTIONS_UNREVIEWED',
-        `questions not approved: ${pending.map(q => q.number).join(', ')}`)
-    }
-
-    const prior = job.approval?.versionHash === current.hash ? job.approval : undefined
-    const approval: PaperApproval = {
-      versionHash: current.hash,
-      reviewer,
-      at: now(),
-      physics: subject === 'physics' ? { reviewer, at: now() } : prior?.physics ?? { reviewer, at: now() },
-      chemistry: job.request.subjects.includes('chemistry')
-        ? (subject === 'chemistry' ? { reviewer, at: now() } : prior?.chemistry)
-        : prior?.chemistry,
-    }
-    const needsChemistry = job.request.subjects.includes('chemistry')
-    if (needsChemistry && approval.chemistry === undefined) {
-      await this.domain.table('jobs').put(id, { ...job, approval, updatedAt: now() })
-      throw new PaperError(409, 'AWAITING_CHEMISTRY', 'physics half approved; chemistry half pending')
-    }
-    const next: PaperJob = { ...job, approval, status: 'approved', updatedAt: now() }
-    await this.domain.table('jobs').put(id, next)
-    return next
+  async approve(id: string, reviewer: string, subject?: 'physics' | 'chemistry',
+    expected?: { version?: number; documentHash?: string; checkHash?: string }): Promise<ManagedPaperJob> {
+    return this.updateJob(id, (job) => {
+      this.requireFence(job)
+      this.requireExpectedVersion(job, expected?.version)
+      if (job.status !== 'review') throw new PaperError(409, 'BAD_STATE', `job ${id} is '${job.status}', not review`)
+      if (job.document === undefined) throw new PaperError(409, 'NO_DOCUMENT', `job ${id} has no document`)
+      const binding = currentChecks(job)
+      if (binding === undefined) throw new PaperError(409, 'CHECKS_REQUIRED', '整卷批准需要完整且绑定当前内容的检查报告')
+      if (expected?.documentHash !== undefined && expected.documentHash !== binding.documentHash
+        || expected?.checkHash !== undefined && expected.checkHash !== binding.reportHash) throw new PaperError(409, 'VERSION_CONFLICT', '文档或检查报告已更新，请刷新后批准')
+      const questions = job.document.sections.flatMap(section => section.items)
+      const subjects = [...new Set(job.request.subjects)]
+      if (questions.some(question => !subjects.includes(question.subject))
+        || subjects.some(required => !questions.some(question => question.subject === required))) {
+        throw new PaperError(409, 'SUBJECT_COVERAGE', '试卷题目必须覆盖并且只覆盖请求的学科')
+      }
+      const half = subject ?? (subjects.length === 1 ? subjects[0] : undefined)
+      if (half === undefined || !subjects.includes(half)) throw new PaperError(400, 'BAD_SUBJECT', '请明确签署本卷包含的学科')
+      const errors = unresolvedFindings(job, binding)
+      if (errors.length > 0) throw new PaperError(409, 'UNRESOLVED_FINDINGS',
+        `${errors.length} error findings unresolved: ${errors.map(finding => finding.code).join(', ')}`)
+      const pending = questions.filter(question => question.status !== 'approved'
+        || latestQuestionReview(job, question, binding)?.verdict !== 'approved')
+      if (pending.length > 0) throw new PaperError(409, 'QUESTIONS_UNREVIEWED',
+        `questions not approved against current checks: ${pending.map(question => question.number).join(', ')}`)
+      const prior = job.approval?.versionHash === binding.documentHash && job.approval.checkHash === binding.reportHash
+        ? job.approval : undefined
+      const at = now()
+      const approval: NonNullable<ManagedPaperJob['approval']> = { versionHash: binding.documentHash,
+        checkHash: binding.reportHash, reviewer, at,
+        physics: half === 'physics' ? { reviewer, at } : prior?.physics,
+        chemistry: half === 'chemistry' ? { reviewer, at } : prior?.chemistry }
+      const complete = subjects.every(required => approval[required] !== undefined)
+      return { ...job, approval, status: complete ? 'approved' : 'review' }
+    })
   }
 
   /**
@@ -876,13 +999,23 @@ export class PaperService {
    * @param id - the job id.
    * @returns the approved document for rendering.
    */
-  requireApprovedDocument(id: string): { job: PaperJob; document: PaperDocument } {
+  requireApprovedDocument(id: string): { job: ManagedPaperJob; document: PaperDocument } {
     const job = this.requireJob(id)
     if (job.document === undefined) throw new PaperError(409, 'NO_DOCUMENT', `job ${id} has no document`)
     const current = job.versions.at(-1)
     const hash = current === undefined ? undefined : documentHash(job.document)
     if (job.approval === undefined || job.approval.versionHash !== current?.hash || hash !== job.approval.versionHash) {
       throw new PaperError(409, 'NOT_APPROVED', `job ${id} has no approval bound to the current version`)
+    }
+    if (job.status !== 'approved' && job.status !== 'exported') throw new PaperError(409, 'NOT_APPROVED', '试卷尚未完成当前学科签署')
+    /* Historical finalized rows retain the existing hash-bound export contract.
+       Do not invent a report for them; new approvals always carry checkHash. */
+    if (job.approval.checkHash !== undefined) {
+      const checks = currentChecks(job)
+      if (checks === undefined || checks.reportHash !== job.approval.checkHash || unresolvedFindings(job, checks).length > 0
+        || job.request.subjects.some(subject => job.approval?.[subject] === undefined)) {
+        throw new PaperError(409, 'NOT_APPROVED', '当前检查或学科签署已失效')
+      }
     }
     return { job, document: job.document }
   }
@@ -920,15 +1053,89 @@ export class PaperService {
    * @param id - the job id.
    * @param status - the stage being entered.
    */
-  async markStage(id: string, status: 'drafting' | 'checking'): Promise<void> {
+  async markStage(id: string, status: 'drafting' | 'checking', fence?: PaperOperationFence): Promise<void> {
+    await this.updateJob(id, (job) => {
+      this.requireFence(job, fence)
+      const allowed = status === 'drafting' ? ['spec', 'review', 'failed'] : ['review', 'failed']
+      if (!(fence !== undefined && job.status === 'checking') && !allowed.includes(job.status)) {
+        throw new PaperError(409, 'BAD_STATE', `job ${id} is '${job.status}', not ready for ${status}`)
+      }
+      return { ...job, status, lastError: undefined, approval: undefined }
+    })
+  }
+
+  /** Reserve work before answering 202. All entry points share this single-flight gate. */
+  async beginOperation(id: string, kind: PaperOperationKind,
+    input: { questionNo?: number; suggestion?: string; reviewer?: string; expectedVersion?: number; resume?: boolean } = {}): Promise<ManagedPaperJob> {
+    return this.updateJob(id, (job) => {
+      this.requireFence(job)
+      this.requireExpectedVersion(job, input.expectedVersion)
+      if (job.status === 'drafting' || job.status === 'checking' || job.status === 'approved' || job.status === 'exported') {
+        throw new PaperError(409, 'BAD_STATE', `job ${id} is '${job.status}', not ready for ${kind}`)
+      }
+      if (kind === 'draft') {
+        const checked = summarizeSpecTable(job.specTable, job.request)
+        if (checked.findings.length > 0) throw new PaperError(409, 'SPEC_INVALID', checked.findings.map(finding => finding.detail).join('；'))
+      } else if (job.document === undefined) throw new PaperError(409, 'NO_DOCUMENT', `job ${id} has no document`)
+      if (kind === 'repair' || kind === 'replace') {
+        if (!Number.isSafeInteger(input.questionNo) || (input.questionNo ?? 0) <= 0) throw new PaperError(400, 'BAD_QUESTION', '题号必须是正整数')
+        if (!job.document?.sections.some(section => section.items.some(question => question.number === input.questionNo))) {
+          throw new PaperError(404, 'NO_QUESTION', `job ${id} has no question ${input.questionNo}`)
+        }
+        if (!job.specTable.some(row => row.questionNo === input.questionNo)) throw new PaperError(404, 'NO_SPEC_ROW', '未找到对应细目表题号')
+        if (kind === 'repair' && !input.suggestion?.trim()) throw new PaperError(400, 'BAD_REQUEST', 'repair needs a suggestion')
+      }
+      if (input.resume && (job.status !== 'failed' || job.operation?.state !== 'failed')) throw new PaperError(409, 'NOT_RETRYABLE', '没有已失败阶段可重试')
+      const at = now()
+      const recovery = kind === 'check' || input.resume ? job.recovery : job.document === undefined ? undefined
+        : { document: structuredClone(job.document), hash: documentHash(job.document), at }
+      return { ...job, operation: { id: randomUUID(), kind, phase: kind, state: 'running',
+        questionNo: input.questionNo, suggestion: input.suggestion?.trim(), reviewer: input.reviewer,
+        startedAt: at, updatedAt: at },
+        status: kind === 'draft' ? 'drafting' : 'checking', lastError: undefined, approval: undefined,
+        checkBinding: kind === 'check' ? undefined : job.checkBinding,
+        recovery, draftCheckpoint: kind === 'draft' && !input.resume ? undefined : job.draftCheckpoint,
+        questionCheckpoint: input.resume ? job.questionCheckpoint : undefined,
+        repairRounds: kind === 'draft' && !input.resume ? 0 : job.repairRounds,
+        progress: { stage: kind, done: 0, total: 1, detail: kind === 'repair' ? `修订第${input.questionNo}题`
+          : kind === 'replace' ? `更换第${input.questionNo}题` : kind === 'check' ? '仅重新检查当前稿，不重新起草' : '准备起草', updatedAt: at },
+      }
+    })
+  }
+
+  async operationPhase(id: string, phase: 'check' | 'figure', fence: PaperOperationFence): Promise<ManagedPaperJob> {
+    return this.updateJob(id, (job) => {
+      this.requireFence(job, fence)
+      if (job.operation === undefined) throw new PaperError(409, 'STALE_OPERATION', 'operation missing')
+      return { ...job, status: 'checking', operation: { ...job.operation, phase, updatedAt: now() } }
+    })
+  }
+
+  retryableOperation(id: string): { kind: PaperOperationKind; questionNo?: number; suggestion?: string; reviewer?: string } {
     const job = this.requireJob(id)
-    const allowed = status === 'drafting'
-      ? ['spec', 'review', 'failed']
-      : ['checking', 'review', 'failed']
-    if (!allowed.includes(job.status)) {
-      throw new PaperError(409, 'BAD_STATE', `job ${id} is '${job.status}', not ready for ${status}`)
+    if (job.status !== 'failed' || job.operation?.state !== 'failed') throw new PaperError(409, 'NOT_RETRYABLE', '没有已失败阶段可重试')
+    const { phase, kind, questionNo, suggestion, reviewer } = job.operation
+    return { kind: phase === 'check' || phase === 'figure' ? 'check' : kind, questionNo, suggestion, reviewer }
+  }
+
+  /** A service restart settles abandoned work; it never replays paid generation. */
+  async settleInterrupted(): Promise<void> {
+    for (const [id, candidate] of this.domain.table('jobs').entries()) {
+      if (candidate.status !== 'drafting' && candidate.status !== 'checking' && candidate.operation?.state !== 'running') continue
+      await this.updateJob(id, (job) => {
+        if (job.status !== 'drafting' && job.status !== 'checking' && job.operation?.state !== 'running') return job
+        const at = now()
+        return { ...job, status: 'failed', lastError: '服务重启中断了当前阶段；原稿和已完成批次已保留，可仅重试检查或显式重试失败阶段，不会自动重新生成',
+          operation: job.operation === undefined ? undefined : { ...job.operation, state: 'failed', updatedAt: at } }
+      })
     }
-    await this.domain.table('jobs').put(id, { ...job, status, lastError: undefined, updatedAt: now() })
+  }
+
+  async restoreDraft(id: string, expectedVersion?: number): Promise<ManagedPaperJob> {
+    const job = this.requireJob(id)
+    if (job.status !== 'failed') throw new PaperError(409, 'BAD_STATE', '只有已失败任务可恢复原稿')
+    if (job.recovery === undefined) throw new PaperError(409, 'NO_RECOVERY', '本任务没有更改前原稿')
+    return this.commitDocument(id, job.recovery.document, '恢复更改前原稿（需重新检查）', expectedVersion ?? job.versions.length)
   }
 
   /**
@@ -936,12 +1143,19 @@ export class PaperService {
    * @param id - the job id.
    * @param message - the failure text stored on `lastError`.
    */
-  async failJob(id: string, message: string): Promise<void> {
-    const job = this.requireJob(id)
-    if (job.status !== 'drafting' && job.status !== 'checking') {
-      throw new PaperError(409, 'BAD_STATE', `job ${id} is '${job.status}', not running`)
-    }
-    await this.domain.table('jobs').put(id, { ...job, status: 'failed', lastError: message, updatedAt: now() })
+  async failJob(id: string, message: string, fence?: PaperOperationFence): Promise<void> {
+    await this.updateJob(id, (job) => {
+      /* Failure/progress may settle after a content edit or restart: only their
+         operation id matters, and never lets an old worker fail a newer run. */
+      if (fence !== undefined && (job.operation?.id !== fence.operationId || job.operation.state !== 'running')) return job
+      this.requireFence(job, fence === undefined ? undefined : operationFence(job))
+      if (job.status !== 'drafting' && job.status !== 'checking') throw new PaperError(409, 'BAD_STATE', `job ${id} is '${job.status}', not running`)
+      const at = now()
+      return { ...job, status: 'failed', lastError: message,
+        operation: job.operation === undefined ? undefined : { ...job.operation, state: 'failed', updatedAt: at },
+        progress: { stage: job.operation?.phase ?? job.progress?.stage ?? 'check', detail: message,
+          done: job.progress?.done ?? 0, total: job.progress?.total ?? 1, updatedAt: at } }
+    })
   }
 
   /**
@@ -961,13 +1175,16 @@ export class PaperService {
     done: number,
     total: number,
     detail?: string,
+    fence?: PaperOperationFence,
   ): Promise<void> {
     try {
-      const job = this.requireJob(id)
-      await this.domain.table('jobs').put(id, {
-        ...job,
-        progress: { stage, ...(detail === undefined ? {} : { detail }), done, total, updatedAt: now() },
-        updatedAt: now(),
+      await this.updateJob(id, (job) => {
+        if (fence !== undefined && (!fenceMatches(job, fence)
+          || job.operation?.phase === 'figure' && stage !== 'figure')) return job
+        if (fence === undefined && job.operation?.state === 'running') return job
+        if (fence === undefined && !['approved', 'exported', 'drafting', 'checking'].includes(job.status)) return job
+        return { ...job, progress: { stage, ...(detail === undefined ? {} : { detail }),
+          done, total, updatedAt: now() } }
       })
     } catch {
       /* telemetry only — the driver keeps going */
@@ -979,11 +1196,12 @@ export class PaperService {
    * @param id - the job id.
    * @returns the new round count.
    */
-  async spendRepairRound(id: string): Promise<number> {
-    const job = this.requireJob(id)
-    const rounds = job.repairRounds + 1
-    await this.domain.table('jobs').put(id, { ...job, repairRounds: rounds, updatedAt: now() })
-    return rounds
+  async spendRepairRound(id: string, fence?: PaperOperationFence): Promise<number> {
+    const updated = await this.updateJob(id, (job) => {
+      this.requireFence(job, fence)
+      return { ...job, repairRounds: job.repairRounds + 1 }
+    })
+    return updated.repairRounds
   }
 
   /**
@@ -991,16 +1209,25 @@ export class PaperService {
    * @param id - the job id; must carry a current-version approval.
    * @param files - produced file names by kind.
    */
-  async recordExport(id: string, files: { paperPdf?: string; paperDocx?: string; answerPdf?: string; answerDocx?: string }): Promise<void> {
+  async recordExport(id: string, produced: ExportFileSet): Promise<void> {
     const { job } = this.requireApprovedDocument(id)
     const current = job.versions.at(-1)
-    if (current === undefined) {
-      throw new PaperError(409, 'NO_VERSION', `试卷 ${id} 没有任何已提交版本`)
-    }
-    await this.domain.table('exports').put(`${id}@${current.version}`, {
+    if (current === undefined) throw new PaperError(409, 'NO_VERSION', `试卷 ${id} 没有任何已提交版本`)
+    if (produced.documentHash !== current.hash || produced.manifest.documentHash !== current.hash
+      || produced.manifest.paperId !== id || produced.manifest.contentHash !== produced.contentHash
+      || !/^[0-9a-f]{64}$/.test(produced.contentHash)) throw new PaperError(409, 'STALE_EXPORT', '导出产物或清单不属于当前文档，未标为定稿')
+    const files = { paperPdf: produced.paperPdf, paperDocx: produced.paperDocx,
+      answerPdf: produced.answerPdf, answerDocx: produced.answerDocx }
+    await this.domain.table('exports').put(`${id}@${current.version}@${produced.contentHash}`, {
       paperId: id, version: current.version, hash: current.hash, files, exportedAt: now(),
+      contentHash: produced.contentHash, manifestPath: produced.manifestPath, manifest: produced.manifest,
+    } as ExportBundle)
+    await this.updateJob(id, (latest) => {
+      if (latest.versions.at(-1)?.hash !== current.hash || latest.approval?.versionHash !== current.hash
+        || latest.document === undefined || documentHash(latest.document) !== current.hash
+        || latest.operation?.state === 'running') throw new PaperError(409, 'STALE_EXPORT', '试卷已更新，旧产物保留但未覆盖新状态')
+      return { ...latest, status: 'exported' }
     })
-    await this.domain.table('jobs').put(id, { ...job, status: 'exported', updatedAt: now() })
   }
 
   /**

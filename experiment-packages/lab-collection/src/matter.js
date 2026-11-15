@@ -1,310 +1,251 @@
-// Fluids, thermal physics and photoelectric apparatus. All measured levels,
-// contact widths, fractions and particle positions are snapshot facts.
-const point = p => p && Number.isFinite(p.x) && Number.isFinite(p.y);
-const finite = n => Number.isFinite(n);
-const at = (p, dx = 0, dy = 0, z = 0) => ({ x: p.x + dx, y: p.y + dy, z });
+// Four fluid, four thermal and photoelectric experiments. Levels, fractions,
+// contact widths, normalized needles and particles remain native snapshot facts.
+import { finite, positive, isPoint, offset, scope, entityScope, semanticNumber } from './apparatus-geometry.js';
+import { apparatusColors as c, finishes, apparatusFrame, bindingTerminal, container, liquidVolume, dialMeter, digitalMeter, thermometerTube, hotplate } from './apparatus.js';
 
-function vessel(left, right, floor, top, depth, kit, tag) {
-  if (![left, right, floor, top, depth].every(finite) || right <= left || top <= floor || depth <= 0) return;
-  const { unit: u, palette: c } = kit, middle = (left + right) / 2;
-  for (const x of [left, right]) {
-    kit.box({ x, y: (floor + top) / 2, z: -depth * 0.15 }, u * 0.05, top - floor, depth, c.glass, { opacity: 0.24, tag: `${tag}-wall` });
-    kit.line([{ x, y: top, z: depth * 0.36 }, { x, y: floor, z: depth * 0.36 }], c.metal, { opacity: 0.8 });
-  }
-  kit.box({ x: middle, y: floor - u * 0.035, z: -depth * 0.15 }, right - left, u * 0.07, depth, c.glass, { opacity: 0.38, tag: `${tag}-floor` });
-  kit.line([{ x: left, y: floor, z: depth * 0.36 }, { x: right, y: floor, z: depth * 0.36 }], c.metal);
-  // The rear sheet and two open rims convey a transparent laboratory vessel.
-  kit.box({ x: middle, y: (floor + top) / 2, z: -depth * 0.65 }, right - left, top - floor, u * 0.025, c.glass, { opacity: 0.08, tag: `${tag}-rear` });
-  for (const x of [left, right]) kit.line([{ x, y: top, z: -depth * 0.65 }, { x, y: top, z: depth * 0.36 }], c.metal, { opacity: 0.8 });
+function liquidTank(tank, kit, comparison = false) {
+  if (!tank || ![tank.left, tank.right, tank.floor, tank.surface].every(finite) || tank.right <= tank.left) return;
+  entityScope(kit, 'liquid-tank', tank, () => {
+    const u = kit.unit, depth = Math.min((tank.right - tank.left) * 0.45, u * 2.3), rim = finite(tank.rim) && tank.rim >= 0 ? tank.rim : u * 0.75;
+    const bounds = { left: tank.left, right: tank.right, floor: tank.floor, top: tank.surface + rim, depth };
+    container(kit, bounds, { key: 'vessel', tag: tank.id });
+    liquidVolume(kit, bounds, tank.surface, { key: 'fill', color: comparison ? '#b7c69f' : c.liquid, surfaceColor: comparison ? '#6c8a68' : '#648c9e', tag: `${tank.id}-liquid`, surfaceTag: `${tank.id}-surface` });
+    kit.label(tank.densityText ?? tank.label, { x: (tank.left + tank.right) / 2, y: tank.surface + rim + u * 0.27, z: 0 }, { color: c.muted, key: 'label', tag: `${tank.id}-label` });
+  });
 }
 
-function liquidTank(t, kit, comparison = false) {
-  if (!t || ![t.left, t.right, t.floor, t.surface].every(finite)) return;
-  const { unit: u, palette: c } = kit, width = t.right - t.left;
-  if (width <= 0) return;
-  const depth = Math.min(width * 0.45, u * 2.4), height = t.surface - t.floor;
-  const rim = finite(t.rim) ? t.rim : u * 0.8;
-  vessel(t.left, t.right, t.floor, t.surface + rim, depth, kit, t.id);
-  if (height > 0) kit.box({ x: (t.left + t.right) / 2, y: (t.surface + t.floor) / 2, z: -depth * 0.15 },
-    width, height, depth * 0.96, comparison ? '#b9c8a4' : c.glass, { opacity: 0.22, tag: `${t.id}-liquid` });
-  kit.line([{ x: t.left, y: t.surface }, { x: t.right, y: t.surface }], comparison ? c.green : c.blue, { opacity: 0.75, tag: `${t.id}-surface` });
-  const text = t.densityText ?? t.label;
-  if (text) kit.label(text, { x: (t.left + t.right) / 2, y: t.surface + rim + u * 0.3 }, { color: c.muted, tag: `${t.id}-label` });
-}
-
-function dial(center, radius, fraction, kit, tag) {
-  const c = kit.palette;
-  kit.cylinder(at(center, 0, 0, -radius * 0.2), at(center, 0, 0, radius * 0.2), radius, c.metal, { tag });
-  kit.cylinder(at(center, 0, 0, radius * 0.205), at(center, 0, 0, radius * 0.22), radius * 0.87, '#f8f6ed');
-  for (let i = 0; i <= 8; i++) {
-    const angle = Math.PI * (1.2 - i * 1.4 / 8);
-    kit.line([at(center, Math.cos(angle) * radius * 0.67, Math.sin(angle) * radius * 0.67, radius * 0.24),
-      at(center, Math.cos(angle) * radius * 0.8, Math.sin(angle) * radius * 0.8, radius * 0.24)], c.muted);
-  }
-  if (finite(fraction)) {
-    const angle = Math.PI * (1.2 - fraction * 1.4);
-    kit.line([at(center, 0, 0, radius * 0.26), at(center, Math.cos(angle) * radius * 0.62, Math.sin(angle) * radius * 0.62, radius * 0.26)], c.orange, { tag: `${tag}-needle` });
-    kit.sphere(at(center, 0, 0, radius * 0.27), radius * 0.065, c.ink);
-  }
-}
-
-function buoyancy(v, kit) {
-  const { unit: u, palette: c } = kit;
-  liquidTank(v.fluidLiquid, kit);
-  const b = v.fluidBlock, s = v.fluidScale;
-  if (b && point(b.at) && b.halfWidth > 0 && b.halfHeight > 0) {
-    const depth = b.halfWidth * 1.5;
-    kit.box(b.at, b.halfWidth * 2, b.halfHeight * 2, depth, b.phase === 'floating' ? c.wood : c.metal, { tag: b.id });
-    // The highlight ends at the engine's submergedTop, including exactly dry.
-    const bottom = b.at.y - b.halfHeight;
-    if (kit.visible('displaced') && finite(b.submergedTop) && b.submergedTop > bottom) {
-      const height = b.submergedTop - bottom;
-      kit.box({ x: b.at.x, y: bottom + height / 2, z: depth / 2 + u * 0.015 }, b.halfWidth * 2, height, u * 0.025, c.blue,
-        { opacity: 0.55, tag: `${b.id}-displaced` });
-      kit.line([{ x: b.at.x - b.halfWidth, y: b.submergedTop, z: depth / 2 + u * 0.035 },
-        { x: b.at.x + b.halfWidth, y: b.submergedTop, z: depth / 2 + u * 0.035 }], c.blue, { tag: `${b.id}-submerged-level` });
+function buoyancy(view, kit) {
+  const u = kit.unit;
+  liquidTank(view.fluidLiquid, kit);
+  const block = view.fluidBlock, scale = view.fluidScale;
+  if (isPoint(block?.at) && positive(block.halfWidth) && positive(block.halfHeight)) entityScope(kit, 'buoyancy-block', block, () => {
+    const depth = block.halfWidth * 1.5, f = apparatusFrame(kit, block.at), bottom = block.at.y - block.halfHeight;
+    const body = f.box('body', [0, 0, 0], block.halfWidth * 2, block.halfHeight * 2, depth, block.phase === 'floating' ? c.wood : c.alloy, { ...(block.phase === 'floating' ? finishes.wood : finishes.brushed), tag: block.id, rounded: false });
+    if (body) body.userData.apparatus = { factory: 'buoyancy-block', origin: offset(block.at), anchors: { centerOfMass: offset(block.at), suspension: offset(block.at, 0, block.halfHeight), submergedTop: block.submergedTop }, unit: 'scene' };
+    if (kit.visible('displaced') && finite(block.submergedTop) && block.submergedTop > bottom) {
+      const height = block.submergedTop - bottom;
+      kit.box({ x: block.at.x, y: bottom + height / 2, z: (block.at.z ?? 0) + depth / 2 + u * 0.01 }, block.halfWidth * 2, height, u * 0.018, '#7199aa', { ...finishes.liquid, opacity: 0.43, key: 'displaced-volume', tag: `${block.id}-displaced`, rounded: false });
+      kit.line([{ x: block.at.x - block.halfWidth, y: block.submergedTop, z: (block.at.z ?? 0) + depth / 2 + u * 0.024 }, { x: block.at.x + block.halfWidth, y: block.submergedTop, z: (block.at.z ?? 0) + depth / 2 + u * 0.024 }], '#628d9f', { key: 'submerged-level', tag: `${block.id}-submerged-level` });
     }
-    if (b.label) kit.label(b.label, at(b.at, -b.halfWidth - u * 0.4, 0), { tag: `${b.id}-label` });
-    if (s && point(s.at)) {
-      kit.line([s.at, at(b.at, 0, b.halfHeight)], c.ink, { tag: `${s.id}-suspension` });
-      kit.circle(at(b.at, 0, b.halfHeight + u * 0.06), u * 0.07, c.metal);
+    f.label('label', block.label, [-block.halfWidth - u * 0.37, 0, 0]);
+    if (isPoint(scale?.at)) {
+      const top = offset(block.at, 0, block.halfHeight), hookCenter = offset(top, 0, u * 0.057), hookContact = offset(hookCenter, 0, u * 0.067);
+      kit.cylinder(scale.at, hookContact, u * 0.013, c.rubber, { ...finishes.rubber, key: 'suspension', tag: `${scale.id}-suspension` });
+      kit.torus(hookCenter, u * 0.057, u * 0.01, c.alloy, { ...finishes.aluminum, axis: 'z', key: 'hook' });
     }
-  }
-  if (s && point(s.at)) {
-    const center = at(s.at, 0, u * 0.5);
-    dial(center, u * 0.46, s.dialFraction, kit, s.id);
-    kit.cylinder(s.at, at(center, 0, -u * 0.4), u * 0.045, c.metal);
-    kit.circle(at(center, 0, u * 0.57), u * 0.11, c.metal, { tag: `${s.id}-mount` });
-    kit.label(s.reading, at(center, u * 0.8, 0), { color: c.orange, tag: `${s.id}-reading` });
-  }
+  });
+  if (isPoint(scale?.at)) entityScope(kit, 'buoyancy-scale', scale, () => {
+    const center = offset(scale.at, 0, u * 0.46);
+    dialMeter(kit, center, u * 0.42, scale.dialFraction, { key: 'dial', tag: scale.id });
+    kit.cylinder(scale.at, offset(center, 0, -u * 0.37), u * 0.035, c.alloy, { ...finishes.aluminum, key: 'hook-pin' });
+    kit.torus(offset(center, 0, u * 0.54), u * 0.1, u * 0.013, c.alloy, { ...finishes.aluminum, axis: 'z', key: 'mount' });
+    kit.label(scale.reading, offset(center, u * 0.72), { color: c.ink, priority: 3, key: 'reading', tag: `${scale.id}-reading` });
+  });
 }
 
-function solidPressure(s, kit) {
-  if (!s || !point(s.at) || !(s.halfHeight > 0)) return;
-  const { unit: u, palette: c } = kit;
-  for (const f of s.faces ?? []) {
-    if (!point(f.at) || !(f.halfWidth > 0)) continue;
-    if (!f.loaded && !kit.visible('pressureComparison')) continue;
-    const width = f.halfWidth * 2;
-    // Both horizontal directions use the supplied contact-face side length;
-    // the footprint therefore preserves the stated square-root area ratio.
-    kit.box(at(f.at, 0, -s.plateDepth / 2), width, s.plateDepth, width, '#ccd6cb', { tag: `${f.id}-plate` });
-    const center = f.loaded ? s.at : at(f.at, 0, s.halfHeight);
-    kit.box(center, width, s.halfHeight * 2, width, f.loaded ? c.green : '#a9bbb0', { tag: `${s.id}-${f.id}` });
-    for (const side of [-1, 1]) kit.line([at(f.at, -f.halfWidth, 0, side * f.halfWidth), at(f.at, f.halfWidth, 0, side * f.halfWidth)], c.orange, { opacity: 0.75, tag: `${f.id}-contact` });
-    if (kit.visible(f.loaded ? 'pressure' : 'pressureComparison')) kit.label(f.pressureText, at(center, 0, 0, f.halfWidth + u * 0.1), { color: c.ink, tag: `${f.id}-reading` });
-  }
+function solidPressure(solid, kit) {
+  if (!isPoint(solid?.at) || !positive(solid.halfHeight) || !positive(solid.plateDepth)) return;
+  entityScope(kit, 'pressure-solid', solid, () => {
+    for (const face of solid.faces ?? []) {
+      if (!isPoint(face.at) || !positive(face.halfWidth) || (!face.loaded && !kit.visible('pressureComparison'))) continue;
+      entityScope(kit, 'contact-face', face, () => {
+        const width = face.halfWidth * 2, center = face.loaded ? solid.at : offset(face.at, 0, solid.halfHeight), f = apparatusFrame(kit, face.at);
+        const plate = f.box('plate', [0, -solid.plateDepth / 2, 0], width, solid.plateDepth, width, '#cad5bc', { ...finishes.ceramic, rounded: false, tag: `${face.id}-plate` });
+        kit.box(center, width, solid.halfHeight * 2, width, face.loaded ? '#698461' : '#a5b493', { ...finishes.enamel, rounded: false, key: 'block', tag: `${solid.id}-${face.id}` });
+        if (plate) plate.userData.apparatus = { factory: 'pressure-contact', origin: offset(face.at), anchors: { contactPlane: offset(face.at), sideLength: width }, unit: 'scene' };
+        // Equal X and Z side lengths retain the square-root area ratio.
+        for (const [edge, z] of [['back', -face.halfWidth], ['front', face.halfWidth]]) f.line(`contact-edge:${edge}`, [[-face.halfWidth, 0, z], [face.halfWidth, 0, z]], '#b48d4f', { opacity: 0.75 });
+        if (kit.visible(face.loaded ? 'pressure' : 'pressureComparison')) kit.label(face.pressureText, offset(center, 0, 0, face.halfWidth + kit.unit * 0.08), { color: c.ink, priority: 3, key: 'reading', tag: `${face.id}-reading` });
+      });
+    }
+  });
 }
 
-function pressureLiquids(v, kit) {
-  const { unit: u, palette: c } = kit;
-  liquidTank(v.pressureLiquid, kit);
-  if (kit.visible('pressureComparison')) liquidTank(v.pressureComparisonLiquid, kit, true);
-  for (const probe of v.pressureProbes ?? []) {
-    if (!point(probe.at) || (!probe.primary && !kit.visible('pressureComparison'))) continue;
-    const radius = u * 0.16;
-    kit.cylinder(at(probe.at, 0, 0, -radius), at(probe.at, 0, 0, radius), radius, c.metal, { tag: probe.id });
-    kit.circle(at(probe.at, 0, 0, radius * 1.05), radius * 0.68, c.ink);
-    kit.sphere(at(probe.at, 0, 0, radius * 1.1), radius * 0.23, probe.primary ? c.orange : c.blue);
-    // A flexible sensing hose returns to the surface, without encoding pressure
-    // as an invented fluid-column height or a fabricated gauge deflection.
-    const hoseX = probe.at.x - u * (probe.primary ? 0.42 : 0.7);
-    kit.tube([probe.at, { x: hoseX, y: probe.at.y }, { x: hoseX, y: probe.surface + u * 0.45 }], u * 0.022, c.ink, { tag: `${probe.id}-hose` });
-    if (kit.visible(probe.primary ? 'pressure' : 'pressureComparison')) kit.label(probe.readingText, at(probe.at, u * 0.75, 0), { color: probe.primary ? c.orange : c.blue, tag: `${probe.id}-reading` });
+function liquidPressure(view, kit) {
+  const u = kit.unit;
+  liquidTank(view.pressureLiquid, kit);
+  if (kit.visible('pressureComparison')) liquidTank(view.pressureComparisonLiquid, kit, true);
+  for (const probe of view.pressureProbes ?? []) {
+    if (!isPoint(probe.at) || (!probe.primary && !kit.visible('pressureComparison'))) continue;
+    entityScope(kit, 'pressure-probe', probe, () => {
+      const r = u * 0.145, f = apparatusFrame(kit, probe.at);
+      f.rod('diaphragm-case', [0, 0, -r], [0, 0, r], r, c.alloy, { ...finishes.brushed, tag: probe.id });
+      kit.torus(f.at(0, 0, r), r * 0.72, r * 0.05, '#5e796b', { ...finishes.rubber, axis: 'z', key: 'diaphragm-rim' });
+      f.rod('diaphragm', [0, 0, r], [0, 0, r * 1.05], r * 0.62, '#7c9985', finishes.rubber);
+      if (finite(probe.surface)) {
+        const hoseX = probe.at.x - u * (probe.primary ? 0.4 : 0.65), gaugeAt = { x: hoseX, y: probe.surface + u * 0.6, z: probe.at.z ?? 0 };
+        kit.tube([probe.at, { x: hoseX, y: probe.at.y, z: probe.at.z ?? 0 }, gaugeAt], u * 0.019, c.rubber, { ...finishes.rubber, curve: 'polyline', key: 'hose', tag: `${probe.id}-hose` });
+        // Digital gauge: no inferred liquid-column height or invented needle.
+        digitalMeter(kit, gaugeAt, { key: 'gauge', scale: u * 0.37, unit: 'Pa', reading: probe.readingText, showReading: kit.visible(probe.primary ? 'pressure' : 'pressureComparison'), tag: `${probe.id}-meter` });
+      }
+      if (kit.visible(probe.primary ? 'pressure' : 'pressureComparison')) f.label('reading', probe.readingText, [u * 0.69, 0, 0], { priority: 3, tag: `${probe.id}-reading` });
+    });
   }
 }
 
 function barometer(b, kit) {
-  if (!b || !point(b.at) || ![b.surface, b.columnTop, b.tubeTop, b.dishDepth].every(finite)) return;
-  const { unit: u, palette: c } = kit, x = b.at.x, floor = b.surface - b.dishDepth;
-  const depth = b.dishHalfWidth * 0.9;
-  vessel(x - b.dishHalfWidth, x + b.dishHalfWidth, floor, b.surface + u * 0.2, depth, kit, `${b.id}-dish`);
-  if (b.dishDepth > 0) kit.box({ x, y: b.surface - b.dishDepth / 2, z: -depth * 0.15 }, b.dishHalfWidth * 2, b.dishDepth, depth * 0.95, c.metal, { tag: `${b.id}-mercury-pool` });
-  if (b.tubeTop > floor) {
-    kit.cylinder({ x, y: floor }, { x, y: b.tubeTop }, b.halfWidth * 1.12, c.glass, { opacity: 0.18, tag: `${b.id}-glass` });
-    for (const side of [-1, 1]) kit.line([{ x: x + side * b.halfWidth, y: floor }, { x: x + side * b.halfWidth, y: b.tubeTop }], c.metal, { opacity: 0.65 });
-    kit.circle({ x, y: b.tubeTop - b.halfWidth }, b.halfWidth, c.metal, { start: 0, end: Math.PI, tag: `${b.id}-sealed-top` });
-  }
-  if (b.columnTop > b.surface) kit.cylinder({ x, y: b.surface }, { x, y: b.columnTop }, b.halfWidth, '#899b9d', { tag: `${b.id}-mercury-column` });
-  kit.line([{ x: x - b.halfWidth, y: b.columnTop }, { x: x + b.halfWidth, y: b.columnTop }], c.ink, { tag: `${b.id}-column-top` });
-  if (b.tubeTop > b.columnTop) kit.label('真空', { x, y: (b.columnTop + b.tubeTop) / 2 }, { color: c.muted, tag: `${b.id}-vacuum` });
-  if (kit.visible('pressure')) {
-    kit.label(b.columnText, { x: x + u, y: b.columnTop }, { color: c.blue, tag: `${b.id}-height-reading` });
-    kit.label(b.pressureText, { x, y: b.surface - b.dishDepth - u * 0.32 }, { tag: `${b.id}-pressure-reading` });
-  }
+  if (!isPoint(b?.at) || ![b.surface, b.columnTop, b.tubeTop, b.dishDepth].every(finite) || !positive(b.dishHalfWidth) || !positive(b.halfWidth)) return;
+  entityScope(kit, 'barometer', b, () => {
+    const u = Math.min(kit.unit, b.dishHalfWidth), x = b.at.x, z = b.at.z ?? 0, floor = b.surface - b.dishDepth, depth = b.dishHalfWidth * 0.9;
+    const dish = { left: x - b.dishHalfWidth, right: x + b.dishHalfWidth, floor, top: b.surface + u * 0.18, depth };
+    container(kit, dish, { key: 'dish', tag: `${b.id}-dish` });
+    liquidVolume(kit, dish, b.surface, { key: 'reservoir', color: '#9aac9f', material: { opacity: 0.76, metalness: 0.68, roughness: 0.3 }, tag: `${b.id}-mercury-pool`, surfaceTag: `${b.id}-reservoir-surface` });
+    if (b.tubeTop > floor) {
+      // A hollow glass bore and sealed cap, not an opaque cylinder claiming to
+      // simulate mercury. The interior column top is the measured quantity.
+      kit.lathe({ x, y: floor, z }, [[b.halfWidth, 0], [b.halfWidth * 1.12, 0], [b.halfWidth * 1.12, b.tubeTop - floor], [b.halfWidth, b.tubeTop - floor], [b.halfWidth, 0]], c.glass, { ...finishes.glass, opacity: 0.17, axis: 'y', key: 'glass', tag: `${b.id}-glass` });
+      kit.sphere({ x, y: b.tubeTop, z }, b.halfWidth * 1.12, c.glass, { ...finishes.glass, opacity: 0.14, scale3D: { x: 1, y: 0.32, z: 1 }, key: 'sealed-cap' });
+      const columnX = x + b.dishHalfWidth + u * 0.25;
+      kit.cylinder({ x: columnX, y: floor - u * 0.2, z: -depth * 0.5 }, { x: columnX, y: b.tubeTop + u * 0.16, z: -depth * 0.5 }, u * 0.045, c.alloy, { ...finishes.aluminum, key: 'support-post' });
+      for (const [clamp, y] of [['lower', b.surface + (b.tubeTop - b.surface) * 0.28], ['upper', b.surface + (b.tubeTop - b.surface) * 0.8]]) kit.cylinder({ x: columnX, y, z: -depth * 0.5 }, { x, y, z: -b.halfWidth * 1.2 }, u * 0.03, c.alloy, { ...finishes.aluminum, key: `clamp:${clamp}` });
+    }
+    if (b.columnTop > b.surface) kit.cylinder({ x, y: b.surface, z }, { x, y: b.columnTop, z }, b.halfWidth, '#8b9d96', { ...finishes.brushed, key: 'mercury-column', tag: `${b.id}-mercury-column` });
+    kit.line([{ x: x - b.halfWidth, y: b.columnTop, z }, { x: x + b.halfWidth, y: b.columnTop, z }], c.ink, { key: 'column-top', tag: `${b.id}-column-top` });
+    if (b.tubeTop > b.columnTop) kit.label('真空', { x, y: (b.columnTop + b.tubeTop) / 2, z }, { color: c.muted, key: 'vacuum' });
+    if (kit.visible('pressure')) {
+      kit.label(b.columnText, { x: x + u * 0.91, y: b.columnTop, z }, { priority: 3, key: 'column-reading' });
+      kit.label(b.pressureText, { x, y: floor - u * 0.3, z }, { priority: 3, key: 'pressure-reading' });
+    }
+  });
 }
 
 function hemispheres(h, kit) {
-  if (!h || !point(h.at) || !(h.radius > 0) || !kit.visible('pressureComparison')) return;
-  const { unit: u, palette: c } = kit;
-  for (const side of [-1, 1]) {
-    const mesh = new kit.THREE.Mesh(new kit.THREE.SphereGeometry(h.radius, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2),
-      new kit.THREE.MeshStandardMaterial({ color: side < 0 ? '#b69965' : '#bea779', metalness: 0.65, roughness: 0.32, side: kit.THREE.DoubleSide }));
-    mesh.rotation.z = side < 0 ? Math.PI / 2 : -Math.PI / 2;
-    mesh.position.set(h.at.x, h.at.y, 0); mesh.userData.tag = `${h.id}-${side}`; kit.group.add(mesh);
-    const handle = at(h.at, side * (h.radius + u * 0.15));
-    kit.cylinder(at(h.at, side * h.radius), handle, u * 0.035, c.metal);
-    kit.circle(at(handle, side * u * 0.12), u * 0.14, c.metal, { tag: `${h.id}-handle-${side}` });
-  }
-  kit.line([at(h.at, 0, -h.radius), at(h.at, 0, h.radius)], c.ink, { tag: `${h.id}-seal` });
-  if (h.label) kit.label(h.label, at(h.at, 0, h.radius + u * 0.4), { tag: h.id });
-  kit.label(h.forceText, at(h.at, 0, -h.radius - u * 0.38), { color: c.orange, tag: `${h.id}-force` });
+  if (!isPoint(h?.at) || !positive(h.radius) || !kit.visible('pressureComparison')) return;
+  entityScope(kit, 'hemispheres', h, () => {
+    const u = Math.min(kit.unit, h.radius), T = kit.THREE;
+    for (const [name, side] of [['left', -1], ['right', 1]]) scope(kit, name, () => {
+      kit.customMesh(h.at, side < 0 ? '#b29a65' : '#bfa974', { ...finishes.brass, materialType: 'standard', key: 'shell', geometryKey: 'hemisphere:unit:32:16', geometry: () => new T.SphereGeometry(1, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2), rotation3D: { x: 0, y: 0, z: side < 0 ? 90 : -90 }, scale3D: { x: h.radius, y: h.radius, z: h.radius }, tag: `${h.id}-${name}` });
+      const handle = offset(h.at, side * (h.radius + u * 0.13));
+      kit.cylinder(offset(h.at, side * h.radius), handle, u * 0.03, c.alloy, { ...finishes.aluminum, key: 'handle-pin' });
+      kit.torus(offset(handle, side * u * 0.11), u * 0.12, u * 0.018, c.alloy, { ...finishes.aluminum, axis: 'z', key: 'handle' });
+    });
+    kit.circle(h.at, h.radius, '#627b60', { key: 'seal-ring', tag: `${h.id}-seal` });
+    kit.label(h.label, offset(h.at, 0, h.radius + u * 0.34), { key: 'label' });
+    kit.label(h.forceText, offset(h.at, 0, -h.radius - u * 0.34), { priority: 3, key: 'force' });
+  });
 }
 
 function calibratedThermometer(t, kit) {
-  if (!t || !point(t.at) || ![t.columnTop, t.icePoint, t.steamPoint, t.halfWidth, t.bulbRadius].every(finite)) return;
-  const { unit: u, palette: c } = kit;
-  const upper = Math.max(t.steamPoint, t.columnTop, t.at.y) + u * 0.8;
-  const lower = Math.min(t.at.y, t.columnTop);
-  const bulb = at(t.at, 0, -t.bulbRadius * 0.7);
-  kit.box({ x: t.at.x + t.halfWidth * 0.9, y: (upper + lower) / 2, z: -t.halfWidth * 1.1 }, t.halfWidth * 4.2,
-    upper - lower, t.halfWidth * 0.25, '#e7e2cf', { tag: `${t.id}-scale-backing` });
-  kit.cylinder({ x: t.at.x, y: lower }, { x: t.at.x, y: upper }, t.halfWidth * 1.08, c.glass, { opacity: 0.24, tag: `${t.id}-tube` });
-  kit.sphere(bulb, t.bulbRadius, c.glass, { opacity: 0.32, tag: `${t.id}-bulb-glass` });
-  if (kit.visible('thermometer')) {
-    if (t.columnTop !== t.at.y) kit.cylinder(t.at, { x: t.at.x, y: t.columnTop }, t.halfWidth * 0.72, c.red, { tag: `${t.id}-column` });
-    kit.sphere(bulb, t.bulbRadius * 0.8, c.red, { tag: `${t.id}-bulb` });
-    kit.label(t.temperatureText, { x: t.at.x - u * 1.3, y: t.columnTop }, { color: c.red, tag: `${t.id}-temperature` });
-    kit.label(t.columnText, { x: t.at.x - u * 1.3, y: t.columnTop - u * 0.4 }, { color: c.muted, tag: `${t.id}-column-reading` });
-  }
-  if (kit.visible('guides')) {
-    // Linear scale graduation is geometric subdivision between fixed-point
-    // marks and belongs to the same scale observable as its labels.
-    for (let i = 0; i <= 20; i++) {
-      const y = t.icePoint + (t.steamPoint - t.icePoint) * i / 20;
-      const length = t.halfWidth * (i % 5 === 0 ? 2.1 : 1.2);
-      kit.line([{ x: t.at.x + t.halfWidth, y, z: t.halfWidth }, { x: t.at.x + t.halfWidth + length, y, z: t.halfWidth }], c.muted, { tag: `${t.id}-tick-${i}` });
+  if (!isPoint(t?.at) || ![t.columnTop, t.icePoint, t.steamPoint].every(finite) || !positive(t.halfWidth) || !positive(t.bulbRadius)) return;
+  entityScope(kit, 'calibrated-thermometer', t, () => {
+    const u = kit.unit, upper = Math.max(t.steamPoint, t.columnTop, t.at.y) + u * 0.7, lower = Math.min(t.at.y, t.columnTop), z = t.at.z ?? 0;
+    kit.box({ x: t.at.x + t.halfWidth * 0.92, y: (upper + lower) / 2, z: z - t.halfWidth * 1.12 }, t.halfWidth * 4.2, upper - lower, t.halfWidth * 0.23, '#e5dfc9', { ...finishes.wood, key: 'scale-backing', tag: `${t.id}-scale-backing` });
+    thermometerTube(kit, { key: 'tube', at: t.at, lower, upper, columnTop: t.columnTop, radius: t.halfWidth, bulbRadius: t.bulbRadius, showColumn: kit.visible('thermometer'), reading: t.temperatureText, tag: t.id });
+    if (kit.visible('thermometer')) kit.label(t.columnText, { x: t.at.x - u * 1.18, y: t.columnTop - u * 0.36, z }, { color: c.muted, key: 'column-reading' });
+    if (kit.visible('guides')) {
+      for (let station = 0; station <= 20; station += 1) {
+        const y = t.icePoint + (t.steamPoint - t.icePoint) * station / 20, length = t.halfWidth * (station % 5 === 0 ? 2.1 : 1.2);
+        kit.line([{ x: t.at.x + t.halfWidth, y, z: z + t.halfWidth }, { x: t.at.x + t.halfWidth + length, y, z: z + t.halfWidth }], c.muted, { key: `degree-station:${station * 5}` });
+      }
+      kit.label('0 °C', { x: t.at.x + t.halfWidth * 4.2, y: t.icePoint, z }, { key: 'ice-point' });
+      kit.label('100 °C', { x: t.at.x + t.halfWidth * 4.2, y: t.steamPoint, z }, { key: 'steam-point' });
+      kit.label(t.scaleText, { x: t.at.x - u * 1.45, y: (t.icePoint + t.steamPoint) / 2 + u * 0.65, z }, { color: c.muted, key: 'sensitivity' });
     }
-    for (const [y, label] of [[t.icePoint, '0 °C'], [t.steamPoint, '100 °C']]) kit.label(label, { x: t.at.x + t.halfWidth * 4.2, y }, { tag: `${t.id}-${label}` });
-    kit.label(t.scaleText, { x: t.at.x - u * 1.55, y: (t.icePoint + t.steamPoint) / 2 + u * 0.7 }, { color: c.muted, tag: `${t.id}-sensitivity` });
-  }
+  });
 }
 
-function sample(s, kit, comparison) {
-  if (!s || !point(s.at) || !(s.halfWidth > 0) || !(s.halfHeight > 0)) return;
-  const { unit: u, palette: c } = kit;
-  const left = s.at.x - s.halfWidth, right = s.at.x + s.halfWidth;
-  const floor = s.at.y - s.halfHeight, top = s.at.y + s.halfHeight;
-  const depth = Math.min(s.halfWidth, u * 2.1);
-  vessel(left, right, floor, top + u * 0.28, depth, kit, s.id);
-  const showPhase = kit.visible('phase');
-  if (!showPhase || !finite(s.meltedFraction)) kit.box(at(s.at, 0, 0, -depth * 0.15), s.halfWidth * 2, s.halfHeight * 2, depth * 0.93, '#cdd6cd', { opacity: 0.3, tag: `${s.id}-sample` });
-  else {
-    const fraction = Math.min(1, Math.max(0, s.meltedFraction));
-    const liquidHeight = s.halfHeight * 2 * fraction;
-    const solidHeight = s.halfHeight * 2 - liquidHeight;
-    if (liquidHeight > 0) {
-      kit.box({ x: s.at.x, y: floor + liquidHeight / 2, z: -depth * 0.15 }, s.halfWidth * 2, liquidHeight, depth * 0.94,
-        comparison ? '#cab875' : c.glass, { opacity: 0.48, tag: `${s.id}-liquid-fraction` });
-      kit.line([{ x: left, y: floor + liquidHeight }, { x: right, y: floor + liquidHeight }], comparison ? '#a49054' : c.blue, { tag: `${s.id}-meniscus` });
+function thermalSample(sample, kit, comparison) {
+  if (!isPoint(sample?.at) || !positive(sample.halfWidth) || !positive(sample.halfHeight)) return;
+  entityScope(kit, 'thermal-sample', sample, () => {
+    const u = kit.unit, left = sample.at.x - sample.halfWidth, right = sample.at.x + sample.halfWidth, floor = sample.at.y - sample.halfHeight, top = sample.at.y + sample.halfHeight, depth = Math.min(sample.halfWidth, u * 2.05), z = (sample.at.z ?? 0) - depth * 0.15;
+    const bounds = { left, right, floor, top: top + u * 0.25, depth, z };
+    container(kit, bounds, { key: 'beaker', tag: sample.id });
+    const showPhase = kit.visible('phase'), fraction = semanticNumber(sample.meltedFraction);
+    if (!showPhase || fraction === undefined || fraction < 0 || fraction > 1) kit.box({ ...sample.at, z }, sample.halfWidth * 2, sample.halfHeight * 2, depth * 0.93, '#cdd5c4', { ...finishes.glass, opacity: 0.23, key: 'unclassified-sample', tag: `${sample.id}-sample`, rounded: false });
+    else {
+      const liquidHeight = sample.halfHeight * 2 * fraction, solidHeight = sample.halfHeight * 2 - liquidHeight;
+      if (liquidHeight > 0) liquidVolume(kit, { ...bounds, floor }, floor + liquidHeight, { key: 'liquid-phase', color: comparison ? '#c5b677' : '#8fbdc0', material: { opacity: 0.36 }, tag: `${sample.id}-liquid-fraction`, surfaceTag: `${sample.id}-meniscus` });
+      if (solidHeight > 0) {
+        kit.box({ x: sample.at.x, y: top - solidHeight / 2, z }, sample.halfWidth * 2, solidHeight, depth * 0.93, '#b7d4ce', { ...finishes.ceramic, opacity: 0.66, depthWrite: false, key: 'solid-phase', tag: `${sample.id}-solid-fraction`, rounded: false });
+        for (let station = 1; station <= 3; station += 1) kit.line([{ x: left + station * sample.halfWidth / 2, y: top, z: z + depth * 0.47 }, { x: left + (station - 0.3) * sample.halfWidth / 2, y: top - solidHeight, z: z + depth * 0.47 }], '#e4eddb', { opacity: 0.6, key: `crystal-seam:${station}` });
+      }
+      // No fabricated bubble positions, flow or timer. The phase label conveys
+      // boiling honestly; a volume of bubbles would require engine particle data.
     }
-    if (solidHeight > 0) {
-      kit.box({ x: s.at.x, y: top - solidHeight / 2, z: -depth * 0.15 }, s.halfWidth * 2, solidHeight, depth * 0.93, '#b9d6da', { opacity: 0.78, tag: `${s.id}-solid-fraction` });
-      // Facet seams distinguish the remaining crystalline sample. They remain
-      // within the exact solid fraction, including an arbitrarily thin remnant.
-      for (let i = 1; i < 4; i++) kit.line([{ x: left + i * s.halfWidth / 2, y: top, z: depth * 0.34 },
-        { x: left + (i - 0.3) * s.halfWidth / 2, y: top - solidHeight, z: depth * 0.34 }], '#eaf5f1', { opacity: 0.7 });
-    }
-    if (s.phase === 'boiling' && liquidHeight > 0) for (let i = 0; i < 6; i++) {
-      const p = { x: s.at.x + ((i % 3) - 1) * s.halfWidth * 0.5,
-        y: floor + liquidHeight * (0.2 + Math.floor(i / 3) * 0.45), z: depth * 0.35 };
-      kit.circle(p, u * (0.08 + (i % 2) * 0.035), '#f4faf6', { tag: `${s.id}-boiling-bubble-${i}` });
-    }
-  }
-  if (s.label) kit.label(s.label, { x: s.at.x, y: top + u * 0.62 }, { tag: `${s.id}-label` });
-  if (showPhase) kit.label(({ solid: '固态', melting: '熔化中', liquid: '液态', boiling: '沸腾中' })[s.phase] ?? '',
-    { x: s.at.x, y: floor + u * 0.35, z: depth * 0.4 }, { color: c.ink, tag: `${s.id}-phase` });
+    kit.label(sample.label, { x: sample.at.x, y: top + u * 0.57, z: sample.at.z ?? 0 }, { key: 'label' });
+    if (showPhase) kit.label(({ solid: '固态', melting: '熔化中', liquid: '液态', boiling: '沸腾中' })[sample.phase], { x: sample.at.x, y: floor + u * 0.32, z: z + depth * 0.49 }, { color: c.ink, key: 'phase' });
+  });
 }
 
 function thermalThermometer(t, kit) {
-  if (!t || !point(t.at) || !finite(t.columnHeight) || !kit.visible('thermometer')) return;
-  const { unit: u, palette: c } = kit;
-  const top = Math.max(15, t.columnHeight + u * 0.35);
-  const low = Math.min(0, t.columnHeight);
-  kit.cylinder(at(t.at, 0, low), at(t.at, 0, top), u * 0.105, c.glass, { opacity: 0.28, tag: `${t.id}-glass` });
-  if (t.columnHeight !== 0) kit.cylinder(t.at, at(t.at, 0, t.columnHeight), u * 0.046, c.red, { tag: `${t.id}-column` });
-  kit.sphere(t.at, u * 0.18, c.red, { tag: `${t.id}-bulb` });
-  for (let i = 0; i <= 10; i++) {
-    const y = 15 * i / 10;
-    kit.line([at(t.at, u * 0.13, y), at(t.at, u * (i % 5 === 0 ? 0.34 : 0.25), y)], c.muted);
-  }
-  kit.label(t.reading, at(t.at, u * 0.55, t.columnHeight + u * 0.22), { color: c.red, tag: `${t.id}-reading` });
-}
-
-function heater(h, kit) {
-  if (!h || !point(h.at) || !(h.halfWidth > 0)) return;
-  const { unit: u, palette: c } = kit;
-  // An electric hotplate avoids animating a made-up flame or asserting a gas
-  // burner. Its power is the supplied reading, including zero.
-  kit.box(at(h.at, 0, -u * 0.23), h.halfWidth * 2, u * 0.46, u * 1.65, c.green, { tag: h.id });
-  kit.box(at(h.at, 0, u * 0.025), h.halfWidth * 2.06, u * 0.08, u * 1.68, c.metal, { tag: `${h.id}-plate` });
-  kit.cylinder(at(h.at, h.halfWidth * 0.6, -u * 0.24, u * 0.82), at(h.at, h.halfWidth * 0.6, -u * 0.24, u * 0.91), u * 0.09, c.ink);
-  kit.label(h.power, at(h.at, 0, -u * 0.65), { tag: `${h.id}-power` });
+  if (!isPoint(t?.at) || !finite(t.columnHeight)) return;
+  entityScope(kit, 'thermal-thermometer', t, () => {
+    const u = kit.unit, top = Math.max(15, t.columnHeight + u * 0.3), low = Math.min(0, t.columnHeight);
+    // 15 is the legacy bridge's fixed schematic instrument span, not a recovered
+    // temperature range. No numbers are engraved without a calibration field.
+    thermometerTube(kit, { key: 'tube', at: t.at, lower: t.at.y + low, upper: t.at.y + top, columnTop: t.at.y + t.columnHeight, radius: u * 0.09, bulbRadius: u * 0.15, showColumn: kit.visible('thermometer'), reading: t.reading, tag: t.id });
+    for (let station = 0; station <= 10; station += 1) {
+      const y = 15 * station / 10;
+      kit.line([offset(t.at, u * 0.12, y), offset(t.at, u * (station % 5 === 0 ? 0.31 : 0.23), y)], c.muted, { key: `engraving:${station}` });
+    }
+  });
 }
 
 function photoelectric(snapshot, kit) {
-  const v = snapshot.view, { unit: u, palette: c } = kit;
-  const cathode = (v.particles ?? []).find(p => p.id === 'modern-cathode');
-  if (!cathode || !point(cathode.at)) return;
-  const photons = (v.trajectories ?? []).filter(p => p.id.startsWith('modern-photon-'));
-  const electrons = (v.trajectories ?? []).filter(p => p.id.startsWith('modern-electron-'));
-  const photonPoints = photons.flatMap(p => p.points).filter(point), electronPoints = electrons.flatMap(p => p.points).filter(point);
-  const allPoints = [...photonPoints, ...electronPoints];
-  const cy = cathode.at.y;
-  const half = Math.max(cathode.radius, ...allPoints.map(p => Math.abs(p.y - cy))) + u * 0.35;
-  const right = electronPoints.length ? Math.max(...electronPoints.map(p => p.x)) : v.origin.x + v.extent.width * 0.9;
-  const left = cathode.at.x - u * 0.68;
-  const width = right - left;
-  if (width > 0) {
-    // Glass envelope and electrode mounts are apparatus dimensions only. The
-    // cathode and emitted particles stay at their published xy coordinates.
-    kit.box({ x: (left + right) / 2, y: cy, z: -u * 0.4 }, width + u * 0.5, half * 2.1, u * 1.15, c.glass, { opacity: 0.1, tag: 'photoelectric-vacuum-tube' });
-    const corners = [{ x: left - u * 0.25, y: cy - half * 1.05 }, { x: right + u * 0.25, y: cy - half * 1.05 },
-      { x: right + u * 0.25, y: cy + half * 1.05 }, { x: left - u * 0.25, y: cy + half * 1.05 }];
-    kit.line([...corners, corners[0]], c.metal, { opacity: 0.45, tag: 'photoelectric-envelope-edge' });
-  }
-  kit.box(cathode.at, u * 0.19, half * 2, u * 0.8, '#ac9d7a', { tag: cathode.id });
-  kit.line([at(cathode.at, -u * 0.1, -half), at(cathode.at, -u * 0.1, half)], c.orange, { tag: 'photoelectric-active-surface' });
-  // The collecting electrode is mounted at the supplied electron-path ends.
-  // When no electron is emitted it remains the same schematic apparatus.
-  kit.box({ x: right, y: cy, z: -u * 0.15 }, u * 0.14, half * 2, u * 0.72, c.metal, { tag: 'photoelectric-collector' });
-  if (photonPoints.length) {
-    const sourceX = Math.min(...photonPoints.map(p => p.x));
-    kit.box({ x: sourceX - u * 0.18, y: cy, z: -u * 0.12 }, u * 0.55, half * 1.25, u * 0.85, c.green, { tag: 'photoelectric-light-source' });
-    for (const path of photons) if (point(path.points[0])) kit.sphere(path.points[0], u * 0.07, c.orange, { tag: `${path.id}-aperture` });
-  }
-  if (kit.visible('photocurrent')) for (const p of v.particles ?? []) {
-    if (p.id === cathode.id || !point(p.at) || !(p.radius > 0)) continue;
-    kit.sphere(p.at, p.radius, c.blue, { tag: p.id });
-    if (p.symbol) kit.label(p.symbol, at(p.at, 0, -p.radius - u * 0.24), { color: c.blue, tag: `${p.id}-label` });
-  }
-  const wireY = Math.max(v.origin.y + u * 0.65, cy - half - u * 0.65);
-  kit.tube([at(cathode.at, 0, -half), { x: cathode.at.x, y: wireY }, { x: right, y: wireY }, { x: right, y: cy - half }], u * 0.023, c.ink, { tag: 'photoelectric-meter-circuit' });
-  const meter = { x: cathode.at.x + (right - cathode.at.x) * 0.72, y: wireY };
-  dial(meter, u * 0.32, undefined, kit, 'photoelectric-ammeter');
-  if (kit.visible('photocurrent')) kit.label('A', at(meter, 0, 0, u * 0.11), { tag: 'photoelectric-ammeter-face' });
-  if (kit.visible('stoppingPotential')) {
-    const power = { x: cathode.at.x + (right - cathode.at.x) * 0.3, y: wireY };
-    kit.box(power, u * 0.8, u * 0.45, u * 0.28, c.green, { tag: 'photoelectric-bias-supply' });
-    kit.label('Uₛ', at(power, 0, 0, u * 0.16), { tag: 'photoelectric-voltage-face' });
-  }
+  const view = snapshot.view, u = kit.unit, rig = view.photoelectricRig;
+  const cathode = (view.particles ?? []).find(item => item.id === 'modern-cathode');
+  const rigValid = rig && [rig.cathodeAt, rig.collectorAt, rig.sourceAt].every(isPoint) && positive(rig.halfHeight);
+  if (!rigValid) {
+    // Older frames publish a cathode but no electrode topology. Preserve that
+    // fact rather than infer a collector from electron trajectories or a grid.
+    if (isPoint(cathode?.at)) entityScope(kit, 'legacy-cathode', cathode, () => {
+      kit.sphere(cathode.at, cathode.radius, '#b0a176', { ...finishes.brushed, key: 'cathode', tag: cathode.id });
+      kit.label('光电装置连接需平台语义帧', offset(cathode.at, 0, u * 1.7), { color: c.muted, key: 'caption' });
+    });
+  } else entityScope(kit, 'photoelectric-rig', rig, () => {
+    // Fixed published schematic anchors: neither electrode nor envelope moves
+    // when emission stops. Apparatus is labelled schematic, not real-size data.
+    const left = Math.min(rig.cathodeAt.x, rig.collectorAt.x) - u * 0.25, right = Math.max(rig.cathodeAt.x, rig.collectorAt.x) + u * 0.25, cy = rig.cathodeAt.y, h = rig.halfHeight;
+    container(kit, { left, right, floor: cy - h, top: cy + h, depth: u * 1.1, z: (rig.cathodeAt.z ?? 0) - u * 0.12 }, { key: 'vacuum-envelope', tag: 'photoelectric-vacuum-tube' });
+    const cathodeFace = kit.box(offset(rig.cathodeAt, -u * 0.05), u * 0.1, h * 2, u * 0.77, '#ae9d73', { ...finishes.brass, key: 'cathode', tag: cathode?.id ?? 'modern-cathode', rounded: false });
+    if (cathodeFace) cathodeFace.userData.apparatus = { factory: 'photoelectric-cathode', origin: offset(rig.cathodeAt), anchors: { activeSurface: offset(rig.cathodeAt) }, unit: 'schematic' };
+    kit.line([offset(rig.cathodeAt, 0, -h), offset(rig.cathodeAt, 0, h)], '#b39150', { key: 'active-surface', tag: 'photoelectric-active-surface' });
+    kit.box(offset(rig.collectorAt, u * 0.04), u * 0.08, h * 2, u * 0.69, c.alloy, { ...finishes.aluminum, key: 'collector', tag: 'photoelectric-collector', rounded: false });
+    const f = apparatusFrame(kit, rig.sourceAt);
+    f.box('source-housing', [-u * 0.22, 0, 0], u * 0.43, h * 1.16, u * 0.8, '#698260', { ...finishes.enamel, tag: 'photoelectric-light-source' });
+    f.box('source-aperture', [-u * 0.007, 0, 0], u * 0.014, h * 0.94, u * 0.58, '#c4cba7', finishes.ceramic);
+    const wireY = cy - h - u * 0.7, meter = { x: rig.cathodeAt.x + (rig.collectorAt.x - rig.cathodeAt.x) * 0.72, y: wireY, z: rig.cathodeAt.z ?? 0 }, supply = { x: rig.cathodeAt.x + (rig.collectorAt.x - rig.cathodeAt.x) * 0.28, y: wireY, z: rig.cathodeAt.z ?? 0 };
+    const a = { x: rig.cathodeAt.x, y: cy - h, z: rig.cathodeAt.z ?? 0 }, b = { x: rig.collectorAt.x, y: rig.collectorAt.y - h, z: rig.collectorAt.z ?? 0 };
+    bindingTerminal(kit, a, u * 0.065, '#8b9578', 'cathode-terminal');
+    bindingTerminal(kit, b, u * 0.065, '#8b9578', 'collector-terminal');
+    // Distinct continuous connections terminate at meter/supply sockets. No
+    // smoothed tube shortcuts through boxes or pretends a bypass connection.
+    const meterHalf = u * 0.39, supplyHalf = u * 0.372;
+    for (const [device, center, half] of [['meter', meter, meterHalf], ['supply', supply, supplyHalf]]) {
+      bindingTerminal(kit, offset(center, -half), u * 0.05, '#769276', `${device}-terminal:a`);
+      bindingTerminal(kit, offset(center, half), u * 0.05, '#769276', `${device}-terminal:b`);
+    }
+    kit.tube([a, { ...a, y: wireY }, offset(supply, -supplyHalf)], u * 0.018, c.rubber, { ...finishes.rubber, curve: 'polyline', key: 'wire:cathode-supply' });
+    kit.tube([offset(supply, supplyHalf), offset(meter, -meterHalf)], u * 0.018, c.rubber, { ...finishes.rubber, curve: 'polyline', key: 'wire:supply-meter' });
+    kit.tube([offset(meter, meterHalf), { ...b, y: wireY }, b], u * 0.018, c.rubber, { ...finishes.rubber, curve: 'polyline', key: 'wire:meter-collector' });
+    digitalMeter(kit, meter, { key: 'photocurrent-meter', scale: u * 0.65, unit: 'A', reading: rig.photocurrentText, showReading: kit.visible('photocurrent'), tag: 'photoelectric-ammeter' });
+    digitalMeter(kit, supply, { key: 'bias-supply', scale: u * 0.62, unit: 'V', reading: rig.stoppingPotentialText, showReading: kit.visible('stoppingPotential'), tag: 'photoelectric-bias-supply' });
+    kit.label('光电效应装置示意 · 非尺寸测量', { x: (left + right) / 2, y: cy + h + u * 0.5, z: rig.cathodeAt.z ?? 0 }, { color: c.muted, size: 10, priority: 0, key: 'caption' });
+  });
+  if (kit.visible('photocurrent')) for (const particle of view.particles ?? []) if (particle.id !== 'modern-cathode' && isPoint(particle.at) && positive(particle.radius)) entityScope(kit, 'photoelectron', particle, () => {
+    kit.sphere(particle.at, particle.radius, '#668ba2', { ...finishes.enamel, key: 'particle', tag: particle.id });
+    kit.label(particle.symbol, offset(particle.at, 0, -particle.radius - u * 0.2), { key: 'label' });
+  });
 }
 
 export function drawMatter(snapshot, kit) {
-  const v = snapshot.view;
-  if (!v) return;
-  if (v.domain === 'modern') { photoelectric(snapshot, kit); return; }
-  if (v.domain === 'fluid') {
-    if (v.pressureRig === 'solid') solidPressure(v.pressureSolid, kit);
-    else if (v.pressureRig === 'liquid') pressureLiquids(v, kit);
-    else if (v.pressureRig === 'atmospheric') { barometer(v.pressureBarometer, kit); hemispheres(v.pressureHemispheres, kit); }
-    else buoyancy(v, kit);
-    return;
-  }
-  if (v.thermometer) calibratedThermometer(v.thermometer, kit);
-  else {
-    heater(v.thermalHeater, kit); heater(v.thermalComparisonHeater, kit);
-    sample(v.thermalSample, kit, false); sample(v.thermalComparisonSample, kit, true);
-    thermalThermometer(v.thermalThermometer, kit); thermalThermometer(v.thermalComparisonThermometer, kit);
-  }
+  const view = snapshot?.view;
+  if (!view || !positive(kit.unit)) return;
+  scope(kit, 'matter', () => {
+    const domain = view.domain ?? snapshot.domain;
+    if (domain === 'modern') { photoelectric(snapshot, kit); return; }
+    if (domain === 'fluid') {
+      if (view.pressureRig === 'solid') solidPressure(view.pressureSolid, kit);
+      else if (view.pressureRig === 'liquid') liquidPressure(view, kit);
+      else if (view.pressureRig === 'atmospheric') { barometer(view.pressureBarometer, kit); hemispheres(view.pressureHemispheres, kit); }
+      else buoyancy(view, kit);
+      return;
+    }
+    if (view.thermometer) calibratedThermometer(view.thermometer, kit);
+    else {
+      hotplate(view.thermalHeater, kit); hotplate(view.thermalComparisonHeater, kit);
+      thermalSample(view.thermalSample, kit, false); thermalSample(view.thermalComparisonSample, kit, true);
+      thermalThermometer(view.thermalThermometer, kit); thermalThermometer(view.thermalComparisonThermometer, kit);
+    }
+  });
 }

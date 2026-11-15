@@ -10,10 +10,12 @@
 
 import { coefficientLabel, paperCoefficient } from './difficulty.ts'
 import type { PaperDocument, PaperQuestion, SolveResult } from './paper.ts'
+import { studentFigureCaption } from './print-diagram.ts'
+import { wordAnswerSpace, wordPageBreak } from './print-layout.ts'
 
-/** Section-order group the answer key needs for its own headings. */
-const questionsOf = (doc: PaperDocument): { title: string; items: PaperQuestion[] }[] =>
-  doc.sections.map((section) => ({ title: section.title, items: [...section.items] }))
+/** Section-order group the answer key needs for its own headings and rules. */
+const questionsOf = (doc: PaperDocument): { title: string; note?: string; items: PaperQuestion[] }[] =>
+  doc.sections.map((section) => ({ title: section.title, ...(section.note === undefined ? {} : { note: section.note }), items: [...section.items] }))
 
 // Options join the stem paragraph as hard line breaks (trailing `\` is
 // pandoc's escaped_line_breaks): a 4-space indent would become a code block
@@ -39,6 +41,22 @@ const renderOptions = (question: PaperQuestion): string[] =>
  * text. Convert each block to a pipe table — a real bordered Word table —
  * before the inline-math pass touches anything else.
  */
+/** The model supplies text data, never Markdown resources or raw writer code. */
+const literalText = (text: string): string => text
+  .replace(/_{2,}/g, (match) => '＿'.repeat(match.length))
+  .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '')
+  .replace(/\\/g, '\u0001')
+  .replace(/&/g, '&amp;')
+  .replace(/[<>]/g, (char) => char === '<' ? '&lt;' : '&gt;')
+  .replace(/([`*_[\]{}!#|$])/g, '\\$1')
+  .replace(/^\s*(?:(\d+)[.)]|([-+]))\s+/gm, (_match, number: string | undefined, bullet: string | undefined) => number === undefined ? `\\${bullet} ` : `${number}\\. `)
+  .replace(/^ {4,}/gm, '')
+  .replace(/\u0001/g, '&#92;')
+
+const mathText = (text: string): string => {
+  if (/\\(?:input|include(?:graphics)?|graphicspath|write\d*|open(?:in|out)|read|usepackage|documentclass|special|href|url|html(?:Class|Id|Style)?|def|gdef|newcommand|renewcommand|catcode|csname|directlua|verbatim(?:input)?|import|markdownInput)\b/i.test(text)) throw new Error('公式中不允许资源、文件或可执行 TeX 指令')
+  return text
+}
 const arrayTables = (text: string): string =>
   text.replace(
     /\$\$?\s*\\begin\{array\}\{[^}]*\}([\s\S]*?)\\end\{array\}\s*\$\$?/g,
@@ -53,56 +71,52 @@ const arrayTables = (text: string): string =>
         )
         .filter((row) => row.some((cell) => cell !== ''))
       if (rows.length === 0) return ''
-      const cell = (c: string): string => (/[\\^_]/.test(c) ? `$${c}$` : c)
+      const cell = (c: string): string => (/[\\^_]/.test(c) ? `$${mathText(c).replace(/\$/g, '').replace(/\|/g, '\\vert')}$` : literalText(c))
       const width = Math.max(...rows.map((row) => row.length))
+      if (rows.length > 80 || width > 24) throw new Error('题面数据表超过排版限额')
       const line = (row: string[]): string =>
         `| ${[...row, ...Array<string>(width - row.length).fill('')].map(cell).join(' | ')} |`
       return `\n\n${line(rows[0]!)}\n| ${'--- | '.repeat(width).trimEnd()}\n${rows.slice(1).map(line).join('\n')}\n\n`
     },
   )
 
-const tex = (text: string): string =>
-  arrayTables(text)
-    .split(/(\$[^$]*\$)/)
-    .map((part) => {
-      if (!part.startsWith('$')) return part.replace(/_{2,}/g, (m) => '＿'.repeat(m.length))
-      const inner = part
-        .slice(1, -1)
-        .trim()
+const tex = (text: string): string => {
+  const tables: string[] = []
+  const source = text.replace(/\u0000/g, '').replace(/\$\$?\s*\\begin\{array\}\{[^}]*\}[\s\S]*?\\end\{array\}\s*\$\$?/g, (match) => {
+    tables.push(arrayTables(match))
+    return `\u0000TABLE${tables.length - 1}\u0000`
+  })
+  const normalized = source
+    .split(/(\$\$[\s\S]*?\$\$|\$[^$\n]*\$)/)
+    .map((part, index) => {
+      if (index % 2 === 0) return part.split(/(\u0000TABLE\d+\u0000)/).map((piece) => /^\u0000TABLE\d+\u0000$/.test(piece) ? piece : literalText(piece)).join('')
+      const dollars = part.startsWith('$$') ? '$$' : '$'
+      const inner = mathText(part.slice(dollars.length, -dollars.length).trim())
         .replace(/\\,?\s*\^\s*\{?\s*\\circ\s*\}?\s*\\mathrm\s*\{\s*C\s*\}/g, '\\ \\mathrm{℃}')
         .replace(/\\,?\s*\^\s*\{?\s*\\circ\s*\}?\s*C(?=\s*\})/g, '℃')
-      return `$${inner}$`
-    })
-    .join('')
-    .replace(
-      /\$([^$]*?[+\-×÷=<>])\$(＿+)/g,
-      (_m, math: string, blanks: string) => `$${math}\\text{${blanks}}$`,
-    )
+      return `${dollars}${inner}${dollars}`
+    }).join('')
+    .replace(/\$([^$]*?[+\-×÷=<>])\$(＿+)/g, (_match, math: string, blanks: string) => `$${math}\\text{${blanks}}$`)
+  return normalized.replace(/\u0000TABLE(\d+)\u0000/g, (_match, index: string) => tables[Number(index)]!)
+}
+const headerText = (value: string): string => literalText(value.replace(/[\r\n]+/g, ' '))
 
 /** Sub-question numbers arrive as `1`, `(1)`, or `（1）`; print one pair. */
 const subNo = (no: string): string => no.replace(/^[（(]+|[)）]+$/g, '')
 
-/** Space a question reserves for on-paper answering, by kind. */
-const answerSpace = (question: PaperQuestion): string => {
-  switch (question.kind) {
-    case 'short-answer':
-      return '\n\\vspace{2.2cm}\n'
-    case 'experiment':
-      return '\n\\vspace{3.5cm}\n'
-    case 'calculation':
-      return '\n\\vspace{4.5cm}\n'
-    default:
-      return ''
-  }
-}
+/**
+ * This exporter supplies a question paper and answers, not a separate answer
+ * sheet. Instructions and native Word writing space therefore use one
+ * consistent, explicit on-paper mode.
+ */
 
 /**
  * Render the student-facing paper: header block, candidate fields, section
  * headings with scoring notes, numbered stems, option lines, sub-questions
  * and answer space. No answers or hints appear anywhere in this output.
  * @param doc - the approved document version.
- * @param figures - generated image files keyed by `figure.ref`, relative to
- *   the markdown's directory; refs without an image print as captions.
+ * @param figures - validated image files keyed by `figure.ref`, relative to
+ *   the markdown's directory; a required missing image blocks export.
  * @returns pandoc Markdown for `试卷.docx`.
  */
 export function renderPaperMarkdown(
@@ -110,53 +124,50 @@ export function renderPaperMarkdown(
   figures?: ReadonlyMap<string, string>,
 ): string {
   const lines: string[] = [
-    `% ${doc.title}`,
+    `% ${headerText(doc.title)}`,
     '',
-    `**${doc.header.examName}**\u3000${doc.header.grade}\u3000${doc.header.subjectLine}`,
+    `**${headerText(doc.header.examName)}**\u3000${headerText(doc.header.grade)}\u3000${headerText(doc.header.subjectLine)}`,
     '',
     `满分：${doc.header.totalScore} 分\u3000\u3000考试时间：${doc.header.minutes} 分钟`,
     '',
-    `${doc.header.candidateFields.join('\u3000\u3000')}：____________`,
+    `${doc.header.candidateFields.map((field) => `${headerText(field)}\uff1a\uff3f\uff3f\uff3f\uff3f\uff3f\uff3f`).join('\u3000\u3000')}`,
     '',
-    '**注意事项：**',
+    '**注意事项（卷内作答）：**',
     '',
-    '1. 答题前，考生务必将自己的姓名、准考证号填写在答题卡上。',
-    '2. 回答选择题时，选出每小题正确选项后，用铅笔把答题卡上对应题目的选项标号涂黑；如需改动，用橡皮擦干净后，再选涂其他标号。',
-    '3. 回答非选择题时，将作答写在答题卡上，写在本试卷上无效。',
-    '4. 考试结束后，将本试卷和答题卡一并交回。',
+    '1. 答题前，请在本试卷卷首填写姓名、班级及考号等信息。',
+    '2. 选择题请将所选选项字母写在题号后的作答处；单选题只选一项，多选题按相应板块给分规则作答。',
+    '3. 非选择题请在本试卷的空格或作答区内作答，作图题用铅笔规范作图；计算题须写出必要的公式、计算过程或文字说明。',
+    '4. 考试结束后交回本试卷。本套文件不另附答题卡。',
     '',
   ]
-  if (doc.policyLabel !== undefined) lines.push(doc.policyLabel, '')
+  if (doc.policyLabel !== undefined) lines.push(tex(doc.policyLabel), '')
 
   for (const section of doc.sections) {
     const sectionScore = section.items.reduce((sum, q) => sum + q.score, 0)
     lines.push(
-      `## ${section.title}（本题共 ${section.items.length} 小题，满分 ${sectionScore} 分）`,
+      `## ${headerText(section.title)}（本节共 ${section.items.length} 小题，满分 ${sectionScore} 分）`,
       '',
     )
     /* Plain paragraphs, not emphasis: CJK print has no italics, and the italic
        runs lose Latin digits in LibreOffice's headless font fallback. */
     if (section.note !== undefined) lines.push(tex(section.note), '')
     for (const question of section.items) {
-      lines.push(`**${question.number}.**（${question.score} 分）${tex(question.stem)}`, '')
+      const choiceAnswer = question.kind === 'choice-single' || question.kind === 'choice-multi' ? '作答：＿＿＿＿　' : ''
+      lines.push(`**${question.number}.**（${question.score} 分）${choiceAnswer}${tex(question.stem)}`, '')
       lines.push(...renderOptions(question), '')
       for (const sub of question.subQuestions ?? []) {
-        lines.push(`\u3000（${subNo(sub.no)}）（${sub.score} 分）${tex(sub.text)}`, '')
+        lines.push(`\u3000（${headerText(subNo(sub.no))}）（${sub.score} 分）${tex(sub.text)}`, '')
       }
       if (question.figure !== undefined) {
-        const caption = tex(question.figure.caption ?? question.figure.ref)
+        const caption = studentFigureCaption(question)
         const image = figures?.get(question.figure.ref)
-        /* `implicit_figures` is disabled in the pandoc flags: its italic
-           caption style drops digits in headless PDF export. The caption
-           prints as an ordinary paragraph instead. */
-        lines.push(
-          image === undefined
-            ? `[题图：${caption}]`
-            : `![](${image}){width=55%}\n\n题图：${caption}`,
-          '',
-        )
+        if (image === undefined) throw new Error(`第 ${question.number} 题必要题图未准备完成，不能导出图注占位`)
+        if (!/^fig-[0-9a-f]{64}\.png$/.test(image)) throw new Error(`第 ${question.number} 题图片路径不是已验证的内容文件`)
+        /* `implicit_figures` stays disabled: the neutral caption is ordinary
+           text, never the internal drawing instruction (legacy caption). */
+        lines.push(`![](${image}){width=55%}\n\n${caption}`, '')
       }
-      lines.push(answerSpace(question))
+      lines.push(wordAnswerSpace(question))
     }
   }
   return lines.join('\n')
@@ -186,17 +197,21 @@ const DIFFICULTY_LABEL: Record<string, string> = { basic: '基础', medium: '中
 export function renderAnswerMarkdown(doc: PaperDocument, solves?: readonly SolveResult[]): string {
   const verify = new Map((solves ?? []).map((s) => [s.questionNo, s]))
   const lines: string[] = [
-    `% ${doc.title} · 参考答案及解析`,
+    `% ${headerText(doc.title)} · 参考答案及解析`,
     '',
+    '教师用参考答案及解析（不得随学生卷发放）',
+    '',
+    wordPageBreak(),
     `整卷预估：${coefficientLabel(paperCoefficient(doc))}`,
     '',
   ]
   for (const section of questionsOf(doc)) {
     const sectionScore = section.items.reduce((sum, q) => sum + q.score, 0)
     lines.push(
-      `## ${section.title}（本题共 ${section.items.length} 小题，满分 ${sectionScore} 分）`,
+      `## ${headerText(section.title)}（本节共 ${section.items.length} 小题，满分 ${sectionScore} 分）`,
       '',
     )
+    if (section.note !== undefined) lines.push(tex(section.note), '')
     for (const question of section.items) {
       const answer = question.answer
       lines.push(
@@ -204,7 +219,7 @@ export function renderAnswerMarkdown(doc: PaperDocument, solves?: readonly Solve
         '',
       )
       lines.push(
-        `命题依据：考点 ${question.knowledge.join('、') || '—'} ｜ 能力 ${question.ability} ｜ 难度 ${DIFFICULTY_LABEL[question.difficulty] ?? question.difficulty}`,
+        `命题依据：考点 ${headerText(question.knowledge.join('、') || '—')} ｜ 能力 ${headerText(question.ability)} ｜ 难度 ${headerText(DIFFICULTY_LABEL[question.difficulty] ?? question.difficulty)}`,
         '',
       )
       const solved = verify.get(question.number)

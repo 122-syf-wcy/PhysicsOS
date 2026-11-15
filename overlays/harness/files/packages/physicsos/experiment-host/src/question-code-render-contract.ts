@@ -32,7 +32,7 @@ fluid: fluidLiquid/fluidBlock/fluidScale/pressureRig/pressureSolid/pressureLiqui
 thermal: thermalSample/thermalThermometer/thermalHeater and thermalComparisonSample/thermalComparisonThermometer/thermalComparisonHeater; thermometer when present.
 induction: inductionField/inductionBar/inductionResistor/inductionRails/inductionPairBars/inductionForceArrows/inductionCoil/inductionCurrent/chargeFlows.
 wave: waveProfile/waveMarker/waveSources/wavePoint/waveNodes/waveEnvelope/waveFronts/vectors.
-modern: shared particles/trajectories/labels/overlay; there is no separate photoelectric or modern apparatus field.
+modern: shared particles/trajectories/labels/overlay. Additional optional apparatus hints may be present; ignore fields not described by this private contract.
 
 Exact field shapes (TypeScript notation describes data; do not import these types):
 interface UniversalExperimentSnapshot {

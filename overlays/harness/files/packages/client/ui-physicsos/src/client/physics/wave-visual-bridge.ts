@@ -427,12 +427,27 @@ export const waveSceneVisual = (input: WaveVisualInput): SceneVisualModel => {
     const screenDistanceCm = cmOf(model.screenDistance ?? 0)
     const sourceDistanceCm = cmOf(Math.max(2 * model.wavelength, (model.slitWidth ?? 0) * 0.75))
     const intensityScale = screenDistanceCm * 0.3
-    const intensity = state.objects.filter(object => object.id.startsWith(`${model.benchId}.intensity.`))
-    const screenPoints = intensity.flatMap(object => object.position === undefined ? [] : [{
-      x: screenDistanceCm + intensityScale * (scalarValueOf(state, object.id, 'intensity_ratio') ?? 0) * (scalarValueOf(state, object.id, 'illumination') ?? 0),
-      y: cmOf(object.position.vector.y),
-    }])
+    const intensityObjects = state.objects.filter(object => object.id.startsWith(`${model.benchId}.intensity.`))
+    const intensitySamples = intensityObjects.flatMap(object => {
+      const ratio = object.values?.['intensity_ratio']
+      const illumination = object.values?.['illumination']
+      if (object.position === undefined || ratio === undefined || illumination === undefined ||
+        'vector' in ratio || 'vector' in illumination) return []
+      return [{
+        id: object.id,
+        y: cmOf(object.position.vector.y),
+        intensity: ratio.value * illumination.value,
+      }]
+    })
+    // The legacy curve and the apparatus use the same raw facts. Its x scaling
+    // is presentation only: renderers must not invert it to recover intensity.
+    const screenPoints = intensitySamples.map(sample => ({
+      x: screenDistanceCm + intensityScale * sample.intensity,
+      y: sample.y,
+    }))
     const halfHeight = Math.max(50, ...screenPoints.map(point => Math.abs(point.y)))
+    const slit = positionOf(state, `${model.benchId}.slit`)
+    const screen = positionOf(state, `${model.benchId}.screen`)
     const groups = new Map<string, ScenePoint[]>()
     for (const object of state.objects) {
       if ((!object.id.includes('.diffraction-front.') && !object.id.includes('.diffraction-incident.')) || object.position === undefined) continue
@@ -448,6 +463,16 @@ export const waveSceneVisual = (input: WaveVisualInput): SceneVisualModel => {
       extent: { width: sourceDistanceCm + screenDistanceCm * 1.55, height: halfHeight * 2.25 },
       origin: { x: -sourceDistanceCm * 1.1, y: -halfHeight * 1.125 },
       grid: { minor: 20, major: 100 }, axes: { x: 'x / cm', y: 'y / cm' }, tickStep: 100,
+      ...(slit === undefined || screen === undefined || model.slitWidth === undefined ? {} : {
+        waveDiffraction: {
+          id: model.benchId,
+          slitAt: { x: cmOf(slit.x), y: cmOf(slit.y) },
+          slitWidth: cmOf(model.slitWidth),
+          screenAt: { x: cmOf(screen.x), y: cmOf(screen.y) },
+          screenHalfHeight: halfHeight,
+          intensitySamples,
+        },
+      }),
       trajectories: [
         ...[...groups].map(([id, points]) => ({ id: `wave-${id}`, kind: 'history' as const, points })),
         ...(visibleMinimum ? [{ id: 'wave-first-minimum', kind: 'predicted' as const, points: [{ x: 0, y: 0 }, { x: screenDistanceCm, y: exactHalfWidthCm }] }] : []),

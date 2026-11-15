@@ -1,6 +1,6 @@
 import { sceneRefOf } from './surface-store.ts'
 import {
-  IconBrowseOutlineMedium, IconFolderOpenOutlineMedium,
+  IconBrowseOutlineMedium, IconFolderOpenOutlineMedium, IconChevronRightOutlineMedium, IconPlusOutlineMedium,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SnapshotStore } from './runtime-compat.ts'
 import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
@@ -69,7 +69,9 @@ export function HomeActions({ useRecentExperiments, openSurface, requestSceneInC
                       openSurface('lab', sceneRefOf(entry))
                     }}
                   >
-                    <IconFolderOpenOutlineMedium size={16} />
+                    <span className={css.recentIcon} data-kind={entry.kind}>
+                      {entry.kind === 'question' ? <IconQuestionSheet size={22} /> : <IconPhysicsLab size={22} />}
+                    </span>
                     <span className={css.recentName}>{entry.title}</span>
                     <span className={css.recentMeta}>
                       {knowledge.subject}
@@ -79,9 +81,12 @@ export function HomeActions({ useRecentExperiments, openSurface, requestSceneInC
                       {t(entry.kind === 'question' ? 'recent.kind.question' : 'recent.kind.experiment')}
                     </span>
                     <span className={css.recentTime}>{formatUpdatedAt(entry.updatedAt)}</span>
+                    <IconChevronRightOutlineMedium size={16} className={css.recentChevron} />
                   </button>
-                  <button type="button" className={css.action} aria-label={`${t('canvas.addToCanvas')} · ${entry.title}`}
-                    onClick={() => { requestSceneInCanvas(sceneRefOf(entry)) }}>{t('canvas.addToCanvas')}</button>
+                  <button type="button" className={css.recentAdd} aria-label={`${t('canvas.addToCanvas')} · ${entry.title}`}
+                    title={t('canvas.addToCanvas')} onClick={() => { requestSceneInCanvas(sceneRefOf(entry)) }}>
+                    <IconPlusOutlineMedium size={18} />
+                  </button>
                 </li>
               )
             })}

@@ -106,3 +106,58 @@ test('downloaded SDK validation rejects canonical defaults outside declared boun
     assert.deepEqual(Buffer.from(data.base['tools/'+name],'base64'), canonical)
   }
 })
+
+test('photoelectric generated profile, parameter contract and cases preserve all six live SI values', async () => {
+  const registry = JSON.parse(await readFile(new URL('experiment-registry.json', host)))
+  const data = JSON.parse(await readFile(new URL('universal-template-data.json', host)))
+  const profile = registry.find(entry => entry.id === 'photoelectric-effect')
+  assert.ok(profile)
+  const target = data.targets['photoelectric-effect']
+  assert.ok(target)
+  const decode = name => JSON.parse(Buffer.from(target[name], 'base64'))
+  const snapshot = decode('public/fixture.json')
+  const parameters = decode('parameters.json')
+  const cases = decode('cases.json')
+  const expectedUnits = {
+    workFunction: 'J', photonWavelength: 'm', photonFrequency: 'Hz',
+    lightIntensity: 'W/m²', cathodeArea: 'm²', quantumEfficiency: '',
+  }
+  assert.deepEqual(profile.parameters.map(entry => entry.id).sort(), Object.keys(expectedUnits).sort())
+  assert.deepEqual(profile.choices, [])
+  assert.deepEqual(decode('tools/profile.json'), profile)
+  assert.deepEqual(parameters.parameters, profile.parameters)
+  assert.deepEqual(parameters.choices, profile.choices)
+  const liveParameters = snapshot.inspector.flatMap(section => section.parameters ?? [])
+  assert.equal(liveParameters.length, 6)
+  for (const parameter of profile.parameters) {
+    const live = liveParameters.find(entry => entry.id === parameter.id)
+    assert.ok(live, parameter.id)
+    assert.equal(parameter.unit, expectedUnits[parameter.id])
+    assert.equal(parameter.value, live.value, `${parameter.id}: no formatted-value round trip`)
+    assert.equal(parameter.min, live.min)
+    assert.equal(parameter.max, live.max)
+    assert.equal(parameter.step, live.step)
+    assert.ok(Number.isFinite(parameter.value))
+    assert.ok(Number.isFinite(parameter.min))
+    assert.ok(Number.isFinite(parameter.step) && parameter.step > 0)
+    assert.equal(cases.cases[0].input.parameters[parameter.id], live.value)
+    assert.equal(JSON.parse(JSON.stringify(parameter)).value, live.value)
+  }
+  assert.equal(profile.parameters.find(entry => entry.id === 'workFunction').value, 2 * 1.602176634e-19)
+  const wavelength = profile.parameters.find(entry => entry.id === 'photonWavelength').value
+  const frequency = profile.parameters.find(entry => entry.id === 'photonFrequency').value
+  assert.equal(frequency, 2.99792458e8 / wavelength)
+  assert.equal(snapshot.clock.total, 0)
+  assert.deepEqual(snapshot.view.photoelectricRig.cathodeAt, { x: 0, y: 0 })
+  assert.deepEqual(snapshot.view.photoelectricRig.collectorAt, { x: 160, y: 0 })
+  assert.deepEqual(snapshot.view.photoelectricRig.sourceAt, { x: -170, y: 0 })
+  const sdk = new URL('../../developer-kit/universal-experiment-template/tools/', import.meta.url)
+  const { manifestV3Schema, validatePackageMetadataV3 } = await import(new URL('contract-v3.ts', sdk))
+  const files = new Map(Object.entries({ ...data.base, ...target }).map(([name, body]) => [name, Buffer.from(body, 'base64')]))
+  for (const [name, body] of [...files]) {
+    if (name.startsWith('public/')) files.set('dist/' + name.slice(7), body)
+    if (name.startsWith('src/')) files.set('dist/runtime/' + name.slice(4), body)
+  }
+  const manifest = manifestV3Schema.parse(JSON.parse(files.get('experiment.json')))
+  assert.deepEqual(validatePackageMetadataV3(files, manifest), [])
+})

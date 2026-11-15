@@ -1,10 +1,19 @@
 import { derivedScalar, isScalarQuantity, type SimulationResult } from '@physicsos/physics-core'
 import type { PhysicsScene } from '@physicsos/physics-scene'
+import { canonicalValue } from '@physicsos/physics-units'
 
 import { emptyVisualModel, type SceneVisualModel } from './scene-visual-model.ts'
 import { formatSignificant } from './number-format.ts'
 
 const fmt = formatSignificant
+
+// Existing apparatus drawing coordinates, in scene cm. These are schematic
+// anchors, not electrode distances solved by the photoelectric engine.
+const CATHODE_X = 0
+const COLLECTOR_X = 160
+const SOURCE_X = -170
+// Presentation-only plate span: contains the outer electron path at y = -50.
+const ELECTRODE_HALF_HEIGHT = 60
 
 export const modernSceneVisual = (
   scene: PhysicsScene,
@@ -22,11 +31,13 @@ export const modernSceneVisual = (
     }
   }
   const emits = scalar('emits_photoelectrons') > 0
+  const photocurrentText = `光电流 I = ${fmt(scalar('photocurrent'))} A`
+  const stoppingPotentialText = `遏止电压 Us = ${fmt(scalar('stopping_potential'))} V`
   const photons = [0, 1, 2].map(index => ({
     id: `modern-photon-${index}`,
     kind: 'history' as const,
     points: [
-      { x: -170, y: -30 + index * 30 },
+      { x: SOURCE_X, y: -30 + index * 30 },
       { x: -20, y: -30 + index * 30 },
     ],
   }))
@@ -35,8 +46,8 @@ export const modernSceneVisual = (
       id: `modern-electron-${index}`,
       kind: 'predicted' as const,
       points: [
-        { x: 0, y: -30 + index * 30 },
-        { x: 160, y: -50 + index * 40 },
+        { x: CATHODE_X, y: -30 + index * 30 },
+        { x: COLLECTOR_X, y: -50 + index * 40 },
       ],
     }))
     : []
@@ -45,11 +56,20 @@ export const modernSceneVisual = (
     origin: { x: -200, y: -110 },
     grid: { minor: 20, major: 100 },
     axes: { x: '', y: '' },
+    photoelectricRig: {
+      id: bench.id,
+      cathodeAt: { x: CATHODE_X, y: 0 },
+      collectorAt: { x: COLLECTOR_X, y: 0 },
+      sourceAt: { x: SOURCE_X, y: 0 },
+      halfHeight: ELECTRODE_HALF_HEIGHT,
+      photocurrentText,
+      stoppingPotentialText,
+    },
     trajectories: [...photons, ...electrons],
     particles: [
       {
         id: 'modern-cathode',
-        at: { x: 0, y: 0 },
+        at: { x: CATHODE_X, y: 0 },
         sign: 'negative' as const,
         radius: 16,
         symbol: 'M',
@@ -75,7 +95,7 @@ export const modernSceneVisual = (
       },
       {
         id: 'modern-cathode-label',
-        at: { x: 0, y: -85 },
+        at: { x: CATHODE_X, y: -85 },
         text: '金属阴极',
         anchor: 'middle',
       },
@@ -89,13 +109,13 @@ export const modernSceneVisual = (
     overlay: {
       readout: [
         '光电效应 · 装置示意',
-        `λ = ${fmt(bench.photonWavelength.value)} m`,
+        `λ = ${fmt(canonicalValue(bench.photonWavelength))} m`,
         `光子能量 E = ${fmt(scalar('photon_energy'))} J`,
-        `逸出功 W = ${fmt(bench.workFunction.value)} J`,
+        `逸出功 W = ${fmt(canonicalValue(bench.workFunction))} J`,
         `截止频率 f₀ = ${fmt(scalar('threshold_frequency'))} Hz`,
         `Kmax = ${fmt(scalar('max_kinetic_energy'))} J`,
-        `遏止电压 Us = ${fmt(scalar('stopping_potential'))} V`,
-        `光电流 I = ${fmt(scalar('photocurrent'))} A`,
+        stoppingPotentialText,
+        photocurrentText,
       ],
       scale: { label: '', length: 0 },
     },

@@ -45,7 +45,9 @@
     "@physicsos/agent-tools": "link:../../../../../packages/agent-tools",
     "zod": "^4.4.3",
     "@deepseek-ai/dsh-attachment": "workspace:^",
-    "@physicsos/model-usage-outbox": "link:../../../../../packages/model-usage-outbox"
+    "@physicsos/model-usage-outbox": "link:../../../../../packages/model-usage-outbox",
+    "sharp": "0.35.4",
+    "pdfjs-dist": "6.3.289"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^",

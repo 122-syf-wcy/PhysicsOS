@@ -40,6 +40,47 @@ class CandidateSafety(unittest.TestCase):
                 candidate.owned_path(root, root / 'profile', [])
             self.assertEqual(source.read_text(), 'unchanged')
 
+    def test_refresh_preserves_existing_candidate_profile_and_permissions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / 'production-profile'; source.write_text('new production settings')
+            target = Path(tmp) / 'candidate-profile'; target.write_text('candidate-owned settings'); target.chmod(0o600)
+            inode = target.stat().st_ino
+            self.assertFalse(candidate.seed_profile_file(source, target))
+            self.assertEqual(target.read_text(), 'candidate-owned settings')
+            self.assertEqual(target.stat().st_ino, inode)
+            self.assertEqual(target.stat().st_mode & 0o777, 0o600)
+
+    def test_initial_profile_is_seeded_once_and_missing_source_is_not_created(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / 'production-profile'; source.write_text('initial settings')
+            target = Path(tmp) / 'candidate-profile'
+            self.assertTrue(candidate.seed_profile_file(source, target))
+            self.assertEqual(target.read_text(), 'initial settings')
+            source.write_text('later production settings')
+            self.assertFalse(candidate.seed_profile_file(source, target))
+            self.assertEqual(target.read_text(), 'initial settings')
+            absent = Path(tmp) / 'missing-profile'
+            self.assertFalse(candidate.seed_profile_file(Path(tmp) / 'missing-source', absent))
+            self.assertFalse(absent.exists())
+
+    def test_profile_seed_rejects_symlinks_and_hardlinks_without_touching_sources(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / 'source'; source.write_text('unchanged')
+            link = Path(tmp) / 'symlink'; link.symlink_to(source)
+            with self.assertRaisesRegex(RuntimeError, 'regular file'):
+                candidate.seed_profile_file(source, link)
+            hardlink = Path(tmp) / 'hardlink'; os.link(source, hardlink)
+            with self.assertRaisesRegex(RuntimeError, 'regular file'):
+                candidate.seed_profile_file(source, hardlink)
+            self.assertEqual(source.read_text(), 'unchanged')
+
+    def test_existing_empty_candidate_patch_is_not_replaced(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / 'production-patch'; source.write_text('production override')
+            target = Path(tmp) / 'candidate-patch'; target.write_text('')
+            self.assertFalse(candidate.seed_profile_file(source, target))
+            self.assertEqual(target.read_bytes(), b'')
+
     def test_wrong_endpoint_identity_prevents_any_http_authentication(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / 'validation'; root.mkdir()

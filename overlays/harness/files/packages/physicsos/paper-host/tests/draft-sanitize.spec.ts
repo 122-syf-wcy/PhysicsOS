@@ -17,6 +17,14 @@ describe('draft figure references', () => {
     expect(question.figure.ref).toBe(ref)
   })
 
+  it('does not let model output invent ownership of a source image', () => {
+    const sourceAsset = { id: 'private-attachment', sha256: 'a'.repeat(64), mediaType: 'image/png' }
+    const input = { number: 1, figure: { kind: 'image', ref: 'q1', sourceAsset } }
+    const output = sanitizeQuestion(input) as { figure: { sourceAsset?: unknown } }
+    expect(output.figure.sourceAsset).toBeUndefined()
+    expect(input.figure.sourceAsset).toBe(sourceAsset)
+  })
+
   it.each([
     ['  Incline / Diagram  ', 'incline-diagram'],
     [42, '42'],

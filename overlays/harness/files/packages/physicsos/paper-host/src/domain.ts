@@ -10,10 +10,11 @@
 import { isModelUsageOutboxRecord, type ModelUsageOutboxRecord } from '@physicsos/model-usage-outbox'
 import { z } from 'zod'
 import { defineDomain, domainTable } from '@deepseek-ai/dsh-storage-domain'
-import { CHECK_CODES } from '@physicsos/question-paper'
+import { CHECK_CODES, parsePaperFigure } from '@physicsos/question-paper'
 import type {
-  BankItem, BankUsage, ExamBlueprint, ExportBundle, KnowledgeAnnotation, PaperJob, SourcePaper,
+  BankItem, BankUsage, ExamBlueprint, ExportBundle, KnowledgeAnnotation, SourcePaper,
 } from '@physicsos/question-paper'
+import type { ManagedPaperJob } from './workflow-state.ts'
 
 const level = z.enum(['zhongkao', 'gaokao'])
 const subject = z.enum(['physics', 'chemistry'])
@@ -153,6 +154,26 @@ const paperAnswer = z.object({
   equivalents: z.array(z.string()).optional(),
 })
 
+/** One shared figure parser for wire, model output and durable rows. Legacy
+ * captions stay readable; only a validated diagram may become a new asset. */
+const legacyPaperFigureSchema = z.object({
+  kind: z.enum(['line-diagram', 'image']), ref: z.string(), caption: z.string().optional(),
+})
+const paperFigureSchema = z.unknown().transform((input, context) => {
+  /* Old records accepted arbitrary caption/ref strings. Do not tighten the
+     durable read boundary retroactively; checks reject unusable new assets. */
+  if (input !== null && typeof input === 'object' && !Array.isArray(input)
+    && Object.keys(input).every(key => key === 'kind' || key === 'ref' || key === 'caption')) {
+    const legacy = legacyPaperFigureSchema.safeParse(input)
+    if (legacy.success) return legacy.data
+  }
+  try { return parsePaperFigure(input) } catch (error) {
+    context.issues.push({ code: 'custom', input,
+      message: error instanceof Error ? error.message : String(error) })
+    return z.NEVER
+  }
+})
+
 /** Draft-stage question schema — the shape the drafting model must emit. */
 export const paperQuestionSchema = z.object({
   number: z.number().int().positive(),
@@ -164,11 +185,7 @@ export const paperQuestionSchema = z.object({
   subQuestions: z.array(z.object({
     no: z.string(), text: z.string(), score: z.number(),
   })).optional(),
-  figure: z.object({
-    kind: z.enum(['line-diagram', 'image']),
-    ref: z.string(),
-    caption: z.string().optional(),
-  }).optional(),
+  figure: paperFigureSchema.optional(),
   answer: paperAnswer.optional(),
   knowledge: z.array(z.string()),
   ability,
@@ -228,10 +245,16 @@ const reviewRecord = z.object({
   note: z.string().optional(),
   reviewer: z.string(),
   at: z.string(),
+  documentHash: z.string().optional(),
+  questionHash: z.string().optional(),
+  checkHash: z.string().optional(),
+  acknowledgedFindings: z.array(z.string()).optional(),
+  analysisConfirmed: z.boolean().optional(),
 })
 
 const paperApproval = z.object({
   versionHash: z.string(),
+  checkHash: z.string().optional(),
   reviewer: z.string(),
   at: z.string(),
   physics: z.object({ reviewer: z.string(), at: z.string() }).optional(),
@@ -253,6 +276,39 @@ const solveResult = z.object({
   solvedAnswer: z.string(),
   consistent: z.boolean(),
   note: z.string().optional(),
+  questionHash: z.string().optional(),
+  inputQuestionHash: z.string().optional(),
+})
+
+const paperOperation = z.object({
+  id: z.string().min(1),
+  kind: z.enum(['draft', 'check', 'repair', 'replace']),
+  phase: z.enum(['draft', 'check', 'repair', 'replace', 'figure']),
+  state: z.enum(['running', 'completed', 'failed']),
+  questionNo: z.number().int().positive().optional(),
+  suggestion: z.string().optional(),
+  reviewer: z.string().optional(),
+  startedAt: z.string(),
+  updatedAt: z.string(),
+})
+const checkBinding = z.object({
+  documentHash: z.string(), version: z.number().int().positive(),
+  requestHash: z.string(), specHash: z.string(), reportHash: z.string(),
+  questionHashes: z.record(z.string(), z.string()),
+  questionReports: z.record(z.string(), z.string()),
+  completedAt: z.string(),
+})
+const figureAsset = z.object({
+  questionNo: z.number().int().positive(), questionHash: z.string(),
+  inputHash: z.string(), path: z.string(), sha256: z.string(),
+})
+const planSummary = z.object({
+  requestedTotalScore: z.number().positive(), totalScore: z.number().nonnegative(),
+  questionCount: z.number().int().nonnegative(),
+  scorePolicy: z.literal('blueprint-slot-sum'), normalized: z.boolean(),
+  sections: z.array(z.object({ title: z.string(), note: z.string().optional(),
+    questionCount: z.number().int().nonnegative(), totalScore: z.number().nonnegative() })),
+  unassignedQuestionNos: z.array(z.number().int().positive()),
 })
 
 const paperJob = z.object({
@@ -267,6 +323,22 @@ const paperJob = z.object({
   approval: paperApproval.optional(),
   findings: z.array(checkFinding),
   solveReport: z.array(solveResult),
+  /* Optional additive metadata — never synthesize historical checks/approvals. */
+  rowVersion: z.number().int().nonnegative().optional(),
+  operation: paperOperation.optional(),
+  checkBinding: checkBinding.optional(),
+  figureAssets: z.array(figureAsset).optional(),
+  answerCorrections: z.array(z.object({ questionNo: z.number().int().positive(),
+    questionHash: z.string(), originalResult: z.string(), engineResult: z.string(), at: z.string() })).optional(),
+  selectedBlueprint: blueprint.optional(),
+  planSummary: planSummary.optional(),
+  draftCheckpoint: z.object({ specHash: z.string(), sections: z.array(z.object({
+    title: z.string(), items: z.array(paperQuestionSchema),
+  })) }).optional(),
+  questionCheckpoint: z.object({ kind: z.enum(['repair', 'replace']), questionNo: z.number().int().positive(),
+    baseQuestionHash: z.string(), suggestion: z.string().optional(), item: paperQuestionSchema,
+    bankItemId: z.string().optional(), bankMode: z.enum(['verbatim', 'adapted']).optional() }).optional(),
+  recovery: z.object({ document: paperDocument, hash: z.string(), at: z.string() }).optional(),
   bankPlan: z.array(z.object({
     questionNo: z.number().int(),
     mode: z.enum(['verbatim', 'adapt', 'generate', 'gap']),
@@ -287,12 +359,15 @@ const paperJob = z.object({
   status: z.enum(['spec', 'drafting', 'checking', 'review', 'approved', 'exported', 'failed']),
   createdAt: z.string(),
   updatedAt: z.string(),
-}) satisfies z.ZodType<PaperJob>
+}) satisfies z.ZodType<ManagedPaperJob>
 
 const exportBundle = z.object({
   paperId: z.string(),
   version: z.number().int(),
   hash: z.string(),
+  contentHash: z.string().optional(),
+  manifestPath: z.string().optional(),
+  manifest: z.unknown().optional(),
   files: z.object({
     paperPdf: z.string().optional(),
     paperDocx: z.string().optional(),
@@ -321,11 +396,7 @@ const bankItemInput = {
   subQuestions: z.array(z.object({
     no: z.string(), text: z.string(), score: z.number(),
   })).optional(),
-  figure: z.object({
-    kind: z.enum(['line-diagram', 'image']),
-    ref: z.string(),
-    caption: z.string().optional(),
-  }).optional(),
+  figure: paperFigureSchema.optional(),
   answer: paperAnswer,
   answerTier: evidenceTier,
   sourceLabel: z.string().optional(),
@@ -375,7 +446,7 @@ export const paperDomain = defineDomain({
     source_papers: domainTable<string, SourcePaper>(sourcePaper),
     annotations: domainTable<string, KnowledgeAnnotation>(annotation),
     blueprints: domainTable<string, ExamBlueprint>(blueprint),
-    jobs: domainTable<string, PaperJob>(paperJob),
+    jobs: domainTable<string, ManagedPaperJob>(paperJob),
     exports: domainTable<string, ExportBundle>(exportBundle),
     bank_items: domainTable<string, BankItem>(bankItem),
     bank_usage: domainTable<string, BankUsage>(bankUsage),

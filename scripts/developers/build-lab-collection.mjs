@@ -9,14 +9,19 @@ import { spawnSync } from 'node:child_process'
 
 const root = fileURLToPath(new URL('../../', import.meta.url))
 const authored = join(root, 'experiment-packages/lab-collection')
+const frozenSource = JSON.parse(await readFile(join(root, 'physicsos-source-manifest.json')))
+assert.match(frozenSource.revision, /^[0-9a-f]{40}$/)
+assert.match(frozenSource.sourceDigest, /^[0-9a-f]{64}$/)
 const host = join(root, 'vendor/deepseek-harness/packages/physicsos/experiment-host')
 const sourceHost = join(root, 'overlays/harness/files/packages/physicsos/experiment-host/src')
 const data = JSON.parse(await readFile(join(sourceHost, 'universal-template-data.json')))
 const profiles = JSON.parse(await readFile(join(sourceHost, 'experiment-registry.json')))
 assert.equal(profiles.length, 76)
-const output = resolve(process.env.PHYSICSOS_LAB_RELEASE_DIR ?? '/tmp/physicsos-lab-collection-20261105')
-const version = process.env.PHYSICSOS_LAB_VERSION ?? '2.0.0'
+const profileIds = new Set(profiles.map(profile => profile.id))
+assert.equal(profileIds.size, 76, 'Every registered experiment must have a unique identity')
+const version = process.env.PHYSICSOS_LAB_VERSION ?? '2.3.0'
 assert.match(version, /^\d+\.\d+\.\d+$/)
+const output = resolve(process.env.PHYSICSOS_LAB_RELEASE_DIR ?? `/tmp/physicsos-lab-collection-${version}`)
 await mkdir(output, { recursive: true })
 const clientRequire = createRequire(join(root, 'vendor/deepseek-harness/packages/client/ui-physicsos/package.json'))
 const { Rolldown } = await import(pathToFileURL(clientRequire.resolve('tsdown')).href)
@@ -28,6 +33,7 @@ finally { await bundler.close() }
 const license = await readFile(join(threeRoot, 'LICENSE'))
 const reports = []
 const selected = process.argv.slice(2)
+assert.ok(selected.every(id => profileIds.has(id)), 'Only registered experiment IDs may be selected')
 await import('./compile-lab-runtimes.mjs')
 const { createExperiment, snapshotOf } = await import(pathToFileURL(process.env.PHYSICSOS_LAB_RUNTIME_MODULE ?? '/tmp/physicsos-lab-runtimes.mjs'))
 for (const profile of profiles.filter(p => selected.length === 0 || selected.includes(p.id))) {
@@ -74,5 +80,5 @@ for (const profile of profiles.filter(p => selected.length === 0 || selected.inc
   } finally { await rm(workspace, { recursive: true, force: true }) }
 }
 if (!selected.length) assert.equal(reports.length, 76)
-await writeFile(join(output, 'index.json'), JSON.stringify({ collection: 'PhysicsOS Lab Collection', version, count: reports.length, domains: new Set(reports.map(p => p.domain)).size, packages: reports }, null, 2) + '\n')
+await writeFile(join(output, 'index.json'), JSON.stringify({ collection: 'PhysicsOS Lab Collection', version, sourceRevision: frozenSource.revision, sourceDigest: frozenSource.sourceDigest, count: reports.length, domains: new Set(reports.map(p => p.domain)).size, packages: reports }, null, 2) + '\n')
 console.log(`Released ${reports.length} packages at ${output}`)

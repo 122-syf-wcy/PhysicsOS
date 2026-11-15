@@ -4,6 +4,8 @@ import { useStudentAuth } from './student-auth-fixture.client.ts'
 import { withOfficialRenderer } from './official-renderer-fixture.client.ts'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { motorReadingOf, resolveCurrentModel } from '@physicsos/engine-magnetic'
+import { derivedScalar } from '@physicsos/physics-core'
 import {
   createElectromagnetScene,
   createMotorScene,
@@ -21,6 +23,9 @@ import {
   findExperimentTemplate,
 } from '../src/client/physics/experiment-templates.ts'
 import { createCurrentWorkspaceRuntime } from '../src/client/physics/current-workspace-runtime.ts'
+import { currentSceneVisual } from '../src/client/physics/current-visual-bridge.ts'
+import { universalContributionSnapshot } from '../src/client/experiments/contribution-protocol.ts'
+import { isUniversalSnapshot } from '../src/client/experiments/universal-contract.ts'
 import { zh } from '../src/client/locales.ts'
 
 const translations: Readonly<Record<string, string>> = zh
@@ -455,6 +460,10 @@ describe('motor rig', () => {
     expect(rotor?.torqueText).toBe('τ = 0.24 N·m')
     expect(rotor?.forceText).toBe('F = 0.06 N')
     expect(rotor?.angleText).toBe('θ = 0°')
+    expect(rotor?.statorDirection).toEqual({ x: 1, y: 0 })
+    expect(rotor?.torque).toBeCloseTo(0.24, 15)
+    expect(rotor?.sideForce).toBeCloseTo(0.06, 15)
+    expect(rotor?.angle).toBe(0)
 
     /* At θ = 0 the coil lies along the field: its two sides are level with each
        other, W/2 either side of the axis, and the couple is at full strength. */
@@ -481,6 +490,10 @@ describe('motor rig', () => {
     expect(derivedValue(turned, '力矩 τ')).toBe('0')
     expect(derivedValue(turned, '每边安培力 F')).toBe('0.06')
     expect(turned.view.currentRotor?.angleText).toBe('θ = 90°')
+    expect(turned.view.currentRotor?.torque).toBe(0)
+    expect(turned.view.currentRotor?.sideForce).toBeCloseTo(0.06, 15)
+    expect(turned.view.currentRotor?.angle).toBe(Math.PI / 2)
+    expect(runtime.advance(100).view.currentRotor).toEqual(turned.view.currentRotor)
     /* The sides are now one above the other — to within floating point, since
        cos(90°) is 6×10⁻¹⁷ — so the two forces act along a single line. */
     const sides = turned.view.currentRotor?.sides ?? []
@@ -495,6 +508,9 @@ describe('motor rig', () => {
     /* Same torque, opposite sense — the sign IS the direction. */
     expect(derivedValue(reversed, '力矩 τ')).toBe('-0.24')
     expect(reversed.view.currentRotor?.sense).toBe(-1)
+    expect(reversed.view.currentRotor?.torque).toBeCloseTo(-0.24, 15)
+    expect(reversed.view.currentRotor?.sideForce).toBeCloseTo(0.06, 15)
+    expect(reversed.view.currentRotor?.statorDirection).toEqual({ x: 1, y: 0 })
     const forces = reversed.view.currentRotor?.forces ?? []
     expect(forces.map(force => force.to.y - force.from.y)).toEqual([6, -6])
   })
@@ -509,6 +525,46 @@ describe('motor rig', () => {
     const wider = runtime.editParameter('rotor-width', 8)
     expect(derivedValue(wider, '线圈面积 A')).toBe('0.0048')
     expect(derivedValue(wider, '力矩 τ')).toBe('0.96')
+  })
+
+  it.each([-60, 0, 60, 90, 120, 180])('carries the engine readings at θ = %s° without changing raw quantities or frame metadata', angle => {
+    const runtime = createCurrentWorkspaceRuntime(createMotorScene({ coilAngle: angle }))
+    const before = structuredClone(runtime.captureRaw())
+    const model = resolveCurrentModel(before.scene)
+    if (model.type !== 'motor' || before.result === undefined) throw new Error('Expected actual motor evidence.')
+    const reading = motorReadingOf(model)
+    const snapshot = runtime.getSnapshot()
+    expect(snapshot.view.currentRotor).toMatchObject({
+      statorDirection: { x: 1, y: 0 }, angle: reading.angle,
+      torque: reading.torque, sideForce: reading.sideForce,
+    })
+    expect(snapshot.view.currentRotor!.torque).toBe(derivedScalar(before.result.derivedQuantities, 'motor_torque').value)
+    expect(snapshot.view.currentRotor!.sideForce).toBe(derivedScalar(before.result.derivedQuantities, 'side_force').value)
+    const wire = universalContributionSnapshot(snapshot, 'motor')
+    expect(isUniversalSnapshot(wire, 'motor')).toBe(true)
+    const legacy = structuredClone(wire)
+    const rotor = (legacy.view as { currentRotor: Record<string, unknown> }).currentRotor
+    for (const key of ['statorDirection', 'torque', 'sideForce']) Reflect.deleteProperty(rotor, key)
+    expect(isUniversalSnapshot(legacy, 'motor')).toBe(true)
+    expect(runtime.captureRaw()).toEqual(before)
+  })
+
+  it('preserves a tiny side-force reading even when its fixed display arrow cannot encode the magnitude', () => {
+    const scene = createMotorScene()
+    const base = resolveCurrentModel(scene)
+    if (base.type !== 'motor') throw new Error('Expected the motor model.')
+    const model = { ...base, current: 7.654321098765432e-29 }
+    const before = structuredClone(model)
+    const reading = motorReadingOf(model)
+    const rotor = currentSceneVisual({ scene, model }).currentRotor!
+    expect(rotor.sideForce).toBe(reading.sideForce)
+    expect(rotor.sideForce).toBeGreaterThan(0)
+    expect(rotor.sideForce).toBeLessThan(1e-25)
+    // Zero is the engine's own snap decision, not a bridge cutoff or an animation rate.
+    expect(rotor.torque).toBe(reading.torque)
+    expect(rotor.torque).toBe(0)
+    expect(rotor.forces.map(force => force.to.y - force.from.y)).toEqual([-6, 6])
+    expect(model).toEqual(before)
   })
 
   it('forks a question-sourced motor when the angle changes', () => {

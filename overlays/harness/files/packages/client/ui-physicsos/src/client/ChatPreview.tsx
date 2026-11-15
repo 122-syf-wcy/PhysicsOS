@@ -1,7 +1,8 @@
 /** One experiment preview per Conversation, hosted by the existing right sidebar. */
-import { useEffect, useMemo } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
+import { isBehindModal, observeComposition } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { PhysicsSceneSnapshot } from '@deepseek-ai/dsh-tool-physicsos/types'
@@ -69,9 +70,17 @@ export function ChatPreviewTitle({ t }: PropsLocale<'physicsos'>) {
 }
 
 /** Selection is shared viewing state; the selected scene stays in the Session projection. */
-export function ChatPreview({ sessionId, useProjection, useStore, actions, useAuth, usePreviewSession, t,
+export function ChatPreview({ sessionId, useProjection, useStore, actions, useAuth, usePreviewSession, useTabInfo, t,
   openSceneInLab, requestSceneInCanvas, questionCodeOwner, regenerateQuestionCode, recordAttempt,
 }: ChatPreviewProps) {
+  const tab = useTabInfo()
+  const preview = useRef<HTMLElement>(null)
+  const composition = useRef<ReturnType<typeof observeComposition>>()
+  useLayoutEffect(() => {
+    const watcher = observeComposition(document)
+    composition.current = watcher
+    return () => { composition.current = undefined; watcher.dispose() }
+  }, [])
   const auth = useAuth(value => value)
   const owner = chatPreviewOwner(auth)
   const account = chatPreviewAccount(auth)
@@ -87,7 +96,15 @@ export function ChatPreview({ sessionId, useProjection, useStore, actions, useAu
   const scenes = Object.values(projection.scenes)
   const title = data.visualization?.status === 'ready' && data.visualization.rendererKind === 'independent'
     ? data.visualization.title : data.title
-  return <section className={css.preview} aria-label={t('chatPreview.title')} data-chat-preview data-preview-scene={data.sceneId}>
+  return <section ref={preview} className={css.preview} aria-label={t('chatPreview.title')} data-chat-preview data-preview-scene={data.sceneId}
+    onKeyDown={event => {
+      const composing = composition.current?.guards(event.nativeEvent) === true
+      if (event.key !== 'Escape' || event.defaultPrevented || composing || isBehindModal(preview.current)
+        || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey || !tab.tab.visible || tab.tab.signal.aborted
+        || !(event.target instanceof Node) || preview.current?.contains(event.target) !== true) return
+      event.preventDefault(); event.stopPropagation()
+      if (!event.repeat) tab.tab.actions.close()
+    }}>
     <div className={css.sections} role="tablist" aria-label={t('chatPreview.sections')}>
       <button type="button" role="tab" aria-selected={state.section === 'experiment'} onClick={() => { actions.setSection('experiment') }}>
         {t('chatPreview.experiment')}

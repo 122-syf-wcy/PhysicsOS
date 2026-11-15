@@ -177,7 +177,7 @@ describe('proposeSpecTable', () => {
 
   it('seeds knowledge + chapter from the ranked pool into hint-less slots', () => {
     const pool = [{ knowledge: '欧姆定律', chapter: '第十七章 欧姆定律' }, { knowledge: '浮力' }]
-    const rows = proposeSpecTable(blueprintById('gz-zk-physics')!, zkRequest, pool)
+    const rows = proposeSpecTable(blueprintById('gz-zk-physics')!, { ...zkRequest, chapters: [] }, pool)
     expect(rows[0]?.knowledge).toEqual(['欧姆定律'])
     expect(rows[0]?.chapter).toBe('第十七章 欧姆定律')
     expect(rows[1]?.knowledge).toEqual(['浮力'])
@@ -194,7 +194,7 @@ describe('proposeSpecTable', () => {
         },
       ],
     }
-    const hintedRows = proposeSpecTable(hinted, { ...zkRequest, kind: 'weekly' }, pool)
+    const hintedRows = proposeSpecTable(hinted, { ...zkRequest, kind: 'weekly', chapters: [] }, pool)
     expect(hintedRows[0]?.knowledge).toEqual(['声现象'])
   })
 })
@@ -228,8 +228,11 @@ describe('runChecks', () => {
     const broken = mutable(doc())
     broken.sections[0]!.items[0]!.stem =
       '某次实验得到的一条纸带如图所示，相邻两计数点间还有四个点未画出'
-    broken.sections[0]!.items[0]!.figure = { kind: 'line-diagram', ref: 'f1', caption: '纸带' }
-    const findings = runChecks(broken, zkRequest)
+    broken.sections[0]!.items[0]!.figure = {
+      kind: 'line-diagram', ref: 'f1', caption: '内部指令：纸带',
+      diagram: { schemaVersion: 1, viewBox: { x: 0, y: 0, width: 160, height: 80 }, scale: 'schematic', primitives: [{ id: 'tape', role: 'given', type: 'line', points: [[20, 40], [140, 40]] }] },
+    } as unknown as DeepMutable<PaperDocument>['sections'][number]['items'][number]['figure']
+    const findings = runChecks(broken, { ...zkRequest, chapters: [] })
     expect(findings.filter((f) => f.questionNo === broken.sections[0]!.items[0]!.number)).toEqual(
       [],
     )

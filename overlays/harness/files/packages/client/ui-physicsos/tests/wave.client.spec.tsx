@@ -11,7 +11,7 @@ import {
 } from '@physicsos/physics-scene'
 
 import { PhysicsSurface, type PhysicsSurfaceProps } from '../src/client/LabWorkspace.tsx'
-import { SceneChatCard } from '../src/client/SceneChatCard.tsx'
+import { SceneCardBody, SceneChatCard } from '../src/client/SceneChatCard.tsx'
 import { PhysicsCanvas } from '../src/client/physics/PhysicsCanvas.tsx'
 import { createPhysicsSurfaceController } from '../src/client/surface-store.ts'
 import { domainOfScene } from '../src/client/physics/domain-of-scene.ts'
@@ -419,9 +419,13 @@ describe('wave solved cards', () => {
     /* The solution quotes the engine's numbers: v = λf = 2 m/s, T = 0.2 s. */
     expect(container.textContent).toContain('2.0000')
     expect(container.textContent).toContain('0.2000')
-    // Historical cards retain verified answers while waiting for their own
-    // private code. The bundled renderer still must draw these exact facts.
-    expect(container.querySelector('[data-question-code-status="historical"]')).toBeTruthy()
+    /* The transcript retains answers; the selected preview owns code status. */
+    expect(container.querySelector('[data-scene-attachment]')?.getAttribute('data-scene-attachment')).toBe(data.sceneId)
+    expect(container.querySelector('[data-preview-status="historical"]')).toBeTruthy()
+    expect(container.querySelector('[data-code-experiment-shell]')).toBeNull()
+    const preview = render(<SceneCardBody data={data} presentation="preview" t={t} openSceneInLab={vi.fn()} />).container
+    expect(preview.querySelector('[data-code-experiment-shell]')).toBeTruthy()
+    expect(preview.querySelector('[data-question-code-status="historical"]')).toBeTruthy()
     const snapshot = createWaveWorkspaceRuntime(data.scene as unknown as PhysicsScene).getSnapshot()
     const canvas = render(<PhysicsCanvas view={snapshot.view} ariaLabel={snapshot.ariaLabel} />).container
     const svgText = [...canvas.querySelectorAll('svg text')].map(node => node.textContent ?? '')
@@ -443,7 +447,12 @@ describe('wave solved cards', () => {
       } as unknown as Parameters<typeof SceneChatCard>[0])} />,
     )
     expect(container.textContent).toContain('振动加强')
-    expect(container.querySelector('[data-question-code-status="historical"]')).toBeTruthy()
+    expect(container.querySelector('[data-scene-attachment]')?.getAttribute('data-scene-attachment')).toBe(data.sceneId)
+    expect(container.querySelector('[data-preview-status="historical"]')).toBeTruthy()
+    expect(container.querySelector('[data-code-experiment-shell]')).toBeNull()
+    const preview = render(<SceneCardBody data={data} presentation="preview" t={t} openSceneInLab={vi.fn()} />).container
+    expect(preview.querySelector('[data-code-experiment-shell]')).toBeTruthy()
+    expect(preview.querySelector('[data-question-code-status="historical"]')).toBeTruthy()
     const snapshot = createWaveWorkspaceRuntime(data.scene as unknown as PhysicsScene).getSnapshot()
     const canvas = render(<PhysicsCanvas view={snapshot.view} ariaLabel={snapshot.ariaLabel} />).container
     expect(canvas.querySelectorAll('circle[class*="waveSource"]')).toHaveLength(2)

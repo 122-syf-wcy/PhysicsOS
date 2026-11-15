@@ -78,7 +78,6 @@ export function SidebarNav({ panels = [], selectPanel, openSurface, usePhysicsSu
   const iconSize = 20
   const moreItems = [
     { id: 'notice', label: t('nav.notice') },
-    { id: 'library', label: t('nav.library') },
     { id: 'contribute', label: t('nav.contribute') },
     ...panels.map(panel => ({ id: `panel:${panel.id}`, label: panel.label })),
   ]
@@ -116,7 +115,7 @@ export function SidebarNav({ panels = [], selectPanel, openSurface, usePhysicsSu
           setMoreOpen(false)
           const panel = panels.find(item => `panel:${item.id}` === id)
           if (panel !== undefined) selectPanel?.(panel.id)
-          else if (id === 'notice' || id === 'library' || id === 'contribute') openSurface(id)
+          else if (id === 'notice' || id === 'contribute') openSurface(id)
         }}
         anchor={<button type="button" className={css.item} aria-label={t('nav.more')} aria-haspopup="menu" aria-expanded={moreOpen} onClick={() => { setMoreOpen(value => !value) }}><span aria-hidden="true">···</span></button>} />
     </nav>

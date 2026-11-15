@@ -7,9 +7,11 @@
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { readFile } from 'node:fs/promises'
-import { extname, join, normalize } from 'node:path'
+import { extname, isAbsolute, join, normalize } from 'node:path'
 import type { ImageMediaType } from '@deepseek-ai/dsh-attachment'
 import { PaperError, type PaperService } from './service.ts'
+import type { AcceptedPaperOperation } from './pipeline.ts'
+import type { ManagedPaperJob, PaperOperationKind } from './workflow-state.ts'
 import { auditWrites, guard, type IdentityActor, type PhysicsosIdentity } from './identity.ts'
 import { canManagePaperRecord, canReadPaperRecord, schoolScopeOf } from './scope.ts'
 import type { ExportFileSet } from './export.ts'
@@ -93,6 +95,18 @@ const FILE_NAMES = new Set(['试卷.pdf', '试卷.docx', '答案解析.pdf', '�
  *  separators are excluded — `normalize` plus the job-id scoping contain the
  *  rest. */
 const FIGURE_NAME = /^fig-[^/\\]+\.png$/
+const safeDownloadPath = (path: string): boolean => path !== '' && !isAbsolute(path)
+  && !path.includes('\\') && !/[\u0000-\u001f]/.test(path)
+  && path.split('/').every(part => part !== '' && part !== '.' && part !== '..')
+const readableFile = (service: PaperService, job: ManagedPaperJob, path: string): boolean => {
+  if (!safeDownloadPath(path)) return false
+  if (service.listExports(job.id).some(bundle => Object.values(bundle.files).includes(path))) return true
+  if ((job.figureAssets ?? []).some(asset => asset.path === path)) return true
+  /* Historical unbound finalized documents keep their previous basename URLs;
+     new assets always come from a content-bound recorded path. */
+  return job.checkBinding === undefined && job.approval?.checkHash === undefined
+    && (job.status === 'approved' || job.status === 'exported') && (FILE_NAMES.has(path) || FIGURE_NAME.test(path))
+}
 
 const MIME: Record<string, string> = {
   '.pdf': 'application/pdf',
@@ -173,13 +187,11 @@ export interface RouteDeps {
   readonly service: PaperService
   /** Export-root resolver for file downloads. */
   readonly exportDir: string
-  /** Draft+check driver wired by the plugin. */
-  readonly runDraft: (jobId: string) => Promise<void>
-  readonly runChecks: (jobId: string) => Promise<void>
-  /** Single-question revision driven by the teacher's suggestion. */
-  readonly runRepair: (jobId: string, questionNo: number, suggestion: string, reviewer: string) => Promise<void>
-  /** Swap a printed question for the next-best bank candidate. */
-  readonly runReplace: (jobId: string, questionNo: number, reviewer: string) => Promise<void>
+  /** Reserve durably, then drive one server-owned continuation in the background. */
+  readonly startOperation: (jobId: string, kind: PaperOperationKind, input?: {
+    questionNo?: number; suggestion?: string; reviewer?: string; expectedVersion?: number;
+  }) => Promise<AcceptedPaperOperation>
+  readonly retryOperation: (jobId: string, expectedVersion?: number) => Promise<AcceptedPaperOperation>
   /** Sync half of a swap — throws NO_CANDIDATE before the 202 is answered. */
   readonly planReplace: (jobId: string, questionNo: number) => unknown
   readonly runExport: (jobId: string) => Promise<{ files: ExportFileSet }>
@@ -229,6 +241,29 @@ export interface RouteDeps {
 type Body = Record<string, unknown>
 const str = (body: Body, key: string): string =>
   typeof body[key] === 'string' && (body[key]).length > 0 ? body[key] : ''
+const versionOf = (body: Body): number | undefined => {
+  const value = body['expectedVersion']
+  if (value === undefined) return undefined
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) throw new PaperError(400, 'BAD_BODY', 'expectedVersion must be a nonnegative integer')
+  return value
+}
+const questionNoOf = (seg: readonly string[]): number => {
+  const value = Number(segment(seg, 3))
+  if (!Number.isSafeInteger(value) || value <= 0) throw new PaperError(400, 'BAD_QUESTION', '题号必须是正整数')
+  return value
+}
+const accepted = (res: ServerResponse, operation: AcceptedPaperOperation): void => {
+  void operation.completion.catch(() => undefined)
+  send(res, 202, { status: operation.job.status, operationId: operation.job.operation?.id, job: operation.job })
+}
+/** An id/hash alone is not attachment authorization. Retain old rows for reads,
+ * but refuse unverified new asset references instead of trusting caller hashes. */
+const requireOwnedFigures = (items: readonly { figure?: unknown }[]): void => {
+  if (items.some(item => item.figure !== null && typeof item.figure === 'object'
+    && 'sourceAsset' in item.figure && item.figure.sourceAsset !== undefined)) {
+    throw new PaperError(403, 'FIGURE_ASSET_UNAUTHORIZED', '原图附件须先校验所属与授权；不能仅凭 id 或哈希写入')
+  }
+}
 
 const reviewStatusBody = (body: Body): ReviewStatus => {
   const status = typeof body['status'] === 'string' ? reviewStatusOf(body['status']) : undefined
@@ -406,6 +441,7 @@ export function paperRoutes(deps: RouteDeps): (req: IncomingMessage, res: Server
       }
       if (method === 'POST' && path === '/bank/items') {
         const input = parse(bankItemWire, await readJson(req))
+        requireOwnedFigures([input])
         if (input.sourcePaperId !== undefined) {
           const source = service.listSources().find(row => row.id === input.sourcePaperId)
           if (source === undefined || !canReadPaperRecord(actor, source)) {
@@ -477,8 +513,9 @@ export function paperRoutes(deps: RouteDeps): (req: IncomingMessage, res: Server
         if (!canManagePaperRecord(actor, service.getBankItem(id))) {
           throw new PaperError(404, 'NOT_FOUND', 'not found')
         }
-        const body = await readJson(req)
-        send(res, 200, await service.updateBankItem(id, parse(bankItemPatchWire, body)))
+        const input = parse(bankItemPatchWire, await readJson(req))
+        requireOwnedFigures([input])
+        send(res, 200, await service.updateBankItem(id, input))
         return
       }
       if (method === 'POST' && seg[0] === 'bank' && seg[1] === 'items' && seg[2] === 'review-batch') {
@@ -571,9 +608,11 @@ export function paperRoutes(deps: RouteDeps): (req: IncomingMessage, res: Server
         ).filter(job => canManagePaperRecord(actor, job)))
         return
       }
-      if (method === 'POST' && path === '/jobs') {
+      if (method === 'POST' && (path === '/jobs' || path === '/jobs/plan')) {
         const input = parse<{ blueprintId: string; request: PaperRequest }>(jobCreateWire, await readJson(req))
-        send(res, 201, await service.createJob({ ...input, schoolId: schoolScopeOf(actor) }))
+        const scoped = { ...input, schoolId: schoolScopeOf(actor) }
+        send(res, path === '/jobs/plan' ? 200 : 201,
+          path === '/jobs/plan' ? service.planJob(scoped) : await service.createJob(scoped))
         return
       }
       if (method === 'GET' && seg[0] === 'jobs' && seg.length === 2) {
@@ -584,7 +623,7 @@ export function paperRoutes(deps: RouteDeps): (req: IncomingMessage, res: Server
         const id = segment(seg, 1)
         jobForActor(id)
         const body = await readJson(req) as Body
-        send(res, 200, await service.confirmSpec(id, parse(specTableWire, body['specTable'])))
+        send(res, 200, await service.confirmSpec(id, parse(specTableWire, body['specTable']), versionOf(body)))
         return
       }
       /* Live assembly preview: how the confirmed spec table would be served
@@ -608,24 +647,26 @@ export function paperRoutes(deps: RouteDeps): (req: IncomingMessage, res: Server
         })))
         return
       }
-      if (method === 'POST' && seg[0] === 'jobs' && seg[2] === 'draft') {
-        /* Draft runs long: answer 202 and let the client poll the job —
-           the driver marks the job 'failed' with its error on rejection. */
+      if (method === 'POST' && seg[0] === 'jobs' && (seg[2] === 'draft' || seg[2] === 'check')) {
         const id = segment(seg, 1)
         jobForActor(id)
-        void deps.runDraft(id).catch((error: unknown) => {
-          console.error(`[paper-host] draft ${seg[1]} failed:`, error)
-        })
-        send(res, 202, { status: 'drafting' })
+        const body = await readJson(req) as Body
+        accepted(res, await deps.startOperation(id, seg[2] === 'draft' ? 'draft' : 'check',
+          { expectedVersion: versionOf(body), reviewer: actor.userKey }))
         return
       }
-      if (method === 'POST' && seg[0] === 'jobs' && seg[2] === 'check') {
+      if (method === 'POST' && seg[0] === 'jobs' && seg[2] === 'retry') {
         const id = segment(seg, 1)
         jobForActor(id)
-        void deps.runChecks(id).catch((error: unknown) => {
-          console.error(`[paper-host] check ${seg[1]} failed:`, error)
-        })
-        send(res, 202, { status: 'checking' })
+        const body = await readJson(req) as Body
+        accepted(res, await deps.retryOperation(id, versionOf(body)))
+        return
+      }
+      if (method === 'POST' && seg[0] === 'jobs' && seg[2] === 'restore') {
+        const id = segment(seg, 1)
+        jobForActor(id)
+        const body = await readJson(req) as Body
+        send(res, 200, await service.restoreDraft(id, versionOf(body)))
         return
       }
       if (method === 'POST' && seg[0] === 'jobs' && seg[2] === 'questions' && seg[4] === 'repair') {
@@ -634,55 +675,54 @@ export function paperRoutes(deps: RouteDeps): (req: IncomingMessage, res: Server
         const body = await readJson(req) as Body
         const suggestion = str(body, 'suggestion')
         if (suggestion === '') throw new PaperError(400, 'BAD_REQUEST', 'repair needs a suggestion')
-        void deps.runRepair(segment(seg, 1), Number(seg[3]), suggestion, actor.userKey).catch((error: unknown) => {
-          console.error(`[paper-host] repair ${seg[1]}#${seg[3]} failed:`, error)
-        })
-        send(res, 202, { status: 'repairing' })
+        accepted(res, await deps.startOperation(jobId, 'repair', { questionNo: questionNoOf(seg),
+          suggestion, reviewer: actor.userKey, expectedVersion: versionOf(body) }))
         return
       }
       if (method === 'POST' && seg[0] === 'jobs' && seg[2] === 'questions' && seg[4] === 'replace') {
         const jobId = segment(seg, 1)
         jobForActor(jobId)
-        await readJson(req)
-        /* Validate first — a row with no spare candidate answers 404
-           synchronously instead of vanishing into the async driver. */
-        deps.planReplace(jobId, Number(seg[3]))
-        void deps.runReplace(jobId, Number(seg[3]), actor.userKey).catch((error: unknown) => {
-          console.error(`[paper-host] replace ${seg[1]}#${seg[3]} failed:`, error)
-        })
-        send(res, 202, { status: 'replacing' })
+        const body = await readJson(req) as Body
+        const questionNo = questionNoOf(seg)
+        /* Availability is validated before accepting; the operation gate repeats
+           status/version/question validation at its atomic queue slot. */
+        deps.planReplace(jobId, questionNo)
+        accepted(res, await deps.startOperation(jobId, 'replace', { questionNo,
+          reviewer: actor.userKey, expectedVersion: versionOf(body) }))
         return
       }
       if (method === 'POST' && seg[0] === 'jobs' && seg[2] === 'questions' && seg[4] === 'review') {
         const jobId = segment(seg, 1)
         jobForActor(jobId)
         const body = await readJson(req) as Body
-        send(res, 200, await service.reviewQuestion(
-          jobId, Number(seg[3]),
-          body['verdict'] === 'approved' ? 'approved' : 'changes-requested',
-          actor.userKey,
-          body['note'] as string | undefined,
-        ))
+        if (body['verdict'] !== 'approved' && body['verdict'] !== 'changes-requested') throw new PaperError(400, 'BAD_BODY', 'verdict must be approved or changes-requested')
+        const job = jobForActor(jobId)
+        send(res, 200, await service.reviewQuestion(jobId, questionNoOf(seg), body['verdict'], actor.userKey,
+          str(body, 'note') || undefined, { version: versionOf(body) ?? job.versions.length,
+            questionHash: str(body, 'questionHash') || undefined, checkHash: str(body, 'checkHash') || undefined,
+            acknowledgeFindings: body['acknowledgeFindings'] === true, analysisConfirmed: body['analysisConfirmed'] === true }))
         return
       }
       if (method === 'PUT' && seg[0] === 'jobs' && seg[2] === 'document') {
         const jobId = segment(seg, 1)
         jobForActor(jobId)
         const body = await readJson(req) as Body
-        send(res, 200, await service.commitDocument(
-          jobId, parse<PaperDocument>(paperDocumentWire, body['document']), str(body, 'summary') || 'edit',
-          typeof body['expectedVersion'] === 'number' ? body['expectedVersion'] : undefined,
-        ))
+        const document = parse<PaperDocument>(paperDocumentWire, body['document'])
+        requireOwnedFigures(document.sections.flatMap(section => section.items))
+        send(res, 200, await service.commitDocument(jobId, document, str(body, 'summary') || 'edit',
+          versionOf(body) ?? jobForActor(jobId).versions.length))
         return
       }
       if (method === 'POST' && seg[0] === 'jobs' && seg[2] === 'approve') {
         const jobId = segment(seg, 1)
         jobForActor(jobId)
         const body = await readJson(req) as Body
-        send(res, 200, await service.approve(
-          jobId, actor.userKey,
-          body['subject'] === 'chemistry' ? 'chemistry' : 'physics',
-        ))
+        if (body['subject'] !== 'physics' && body['subject'] !== 'chemistry') throw new PaperError(400, 'BAD_SUBJECT', '请明确签署物理或化学部分')
+        const job = jobForActor(jobId)
+        send(res, 200, await service.approve(jobId, actor.userKey, body['subject'], {
+          version: versionOf(body) ?? job.versions.length,
+          documentHash: str(body, 'documentHash') || undefined, checkHash: str(body, 'checkHash') || undefined,
+        }))
         return
       }
       if (method === 'POST' && seg[0] === 'jobs' && seg[2] === 'export') {
@@ -693,10 +733,10 @@ export function paperRoutes(deps: RouteDeps): (req: IncomingMessage, res: Server
       }
       if (method === 'GET' && seg[0] === 'jobs' && seg[2] === 'files') {
         const jobId = segment(seg, 1)
-        jobForActor(jobId)
-        const name = decodeURIComponent(seg[3] ?? '')
-        if (!FILE_NAMES.has(name) && !FIGURE_NAME.test(name)) throw new PaperError(404, 'NO_FILE', 'no such export file')
-        const file = join(deps.exportDir, segment(seg, 1), normalize(name))
+        const job = jobForActor(jobId)
+        const name = decodeURIComponent(seg.slice(3).join('/'))
+        if (!readableFile(service, job, name)) throw new PaperError(404, 'NO_FILE', 'no such export file')
+        const file = join(deps.exportDir, jobId, normalize(name))
         const content = await readFile(file).catch(() => undefined)
         if (content === undefined) throw new PaperError(404, 'NO_FILE', `file '${name}' not produced`)
         res.writeHead(200, {

@@ -1,6 +1,7 @@
 /** Product panels reuse Dockkit's pointer capture, dragging and resize gestures. */
 import { useCallback, useId, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
+import { isBehindModal, observeComposition } from '@deepseek-ai/dsh-client-ui-primitives'
 import { createIdMinter, FloatLayer, type DockIntents, type DockLabels, type FloatRect, type LayoutState } from '@deepseek-ai/dsh-client-ui-dockkit'
 import { fitWorkbenchFloat, readWorkbenchRect, workbenchSafeRect, type WorkbenchPanelLayout } from './workbench-geometry.ts'
 import css from './WorkbenchFloatPanel.module.css'
@@ -34,6 +35,9 @@ const viewportRect = (): FloatRect => ({
   width: window.visualViewport?.width ?? window.innerWidth,
   height: window.visualViewport?.height ?? window.innerHeight,
 })
+
+const sameRect = (previous: FloatRect | undefined, next: FloatRect): boolean => previous !== undefined
+  && previous.x === next.x && previous.y === next.y && previous.width === next.width && previous.height === next.height
 
 function measureWorkbench(owner: HTMLElement): FloatRect {
   const viewport = viewportRect()
@@ -85,7 +89,7 @@ export function useWorkbenchSafeRect(ownerRef: RefObject<HTMLElement>, layoutKey
     if (owner === null) return
     const measure = () => {
       const next = measureWorkbench(owner)
-      setBounds(previous => previous.x === next.x && previous.y === next.y && previous.width === next.width && previous.height === next.height ? previous : next)
+      setBounds(previous => sameRect(previous, next) ? previous : next)
     }
     measure()
     return observeWorkbench(owner, measure)
@@ -106,7 +110,30 @@ export function WorkbenchFloatPanel({ id, title, closeLabel, collapseLabel, onCl
   const restoredKey = useRef<string>()
   const [rect, setRect] = useState<FloatRect>()
   const [wide, setWide] = useState(false)
-  const [portal, setPortal] = useState<Element | null>(null)
+  // Keep React's portal target stable when fullscreen changes its DOM parent.
+  const [portal] = useState(() => {
+    const container = document.createElement('div')
+    container.style.display = 'contents'
+    return container
+  })
+  const previousFocus = useRef<HTMLElement | null>()
+  const ownedFocus = useRef(false)
+  const composition = useRef<ReturnType<typeof observeComposition>>()
+  const restoreFocus = useCallback(() => {
+    const previous = previousFocus.current
+    previousFocus.current = undefined
+    const focused = portal.ownerDocument.activeElement
+    const owned = focused !== null && portal.contains(focused)
+      || ownedFocus.current && (focused === portal.ownerDocument.body || focused === portal.ownerDocument.documentElement)
+    ownedFocus.current = false
+    if (owned && previous?.isConnected === true && previous.closest('[hidden], [inert], [aria-hidden="true"]') === null
+      && !isBehindModal(previous)) previous.focus({ preventScroll: true })
+  }, [portal])
+  useLayoutEffect(() => {
+    const watcher = observeComposition(portal.ownerDocument)
+    composition.current = watcher
+    return () => { composition.current = undefined; watcher.dispose(); restoreFocus(); portal.remove() }
+  }, [portal, restoreFocus])
   const identity = useId()
   const [ids] = useState(() => {
     const mint = createIdMinter()
@@ -129,7 +156,9 @@ export function WorkbenchFloatPanel({ id, title, closeLabel, collapseLabel, onCl
       }
     }
     if (requestedSize.current.width !== width || requestedSize.current.height !== height) {
-      if (manual.current !== undefined) manual.current = { ...manual.current, width, height }
+      if (manual.current !== undefined) manual.current = { ...manual.current,
+        ...(requestedSize.current.width === width ? {} : { width }),
+        ...(requestedSize.current.height === height ? {} : { height }) }
       requestedSize.current = { width, height }
     }
     const measure = () => {
@@ -137,18 +166,27 @@ export function WorkbenchFloatPanel({ id, title, closeLabel, collapseLabel, onCl
         ? { x: bx, y: by, width: bw, height: bh } : measureWorkbench(owner)
       bounds.current = available
       setWide(available.width >= 1000)
-      setPortal(document.fullscreenElement ?? owner.closest('[role="dialog"][aria-modal="true"]') ?? document.body)
+      const parent = document.fullscreenElement ?? owner.closest('[role="dialog"][aria-modal="true"]') ?? document.body
+      if (portal.parentElement !== parent) {
+        const focused = portal.ownerDocument.activeElement
+        const owned = focused instanceof HTMLElement && portal.contains(focused) ? focused : undefined
+        parent.appendChild(portal)
+        // Reparenting must not leave a focused editor at document.body.
+        if (owned?.isConnected === true && !isBehindModal(owned)) owned.focus({ preventScroll: true })
+      }
       const automatic = ax !== undefined && ay !== undefined && aw !== undefined && ah !== undefined
         ? { x: ax, y: ay, width: aw, height: ah }
         : { x: placement === 'top-left' ? available.x : available.x + available.width - width,
           y: placement === 'bottom-right' ? available.y + available.height - height : available.y, width, height }
-      setRect(fitWorkbenchFloat(manual.current ?? automatic, available))
+      const next = fitWorkbenchFloat(manual.current ?? automatic, available)
+      setRect(previous => sameRect(previous, next) ? previous : next)
     }
     measure()
     return observeWorkbench(owner, measure)
-  }, [width, height, placement, identity, storageKey, bx, by, bw, bh, ax, ay, aw, ah])
+  }, [width, height, placement, identity, storageKey, portal, bx, by, bw, bh, ax, ay, aw, ah])
 
-  const visible = layout?.visible ?? (expanded || (desktopDefault && wide))
+  const visible = rect !== undefined && rect.width > 0 && rect.height > 0
+    && (layout?.visible ?? (expanded || (desktopDefault && wide)))
   const raisePanel = useCallback(() => {
     const active = layer.current
     if (active === null || ownerGroup.current === '') return
@@ -159,13 +197,14 @@ export function WorkbenchFloatPanel({ id, title, closeLabel, collapseLabel, onCl
   }, [])
 
   useLayoutEffect(() => {
-    if (portal === null || !visible) return
+    if (!visible) { restoreFocus(); return }
     if (expanded) raisePanel()
-    if (!expanded || wide) return
-    const previous = document.activeElement
-    layer.current?.querySelector<HTMLButtonElement>('[data-dockkit-float-close]')?.focus({ preventScroll: true })
-    return () => { if (previous instanceof HTMLElement && previous.isConnected) previous.focus({ preventScroll: true }) }
-  }, [expanded, portal, wide, visible, raisePanel])
+    if (!expanded || wide || previousFocus.current !== undefined || layer.current === null || isBehindModal(layer.current)) return
+    const focused = portal.ownerDocument.activeElement
+    if (focused !== null && portal.contains(focused)) return
+    previousFocus.current = focused instanceof HTMLElement ? focused : null
+    layer.current.querySelector<HTMLButtonElement>('[data-dockkit-float-close]')?.focus({ preventScroll: true })
+  }, [expanded, portal, wide, visible, raisePanel, restoreFocus])
 
   const settle = (next: FloatRect) => {
     raisePanel()
@@ -202,17 +241,19 @@ export function WorkbenchFloatPanel({ id, title, closeLabel, collapseLabel, onCl
   }
   return <>
     <span ref={anchor} className={css.anchor} aria-hidden="true" />
-    {portal !== null && state !== undefined ? createPortal(
+    {state !== undefined ? createPortal(
       <div ref={layer} id={id} role={role} aria-label={title} hidden={!visible} className={`${css.layer} ${className ?? ''}`} data-workbench-float={placement} data-workbench-float-owner={ownerGroup.current}
+        data-workbench-short={rect !== undefined && rect.height < 120 || undefined}
         onPointerDownCapture={(event) => { if (event.target instanceof Node && layer.current?.contains(event.target)) { raisePanel(); onActivate?.() } }}
-        onFocusCapture={(event) => { if (event.target instanceof Node && layer.current?.contains(event.target)) { raisePanel(); onActivate?.() } }}
+        onFocusCapture={(event) => { if (event.target instanceof Node && layer.current?.contains(event.target)) { ownedFocus.current = true; raisePanel(); onActivate?.() } }}
+        onBlurCapture={(event) => { if (event.relatedTarget instanceof Node && !portal.contains(event.relatedTarget)) ownedFocus.current = false }}
         data-can-collapse={onCollapse !== undefined && collapseLabel !== closeLabel} onKeyDown={(event) => {
-          // oxlint-disable-next-line typescript/no-deprecated -- Legacy IME 229 remains necessary on engines without isComposing.
-          const composing = event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229
-          if (event.key === 'Escape' && !event.defaultPrevented && !composing
-            && !event.ctrlKey && !event.altKey && !event.metaKey
+          const composing = composition.current?.guards(event.nativeEvent) === true
+          if (event.key === 'Escape' && !event.defaultPrevented && !composing && !isBehindModal(layer.current)
+            && !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey
             && event.target instanceof Node && layer.current?.contains(event.target)) {
-            event.preventDefault(); event.stopPropagation(); close()
+            event.preventDefault(); event.stopPropagation()
+            if (!event.repeat) close()
           }
         }}>
         <FloatLayer state={state} intents={intents} labels={labels} renderTab={() => <div className={css.content}>{children}</div>} />

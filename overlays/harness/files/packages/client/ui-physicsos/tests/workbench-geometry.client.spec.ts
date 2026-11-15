@@ -24,6 +24,18 @@ describe('workbench safe geometry', () => {
     expect(workbenchSafeRect({ x: 0, y: 900, width: 320, height: 300 }, { x: 0, y: 0, width: 320, height: 500 }).height).toBe(0)
   })
 
+  it.each([1, 20, 40, 50, 64])('keeps real visual-viewport space reachable when only %i pixels remain', height => {
+    const scene = { x: 0, y: 140, width: 390, height: 500 }
+    const viewport = { x: 0, y: 140, width: 390, height }
+    const bounds = workbenchSafeRect(scene, viewport)
+    expect(bounds.height).toBe(Math.min(height, Math.max(40, height - 24)))
+    const layout = layoutWorkbenchPanels(bounds, [graph, params], 'params')
+    const panel = layout.panels.params!
+    expect(panel.visible).toBe(true)
+    expect(panel.rect.height).toBeGreaterThan(0)
+    assertInside(panel.rect, bounds)
+  })
+
   it.each([532, 600, 720])('stacks the graph and quick parameters with a gap at %i available pixels', height => {
     const bounds = { x: 80, y: 100, width: 1240, height }
     // Call order must not put the bottom panel before the graph.
@@ -69,6 +81,12 @@ describe('workbench safe geometry', () => {
     expect(readWorkbenchRect('{"x":0,"y":0,"width":"400","height":300}')).toBeUndefined()
     expect(readWorkbenchRect('{"x":0,"y":0,"width":1e999,"height":300}')).toBeUndefined()
     expect(readWorkbenchRect('{')).toBeUndefined()
+  })
+
+  it('does not expose a zero-area panel while the bench is outside the visual viewport', () => {
+    const bounds = workbenchSafeRect({ x: 0, y: 900, width: 320, height: 300 }, { x: 0, y: 0, width: 320, height: 500 })
+    const layout = layoutWorkbenchPanels(bounds, [graph, params], 'params')
+    expect(Object.values(layout.panels).some(panel => panel.visible)).toBe(false)
   })
 
   it('keeps the tree and right rail apart, or switches the whole group on a narrow bench', () => {

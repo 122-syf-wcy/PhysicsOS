@@ -35,6 +35,9 @@ export interface LabEmptyStateProps {
   readonly onNewCanvas?: ExperimentPickerProps['onNewCanvas']
   readonly onAddScene?: ExperimentPickerProps['onAddScene']
   readonly onAddTemplate?: ExperimentPickerProps['onAddTemplate']
+  /** Optional student study content belongs only to the Lab's open-mode chooser. */
+  readonly practiceQuestion?: ExperimentPickerProps['practiceQuestion']
+  readonly paperApi?: ExperimentPickerProps['paperApi']
 }
 
 /**
@@ -52,6 +55,8 @@ export function LabEmptyState({
   onNewCanvas,
   onAddScene,
   onAddTemplate,
+  practiceQuestion,
+  paperApi,
 }: LabEmptyStateProps) {
   return (<>
     {routeNotice ? <div role="status" className={css.routeNotice}>{routeNotice}</div> : null}
@@ -65,6 +70,8 @@ export function LabEmptyState({
       {...(onNewCanvas === undefined ? {} : { onNewCanvas })}
       {...(onAddScene === undefined ? {} : { onAddScene })}
       {...(onAddTemplate === undefined ? {} : { onAddTemplate })}
+      {...(practiceQuestion === undefined ? {} : { practiceQuestion })}
+      {...(paperApi === undefined ? {} : { paperApi })}
     />
   </>)
 }

@@ -8,6 +8,9 @@ import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { AuthState } from '../src/client/auth-store.ts'
 import type { ChatPreviewInjected } from '../src/client/ChatPreview.tsx'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { Session } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { PhysicsSurfaceInjected } from '../src/client/LabWorkspace.tsx'
+import { GOLDEN_QUESTIONS } from '@physicsos/question-core'
 import {
   createExperimentSceneRef, findExperimentTemplate,
 } from '@deepseek-ai/dsh-client-ui-physicsos/src/client/physics/experiment-templates.ts'
@@ -17,7 +20,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-async function bench() {
+async function bench(options: { activePanelId?: string; practicePrompt?: Session['prompt'] } = {}) {
   const ctx = new Context()
   await ctx.plugin(SlotRegistry).await()
   const workspaces = {
@@ -33,17 +36,21 @@ async function bench() {
     archiveSession: vi.fn(async () => undefined),
   }
   const panelInfo = {
-    getSnapshot: () => ({ activePanelId: null }),
+    getSnapshot: () => ({ activePanelId: options.activePanelId ?? null }),
     subscribe: () => () => {},
   }
   const layout = { toggleSidebar: vi.fn(), selectPanel: vi.fn(), panelInfo }
+  const practiceSessionId = 'practice-session' as SessionId
+  const practiceSummary = { id: practiceSessionId, blank: false, retainedBy: { mainView: 1 } }
+  const practiceSession = options.practicePrompt === undefined ? undefined : { prompt: options.practicePrompt }
   const sessions = {
     list: {
-      getSnapshot: () => ({ ids: [], byId: {} }),
+      getSnapshot: () => ({ ids: practiceSession === undefined ? [] : [practiceSessionId],
+        byId: practiceSession === undefined ? {} : { [practiceSessionId]: practiceSummary } }),
       subscribe: () => () => {},
     },
-    scope: () => undefined,
-    sessionOf: () => undefined,
+    scope: () => practiceSession === undefined ? undefined : ctx,
+    sessionOf: () => practiceSession,
   }
   const connection = { api: { agentPresets: { select: vi.fn() } } }
   const conversationEvents = { register: vi.fn(() => () => {}) }
@@ -141,7 +148,7 @@ describe('ui-physicsos apply', () => {
     auth.set({ status: 'authed', user: { id: 'preview-student', schoolId: 'preview-school', schoolName: 'School',
       username: 'student', displayName: 'Student', role: 'STUDENT' } })
     const entry = b.slots.entries('conversation.session.header.utilities')[0]!
-    const face = (entry.inject as (id: SessionId) => ChatPreviewInjected)('session-1' as SessionId)
+    const face = (entry.inject as unknown as (id: SessionId) => ChatPreviewInjected)('session-1' as SessionId)
     expect(face.revealPreview(true)).toBe(true)
     expect(b.sidebarRight.openTab).toHaveBeenCalledWith('physicsos-experiment-preview')
     b.sidebarRight.openTab.mockClear()
@@ -151,7 +158,7 @@ describe('ui-physicsos apply', () => {
     expect(b.sidebarRight.openTab).not.toHaveBeenCalled()
     expect(face.revealPreview()).toBe(true)
     expect(b.sidebarRight.openTab).toHaveBeenCalledWith('physicsos-experiment-preview')
-    const stale = (entry.inject as (id: SessionId) => ChatPreviewInjected)('session-2' as SessionId)
+    const stale = (entry.inject as unknown as (id: SessionId) => ChatPreviewInjected)('session-2' as SessionId)
     expect(stale.revealPreview()).toBe(false)
     auth.set({ status: 'guest' })
     expect(face.revealPreview()).toBe(false)
@@ -162,8 +169,8 @@ describe('ui-physicsos apply', () => {
     const b = await bench()
     const fiber = b.ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
-    /* The sectioned rail presents 首页 / 物理实验室 / 出卷专区 / 反馈 / 资源库
-       itself, and 学习记录 rides the sidebar foot, so no PhysicsOS surface
+    /* The sectioned rail presents 首页 / 物理实验室 / 出卷专区 / 反馈
+       itself, and 访问与用量 rides the sidebar foot, so no PhysicsOS surface
        takes a shell panel row — a row would show the entry twice. The only row
        left is the role-gated 管理后台, and this bench carries no role. */
     expect(b.slots.entries('sidebar.nav')).toHaveLength(1)
@@ -188,6 +195,8 @@ describe('ui-physicsos apply', () => {
     const mainPanels = b.slots.entries('main')
     expect(mainPanels).toHaveLength(Object.values(PHYSICS_PANEL_IDS).length)
     expect(mainPanels.map(entry => entry.options.key)).toContain('physicsos-contribute')
+    expect(mainPanels.map(entry => entry.options.key)).not.toContain('physicsos-library')
+    expect(b.slots.entries('sidebar.panellist').map(entry => entry.options.id)).not.toContain('physicsos-library')
     expect(mainPanels.map(entry => entry.options.key))
       .toEqual(expect.arrayContaining(Object.values(PHYSICS_PANEL_IDS)))
     expect(b.slots.entries('conversation.hero.brand.mark')).toHaveLength(1)
@@ -247,6 +256,45 @@ describe('ui-physicsos apply', () => {
     expect(document.title).toBe('DeepSeek Harness')
     expect(document.head.querySelector('style[data-physicsos-chrome]')).toBeNull()
     expect(b.slots.entries('sidebar.brand.mark')).toHaveLength(0)
+  })
+
+  it('restores an old resource-panel selection to the existing Home conversation with no resource slot', async () => {
+    const b = await bench({ activePanelId: 'physicsos-library' })
+    const fiber = b.ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+    const entry = b.slots.entries('main').find(item => item.options.key === PHYSICS_PANEL_IDS.lab)!
+    const face = (entry.inject as () => Pick<PhysicsSurfaceInjected, 'hooks' | 'openSurface' | 'practiceQuestion'>)()
+    expect(face.hooks.physicsSurface.getSnapshot().surface).toBe('home')
+    expect(b.layout.selectPanel).toHaveBeenCalledWith(null)
+    expect(b.slots.entries('main').map(item => item.options.key)).not.toContain('physicsos-library')
+    await fiber.dispose()
+  })
+
+  it('hands the original golden stem to the current tutor session and returns Home only after queue acceptance', async () => {
+    const prompt = vi.fn<Session['prompt']>().mockResolvedValue({ ok: true, value: { accepted: true } })
+    const b = await bench({ practicePrompt: prompt })
+    const fiber = b.ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+    const entry = b.slots.entries('main').find(item => item.options.key === PHYSICS_PANEL_IDS.lab)!
+    const face = (entry.inject as () => Pick<PhysicsSurfaceInjected, 'hooks' | 'openSurface' | 'practiceQuestion'>)()
+    face.openSurface?.('lab')
+    expect(await face.practiceQuestion?.('missing-question')).toMatchObject({ ok: false })
+    expect(prompt).not.toHaveBeenCalled()
+    expect(face.hooks.physicsSurface.getSnapshot().surface).toBe('lab')
+    const golden = GOLDEN_QUESTIONS.find(question => question.id === '01-proton-basic')!
+    expect(await face.practiceQuestion?.(golden.id)).toEqual({ ok: true })
+    expect(prompt).toHaveBeenCalledOnce()
+    expect(prompt).toHaveBeenCalledWith([{
+      type: 'text',
+      text: `这是学生要练习的题目：\n\n${golden.text}\n\n请调用 physics_solve_question 求解（text 传上方题干原文，questionId 传 "${golden.id}"），把场景、推导步骤与验证结果展示给学生。`,
+    }], 'queue')
+    expect(face.hooks.physicsSurface.getSnapshot().surface).toBe('home')
+    expect(b.layout.selectPanel).toHaveBeenLastCalledWith(null)
+    face.openSurface?.('lab')
+    prompt.mockRejectedValueOnce(new Error('queue unavailable'))
+    await expect(face.practiceQuestion?.(golden.id)).rejects.toThrow('queue unavailable')
+    expect(face.hooks.physicsSurface.getSnapshot().surface).toBe('lab')
+    await fiber.dispose()
   })
 
   it('lands the sidebar 物理实验室 entry on the chooser and keeps the opened scene resumable', async () => {

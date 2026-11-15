@@ -1,21 +1,15 @@
 /**
- * AuthGate — the PhysicsOS 账户体系 entrance, registered into `shell.overlay`.
- *
- * Three store states plus four gate views: `loading` paints a quiet brand splash so
- * the shell never flashes through, `guest` paints the full-screen
- * login/register/forgot flow, a URL or injected reset token paints the
- * redemption form, and `authed` renders nothing so the real shell shows. All
- * session-changing submits go through the injected controller callbacks; reset
- * submits use the injected callback or the package's same-origin API fallback.
+ * AuthGate — the PhysicsOS account entrance registered into `shell.overlay`.
+ * The welcome is presentation-only. Real login, school review and recovery
+ * continue through the injected controller/API; no role or session is invented.
  */
-
-import { useEffect, useState } from 'react'
-import type { FormEvent, ReactNode } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
+import type { FormEvent, KeyboardEvent, ReactNode } from 'react'
 import clsx from 'clsx'
 import type { SnapshotStore } from './runtime-compat.ts'
 import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import { Mascot } from './Mascot.tsx'
-import { PhysicsOSMark } from './PhysicsOSMark.tsx'
+import { AuthWelcome } from './AuthWelcome.tsx'
 import {
   createAuthApi,
   type AdminApi,
@@ -29,8 +23,8 @@ import {
 } from './auth-api.ts'
 import type { AuthState } from './auth-store.ts'
 import type { PhysicsosKey } from './locales.ts'
-import { buildStamp } from './build-stamp.ts'
 import { GlassSelect } from './GlassSelect.tsx'
+import { IconObservable, IconRefresh, IconTime, IconUnverified, IconVerified } from './icons/physics-icons.tsx'
 import {
   AdminCard,
   AdminCardMeta,
@@ -45,10 +39,7 @@ export interface AuthGateInjected {
   hooks: { auth: SnapshotStore<AuthState> }
   login: (input: LoginInput) => Promise<void>
   register: (input: RegisterInput) => Promise<RegisterOutcome>
-  /**
-   * Public school lookup for the combobox. Injected rather than imported so a
-   * test can drive the dropdown without a network.
-   */
+  /** Public school lookup, injected so tests need no network. */
   searchSchools: (query: string) => Promise<{ schools: SchoolRow[] }>
   forgotPassword: (input: { username: string; schoolId?: string }) => Promise<{ ok: boolean }>
   resetPassword?: (input: { token: string; newPassword: string }) => Promise<{ ok: boolean }>
@@ -60,6 +51,14 @@ export type AuthGateProps =
   & { resetToken?: string }
 
 type View = 'login' | 'register' | 'forgot' | 'reset'
+type FieldName = 'school' | 'username' | 'displayName' | 'email' | 'password' | 'confirm' | 'terms'
+type LookupState = 'idle' | 'searching' | 'ready' | 'failed'
+interface FormError {
+  message?: string | undefined
+  key?: PhysicsosKey | undefined
+  field?: FieldName | undefined
+  code?: string | undefined
+}
 
 /** Read a reset token from either query or fragment without mutating history. */
 function readResetToken(explicit?: string): string {
@@ -73,63 +72,82 @@ function readResetToken(explicit?: string): string {
   return new URLSearchParams(fragment).get('reset_token') ?? ''
 }
 
-/** Remove a consumed token from the address bar before login is shown again. */
+/** Remove only reset parameters, preserving other URL state and router history. */
 function clearResetToken(): void {
   if (typeof window === 'undefined') return
   const url = new URL(window.location.href)
   url.searchParams.delete('reset_token')
-  window.history.replaceState({}, '', url)
+  const fragment = new URLSearchParams(url.hash.slice(1))
+  if (fragment.has('reset_token')) {
+    fragment.delete('reset_token')
+    url.hash = fragment.toString()
+  }
+  window.history.replaceState(window.history.state, '', url)
 }
 
-/** The eye/eye-off affordance inside the password field. */
-const EyeIcon = ({ hidden }: { hidden: boolean }): ReactNode => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
-    <path
-      d="M2.4 12s3.6-6.6 9.6-6.6S21.6 12 21.6 12 18 18.6 12 18.6 2.4 12 2.4 12Z"
-      stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"
-    />
-    {hidden
-      ? <path d="M4 20 20 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      : <circle cx="12" cy="12" r="2.8" stroke="currentColor" strokeWidth="1.5" />}
+/** Preserve the existing eye-off SVG; visible eye reuses the semantic icon set. */
+const HiddenEyeIcon = (): ReactNode => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <path d="M2.4 12s3.6-6.6 9.6-6.6S21.6 12 21.6 12 18 18.6 12 18.6 2.4 12 2.4 12Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    <path d="M4 20 20 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
   </svg>
 )
 
-/** Brand chrome shared by every gate view. */
-function GateChrome({ t, children, heading = 'auth.login.title' }: { t: (key: PhysicsosKey) => string; children: ReactNode; heading?: PhysicsosKey }) {
+/** Explicit label association avoids wrapping an input and eye button in a label. */
+function Field({ label, id, invalid, hint, children }: {
+  label: string; id?: string | undefined; invalid?: boolean | undefined; hint?: string | undefined; children: ReactNode
+}) {
   return (
-    <div className={css.gate} data-physicsos-auth-gate="">
-      <header className={css.topbar}>
-        <span className={css.wordmark}>
-          <PhysicsOSMark size={18} className={css.wordmarkIcon} />
-          {t('brand.name')}
-        </span>
-        <span className={css.topLinks}>{t('auth.topLinks')}</span>
-      </header>
-      <main className={css.stage}>
-        <section className={css.authCard}>
-          <PhysicsOSMark size={52} className={css.heroMark} />
-          <h1 className={css.tagline}>{t(heading)}</h1>
-          <p className={css.support}>{t(heading === 'auth.login.title' ? 'auth.login.support' : 'auth.support')}</p>
-          {children}
-        </section>
-      </main>
-      <footer className={css.footer}>
-        {t('auth.footerLinks')}
-        {/* 登录页也要有版本戳:没登进来的用户同样会报障,而这是他们唯一能看
-            到的地方。 */}
-        <span className={css.buildStamp} data-build-stamp>{buildStamp()}</span>
-      </footer>
+    <div className={css.field}>
+      <label htmlFor={id} className={clsx(css.fieldLabel, invalid === true && css.fieldLabelInvalid)}>{label}</label>
+      {children}
+      {hint !== undefined && <p className={css.fieldHint} id={`${id}-hint`}>{hint}</p>}
     </div>
   )
 }
 
-/** One labeled field row of the gate form. */
-function Field({ label, invalid, children }: { label: string; invalid?: boolean; children: ReactNode }) {
+function PasswordInput({ id, name, value, onChange, autoComplete, invalid, describedBy, t }: {
+  id: string; name: 'password' | 'confirm'; value: string; onChange: (value: string) => void
+  autoComplete: 'new-password' | 'current-password'; invalid: boolean; describedBy?: string | undefined
+  t: (key: PhysicsosKey) => string
+}) {
+  const [visible, setVisible] = useState(false)
   return (
-    <label className={css.field}>
-      <span className={clsx(css.fieldLabel, invalid === true && css.fieldLabelInvalid)}>{label}</span>
-      {children}
-    </label>
+    <div className={css.passwordWrap}>
+      <input
+        id={id}
+        name={name}
+        className={css.input}
+        type={visible ? 'text' : 'password'}
+        autoComplete={autoComplete}
+        value={value}
+        required
+        aria-invalid={invalid || undefined}
+        aria-describedby={describedBy}
+        onChange={(event) => { onChange(event.target.value) }}
+      />
+      <button
+        type="button"
+        className={css.eye}
+        aria-label={t(name === 'confirm'
+          ? visible ? 'auth.confirm.hide' : 'auth.confirm.show'
+          : visible ? 'auth.password.hide' : 'auth.password.show')}
+        aria-pressed={visible}
+        aria-controls={id}
+        onClick={() => { setVisible(current => !current) }}
+      >
+        {visible ? <IconObservable size={20} /> : <HiddenEyeIcon />}
+      </button>
+    </div>
+  )
+}
+
+function SubmitButton({ busy, label, t }: { busy: boolean; label: PhysicsosKey; t: (key: PhysicsosKey) => string }) {
+  return (
+    <button type="submit" className={css.submit} disabled={busy}>
+      {busy && <span className={css.spinner} aria-hidden="true" />}
+      {t(busy ? 'auth.busy' : label)}
+    </button>
   )
 }
 
@@ -140,511 +158,506 @@ export function AuthGate({
   const [token, setToken] = useState(() => readResetToken(resetToken))
   const [view, setView] = useState<View>(token === '' ? 'login' : 'reset')
   const [schoolName, setSchoolName] = useState('')
-  const [candidates, setCandidates] = useState<SchoolRow[] | undefined>()
+  const [candidates, setCandidates] = useState<SchoolRow[]>()
   const [schoolPick, setSchoolPick] = useState('')
+  const [selectedSchool, setSelectedSchool] = useState<SchoolRow>()
   const [username, setUsername] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [remember, setRemember] = useState(false)
   const [terms, setTerms] = useState(false)
-  const [showPassword, setShowPassword] = useState(false)
-  const [error, setError] = useState('')
+  const [email, setEmail] = useState('')
+  const [error, setError] = useState<FormError>()
   const [busy, setBusy] = useState(false)
   const [forgotSent, setForgotSent] = useState(false)
   const [resetSent, setResetSent] = useState(false)
-  const [email, setEmail] = useState('')
-  /* Live combobox results; `searched` distinguishes "still typing" from "the
-     roster really has nothing for this name", which is what turns the hint on. */
-  const [options, setOptions] = useState<SchoolRow[] | undefined>()
-  const [searched, setSearched] = useState(false)
-  /* Receipt for a registration parked behind a school application. */
-  const [pendingReview, setPendingReview] = useState<
-    Extract<RegisterOutcome, { kind: 'pending' }> | undefined
-  >()
+  const [options, setOptions] = useState<SchoolRow[]>()
+  const [lookup, setLookup] = useState<LookupState>('idle')
+  const [lookupAttempt, setLookupAttempt] = useState(0)
+  const [schoolOpen, setSchoolOpen] = useState(false)
+  const [activeSchool, setActiveSchool] = useState(-1)
+  const [pendingReview, setPendingReview] = useState<Extract<RegisterOutcome, { kind: 'pending' }>>()
+  const formRef = useRef<HTMLFormElement>(null)
+  const errorRef = useRef<HTMLParagraphElement>(null)
+  const schoolInputRef = useRef<HTMLInputElement>(null)
+  const busyRef = useRef(false)
+  const id = useId()
+  const fieldId = (name: FieldName): string => `${id}-${name}`
+  const errorId = `${id}-error`
+  const listId = `${id}-school-options`
+  const errorText = error?.key !== undefined ? t(error.key) : error?.message ?? ''
+
+  const stopBusy = (): void => { busyRef.current = false; setBusy(false) }
+  const clearFieldError = (name: FieldName): void => {
+    setError(current => current?.field === name ? undefined : current)
+  }
+  const fail = (key: PhysicsosKey, field?: FieldName): void => { setError({ key, field }) }
+  const invalid = (name: FieldName): boolean => error?.field === name
+  const describe = (name: FieldName, hint = false): string | undefined => {
+    const ids = [hint ? `${fieldId(name)}-hint` : '', invalid(name) ? errorId : ''].filter(Boolean)
+    return ids.length === 0 ? undefined : ids.join(' ')
+  }
 
   const switchView = (next: View): void => {
+    if (busyRef.current) return
+    const recoverySchool = next === 'forgot'
+      ? selectedSchool ?? candidates?.find(school => school.id === schoolPick)
+      : undefined
     setView(next)
-    setError('')
+    setError(undefined)
     setForgotSent(false)
     setResetSent(false)
     setCandidates(undefined)
     setOptions(undefined)
-    setSearched(false)
-    setSchoolPick('')
+    setLookup('idle')
+    setSchoolOpen(false)
+    setActiveSchool(-1)
+    setSchoolPick(recoverySchool?.id ?? '')
+    setSelectedSchool(recoverySchool)
+    if (next === 'forgot') setSchoolName(recoverySchool?.name ?? '')
+    // Never carry a newly chosen/redeemed password into the login fields.
+    if (view === 'reset' || next === 'forgot') { setPassword(''); setConfirm('') }
   }
 
-  const run = async (
-    action: () => Promise<void>,
-    onError?: (cause: AuthApiError) => void,
-  ): Promise<void> => {
+  const run = async (action: () => Promise<void>, onError?: (cause: AuthApiError) => void): Promise<void> => {
+    // Ref closes the same-tick keyboard/double-click gap before React disables controls.
+    if (busyRef.current) return
+    busyRef.current = true
     setBusy(true)
-    setError('')
+    setError(undefined)
     try {
       await action()
+      // Login/registered success stays busy until the real controller reloads.
+      // Receipt-producing actions explicitly release busy only after their response.
     } catch (cause) {
-      const apiError = cause instanceof Error ? cause : new Error(t('auth.error.unknown'))
-      setError(apiError.message)
-      onError?.(apiError as AuthApiError)
-      setBusy(false)
+      const apiError = cause instanceof Error ? cause as AuthApiError : undefined
+      const code = apiError?.code
+      const field: FieldName | undefined = code === 'SCHOOL_REQUIRED' || code === 'SCHOOL_AMBIGUOUS' ? 'school'
+        : code === 'USERNAME_TAKEN' ? 'username' : code === 'INVALID_CREDENTIALS' ? 'password' : undefined
+      if (apiError instanceof TypeError || /failed to fetch|networkerror|load failed/i.test(apiError?.message ?? '')) {
+        setError({ key: 'auth.error.network' })
+      } else {
+        setError(apiError?.message ? { message: apiError.message, code, field } : { key: 'auth.error.unknown' })
+      }
+      if (apiError !== undefined) onError?.(apiError)
+      stopBusy()
     }
-    /* Success never clears `busy`: the controller reloads the page. */
   }
 
   const showCandidates = (cause: AuthApiError, code: string): void => {
-    if (cause.code !== code || cause.candidates === undefined) return
-    const first = cause.candidates[0]
-    if (first === undefined) return
+    if (cause.code !== code || cause.candidates === undefined || cause.candidates.length === 0) return
     setCandidates(cause.candidates)
-    setSchoolPick(first.id)
+    setSchoolPick('')
+    setSelectedSchool(undefined)
+    setActiveSchool(-1)
+    setSchoolOpen(true)
   }
 
-  /* Same-name schools only differ by region — the picker's label carries it. */
   const candidateLabel = (school: SchoolRow): string => {
     const region = [school.city, school.county].filter(Boolean).join(' ')
     return region === '' ? school.name : `${school.name}（${region}）`
   }
 
-  /* Debounced lookup: one request per typing pause, not per keystroke. The
-     cancellation flag keeps an older reply from overwriting a newer query. */
+  // Both registration and optional recovery lookup use the existing public API.
+  // Cancellation prevents old answers from replacing a new query or chosen tenant.
   useEffect(() => {
-    if (view !== 'register' || status === 'authed') return
+    if ((view !== 'register' && view !== 'forgot') || status === 'authed' || pendingReview !== undefined) return
     const needle = schoolName.trim()
-    if (needle.length < 1) {
+    if (needle === '' || schoolPick !== '' || candidates !== undefined) {
       setOptions(undefined)
-      setSearched(false)
+      setLookup('idle')
       return
     }
     let cancelled = false
+    setOptions(undefined)
+    setLookup('searching')
+    setActiveSchool(-1)
     const timer = setTimeout(() => {
-      void searchSchools(needle)
-        .then((result) => {
-          if (cancelled) return
-          setOptions(result.schools)
-          setSearched(true)
-        })
-        .catch(() => {
-          /* A lookup failure must not block registration: the roster path on
-             the host still answers, and an unlisted name parks for review. */
-          if (cancelled) return
-          setOptions([])
-          setSearched(true)
-        })
+      void searchSchools(needle).then((result) => {
+        if (cancelled) return
+        setOptions(result.schools)
+        setLookup('ready')
+      }).catch(() => {
+        if (cancelled) return
+        // A failed connection is not evidence that the school is unlisted.
+        setOptions(undefined)
+        setLookup('failed')
+      })
     }, 250)
     return () => { cancelled = true; clearTimeout(timer) }
-  }, [schoolName, view, searchSchools, status])
+  }, [schoolName, schoolPick, candidates, view, searchSchools, status, lookupAttempt, pendingReview])
 
-  if (status === 'authed' && token === '') return null
+  // A visible, announced error also receives keyboard focus. Client errors focus
+  // the offending control; server/network errors focus the non-secret summary.
+  useEffect(() => {
+    if (error === undefined) return
+    const field = error.field === 'school' && view === 'login'
+      ? formRef.current?.querySelector<HTMLElement>('[data-testid="login-school"]')
+      : error.field === undefined ? undefined : formRef.current?.querySelector<HTMLElement>(`[name="${error.field}"]`)
+    const target = field ?? errorRef.current
+    target?.focus()
+  }, [error, view])
+
+  useEffect(() => {
+    if (activeSchool < 0) return
+    const option = document.getElementById(`${listId}-${activeSchool}`)
+    if (typeof option?.scrollIntoView === 'function') option.scrollIntoView({ block: 'nearest' })
+  }, [activeSchool, listId])
 
   const chooseSchool = (school: SchoolRow): void => {
     setSchoolName(school.name)
     setSchoolPick(school.id)
+    setSelectedSchool(school)
     setOptions(undefined)
-    setSearched(false)
     setCandidates(undefined)
+    setLookup('idle')
+    setSchoolOpen(false)
+    setActiveSchool(-1)
+    clearFieldError('school')
+    schoolInputRef.current?.focus({ preventScroll: true })
   }
 
-  /* The dropdown shows live search results, or the disambiguation candidates
-     the host returned for an ambiguous name. One list, two sources. */
-  const dropdown: SchoolRow[] | undefined = candidates ?? options
+  const dropdown = candidates ?? options
+  const dropdownVisible = schoolOpen && dropdown !== undefined && dropdown.length > 0
+  const schoolKeyboard = (event: KeyboardEvent<HTMLInputElement>): void => {
+    if (event.key === 'Escape') { setSchoolOpen(false); setActiveSchool(-1); return }
+    if (dropdown === undefined || dropdown.length === 0) return
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      setSchoolOpen(true)
+      setActiveSchool(current => event.key === 'ArrowDown'
+        ? (current + 1) % dropdown.length : current <= 0 ? dropdown.length - 1 : current - 1)
+    } else if (event.key === 'Enter' && dropdownVisible && activeSchool >= 0 && !event.nativeEvent.isComposing) {
+      const school = dropdown[activeSchool]
+      if (school === undefined) return
+      event.preventDefault()
+      chooseSchool(school)
+    }
+  }
 
   const submitLogin = (event: FormEvent): void => {
     event.preventDefault()
-    if (username.trim() === '' || password === '') { setError(t('auth.error.needCredentials')); return }
-    void run(
-      () => login({
-        username: username.trim(),
-        password,
-        rememberDevice: remember,
-        ...(schoolPick === '' ? {} : { schoolId: schoolPick }),
-      }),
-      (cause) => { showCandidates(cause, 'SCHOOL_REQUIRED') },
-    )
+    if (busyRef.current) return
+    if (username.trim() === '') { fail('auth.error.needCredentials', 'username'); return }
+    if (password === '') { fail('auth.error.needCredentials', 'password'); return }
+    if (candidates !== undefined && schoolPick === '') { fail('auth.error.chooseSchool', 'school'); return }
+    void run(() => login({
+      username: username.trim(), password, rememberDevice: remember,
+      ...(schoolPick === '' ? {} : { schoolId: schoolPick }),
+    }), cause => { showCandidates(cause, 'SCHOOL_REQUIRED') })
   }
 
   const submitRegister = (event: FormEvent): void => {
     event.preventDefault()
-    if (schoolName.trim() === '') { setError(t('auth.error.needSchool')); return }
-    if (!/^[a-zA-Z0-9_.-]{3,32}$/.test(username.trim())) { setError(t('auth.error.usernameFormat')); return }
-    if (displayName.trim() === '') { setError(t('auth.error.needName')); return }
-    if (email.trim() === '') { setError(t('auth.error.needEmail')); return }
-    if (!/^[^@\s]+@[^@\s.]+\.[^@\s.]+$/.test(email.trim())) { setError(t('auth.error.emailFormat')); return }
-    if (password.length < 8) { setError(t('auth.error.passwordShort')); return }
-    if (password !== confirm) { setError(t('auth.error.passwordMismatch')); return }
-    if (!terms) { setError(t('auth.error.needTerms')); return }
-    void run(
-      async () => {
-        const outcome = await register({
-          schoolName: schoolName.trim(),
-          ...(schoolPick === '' ? {} : { schoolId: schoolPick }),
-          username: username.trim(),
-          displayName: displayName.trim(),
-          password,
-          email: email.trim(),
-        })
-        /* Parked for review: there is no session, so show the receipt and let
-           the student go back to the login form. */
-        if (outcome.kind === 'pending') {
-          setPendingReview(outcome)
-          setBusy(false)
-        }
-      },
-      (cause) => { showCandidates(cause, 'SCHOOL_AMBIGUOUS') },
-    )
+    if (busyRef.current) return
+    if (schoolName.trim() === '') { fail('auth.error.needSchool', 'school'); return }
+    if (candidates !== undefined && schoolPick === '') { fail('auth.error.chooseSchool', 'school'); return }
+    if (!/^[a-zA-Z0-9_.-]{3,32}$/.test(username.trim())) { fail('auth.error.usernameFormat', 'username'); return }
+    if (displayName.trim() === '') { fail('auth.error.needName', 'displayName'); return }
+    if (email.trim() === '') { fail('auth.error.needEmail', 'email'); return }
+    if (!/^[^@\s]+@[^@\s.]+\.[^@\s.]+$/.test(email.trim())) { fail('auth.error.emailFormat', 'email'); return }
+    if (password.length < 8) { fail('auth.error.passwordShort', 'password'); return }
+    if (password !== confirm) { fail('auth.error.passwordMismatch', 'confirm'); return }
+    if (!terms) { fail('auth.error.needTerms', 'terms'); return }
+    void run(async () => {
+      const outcome = await register({
+        schoolName: schoolName.trim(), ...(schoolPick === '' ? {} : { schoolId: schoolPick }),
+        username: username.trim(), displayName: displayName.trim(), password, email: email.trim(),
+      })
+      if (outcome.kind === 'pending') {
+        setPendingReview(outcome)
+        setPassword('')
+        setConfirm('')
+        stopBusy()
+      }
+    }, cause => { showCandidates(cause, 'SCHOOL_AMBIGUOUS') })
   }
 
   const submitForgot = (event: FormEvent): void => {
     event.preventDefault()
-    if (username.trim() === '') { setError(t('auth.error.needUsername')); return }
+    if (busyRef.current) return
+    if (username.trim() === '') { fail('auth.error.needUsername', 'username'); return }
+    if (schoolName.trim() !== '' && schoolPick === '') { fail('auth.error.chooseSchool', 'school'); return }
     void run(async () => {
-      await forgotPassword({ username: username.trim() })
+      const result = await forgotPassword({ username: username.trim(), ...(schoolPick === '' ? {} : { schoolId: schoolPick }) })
+      if (!result.ok) throw new Error(t('auth.error.unknown'))
       setForgotSent(true)
-      setBusy(false)
+      stopBusy()
     })
   }
 
   const submitReset = (event: FormEvent): void => {
     event.preventDefault()
-    if (password.length < 8) { setError(t('auth.error.passwordShort')); return }
-    if (password !== confirm) { setError(t('auth.error.passwordMismatch')); return }
+    if (busyRef.current) return
+    if (password.length < 8) { fail('auth.error.passwordShort', 'password'); return }
+    if (password !== confirm) { fail('auth.error.passwordMismatch', 'confirm'); return }
     void run(async () => {
       const send = resetPassword ?? createAuthApi().resetPassword
-      await send({ token, newPassword: password })
+      const result = await send({ token, newPassword: password })
+      if (!result.ok) throw new Error(t('auth.error.unknown'))
       clearResetToken()
+      setPassword('')
+      setConfirm('')
       setResetSent(true)
-      setBusy(false)
+      stopBusy()
     })
   }
 
-  /* A registration parked behind a school application: no session exists, so
-     the gate becomes a receipt instead of the shell. */
-  if (pendingReview !== undefined) {
-    return (
-      <GateChrome t={t} heading="auth.pending.title">
-        <div className={css.form} data-physicsos-auth-view="pending">
-          <p className={css.receipt}>{t('auth.pending.body')}</p>
-          <dl className={css.receiptList}>
-            <div>
-              <dt>{t('auth.school.label')}</dt>
-              <dd>{pendingReview.schoolName}</dd>
-            </div>
-            <div>
-              <dt>{t('auth.username.label')}</dt>
-              <dd>{pendingReview.username}</dd>
-            </div>
-            <div>
-              <dt>{t('auth.email.label')}</dt>
-              <dd>{pendingReview.email}</dd>
-            </div>
-          </dl>
-          <button
-            type="button"
-            className={css.submit}
-            onClick={() => {
-              setPendingReview(undefined)
-              setPassword('')
-              setConfirm('')
-              switchView('login')
-            }}
-          >
-            {t('auth.pending.back')}
+  // Every hook stays above the session fast path; the real store owns access.
+  if (status === 'authed' && token === '') return null
+
+  const feedback = errorText !== '' && (
+    <p ref={errorRef} id={errorId} className={css.error} role="alert" tabIndex={-1}>{errorText}</p>
+  )
+  const passwordControl = (
+    <Field label={t('auth.password.label')} id={fieldId('password')} invalid={invalid('password')}
+      hint={view === 'register' || view === 'reset' ? t('auth.password.hint') : undefined}>
+      <PasswordInput key={view} id={fieldId('password')} name="password" value={password}
+        onChange={(value) => { setPassword(value); clearFieldError('password') }}
+        autoComplete={view === 'register' || view === 'reset' ? 'new-password' : 'current-password'}
+        invalid={invalid('password')} describedBy={describe('password', view === 'register' || view === 'reset')} t={t} />
+    </Field>
+  )
+  const confirmControl = (
+    <Field label={t('auth.confirm.label')} id={fieldId('confirm')} invalid={invalid('confirm')}>
+      <PasswordInput key={view} id={fieldId('confirm')} name="confirm" value={confirm}
+        onChange={(value) => { setConfirm(value); clearFieldError('confirm') }} autoComplete="new-password"
+        invalid={invalid('confirm')} describedBy={describe('confirm')} t={t} />
+    </Field>
+  )
+  const schoolControl = (
+    <div className={css.schoolField} onBlur={(event) => {
+      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) { setSchoolOpen(false); setActiveSchool(-1) }
+    }}>
+      <Field label={t(view === 'forgot' ? 'auth.school.optional' : 'auth.school.label')} id={fieldId('school')}
+        invalid={invalid('school')} hint={t(view === 'forgot' ? 'auth.school.recoveryHint' : 'auth.school.hint')}>
+        <input ref={schoolInputRef} id={fieldId('school')} name="school" className={css.input} type="text" autoComplete="organization"
+          placeholder={t('auth.school.registerPlaceholder')} value={schoolName} required={view === 'register'}
+          role="combobox" aria-autocomplete="list" aria-expanded={dropdownVisible} aria-controls={dropdownVisible ? listId : undefined}
+          aria-activedescendant={dropdownVisible && activeSchool >= 0 ? `${listId}-${activeSchool}` : undefined}
+          aria-invalid={invalid('school') || undefined} aria-describedby={describe('school', true)}
+          onFocus={() => { setSchoolOpen(true) }} onKeyDown={schoolKeyboard}
+          onChange={(event) => {
+            setSchoolName(event.target.value)
+            setSchoolPick('')
+            setSelectedSchool(undefined)
+            setCandidates(undefined)
+            setOptions(undefined)
+            setSchoolOpen(true)
+            setActiveSchool(-1)
+            clearFieldError('school')
+          }} />
+      </Field>
+      {dropdownVisible && dropdown !== undefined && (
+        <ul className={css.options} id={listId} role="listbox" aria-label={t('auth.school.pick')} data-testid="school-options">
+          {dropdown.map((school, index) => (
+            <li key={school.id} role="presentation">
+              <button id={`${listId}-${index}`} type="button" role="option" className={css.option}
+                data-testid="school-option" data-school-id={school.id} data-active={activeSchool === index || undefined}
+                aria-selected={schoolPick === school.id} onPointerDown={(event) => { event.preventDefault() }}
+                onClick={() => { chooseSchool(school) }}>
+                {candidateLabel(school)}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {lookup === 'searching' && <p className={css.lookupStatus} role="status">{t('auth.school.searching')}</p>}
+      {lookup === 'failed' && (
+        <div className={css.lookupFailed} data-testid="school-lookup-failed">
+          <p role="status"><IconUnverified size={18} />{t(view === 'forgot' ? 'auth.school.recoveryLookupFailed' : 'auth.school.lookupFailed')}</p>
+          <button type="button" className={css.retryButton} onClick={() => { setLookupAttempt(current => current + 1) }}>
+            <IconRefresh size={16} />{t('auth.school.retry')}
           </button>
         </div>
-      </GateChrome>
+      )}
+      {view === 'register' && lookup === 'ready' && options?.length === 0 && schoolPick === '' && schoolName.trim().length >= 2 && (
+        <p className={css.schoolNotice} data-testid="school-not-found">{t('auth.school.notFound')}</p>
+      )}
+      {view === 'forgot' && lookup === 'ready' && options?.length === 0 && schoolPick === '' && schoolName.trim().length >= 1 && (
+        <p className={css.schoolNotice} role="status">{t('auth.school.recoveryNotFound')}</p>
+      )}
+      {selectedSchool !== undefined && (
+        <p className={css.schoolSelected} role="status">{candidateLabel(selectedSchool)}</p>
+      )}
+    </div>
+  )
+
+  if (pendingReview !== undefined) {
+    return (
+      <AuthWelcome t={t} view="pending">
+        {() => (
+          <div className={css.form} data-physicsos-auth-view="pending">
+            <div className={css.receiptIcon} aria-hidden="true"><IconTime size={28} /></div>
+            <p className={css.receipt} role="status">{t('auth.pending.body')}</p>
+            <dl className={css.receiptList}>
+              <div><dt>{t('auth.school.label')}</dt><dd>{pendingReview.schoolName}</dd></div>
+              <div><dt>{t('auth.username.label')}</dt><dd>{pendingReview.username}</dd></div>
+              <div><dt>{t('auth.email.label')}</dt><dd>{pendingReview.email}</dd></div>
+              <div><dt>{t('auth.pending.reference')}</dt><dd className={css.receiptReference}>{pendingReview.requestId}</dd></div>
+            </dl>
+            <p className={css.receiptNext}>{t('auth.pending.next')}</p>
+            <button type="button" className={css.submit} onClick={() => { setPendingReview(undefined); switchView('login') }}>
+              {t('auth.pending.back')}
+            </button>
+          </div>
+        )}
+      </AuthWelcome>
     )
   }
 
   if (status === 'loading' && token === '') {
     return (
-      <GateChrome t={t}>
-        <div className={css.form} aria-busy="true" aria-label={t('auth.busy')}>
-          <Mascot pose="think" size={112} />
-          <span className={css.loadingDot} />
-        </div>
-      </GateChrome>
+      <AuthWelcome t={t} view="loading">
+        {() => (
+          <div className={clsx(css.form, css.loading)} aria-busy="true" role="status" aria-label={t('auth.busy')}>
+            <Mascot pose="think" size={148} float={false} />
+            <span className={css.loadingDot} aria-hidden="true" />
+          </div>
+        )}
+      </AuthWelcome>
     )
   }
 
-  const passwordField = (
-    <div className={css.passwordWrap}>
-      <input
-        className={css.input}
-        type={showPassword ? 'text' : 'password'}
-        autoComplete={view === 'register' || view === 'reset' ? 'new-password' : 'current-password'}
-        value={password}
-        onChange={(event) => { setPassword(event.target.value) }}
-      />
-      <button
-        type="button"
-        className={css.eye}
-        aria-label={showPassword ? t('auth.password.hide') : t('auth.password.show')}
-        onClick={() => { setShowPassword(current => !current) }}
-      >
-        <EyeIcon hidden={!showPassword} />
-      </button>
-    </div>
-  )
+  const back = view === 'login' ? undefined : (): void => {
+    if (view === 'reset') { clearResetToken(); setToken('') }
+    switchView('login')
+  }
 
   return (
-    <GateChrome t={t} heading={view === 'login' ? 'auth.login.title' : view === 'register' ? 'auth.register.title' : view === 'forgot' ? 'auth.forgot.title' : 'auth.reset.title'}>
-      {view === 'login' && (
-        <form className={css.form} onSubmit={submitLogin} noValidate data-physicsos-auth-view="login">
-          <Field label={t('auth.username.label')}>
-            <input
-              className={css.input}
-              type="text"
-              autoComplete="username"
-              value={username}
-              onChange={(event) => {
-                setUsername(event.target.value)
-                setCandidates(undefined)
-                setSchoolPick('')
-              }}
-            />
-          </Field>
-          {candidates !== undefined && (
-            <Field label={t('auth.school.pick')}>
-              <GlassSelect
-                className={css.select}
-                value={schoolPick}
-                ariaLabel={t('auth.school.pick')}
-                testId="login-school"
-                placeholder={t('auth.school.pick')}
-                options={candidates.map(school => ({ value: school.id, label: candidateLabel(school) }))}
-                onChange={setSchoolPick}
-              />
-            </Field>
+    <AuthWelcome t={t} view={view} busy={busy} onBack={resetSent || forgotSent ? undefined : back}
+      heading={forgotSent ? 'auth.forgot.receivedTitle' : resetSent ? 'auth.reset.doneTitle' : undefined}>
+      {({ showInfo }) => (
+        <>
+          {view === 'login' && (
+            <form ref={formRef} className={css.form} onSubmit={submitLogin} noValidate aria-busy={busy} data-physicsos-auth-view="login">
+              {feedback}
+              <fieldset className={css.formControls} disabled={busy}>
+                <Field label={t('auth.username.label')} id={fieldId('username')} invalid={invalid('username')}>
+                  <input id={fieldId('username')} name="username" className={css.input} type="text" autoComplete="username" autoCapitalize="none" spellCheck={false}
+                    placeholder={t('auth.username.loginPlaceholder')} value={username} required aria-invalid={invalid('username') || undefined}
+                    aria-describedby={describe('username')} onChange={(event) => {
+                      setUsername(event.target.value); setCandidates(undefined); setSchoolPick(''); setSelectedSchool(undefined); clearFieldError('username')
+                    }} />
+                </Field>
+                {candidates !== undefined && (
+                  <Field label={t('auth.school.pick')} invalid={invalid('school')}>
+                    <GlassSelect className={css.select} value={schoolPick} ariaLabel={t('auth.school.pick')} testId="login-school"
+                      placeholder={t('auth.school.pick')} options={candidates.map(school => ({ value: school.id, label: candidateLabel(school) }))}
+                      disabled={busy} onChange={(value) => { setSchoolPick(value); clearFieldError('school') }} />
+                  </Field>
+                )}
+                {passwordControl}
+                <div className={css.row}>
+                  <label className={css.checkbox} htmlFor={`${id}-remember`}>
+                    <input id={`${id}-remember`} name="remember" type="checkbox" checked={remember}
+                      onChange={(event) => { setRemember(event.target.checked) }} />
+                    <span>{t('auth.remember')}</span>
+                  </label>
+                  <button type="button" className={css.link} onClick={() => { switchView('forgot') }}>{t('auth.forgot.link')}</button>
+                </div>
+                <SubmitButton busy={busy} label="auth.login.submit" t={t} />
+                <p className={css.alt}>{t('auth.login.noAccount')}
+                  <button type="button" className={css.link} onClick={() => { switchView('register') }}>{t('auth.login.toRegister')}</button>
+                </p>
+              </fieldset>
+              <p className={css.roleNote}>{t('auth.welcome.loginRoles')}</p>
+            </form>
           )}
-          <Field label={t('auth.password.label')}>
-            {passwordField}
-          </Field>
-          <div className={css.row}>
-            <label className={css.checkbox}>
-              <input
-                type="checkbox"
-                checked={remember}
-                onChange={(event) => { setRemember(event.target.checked) }}
-              />
-              <span>{t('auth.remember')}</span>
-            </label>
-            <button type="button" className={css.link} onClick={() => { switchView('forgot') }}>
-              {t('auth.forgot.link')}
-            </button>
-          </div>
-          {error !== '' && <p className={css.error} role="alert">{error}</p>}
-          <button type="submit" className={css.submit} disabled={busy}>
-            {busy ? t('auth.busy') : t('auth.login.submit')}
-          </button>
-          <p className={css.alt}>
-            {t('auth.login.noAccount')}
-            <button type="button" className={css.link} onClick={() => { switchView('register') }}>
-              {t('auth.login.toRegister')}
-            </button>
-          </p>
-        </form>
-      )}
 
-      {view === 'register' && (
-        <form className={css.form} onSubmit={submitRegister} noValidate data-physicsos-auth-view="register">
-
-          <Field label={t('auth.school.label')} invalid={error !== '' && schoolName.trim() === ''}>
-            <input
-              className={css.input}
-              type="text"
-              autoComplete="organization"
-              placeholder={t('auth.school.registerPlaceholder')}
-              value={schoolName}
-              role="combobox"
-              aria-expanded={dropdown !== undefined && dropdown.length > 0}
-              aria-controls="physicsos-school-options"
-              onChange={(event) => {
-                setSchoolName(event.target.value)
-                setCandidates(undefined)
-                setSchoolPick('')
-              }}
-            />
-          </Field>
-          {/* Quick picks for what the student is typing. Selecting one pins the
-              tenant id, so the host never has to guess between same-name
-              schools. */}
-          {dropdown !== undefined && dropdown.length > 0 && (
-            <ul className={css.options} id="physicsos-school-options" data-testid="school-options">
-              {dropdown.map(school => (
-                <li key={school.id}>
-                  <button
-                    type="button"
-                    className={css.option}
-                    data-testid="school-option"
-                    data-school-id={school.id}
-                    aria-selected={schoolPick === school.id}
-                    onClick={() => { chooseSchool(school) }}
-                  >
-                    {candidateLabel(school)}
-                  </button>
-                </li>
-              ))}
-            </ul>
+          {view === 'register' && (
+            <form ref={formRef} className={css.form} onSubmit={submitRegister} noValidate aria-busy={busy} data-physicsos-auth-view="register">
+              <div className={css.registrationRole}>
+                <span>{t('auth.welcome.studentAccount')}</span>
+                <button type="button" className={css.link} onClick={() => { showInfo('roles') }}>{t('auth.welcome.teacherHelp')}</button>
+              </div>
+              {feedback}
+              <fieldset className={css.formControls} disabled={busy}>
+                {schoolControl}
+                <div className={css.identityFields}>
+                  <Field label={t('auth.username.label')} id={fieldId('username')} invalid={invalid('username')} hint={t('auth.username.hint')}>
+                    <input id={fieldId('username')} name="username" className={css.input} type="text" autoComplete="username" autoCapitalize="none" spellCheck={false}
+                      placeholder={t('auth.username.registerPlaceholder')} value={username} required aria-invalid={invalid('username') || undefined}
+                      aria-describedby={describe('username', true)}
+                      onChange={(event) => { setUsername(event.target.value); clearFieldError('username') }} />
+                  </Field>
+                  <Field label={t('auth.displayName.label')} id={fieldId('displayName')} invalid={invalid('displayName')}>
+                    <input id={fieldId('displayName')} name="displayName" className={css.input} type="text" autoComplete="name"
+                      placeholder={t('auth.displayName.placeholder')} value={displayName} required aria-invalid={invalid('displayName') || undefined}
+                      aria-describedby={describe('displayName')} onChange={(event) => { setDisplayName(event.target.value); clearFieldError('displayName') }} />
+                  </Field>
+                </div>
+                <Field label={t('auth.email.label')} id={fieldId('email')} invalid={invalid('email')} hint={t('auth.email.hint')}>
+                  <input id={fieldId('email')} name="email" className={css.input} type="email" autoComplete="email" inputMode="email" autoCapitalize="none" spellCheck={false}
+                    placeholder={t('auth.email.placeholder')} value={email} data-testid="register-email" required
+                    aria-invalid={invalid('email') || undefined} aria-describedby={describe('email', true)}
+                    onChange={(event) => { setEmail(event.target.value); clearFieldError('email') }} />
+                </Field>
+                <div className={css.passwordFields}>{passwordControl}{confirmControl}</div>
+                <div className={css.termsRow}>
+                  <label className={css.checkbox} htmlFor={fieldId('terms')}>
+                    <input id={fieldId('terms')} name="terms" type="checkbox" checked={terms}
+                      aria-invalid={invalid('terms') || undefined} aria-describedby={describe('terms')}
+                      onChange={(event) => { setTerms(event.target.checked); clearFieldError('terms') }} />
+                    <span>{t('auth.terms')}</span>
+                  </label>
+                  <button type="button" className={css.link} onClick={() => { showInfo('terms') }}>{t('auth.terms.read')}</button>
+                </div>
+                <SubmitButton busy={busy} label="auth.register.submit" t={t} />
+                <p className={css.alt}>{t('auth.register.hasAccount')}
+                  <button type="button" className={css.link} onClick={() => { switchView('login') }}>{t('auth.register.toLogin')}</button>
+                </p>
+              </fieldset>
+            </form>
           )}
-          {/* Nothing matched: submitting is still the right move — it opens an
-              application and parks the account until an admin approves. */}
-          {dropdown !== undefined && dropdown.length === 0 && searched
-            && schoolPick === '' && schoolName.trim().length >= 2 && (
-            <p className={css.hint} data-testid="school-not-found">
-              {t('auth.school.notFound')}
-            </p>
-          )}
-          <Field label={t('auth.username.label')}>
-            <input
-              className={css.input}
-              type="text"
-              autoComplete="username"
-              placeholder={t('auth.username.registerPlaceholder')}
-              value={username}
-              onChange={(event) => { setUsername(event.target.value) }}
-            />
-          </Field>
-          <Field label={t('auth.displayName.label')}>
-            <input
-              className={css.input}
-              type="text"
-              autoComplete="name"
-              value={displayName}
-              onChange={(event) => { setDisplayName(event.target.value) }}
-            />
-          </Field>
-          <Field label={t('auth.email.label')} invalid={error === t('auth.error.needEmail') || error === t('auth.error.emailFormat')}>
-            <input
-              className={css.input}
-              type="email"
-              autoComplete="email"
-              placeholder={t('auth.email.placeholder')}
-              value={email}
-              data-testid="register-email"
-              onChange={(event) => { setEmail(event.target.value) }}
-            />
-          </Field>
-          <Field label={t('auth.password.label')}>
-            {passwordField}
-          </Field>
-          <Field label={t('auth.confirm.label')}>
-            <input
-              className={css.input}
-              type="password"
-              autoComplete="new-password"
-              value={confirm}
-              onChange={(event) => { setConfirm(event.target.value) }}
-            />
-          </Field>
-          <label className={clsx(css.checkbox, css.terms)}>
-            <input
-              type="checkbox"
-              checked={terms}
-              onChange={(event) => { setTerms(event.target.checked) }}
-            />
-            <span>{t('auth.terms')}</span>
-          </label>
-          {error !== '' && <p className={css.error} role="alert">{error}</p>}
-          <button type="submit" className={css.submit} disabled={busy}>
-            {busy ? t('auth.busy') : t('auth.register.submit')}
-          </button>
-          <p className={css.alt}>
-            {t('auth.register.hasAccount')}
-            <button type="button" className={css.link} onClick={() => { switchView('login') }}>
-              {t('auth.register.toLogin')}
-            </button>
-          </p>
-        </form>
-      )}
 
-      {view === 'forgot' && (
-        forgotSent
-          ? (
+          {view === 'forgot' && (forgotSent ? (
             <div className={css.form} data-physicsos-auth-view="forgot">
-
-              <p className={css.receipt}>{t('auth.forgot.receipt')}</p>
-              <button type="button" className={css.submit} onClick={() => { switchView('login') }}>
-                {t('auth.forgot.back')}
-              </button>
+              <div className={css.receiptIcon} aria-hidden="true"><IconVerified size={28} /></div>
+              <p className={css.receipt} role="status">{t('auth.forgot.receipt')}</p>
+              <button type="button" className={css.submit} onClick={() => { switchView('login') }}>{t('auth.forgot.back')}</button>
             </div>
-          )
-          : (
-            <form className={css.form} onSubmit={submitForgot} noValidate>
-
-              <p className={css.receipt}>{t('auth.forgot.hint')}</p>
-              <Field label={t('auth.username.label')}>
-                <input
-                  className={css.input}
-                  type="text"
-                  autoComplete="username"
-                  value={username}
-                  onChange={(event) => { setUsername(event.target.value) }}
-                />
-              </Field>
-              {error !== '' && <p className={css.error} role="alert">{error}</p>}
-              <button type="submit" className={css.submit} disabled={busy}>
-                {busy ? t('auth.busy') : t('auth.forgot.submit')}
-              </button>
-              <p className={css.alt}>
-                <button type="button" className={css.link} onClick={() => { switchView('login') }}>
-                  {t('auth.forgot.toLogin')}
-                </button>
-              </p>
+          ) : (
+            <form ref={formRef} className={css.form} onSubmit={submitForgot} noValidate aria-busy={busy} data-physicsos-auth-view="forgot">
+              {feedback}
+              <fieldset className={css.formControls} disabled={busy}>
+                <Field label={t('auth.username.label')} id={fieldId('username')} invalid={invalid('username')}>
+                  <input id={fieldId('username')} name="username" className={css.input} type="text" autoComplete="username" autoCapitalize="none" spellCheck={false}
+                    placeholder={t('auth.username.loginPlaceholder')} value={username} required aria-invalid={invalid('username') || undefined}
+                    aria-describedby={describe('username')} onChange={(event) => { setUsername(event.target.value); clearFieldError('username') }} />
+                </Field>
+                {schoolControl}
+                <SubmitButton busy={busy} label="auth.forgot.submit" t={t} />
+                <p className={css.alt}><button type="button" className={css.link} onClick={() => { switchView('login') }}>{t('auth.forgot.toLogin')}</button></p>
+              </fieldset>
             </form>
-          )
-      )}
+          ))}
 
-      {view === 'reset' && (
-        resetSent
-          ? (
+          {view === 'reset' && (resetSent ? (
             <div className={css.form} data-physicsos-auth-view="reset">
-
-              <p className={css.receipt}>{t('auth.reset.receipt')}</p>
-              <button
-                type="button"
-                className={css.submit}
-                onClick={() => { window.location.reload() }}
-              >
-                {t('auth.reset.toLogin')}
-              </button>
+              <div className={css.receiptIcon} aria-hidden="true"><IconVerified size={28} /></div>
+              <p className={css.receipt} role="status">{t('auth.reset.receipt')}</p>
+              <button type="button" className={css.submit} onClick={() => { window.location.reload() }}>{t('auth.reset.toLogin')}</button>
             </div>
-          )
-          : (
-            <form className={css.form} onSubmit={submitReset} noValidate>
-
-              <p className={css.receipt}>{t('auth.reset.hint')}</p>
-              <Field label={t('auth.password.label')}>
-                {passwordField}
-              </Field>
-              <Field label={t('auth.confirm.label')}>
-                <input
-                  className={css.input}
-                  type="password"
-                  autoComplete="new-password"
-                  value={confirm}
-                  onChange={(event) => { setConfirm(event.target.value) }}
-                />
-              </Field>
-              {error !== '' && <p className={css.error} role="alert">{error}</p>}
-              <button type="submit" className={css.submit} disabled={busy}>
-                {busy ? t('auth.busy') : t('auth.reset.submit')}
-              </button>
-              <p className={css.alt}>
-                <button
-                  type="button"
-                  className={css.link}
-                  onClick={() => {
-                    clearResetToken()
-                    setToken('')
-                    setView('login')
-                  }}
-                >
-                  {t('auth.forgot.toLogin')}
-                </button>
-              </p>
+          ) : (
+            <form ref={formRef} className={css.form} onSubmit={submitReset} noValidate aria-busy={busy} data-physicsos-auth-view="reset">
+              {feedback}
+              <fieldset className={css.formControls} disabled={busy}>
+                {passwordControl}{confirmControl}
+                <SubmitButton busy={busy} label="auth.reset.submit" t={t} />
+                {error?.code === 'INVALID_RESET_TOKEN' && (
+                  <button type="button" className={css.link} onClick={() => { clearResetToken(); setToken(''); switchView('forgot') }}>
+                    {t('auth.reset.requestAgain')}
+                  </button>
+                )}
+                <p className={css.alt}><button type="button" className={css.link} onClick={back}>{t('auth.forgot.toLogin')}</button></p>
+              </fieldset>
             </form>
-          )
+          ))}
+        </>
       )}
-    </GateChrome>
+    </AuthWelcome>
   )
 }
 

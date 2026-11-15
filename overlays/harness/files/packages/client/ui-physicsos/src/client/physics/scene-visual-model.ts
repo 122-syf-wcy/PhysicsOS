@@ -968,7 +968,13 @@ export interface MotorRotorVisual {
   halfWidth: number
   /** Angle from the coil's plane to the field (rad), for the label. */
   angle: number
-  /** +1 = the rotor turns counter-clockwise on the page. */
+  /** Fixed stator-field unit direction in the end-on scene basis, not arrow endpoints. */
+  statorDirection?: ScenePoint
+  /** Signed engine reading (N·m), including its exact zero at the dead point. */
+  torque?: number
+  /** Engine force magnitude on each force-carrying side (N), never a drawn arrow length. */
+  sideForce?: number
+  /** Current-sense convention: +1 is CCW at θ = 0. Not angular velocity or permission to animate. */
   sense: 1 | -1
   /** Formatted torque, e.g. `τ = 0.24 N·m`. */
   torqueText: string
@@ -1501,6 +1507,45 @@ export interface WaveFrontVisual {
   radius: number
 }
 
+/** Single-slit apparatus and the engine's sampled screen intensities, without display-curve scaling. */
+export interface WaveDiffractionVisual {
+  id: string
+  /** Slit centre in scene centimetres. */
+  slitAt: ScenePoint
+  /** Full physical slit width converted from SI metres to scene centimetres. */
+  slitWidth: number
+  /** Screen centre in scene centimetres. */
+  screenAt: ScenePoint
+  /** Drawn screen half-height in scene centimetres; not the central-maximum width. */
+  screenHalfHeight: number
+  /** Every available engine sample, in engine order; no gamma, clipping or resampling. */
+  intensitySamples: readonly {
+    readonly id: string
+    /** Absolute scene y coordinate (cm), not an offset from screenAt. */
+    readonly y: number
+    /** Raw intensity_ratio × illumination from the verified frame, including exact zero. */
+    readonly intensity: number
+  }[]
+}
+
+/**
+ * Photoelectric apparatus SCHEMATIC anchors in scene units (cm), not measured
+ * electrode distances, cathode area or time-integrated electron positions.
+ * Anchors and drawn half-height stay fixed across emission/parameter changes.
+ */
+export interface PhotoelectricRigVisual {
+  id: string
+  cathodeAt: ScenePoint
+  collectorAt: ScenePoint
+  sourceAt: ScenePoint
+  /** Schematic electrode half-height only; no physical dimension claim. */
+  halfHeight: number
+  /** Trusted photocurrent formatted upstream, never parsed back into a number. */
+  photocurrentText: string
+  /** Trusted stopping potential formatted upstream, never parsed back into a number. */
+  stoppingPotentialText: string
+}
+
 /* ------------------------------------------------------------ view model --- */
 
 /** Canvas-internal readouts. Never a floating toolbar over the scene. */
@@ -1698,6 +1743,10 @@ export interface SceneVisualModel {
   waveEnvelope?: WaveEnvelopeVisual
   /** Circular crests spreading from the interference sources at this frame. */
   waveFronts?: readonly WaveFrontVisual[]
+  /** Single-slit rig and raw screen-intensity samples; absent in legacy V3 frames. */
+  waveDiffraction?: WaveDiffractionVisual
+  /** Fixed photoelectric apparatus schematic; absent in legacy V3 frames. */
+  photoelectricRig?: PhotoelectricRigVisual
   /** Orbit centre (magnetic domain). */
   center?: ScenePoint
 

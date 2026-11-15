@@ -3,22 +3,30 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-const require = createRequire('/Users/dongsiwei/Desktop/PhysicsOS/package.json');
+import { fileURLToPath } from 'node:url';
+const root=fileURLToPath(new URL('../../',import.meta.url));
+const require = createRequire(process.env.UI_REWORK_TOOLCHAIN_ROOT
+  ? path.join(path.resolve(process.env.UI_REWORK_TOOLCHAIN_ROOT),'package.json') : import.meta.url);
 const { chromium } = require('@playwright/test');
-const root=path.resolve(path.dirname(new URL(import.meta.url).pathname),'../..');
+const strict=process.env.UI_REWORK_STRICT==='1';
+if(strict&&!process.env.UI_REWORK_IMAGE)throw Error('Strict inspection requires the independently verified candidate image');
 const base=process.env.UI_REWORK_BASE||'http://physicsos-validation.invalid:3199';
 if(new URL(base).hostname!=='physicsos-validation.invalid')throw Error('Synthetic candidate hostname required');
-const out=path.resolve(process.env.UI_REWORK_OUT||path.join(root,'docs/ui-redesign/rework-20261116/before-surfaces-verified'));
-if(!out.startsWith(path.join(root,'docs/ui-redesign/rework-20261116/')))throw Error('Output outside assigned evidence directory');
+const evidenceRoot=path.join(root,'docs/ui-redesign/rework-20261116');
+const out=path.resolve(process.env.UI_REWORK_OUT||path.join(evidenceRoot,`surfaces-${new Date().toISOString().replace(/[:.]/g,'-')}`));
+const relativeOut=path.relative(evidenceRoot,out);
+if(relativeOut.startsWith('..')||path.isAbsolute(relativeOut))throw Error('Output outside assigned evidence directory');
+if(fs.existsSync(path.join(out,'manifest.json')))throw Error('Evidence already exists; choose a new output directory');
 fs.mkdirSync(out,{recursive:true});
 const users=JSON.parse(fs.readFileSync(process.env.UI_REWORK_CREDENTIALS||'/tmp/physicsos-ui-admin-credentials.json','utf8'));
 const secrets=Object.values(users).flatMap(u=>[u.username,u.password,u.schoolId]).filter(v=>typeof v==='string'&&v.length>2);
 const clean=text=>secrets.reduce((s,v)=>s.split(v).join('[redacted]'),String(text));
 const matrix=JSON.parse(fs.readFileSync(path.join(root,'docs/ui-redesign/coverage.json'),'utf8')).items;
 const readRpc=new Set(['/api/dynamicCordisRunner/inventory','/api/session/modelCatalog','/api/session/list','/api/permissionPresets/catalog','/api/agentPresets/list','/api/llm/listProviders','/api/llm/listConfigurableProviders','/api/credentials/describe']);
-const m={schemaVersion:2,phase:process.env.UI_REWORK_PHASE||'before',startedAt:new Date().toISOString(),candidate:base,image:{value:process.env.UI_REWORK_IMAGE||'93cb03a815a8',provenance:'operator supplied, not independently inspected'},safety:{ownContextsOnly:true,credentialsPersisted:false,productionVisited:false,allowedPostPaths:['/physicsos/auth/login',...readRpc]},policy:'Captured/DOM-observed surfaces are not design acceptance. Blocked requests and transient captures are audit limitations, never product failures.',captures:[],navigation:[],blockedWrites:[],unavailable:[],matrix:matrix.map(i=>({id:i.designId,title:i.title,prototype:i.recommendedDesign,status:'not-seen',observations:[],reason:'Outside focused scope or no safe reachable synthetic fixture'}))};
+const m={schemaVersion:3,phase:process.env.UI_REWORK_PHASE||'inspection',strict,startedAt:new Date().toISOString(),candidate:base,image:{value:process.env.UI_REWORK_IMAGE||'unverified',provenance:'operator supplied; compare with the separate image inspection receipt'},safety:{ownContextsOnly:true,credentialsPersisted:false,productionVisited:false,allowedPostPaths:['/physicsos/auth/login',...readRpc]},policy:'Captured/DOM-observed surfaces are not design acceptance. Blocked requests and transient captures are audit limitations, never product failures.',captures:[],navigation:[],blockedWrites:[],unavailable:[],matrix:matrix.map(i=>({id:i.designId,title:i.title,prototype:i.recommendedDesign,status:'not-seen',observations:[],reason:'Outside focused scope or no safe reachable synthetic fixture'}))};
+if(m.phase!=='before')for(const id of [17,22]){const row=m.matrix.find(x=>x.id===id);row.status='retired-standalone-surface';row.reason='User removed the redundant resource page; practice and verified paper reading are embedded in the real experiment center. This is a scope change, not a visual pass.';}
 const save=()=>fs.writeFileSync(path.join(out,'manifest.json'),clean(JSON.stringify(m,null,2)));
-const b=await chromium.connectOverCDP(process.env.UI_REWORK_CDP||'http://127.0.0.1:9230');
+const b=await chromium.connectOverCDP(process.env.UI_REWORK_CDP||'http://127.0.0.1:9230',{noDefaults:true});
 const contexts=[];let serial=1;
 const fail=(surface,e)=>{m.unavailable.push({surface,error:clean(e.message).split('\n')[0].slice(0,160)});save();};
 const step=async(name,fn)=>{try{await fn();}catch(e){fail(name,e);}};
@@ -62,7 +70,7 @@ async function capture(p,name,ids,role,scheme='light'){
  });
  await p.screenshot({path:path.join(out,file),mask:secrets.filter(s=>s.length>4).map(s=>p.getByText(s,{exact:true})),animations:'disabled'});
  m.captures.push({name,file,role,scheme,ids,dom,status:'captured-and-dom-observed-not-approved'});
- for(const id of ids){const row=m.matrix.find(x=>x.id===id);row.status='seen-partial-before';row.observations.push(file);row.reason='Surface observation only; no full interaction/permission/design pass';}
+ for(const id of ids){const row=m.matrix.find(x=>x.id===id);row.status=`seen-partial-${m.phase}`;row.observations.push(file);row.reason='Surface observation only; no full interaction/permission/design pass';}
  console.log(JSON.stringify({capture:name,file,headings:dom.headings.map(h=>clean(h.text)),overflow:dom.horizontalOverflow}));save();
 }
 async function pair(p,name,ids,role,scheme='light'){
@@ -75,14 +83,15 @@ async function settings(p,role,scheme='light'){
  m.navigation.push({surface:'settings',buttons:await visibleButtons(p)});
  await click(p,['模型']);await p.waitForTimeout(2500);await pair(p,'settings-models',[29],role,scheme);
  await click(p,['学习模式']);await heading(p,'学习模式');await pair(p,'settings-learning',[30],role,scheme);
- await click(p,['Agent 预设']);await p.waitForTimeout(1500);await pair(p,'settings-legacy-presets',[30],role,scheme);
+ if(m.phase==='before'){await click(p,['Agent 预设']);await p.waitForTimeout(1500);await pair(p,'settings-legacy-presets',[30],role,scheme);}
+ else if(await p.getByRole('button',{name:'Agent 预设',exact:true}).isVisible())throw Error('Duplicate legacy preset navigation remains');
  await click(p,['关闭']);
 }
 try{
  const modes=(process.env.UI_REWORK_MODES||'teacher,editors,admin,dark').split(',');
  if(modes.includes('teacher'))await step('teacher',async()=>{
   const p=await login('teacher');await pair(p,'home',[1],'teacher');
-  for(const [name,labels,ids,expect] of [['projects',['项目'],[6],/^项目$/],['canvases',['实验自由画布'],[7],/实验自由画布/],['whiteboards',['教学画板'],[9],/教学画板/],['resources',['物理资源库','资源库',/资源/],[17],/物理资源库|资源库/],['feedback',['反馈','意见反馈',/反馈/],[16],/反馈/]])await step(name,async()=>{await nav(p,labels);if(name==='canvases')await p.locator('[data-physicsos-canvas-catalog]').waitFor({state:'visible',timeout:20000});else await heading(p,expect);await pair(p,name,ids,'teacher');if(name==='feedback')await step('feedback history',async()=>{await click(p,['我的反馈',/我的反馈/]);await pair(p,'feedback-history',[59],'teacher');});});
+  for(const [name,labels,ids,expect] of [['projects',['项目'],[6],/^项目$/],['canvases',['实验自由画布'],[7],/实验自由画布/],['whiteboards',['教学画板'],[9],/教学画板/],...(m.phase==='before'?[['resources',['物理资源库','资源库',/资源/],[17],/物理资源库|资源库/]]:[]),['feedback',['反馈','意见反馈',/反馈/],[16],/反馈/]])await step(name,async()=>{await nav(p,labels);if(name==='canvases')await p.locator('[data-physicsos-canvas-catalog]').waitFor({state:'visible',timeout:20000});else await heading(p,expect);await pair(p,name,ids,'teacher');if(name==='feedback')await step('feedback history',async()=>{await click(p,['我的反馈',/我的反馈/]);await pair(p,'feedback-history',[59],'teacher');});});
   await step('paper',async()=>{
    await nav(p,['出卷专区']);await heading(p,'出卷工作台');await pair(p,'paper-new',[10],'teacher');
    for(const [name,labels,id] of [['paper-jobs',[/草稿与审核/],11],['paper-final',[/已定稿/],13],['paper-bank',[/^题库/],14],['paper-sources',[/真题资料库/],15]])await step(name,async()=>{await click(p,labels);await p.waitForTimeout(1000);await pair(p,name,[id],'teacher');m.navigation.push({surface:name,buttons:await visibleButtons(p)});
@@ -103,4 +112,6 @@ try{
   const p=await login('teacher','dark');await pair(p,'home',[1],'teacher','dark');await step('dark paper',async()=>{await nav(p,['出卷专区']);await heading(p,'出卷工作台');await pair(p,'paper-new',[10],'teacher','dark');});await step('dark settings',()=>settings(p,'teacher','dark'));await p.context().close();
  });
 }finally{for(const c of contexts)await c.close().catch(()=>{});await b.close();m.finishedAt=new Date().toISOString();save();}
-console.log(JSON.stringify({captures:m.captures.length,seen:m.matrix.filter(x=>x.status!=='not-seen').map(x=>x.id),unavailable:m.unavailable,blockedWrites:m.blockedWrites}));
+const overflow=m.captures.filter(c=>c.dom.horizontalOverflow).map(c=>c.name);
+console.log(JSON.stringify({captures:m.captures.length,seen:m.matrix.filter(x=>x.status.startsWith('seen-')).map(x=>x.id),retired:m.matrix.filter(x=>x.status==='retired-standalone-surface').map(x=>x.id),unavailable:m.unavailable,overflow,blockedWrites:m.blockedWrites}));
+if(strict&&(m.unavailable.length>0||overflow.length>0||m.captures.length===0))process.exitCode=1;

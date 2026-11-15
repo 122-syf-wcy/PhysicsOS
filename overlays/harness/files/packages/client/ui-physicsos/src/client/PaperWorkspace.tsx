@@ -15,7 +15,8 @@ import type { InjectFace } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ProductSurfaceBaseProps } from './surface-props.ts'
 import type { PhysicsSceneRef, PhysicsSurfaceId } from './surface-store.ts'
 import type {
-  AnnotationRow, BankItemRow, BankPlanRow, BlueprintRow, ExportBundleRow, PaperApi, PaperJobWire, SourcePaperRow,
+  AnnotationRow, BankItemRow, BankPlanRow, BlueprintRow, ExportBundleRow, PaperApi, PaperJobWire,
+  PaperOperationAccepted, PaperPlanWire, SourcePaperRow, SpecRowWire,
 } from './paper-api.ts'
 import {
   DIFFICULTY_PRESETS, coefficientLabel, mixCoefficient, specCoefficient,
@@ -86,22 +87,23 @@ const kindLabel = (kind: string): string => QUESTION_KIND_LABEL[kind] ?? kind
  * placeholder while it is pending or the draw failed. `onError` flips the
  * fallback locally — no per-figure existence probe.
  */
-function FigureBlock({ job, api, figureRef, caption }: {
+function FigureBlock({ job, api, questionNo, figureRef, caption }: {
   job: PaperJobWire
   api: PaperApi
+  questionNo: number
   figureRef: string
   caption: string
 }) {
+  const asset = job.figureAssets?.find(item => item.questionNo === questionNo)
+  const legacy = job.checkBinding === undefined && (job.status === 'approved' || job.status === 'exported')
+  const path = asset?.path ?? (legacy ? `fig-${figureRef}.png` : undefined)
   const [failed, setFailed] = useState(false)
-  if (failed) return <p className={css.figure}>[题图：{caption}]</p>
+  useEffect(() => { setFailed(false) }, [path])
+  if (path === undefined || failed) return <p className={css.figure}>题图尚未验证或暂不可读取；请勿据占位图批准。</p>
   return (
     <figure className={css.figureBlock}>
-      <img
-        src={api.fileUrl(job.id, `fig-${figureRef}.png`)}
-        alt={`题图：${caption}`}
-        loading="lazy"
-        onError={() => { setFailed(true) }}
-      />
+      <img src={api.fileUrl(job.id, path)} alt={caption || '题图'} loading="lazy"
+        onError={() => { setFailed(true) }} />
       {caption !== '' && <figcaption>{caption}</figcaption>}
     </figure>
   )
@@ -230,7 +232,6 @@ function PaperStudio({ api, t, openSurface }: PaperWorkspaceProps) {
   const [bankItems, setBankItems] = useState<BankItemRow[]>([])
   const [activeJob, setActiveJob] = useState<PaperJobWire | undefined>()
   const selectedId = useRef<string | undefined>(undefined)
-  const [detailPolling, setDetailPolling] = useState<string>()
   const [reviewer, setReviewer] = useState('教研组')
   const [notice, setNotice] = useState<string>()
 
@@ -247,12 +248,14 @@ function PaperStudio({ api, t, openSurface }: PaperWorkspaceProps) {
 
   useEffect(() => { void refresh() }, [refresh])
 
-  /* Every job write passes this gate: a response for another paper, or one older
-     than the paper on screen, is dropped. paper-host stamps updatedAt on every
-     job write and commits writes in order, so a smaller stamp is older. */
+  /* Prefer the monotonic server row version: timestamps can share a millisecond.
+     Legacy rows retain the timestamp fallback. Never replace another selection. */
+  const olderJob = (next: PaperJobWire, previous: PaperJobWire) => next.rowVersion !== undefined && previous.rowVersion !== undefined
+    ? next.rowVersion < previous.rowVersion : next.updatedAt < previous.updatedAt
   const applyJob = useCallback((next: PaperJobWire) => {
+    setJobs(previous => previous.map(row => row.id === next.id && !olderJob(next, row) ? next : row))
     if (next.id !== selectedId.current) return
-    setActiveJob(prev => (prev?.id === next.id && next.updatedAt < prev.updatedAt ? prev : next))
+    setActiveJob(previous => previous?.id === next.id && olderJob(next, previous) ? previous : next)
   }, [])
 
   const openAbort = useRef<AbortController | null>(null)
@@ -267,13 +270,13 @@ function PaperStudio({ api, t, openSurface }: PaperWorkspaceProps) {
     }
   }, [api, applyJob])
 
-  /* Fallback poll while a job is in an async stage: one request at a time,
-     cancelled on a paper switch or unmount, backing off after errors and
-     bounded in time. It steps aside while the detail view polls that job. */
+  /* Read-only observation: leaving this page stops polling, never continuation.
+     One request at a time, cancellable, bounded and with visible backoff errors. */
   const activeId = activeJob?.id
   const pollStage = activeJob?.status === 'drafting' || activeJob?.status === 'checking'
+    || activeJob?.operation?.state === 'running'
   useEffect(() => {
-    if (activeId === undefined || !pollStage || detailPolling === activeId) return
+    if (activeId === undefined || !pollStage) return
     const controller = new AbortController()
     const startedAt = Date.now()
     let delay = POLL_MS
@@ -290,10 +293,11 @@ function PaperStudio({ api, t, openSurface }: PaperWorkspaceProps) {
         delay = Math.min(delay * 2, POLL_MAX_MS)
       }
       if (Date.now() - startedAt < POLL_BUDGET_MS) timer = setTimeout(() => { void tick() }, delay)
+      else setNotice('状态观察已暂停；服务端仍负责当前阶段，可手动刷新查看，不会自动重复生成。')
     }
     timer = setTimeout(() => { void tick() }, delay)
     return () => { controller.abort(); clearTimeout(timer) }
-  }, [activeId, pollStage, detailPolling, api, applyJob])
+  }, [activeId, pollStage, api, applyJob])
 
   const run = useCallback(async (action: () => Promise<unknown>) => {
     try { await action(); await refresh() } catch (e) { setNotice(err(e)) }
@@ -428,7 +432,6 @@ function PaperStudio({ api, t, openSurface }: PaperWorkspaceProps) {
           jobs={draftJobs} activeJob={activeJob} reviewer={reviewer}
           api={api} openJob={openJob} run={run}
           onJobUpdate={applyJob}
-          onPolling={setDetailPolling}
           notify={setNotice}
         />
       )}
@@ -478,6 +481,9 @@ function NewPaperPanel({ blueprints, api, onCreated, onError, onReview, t }: {
   const [exclude, setExclude] = useState('')
   const [presetKey, setPresetKey] = useState<string>('standard')
   const [busy, setBusy] = useState(false)
+  const [plan, setPlan] = useState<PaperPlanWire>()
+  const [planning, setPlanning] = useState(false)
+  const [planError, setPlanError] = useState<string>()
 
   const preset = DIFFICULTY_PRESETS.find(p => p.key === presetKey) ?? DIFFICULTY_PRESETS[1]
 
@@ -485,24 +491,33 @@ function NewPaperPanel({ blueprints, api, onCreated, onError, onReview, t }: {
 
   const splits = (text: string) => text.split(/[;；\n]/).map(s => s.trim()).filter(Boolean)
   const chapterCount = splits(chapters).length
-  const totalQuestions = blueprint?.sections.reduce((n, s) => n + s.slots.length, 0) ?? 0
+  const requestBody = useMemo(() => blueprint === undefined ? undefined : ({
+    level: blueprint.level, subjects: [blueprint.subject], kind, totalScore: blueprint.totalScore,
+    minutes: blueprint.minutes, chapters: splits(chapters), exclude: splits(exclude),
+    difficulty: { ...preset.mix }, targetYear: 2027, textbook: '人教版',
+  }), [blueprint, kind, chapters, exclude, preset])
+  useEffect(() => {
+    const planJob = api.planJob
+    setPlan(undefined); setPlanError(undefined)
+    if (requestBody === undefined || planJob === undefined) { setPlanning(false); return }
+    let live = true
+    setPlanning(true)
+    const timer = setTimeout(() => {
+      void planJob(blueprintId, requestBody).then(next => { if (live) setPlan(next) })
+        .catch(error => { if (live) setPlanError(err(error)) })
+        .finally(() => { if (live) setPlanning(false) })
+    }, 300)
+    return () => { live = false; clearTimeout(timer) }
+  }, [api, blueprintId, requestBody])
+  const totalQuestions = plan?.questionCount
+  const structure = plan?.sections
 
   const create = async () => {
-    if (blueprint === undefined) { onError('请先选择试卷结构模板'); return }
+    if (requestBody === undefined) { onError('请先选择试卷结构模板'); return }
+    if (api.planJob !== undefined && plan === undefined) { onError(planError ?? '请等待结构规划完成后确认'); return }
     setBusy(true)
     try {
-      const job = await api.createJob(blueprintId, {
-        level: blueprint.level,
-        subjects: [blueprint.subject],
-        kind: kind,
-        totalScore: blueprint.totalScore,
-        minutes: blueprint.minutes,
-        chapters: splits(chapters),
-        exclude: splits(exclude),
-        difficulty: { basic: preset.mix.basic, medium: preset.mix.medium, hard: preset.mix.hard },
-        targetYear: 2027,
-        textbook: '人教版',
-      })
+      const job = await api.createJob(blueprintId, requestBody)
       onCreated(job)
     } catch (e) { onError(err(e)) } finally { setBusy(false) }
   }
@@ -537,24 +552,20 @@ function NewPaperPanel({ blueprints, api, onCreated, onError, onReview, t }: {
               </dl>
               {blueprint !== undefined && (
                 <>
-                  <div className={css.bpInfo}>
-                    {blueprint.sections.map((s, i) => (
-                      <span key={i} className={css.bpSection}>
-                        {s.title} · {s.slots.length} 题
-                      </span>
-                    ))}
-                  </div>
-                  <ul className={css.structureList} aria-label="题型结构与给分规则">
-                    {blueprint.sections.map((s, i) => (
-                      <li key={i} className={css.structureRow}>
-                        <span className={css.structureTitle}>{s.title}</span>
-                        <span className={css.structureMeta}>
-                          {s.slots.length} 题 · {s.slots.reduce((n, x) => n + x.score, 0)} 分
-                        </span>
-                        {s.note !== undefined && <span className={css.structureNote}>{s.note}</span>}
-                      </li>
-                    ))}
-                  </ul>
+                  {planning && <p className={css.jobMeta}>正在按卷型规划实际题量与分值…</p>}
+                  {planError !== undefined && <p className={css.errorNote} role="alert">结构规划失败：{planError}</p>}
+                  {plan?.normalized && <p className={css.planNotice}>模板原总分 {plan.requestedTotalScore} 分 → 本卷实际 {plan.totalScore} 分（{plan.questionCount} 题）。按保留题目原分值，不人为重分。</p>}
+                  {structure !== undefined && <details className={css.structureDetails}>
+                    <summary>本卷题型结构与给分规则（{plan?.questionCount} 题）</summary>
+                    <ul className={css.structureList} aria-label="题型结构与给分规则">
+                      {structure.map((section, index) => <li key={index} className={css.structureRow}>
+                        <span className={css.structureTitle}>{section.title}</span>
+                        <span className={css.structureMeta}>{section.questionCount} 题 · {section.totalScore} 分</span>
+                        {section.note !== undefined && <span className={css.structureNote}>{section.note}</span>}
+                      </li>)}
+                    </ul>
+                  </details>}
+                  {api.planJob === undefined && <p className={css.jobMeta}>创建后由服务器解析实际题量和分值；当前模板总分不是本卷已确认总分。</p>}
                 </>
               )}
             </div>
@@ -563,7 +574,7 @@ function NewPaperPanel({ blueprints, api, onCreated, onError, onReview, t }: {
               <h3 className={css.stepCardTitle}>内容范围</h3>
               <label className={css.field}>已教章节（分号或换行分隔）
                 <textarea value={chapters} onChange={(e) => { setChapters(e.target.value) }}
-                  placeholder="人教版九年级·第十三章 内能；第十四章 内能的利用" rows={6} />
+                  placeholder="人教版九年级·第十三章 内能；第十四章 内能的利用" rows={3} />
               </label>
             </div>
 
@@ -606,8 +617,8 @@ function NewPaperPanel({ blueprints, api, onCreated, onError, onReview, t }: {
             <dl className={css.summaryList}>
               <div><dt>{t('paper.new.policy')}</dt><dd>{blueprint === undefined ? '未选择' : blueprint.policyLabel ?? '未标注'}</dd></div>
               <div><dt>试卷结构</dt><dd>{blueprint?.title ?? '未选择'}</dd></div>
-              <div><dt>总分 / 时长</dt><dd>{blueprint === undefined ? '—' : `${blueprint.totalScore} 分 / ${blueprint.minutes} 分钟`}</dd></div>
-              <div><dt>题量</dt><dd>{blueprint === undefined ? '—' : `${totalQuestions} 题`}</dd></div>
+              <div><dt>总分 / 时长</dt><dd>{plan === undefined ? '待规划' : `${plan.totalScore} 分 / ${plan.request.minutes} 分钟`}</dd></div>
+              <div><dt>题量</dt><dd>{totalQuestions === undefined ? '待规划' : `${totalQuestions} 题`}</dd></div>
               <div><dt>卷型</dt><dd>{KIND_LABEL[kind] ?? kind}</dd></div>
               <div><dt>目标年份</dt><dd>2027 届</dd></div>
               <div><dt>教材版本</dt><dd>人教版</dd></div>
@@ -627,17 +638,18 @@ function NewPaperPanel({ blueprints, api, onCreated, onError, onReview, t }: {
                 <span className={clsx(css.statusPill, css.statusPending)}>待检查</span>
               </li>
             </ul>
+            {plan !== undefined && plan.scope.unassignedQuestionNos.length > 0 && <p className={css.planNotice}>有 {plan.scope.unassignedQuestionNos.length} 题缺少可核对的章节或考点；创建后先确认细目表，不会把缺口当成检查通过。</p>}
             <p className={css.summaryHint}>{t('paper.new.pendingHint')}</p>
           </div>
         </aside>
 
         <div className={css.workbenchActions}>
-          <button type="button" className={css.primary} disabled={busy || blueprint === undefined}
+          <button type="button" className={css.primary} disabled={busy || blueprint === undefined || planning || api.planJob !== undefined && plan === undefined}
             onClick={() => { void create() }}>
-            {busy ? '创建中…' : '生成双向细目表'}
+            {busy ? '创建中…' : '确认规划并生成细目表'}
           </button>
           <button type="button" className={css.miniBtn} onClick={onReview}>前往审核</button>
-          {blueprint === undefined && <span className={css.actionHint}>{t('paper.new.emptyHint')}</span>}
+          <span className={css.actionHint}>{blueprint === undefined ? t('paper.new.emptyHint') : '先确认真实题量与分值；创建细目表不会调用起草模型。'}</span>
         </div>
       </div>
     </section>
@@ -665,7 +677,7 @@ function MixBar({ mix }: { readonly mix: DifficultyMix }) {
 
 /* --------------------------------------------------------- 草稿与审核 -- */
 
-function JobsPanel({ jobs, activeJob, reviewer, api, openJob, run, onJobUpdate, onPolling, notify }: {
+function JobsPanel({ jobs, activeJob, reviewer, api, openJob, run, onJobUpdate, notify }: {
   jobs: PaperJobWire[]
   activeJob: PaperJobWire | undefined
   reviewer: string
@@ -673,7 +685,6 @@ function JobsPanel({ jobs, activeJob, reviewer, api, openJob, run, onJobUpdate, 
   openJob: (id: string) => Promise<void>
   run: (action: () => Promise<unknown>) => Promise<void>
   onJobUpdate: (job: PaperJobWire) => void
-  onPolling: (jobId: string | undefined) => void
   notify: (message: string | undefined) => void
 }) {
   /* The list folds away so long stems get the full width — the split is the
@@ -681,7 +692,7 @@ function JobsPanel({ jobs, activeJob, reviewer, api, openJob, run, onJobUpdate, 
   const [listCollapsed, setListCollapsed] = useState(false)
   return (
     <section className={css.panel}>
-      <div className={css.split}>
+      <div className={clsx(css.split, listCollapsed && css.splitCollapsed)}>
         <aside className={clsx(css.jobList, listCollapsed && css.jobListCollapsed)}>
           {jobs.length === 0 && <Empty text="暂无进行中的试卷任务" />}
           {jobs.map((job) => {
@@ -721,8 +732,8 @@ function JobsPanel({ jobs, activeJob, reviewer, api, openJob, run, onJobUpdate, 
           </button>
           {activeJob === undefined
             ? <Empty text="从左侧选择一个试卷任务" />
-            : <JobDetail job={activeJob} reviewer={reviewer} api={api}
-              run={run} onJobUpdate={onJobUpdate} onPolling={onPolling} notify={notify} />}
+            : <JobDetail key={activeJob.id} job={activeJob} reviewer={reviewer} api={api}
+              run={run} onJobUpdate={onJobUpdate} notify={notify} />}
         </div>
       </div>
     </section>
@@ -735,16 +746,16 @@ function JobsPanel({ jobs, activeJob, reviewer, api, openJob, run, onJobUpdate, 
 type WorkerMood = 'think' | 'write' | 'check' | 'paint' | 'sad'
 
 /** Pipeline phases the checklist renders, in order. */
-const PHASE_LABELS = ['题库规划', 'AI 起草', '规范检查', '引擎复核', '题图生成'] as const
+const PHASE_LABELS = ['题库规划', 'AI 起草', '规范检查', '引擎复核', '题图验证'] as const
 const PHASE_OF_STAGE: Record<string, number> = {
-  plan: 0, draft: 1, adapt: 1, assemble: 1, check: 2, solve: 3, figure: 4, export: 4,
+  plan: 0, draft: 1, adapt: 1, repair: 1, replace: 1, assemble: 1, check: 2, solve: 3, figure: 4, export: 4,
 }
 const MOOD_OF_STAGE: Record<string, WorkerMood> = {
-  plan: 'think', draft: 'write', adapt: 'write', assemble: 'write',
-  check: 'check', solve: 'check', figure: 'paint', export: 'paint',
+  plan: 'think', draft: 'write', adapt: 'write', repair: 'write', replace: 'write', assemble: 'write',
+  check: 'check', solve: 'check', figure: 'paint', export: 'check',
 }
 const DEFAULT_DETAIL: readonly string[] = [
-  '正在规划题库供给', '正在思考命题', '正在逐项规范检查', '物理引擎逐题复核', 'AI 正在绘制题图',
+  '正在规划题库供给', '正在思考命题', '正在逐项规范检查', '物理引擎逐题复核', '正在验证并绘制题图',
 ]
 
 const fmtElapsed = (ms: number): string => {
@@ -765,8 +776,7 @@ function AiWorker({ job, runnerActive, since }: {
   runnerActive: boolean
   since: number
 }) {
-  const inAsyncStage = job.status === 'drafting' || job.status === 'checking'
-    || (job.status === 'approved' && job.progress?.stage === 'figure')
+  const inAsyncStage = job.status === 'drafting' || job.status === 'checking' || job.operation?.state === 'running'
   const visible = runnerActive || inAsyncStage
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
@@ -842,145 +852,89 @@ function AiWorker({ job, runnerActive, since }: {
   )
 }
 
-type VersionWait = { jobId: string; no: number; version: number; since: number }
-
-function JobDetail({ job, reviewer, api, run, onJobUpdate, onPolling, notify }: {
+function JobDetail({ job, reviewer, api, run, onJobUpdate, notify }: {
   job: PaperJobWire
   reviewer: string
   api: PaperApi
   run: (action: () => Promise<unknown>) => Promise<void>
   onJobUpdate: (job: PaperJobWire) => void
-  onPolling: (jobId: string | undefined) => void
   notify: (message: string | undefined) => void
 }) {
   const reload = (id = job.id) => run(async () => { onJobUpdate(await api.getJob(id)) })
-  /* ---- AI 流水线编排（客户端状态机）----
-     服务端约定：POST /draft 与 /check 都立即 202，真正的工作在后台推进
-     （drafting → drafting 结束时置 checking；check 从 checking 走到 review）。
-     背靠背连发两者会竞态——check 可能在起草完成前以 NO_DOCUMENT 把任务打成
-     failed。正确顺序是：draft → 轮询到 checking → 才发 check → 轮询到终态。
-     runner 由本组件持有：activeJob 的刷新、轮询与可视化都由它驱动，页面中途
-     刷新时退回旧的 3s 状态轮询兜底。 */
-  /* The runner outlives a paper switch (only it fires /check after drafting),
-     so its busy state belongs to the paper it drives, not to whichever paper
-     is on screen; its writes still pass the studio's selected-paper gate. */
-  const [runnerJobId, setRunnerJobId] = useState<string>()
-  const runnerActive = runnerJobId === job.id
-  const [runnerSince, setRunnerSince] = useState(0)
-  const runnerRef = useRef<{ jobId: string; cancelled: boolean; controller: AbortController } | null>(null)
-  useEffect(() => () => {
-    const handle = runnerRef.current
-    if (handle !== null) { handle.cancelled = true; handle.controller.abort() }
-  }, [])
-  const sleep = (ms: number) => new Promise<void>((resolve) => { setTimeout(resolve, ms) })
-
-  const driveAi = () => {
-    if (runnerRef.current !== null) return
-    const handle = { jobId: job.id, cancelled: false, controller: new AbortController() }
-    const { signal } = handle.controller
-    runnerRef.current = handle
-    setRunnerJobId(handle.jobId)
-    setRunnerSince(Date.now())
-    void (async () => {
+  /* Initiate one explicit action; the server owns all subsequent stages.
+     This component has no draft→check callback or hidden paid replay. */
+  const [actionBusy, setActionBusy] = useState(false)
+  const actionRef = useRef(false)
+  const mounted = useRef(true)
+  useEffect(() => () => { mounted.current = false }, [])
+  const serverBusy = job.status === 'drafting' || job.status === 'checking' || job.operation?.state === 'running'
+  const runnerActive = actionBusy || serverBusy
+  const runnerSince = Date.parse(job.operation?.startedAt ?? job.updatedAt)
+  const explicit = (action: () => Promise<PaperOperationAccepted | PaperJobWire | unknown>) => {
+    if (actionRef.current || serverBusy) return
+    actionRef.current = true
+    setActionBusy(true)
+    notify(undefined)
+    void run(async () => {
       try {
-        let latest = await api.getJob(handle.jobId, { signal })
-        /* 细目表自动确认：确认步不再需要教师操作（spec/failed 都从这里重试）。 */
-        if (latest.status === 'spec' || latest.status === 'failed') {
-          latest = await api.confirmSpec(latest.id, latest.specTable)
-        }
-        onJobUpdate(latest)
-        await api.runDraft(latest.id)
-        let checkFired = false
-        const deadline = Date.now() + 45 * 60_000
-        while (!handle.cancelled && Date.now() < deadline) {
-          await sleep(2500)
-          if (handle.cancelled) break
-          latest = await api.getJob(handle.jobId, { signal })
-          onJobUpdate(latest)
-          if (latest.status === 'checking' && !checkFired) {
-            /* 起草驱动完成（进入 checking）——现在才是发检查的正确时机。 */
-            checkFired = true
-            await api.runChecks(latest.id)
-            continue
-          }
-          if (latest.status === 'review' || latest.status === 'approved'
-            || latest.status === 'exported' || latest.status === 'failed') break
-        }
-      } catch (e) {
-        if (!handle.cancelled) notify(err(e))
+        const result = await action()
+        if (!mounted.current) return
+        if (result !== null && typeof result === 'object' && 'job' in result && result.job !== undefined) {
+          onJobUpdate(result.job as PaperJobWire)
+        } else if (result !== null && typeof result === 'object' && 'id' in result) {
+          onJobUpdate(result as PaperJobWire)
+        } else onJobUpdate(await api.getJob(job.id))
       } finally {
-        runnerRef.current = null
-        if (!handle.cancelled) {
-          setRunnerJobId(undefined)
-          void reload(handle.jobId)
-        }
+        actionRef.current = false
+        if (mounted.current) setActionBusy(false)
       }
-    })()
+    })
+  }
+  const driveAi = () => explicit(async () => {
+    let latest = job
+    if (latest.status === 'spec' || latest.status === 'failed') {
+      latest = await api.confirmSpec(latest.id, latest.specTable, latest.versions.length)
+    }
+    return api.runDraft(latest.id, latest.versions.length)
+  })
+  const driveChecks = () => explicit(() => api.runChecks(job.id, job.versions.length))
+  const driveRetry = () => {
+    const retry = api.retryOperation
+    if (retry !== undefined) explicit(() => retry(job.id, job.versions.length))
   }
 
-  /* 导出同样长跑（每张题图 ~70 s）——同 runner 模式驱动可视化与轮询。 */
-  const driveExport = () => {
-    if (runnerRef.current !== null) return
-    const handle = { jobId: job.id, cancelled: false, controller: new AbortController() }
-    const { signal } = handle.controller
-    runnerRef.current = handle
-    setRunnerJobId(handle.jobId)
-    setRunnerSince(Date.now())
-    void (async () => {
+  /* The synchronous export has a read-only observer while its response is pending;
+     unloading stops observation, not export, and cannot launch another phase. */
+  const exportController = useRef<AbortController | null>(null)
+  const exportTimer = useRef<ReturnType<typeof setTimeout>>()
+  useEffect(() => () => { exportController.current?.abort(); clearTimeout(exportTimer.current) }, [])
+  const driveExport = () => explicit(async () => {
+    const controller = new AbortController()
+    exportController.current = controller
+    const observe = async (): Promise<void> => {
       try {
-        /* POST /export is synchronous server work; cancelling its fetch would not stop it. */
-        await api.runExport(handle.jobId)
-        const deadline = Date.now() + 45 * 60_000
-        while (!handle.cancelled && Date.now() < deadline) {
-          await sleep(2500)
-          if (handle.cancelled) break
-          const latest = await api.getJob(handle.jobId, { signal })
-          onJobUpdate(latest)
-          if (latest.status === 'exported') break
-        }
-      } catch (e) {
-        if (!handle.cancelled) notify(err(e))
-      } finally {
-        runnerRef.current = null
-        if (!handle.cancelled) {
-          setRunnerJobId(undefined)
-          void reload(handle.jobId)
-        }
-      }
-    })()
-  }
+        const latest = await api.getJob(job.id, { signal: controller.signal })
+        if (!controller.signal.aborted && mounted.current) onJobUpdate(latest)
+      } catch (error) { if (!controller.signal.aborted && mounted.current) notify(err(error)) }
+      if (!controller.signal.aborted) exportTimer.current = setTimeout(() => { void observe() }, POLL_MS)
+    }
+    exportTimer.current = setTimeout(() => { void observe() }, POLL_MS)
+    try { return await api.runExport(job.id) }
+    finally { controller.abort(); clearTimeout(exportTimer.current) }
+  })
   /* 退回修改 modal: the suggestion goes to the model, which revises the
      question in place; the new version lands as status 'draft' again. */
   const [repairTarget, setRepairTarget] = useState<number | null>(null)
   const [repairText, setRepairText] = useState('')
-  /* 退回修订与题库换题都等新版本落库：两者共用一条单飞轮询，按试卷归属，
-     切换试卷或卸载时取消。 */
-  const [repairPending, setRepairPending] = useState<VersionWait | null>(null)
-  const [replacePending, setReplacePending] = useState<VersionWait | null>(null)
-  const repairWait = repairPending?.jobId === job.id ? repairPending : null
-  const replaceWait = replacePending?.jobId === job.id ? replacePending : null
-  useEffect(() => {
-    if (repairWait === null && replaceWait === null) return
-    const controller = new AbortController()
-    let timer: ReturnType<typeof setTimeout> | undefined
-    const landed = (wait: VersionWait | null, version: number): boolean =>
-      wait !== null && (version > wait.version || Date.now() - wait.since > 180_000)
-    const tick = async (): Promise<void> => {
-      const latest = await api.getJob(job.id, { signal: controller.signal }).catch(() => undefined)
-      if (controller.signal.aborted) return
-      if (latest !== undefined) onJobUpdate(latest)
-      const version = latest?.versions.at(-1)?.version ?? -1
-      if (landed(repairWait, version)) setRepairPending(null)
-      if (landed(replaceWait, version)) setReplacePending(null)
-      timer = setTimeout(() => { void tick() }, POLL_MS)
-    }
-    timer = setTimeout(() => { void tick() }, POLL_MS)
-    return () => { controller.abort(); clearTimeout(timer) }
-  }, [repairWait, replaceWait, api, job.id, onJobUpdate])
-  /* Tell the studio this paper already has a poller, so its fallback steps aside. */
-  const pollingId = runnerActive || repairWait !== null || replaceWait !== null ? job.id : undefined
-  useEffect(() => { onPolling(pollingId) }, [pollingId, onPolling])
-  useEffect(() => () => { onPolling(undefined) }, [onPolling])
+  const repairWait = job.operation?.state === 'running' && job.operation.kind === 'repair' ? job.operation.questionNo : undefined
+  const replaceWait = job.operation?.state === 'running' && job.operation.kind === 'replace' ? job.operation.questionNo : undefined
+  const [reviewTarget, setReviewTarget] = useState<number | null>(null)
+  const [reviewText, setReviewText] = useState('')
+  const [acknowledgeChecks, setAcknowledgeChecks] = useState(false)
+  const [analysisConfirmed, setAnalysisConfirmed] = useState(false)
+  const [specDraft, setSpecDraft] = useState<readonly SpecRowWire[]>(job.specTable)
+  const [focusedQuestion, setFocusedQuestion] = useState<number>()
+  useEffect(() => { setSpecDraft(job.specTable) }, [job.specTable])
   /* Live assembly preview: how the bank would serve this spec table now —
      shown on the confirm table and reused for the swap button. */
   const [bankPlan, setBankPlan] = useState<readonly BankPlanRow[] | null>(null)
@@ -1000,7 +954,29 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate, onPolling, notify }: 
     () => job.document?.sections.flatMap(s => s.items) ?? [],
     [job.document],
   )
-  const approvedCount = questions.filter(q => q.status === 'approved').length
+  const binding = job.checkBinding?.version === job.versions.at(-1)?.version
+    && job.checkBinding.documentHash === job.versions.at(-1)?.hash ? job.checkBinding : undefined
+  const currentReview = (no: number) => [...job.reviews].reverse().find(record => record.questionNo === no
+    && record.questionHash === binding?.questionHashes[String(no)]
+    && record.checkHash === binding?.questionReports[String(no)])
+  const reviewed = (no: number) => binding !== undefined && currentReview(no)?.verdict === 'approved'
+  const approvedCount = questions.filter(question => reviewed(question.number)).length
+  const canReview = job.status === 'review' && binding !== undefined && !runnerActive
+  const unresolved = job.findings.filter(finding => finding.severity === 'error' && !(finding.questionNo !== undefined
+    && reviewed(finding.questionNo) && currentReview(finding.questionNo)?.acknowledgedFindings?.length))
+  const canApprove = canReview && questions.length > 0 && approvedCount === questions.length && unresolved.length === 0
+  const targetQuestion = questions.find(question => question.number === reviewTarget)
+  const targetErrors = job.findings.filter(finding => finding.questionNo === reviewTarget && finding.severity === 'error')
+  const targetCorrection = job.answerCorrections?.find(correction => correction.questionNo === reviewTarget
+    && correction.questionHash === binding?.questionHashes[String(reviewTarget)])
+  const shownQuestion = questions.find(question => question.number === focusedQuestion)
+    ?? questions.find(question => !reviewed(question.number)) ?? questions[0]
+  const shownIndex = questions.findIndex(question => question.number === shownQuestion?.number)
+  const submitReview = (no: number, note?: string, acknowledgeFindings = false, confirmedAnalysis = false) =>
+    explicit(() => api.reviewQuestion(job.id, no, 'approved', reviewer, note, {
+      expectedVersion: job.versions.length, questionHash: binding?.questionHashes[String(no)],
+      checkHash: binding?.questionReports[String(no)], acknowledgeFindings, analysisConfirmed: confirmedAnalysis,
+    }))
 
   return (
     <div>
@@ -1014,29 +990,41 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate, onPolling, notify }: 
         {` · ${jobRating(job)}`}
       </p>
       <StageRail status={job.status} />
-      {job.status === 'failed' && job.lastError !== undefined && (
-        <p className={css.errorNote}>起草/检查失败：{job.lastError}（点击「重新 AI 起草」可自动重新确认细目表并重试）</p>
+      {job.planSummary?.normalized && <p className={css.planNotice}>按模板保留实际分值：原请求 {job.planSummary.requestedTotalScore} 分 → 当前细目表 {job.planSummary.totalScore} 分、{job.planSummary.questionCount} 题。没有自动重分。</p>}
+      {job.status === 'failed' && (
+        <div className={css.failureBox} role="alert">
+          <b>当前阶段未完成</b>
+          <p>{job.lastError ?? '原稿已保留，请选择有边界的重试动作。'}</p>
+          <p className={css.jobMeta}>重试检查不会重新起草；重试起草、修订或换题可能调用模型，仅在你明确发起时执行。</p>
+        </div>
       )}
-      <AiWorker job={job} runnerActive={runnerActive} since={runnerSince} />
+      <AiWorker job={job} runnerActive={runnerActive} since={Number.isFinite(runnerSince) ? runnerSince : Date.now()} />
+      {serverBusy && <p className={css.jobMeta}>可以离开本页，服务端会接续至检查和待审核；不会因关闭页面自动重复生成。</p>}
 
-      {/* 细目表 — 只读信息：确认不再是独立步骤，AI 起草自动采用当前细目表。
-          'failed' 任务重试也走同一张表（重确认会重置修订预算）。 */}
+      {/* Keep scope gaps editable before a paid call; the server validates this same table. */}
       {(job.status === 'spec' || job.status === 'failed') && job.specTable.length > 0 && (
         <details className={css.block} open={!runnerActive}>
           <summary className={css.specSummary}>
             双向细目表（{job.specTable.length} 题 / {job.specTable.reduce((n, r) => n + r.score, 0)} 分 · {jobRating(job)}）
-            <span className={css.specSummaryHint}>只读 · AI 起草时自动采用</span>
+            <span className={css.specSummaryHint}>检查章节与考点后起草</span>
           </summary>
-          <table className={css.table}>
-            <thead><tr><th>题号</th><th>板块</th><th>题型</th><th>分值</th><th>考点</th><th>能力</th><th>题库供给</th></tr></thead>
+          <table className={clsx(css.table, css.specTable)}>
+            <thead><tr><th>题号</th><th>板块</th><th>题型</th><th>分值</th><th>章节 / 考点</th><th>能力</th><th>题库供给</th></tr></thead>
             <tbody>
-              {job.specTable.map((row) => {
+              {specDraft.map((row, rowIndex) => {
                 const plan = planByNo.get(row.questionNo)
                 return (
                   <tr key={row.questionNo}>
-                    <td>{row.questionNo}</td><td className={css.cellText}>{row.sectionTitle}</td><td>{kindLabel(row.kind)}</td>
-                    <td>{row.score}</td><td className={css.cellText}>{row.knowledge.join('、')}</td><td>{row.ability}</td>
-                    <td>
+                    <td data-label="题号">{row.questionNo}</td><td data-label="板块" className={css.cellText}>{row.sectionTitle}</td><td data-label="题型">{kindLabel(row.kind)}</td>
+                    <td data-label="分值">{row.score}</td><td data-label="章节 / 考点" className={css.cellText}>
+                      <input aria-label={`第${row.questionNo}题章节`} value={row.chapter ?? ''} disabled={runnerActive}
+                        placeholder="对应已教章节" onChange={event => setSpecDraft(previous => previous.map((item, index) =>
+                          index === rowIndex ? { ...item, chapter: event.target.value } : item))} />
+                      <input aria-label={`第${row.questionNo}题考点`} value={row.knowledge.join('；')} disabled={runnerActive}
+                        placeholder="考点以分号分隔" onChange={event => setSpecDraft(previous => previous.map((item, index) =>
+                          index === rowIndex ? { ...item, knowledge: event.target.value.split(/[;；]/).map(point => point.trim()).filter(Boolean) } : item))} />
+                    </td><td data-label="能力">{row.ability}</td>
+                    <td data-label="题库供给">
                       {plan === undefined
                         ? <span className={css.jobMeta}>…</span>
                         : <span className={clsx(css.chip, css[`plan-${plan.mode}`])}
@@ -1049,30 +1037,43 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate, onPolling, notify }: 
               })}
             </tbody>
           </table>
+          <div className={css.actions}>
+            <button type="button" className={css.miniBtn} disabled={runnerActive}
+              onClick={() => explicit(() => api.confirmSpec(job.id, specDraft, job.versions.length))}>确认章节与考点</button>
+            <span className={css.jobMeta}>确认不会调用模型；范围缺口必须先补齐。</span>
+          </div>
         </details>
       )}
 
-      {/* 阶段动作 — 一个按钮完成「确认细目表 → 起草 → 检查」，编排见 driveAi */}
+      {/* Only explicit actions start work; background continuation belongs to the server. */}
       <div className={css.actions}>
         {(job.status === 'spec' || job.status === 'failed' || job.status === 'review') && job.specTable.length > 0 && (
-          <button type="button" className={css.primary} disabled={runnerActive}
-            onClick={driveAi}>
-            {runnerActive
-              ? 'AI 工作中…'
-              : job.status === 'failed'
-                ? '重新 AI 起草 + 自动检查'
-                : job.status === 'review'
-                  ? '重新起草（覆盖当前草稿）'
-                  : 'AI 起草 + 自动检查'}
+          <button type="button" className={job.status === 'spec' ? css.primary : css.miniBtn} disabled={runnerActive}
+            onClick={driveAi}>{job.status === 'spec' ? 'AI 起草 + 自动检查' : '重新起草（保留原稿恢复点）'}</button>
+        )}
+        {job.document !== undefined && (job.status === 'review' || job.status === 'failed') && (
+          <button type="button" className={css.primary} disabled={runnerActive} onClick={driveChecks}>
+            仅重试检查当前稿
           </button>
         )}
+        {job.status === 'failed' && job.operation?.state === 'failed' && api.retryOperation !== undefined && (
+          <button type="button" className={css.miniBtn} disabled={runnerActive} onClick={driveRetry}>
+            {job.operation.phase === 'check' || job.operation.phase === 'figure' ? '重试失败的检查阶段' : '重试失败阶段（可能调用模型）'}
+          </button>
+        )}
+        {job.status === 'failed' && job.recovery !== undefined && api.restoreDraft !== undefined && (
+          <button type="button" className={css.miniBtn} disabled={runnerActive}
+            onClick={() => { const restore = api.restoreDraft; if (restore !== undefined) explicit(() => restore(job.id, job.versions.length)) }}>恢复更改前原稿</button>
+        )}
       </div>
+      {job.status === 'review' && binding === undefined && <p className={css.planNotice}>当前稿尚无有效检查报告，请先检查；旧审核状态不能直接用于批准新内容。</p>}
 
       {/* 检查发现 */}
       {job.findings.length > 0 && (
-        <div className={css.block}>
-          <h3>自动检查（{job.findings.filter(f => f.severity === 'error').length} 个错误 /
-            {job.findings.filter(f => f.severity !== 'error').length} 个提示）</h3>
+        <details className={css.block}>
+          <summary className={css.specSummary}>检查与审核证据（{unresolved.length} 个待解决错误 /
+            {job.findings.filter(f => f.severity !== 'error').length} 个提示）</summary>
+          <p className={css.jobMeta}>{binding === undefined ? '报告不是当前版本，仅供历史参考' : `报告绑定 v${binding.version} · ${binding.completedAt.slice(0, 16).replace('T', ' ')}`}；人工裁定后证据仍保留。</p>
           <ul className={css.findings}>
             {job.findings.map((f, i) => (
               <li key={i} className={f.severity === 'error' ? css.findingError : css.findingWarn}>
@@ -1080,33 +1081,43 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate, onPolling, notify }: 
               </li>
             ))}
           </ul>
-        </div>
+        </details>
       )}
 
       {/* 独立解题报告 */}
       {job.solveReport.length > 0 && (
-        <div className={css.block}>
-          <h3>独立解题比对</h3>
+        <details className={css.block}>
+          <summary className={css.specSummary}>独立解题比对（{job.solveReport.length} 题）</summary>
           <ul className={css.findings}>
             {job.solveReport.map((r, i) => (
               <li key={i} className={r.consistent ? css.findingOk : css.findingWarn}>
                 第 {r.questionNo} 题：{r.consistent
                   ? '一致'
-                  : <>不一致（起草「<Rich text={r.draftAnswer} />」/ 独立解「<Rich text={r.solvedAnswer} />」）</>}
+                  : r.solvedAnswer === '' ? '引擎未能判定，需要教师复核'
+                    : <>不一致（起草「<Rich text={r.draftAnswer} />」/ 引擎「<Rich text={r.solvedAnswer} />」）</>}
                 {r.note !== undefined && <> — <Rich text={r.note} /></>}
               </li>
             ))}
           </ul>
-        </div>
+        </details>
       )}
 
       {/* 逐题审核 */}
       {questions.length > 0 && (
-        <div className={css.block}>
+        <div className={clsx(css.block, css.reviewWorkspace)}>
           <h3>逐题审核（{approvedCount}/{questions.length} 已通过）</h3>
-          {questions.map(q => (
-            <details key={q.number} className={css.question} open={q.status !== 'approved'}>
-              <summary>
+          <div className={css.questionReader}>
+            <nav className={css.questionDirectory} aria-label="题目目录">
+              {questions.map(question => <button key={question.number} type="button"
+                className={clsx(shownQuestion?.number === question.number && css.questionSelected,
+                  reviewed(question.number) && css.questionReviewed)}
+                aria-current={shownQuestion?.number === question.number ? 'step' : undefined}
+                aria-label={`第${question.number}题${reviewed(question.number) ? '，已审核' : '，待审核'}`}
+                onClick={() => { setFocusedQuestion(question.number) }}>{question.number}<span>{reviewed(question.number) ? '已审' : '待审'}</span></button>)}
+            </nav>
+            {(shownQuestion === undefined ? [] : [shownQuestion]).map(q => (
+            <article key={q.number} className={css.question}>
+              <header className={css.questionHeader}>
                 <span className={css.qNo}>第 {q.number} 题</span>
                 <span className={css.qMeta}>{kindLabel(q.kind)} · {q.score} 分 · {q.knowledge.join('、')}</span>
                 {q.provenance !== undefined && (
@@ -1115,10 +1126,10 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate, onPolling, notify }: 
                     {PLAN_LABEL[q.provenance.mode] ?? q.provenance.mode}
                   </span>
                 )}
-                <span className={clsx(css.qStatus, q.status === 'approved' && css.qApproved)}>
-                  {q.status === 'approved' ? '✓ 已通过' : q.status === 'rejected' ? '✗ 退回' : '待审'}
+                <span className={clsx(css.qStatus, reviewed(q.number) && css.qApproved)}>
+                  {reviewed(q.number) ? '✓ 已通过' : q.status === 'rejected' ? '✗ 退回' : '待审'}
                 </span>
-              </summary>
+              </header>
               <div className={css.qBody}>
                 <p className={css.stem}><Rich text={q.stem} /></p>
                 {q.options !== undefined && q.options.length > 0 && (
@@ -1128,12 +1139,14 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate, onPolling, notify }: 
                   <p key={s.no} className={css.sub}>（{s.no}）（{s.score} 分）<Rich text={s.text} /></p>
                 ))}
                 {q.figure !== undefined && (
-                  <FigureBlock job={job} api={api}
-                    figureRef={q.figure.ref} caption={q.figure.caption ?? q.figure.ref} />
+                  <FigureBlock job={job} api={api} questionNo={q.number}
+                    figureRef={q.figure.ref} caption={q.figure.studentCaption ?? '题图'} />
                 )}
                 {q.answer !== undefined && (
                   <div className={css.answer}>
                     <p><b>答案：</b><Rich text={q.answer.result} /></p>
+                    {job.answerCorrections?.some(correction => correction.questionNo === q.number
+                      && correction.questionHash === binding?.questionHashes[String(q.number)]) && <p className={css.analysisWarning}>引擎已改最终答案，下方原解析、评分点与等价答案未自动改写；须人工核对，不能视为新答案的已验证解析。</p>}
                     {q.answer.steps.map((s, i) => <p key={i} className={css.answerStep}><Rich text={s} /></p>)}
                     <p className={css.grading}>
                       评分点：{q.answer.gradingPoints.map((p, i) => (
@@ -1143,54 +1156,72 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate, onPolling, notify }: 
                   </div>
                 )}
                 {q.reviewNote !== undefined && <p className={css.note}>审核意见：{q.reviewNote}</p>}
+                <details className={css.questionEvidence} open={job.findings.some(finding => finding.questionNo === q.number && finding.severity === 'error')}>
+                  <summary>本题检查证据</summary>
+                  <ul className={css.findings}>{job.findings.filter(finding => finding.questionNo === q.number)
+                    .map((finding, index) => <li key={index} className={finding.severity === 'error' ? css.findingError : css.findingWarn}><Rich text={finding.detail} /></li>)}</ul>
+                  {job.findings.every(finding => finding.questionNo !== q.number) && <p className={css.jobMeta}>{binding === undefined ? '尚未完成当前版本检查' : '当前报告无本题专项发现，仍须人工审核'}</p>}
+                </details>
                 <div className={css.qActions}>
-                  <button type="button"
-                    onClick={() => { void run(async () => { onJobUpdate(await api.reviewQuestion(job.id, q.number, 'approved', reviewer)) }) }}>
-                    通过
-                  </button>
-                  <button type="button"
-                    disabled={repairWait !== null}
+                  <button type="button" disabled={!canReview || reviewed(q.number)}
+                    onClick={() => {
+                      const errors = job.findings.filter(finding => finding.questionNo === q.number && finding.severity === 'error')
+                      const corrected = job.answerCorrections?.some(correction => correction.questionNo === q.number
+                        && correction.questionHash === binding?.questionHashes[String(q.number)])
+                      if (errors.length > 0 || corrected) { setReviewTarget(q.number); setReviewText(''); setAcknowledgeChecks(false); setAnalysisConfirmed(false) }
+                      else submitReview(q.number)
+                    }}>通过</button>
+                  <button type="button" disabled={runnerActive || job.status !== 'review' && job.status !== 'failed'}
                     onClick={() => { setRepairTarget(q.number); setRepairText('') }}>
-                    {repairWait?.no === q.number ? 'AI 修订中…' : '退回修改'}
+                    {repairWait === q.number ? 'AI 修订中…' : '退回修改'}
                   </button>
                   {job.status === 'review' && (planByNo.get(q.number)?.candidates ?? 0) > 0 && (
                     <button type="button"
-                      disabled={replaceWait !== null}
-                      title="从题库换一道同考点候选题（原题或改编）"
-                      onClick={() => {
-                        setReplacePending({ jobId: job.id, no: q.number, version: job.versions.at(-1)?.version ?? 0, since: Date.now() })
-                        void run(async () => { await api.replaceQuestion(job.id, q.number, reviewer) })
-                      }}>
-                      {replaceWait?.no === q.number ? '换题中…' : '换一道候选题'}
+                      disabled={runnerActive}
+                      title="从题库换一道同考点候选题（原题或改编）；保留更改前原稿"
+                      onClick={() => explicit(() => api.replaceQuestion(job.id, q.number, reviewer, job.versions.length))}>
+                      {replaceWait === q.number ? '换题中…' : '换一道候选题'}
                     </button>
                   )}
                 </div>
               </div>
-            </details>
+            </article>
           ))}
+          </div>
+          <div className={css.readerActions}>
+            <button type="button" className={css.miniBtn} disabled={shownIndex <= 0}
+              onClick={() => { setFocusedQuestion(questions[shownIndex - 1]?.number) }}>上一题</button>
+            <span className={css.jobMeta}>第 {shownIndex + 1} / {questions.length} 题</span>
+            <button type="button" className={css.miniBtn} disabled={shownIndex >= questions.length - 1}
+              onClick={() => { setFocusedQuestion(questions[shownIndex + 1]?.number) }}>下一题</button>
+          </div>
         </div>
       )}
 
       {/* 整卷批准与导出 */}
       {job.status === 'review' && questions.length > 0 && (
-        <div className={css.actions}>
-          <button type="button" className={css.primary}
-            onClick={() => { void run(async () => { onJobUpdate(await api.approve(job.id, reviewer, 'physics')) }) }}>
-            物理部分批准
-          </button>
-          {job.request.subjects.includes('chemistry') && (
-            <button type="button" className={css.primary}
-              onClick={() => { void run(async () => { onJobUpdate(await api.approve(job.id, reviewer, 'chemistry')) }) }}>
-              化学部分批准
-            </button>
-          )}
+        <div className={css.approvalBox}>
+          <h3>学科签署与定稿</h3>
+          <p className={css.jobMeta}>{canApprove ? '当前内容与检查证据已逐题确认，请分别签署本卷学科。' : '完成当前版本检查、解决阻断项并逐题审核后才能签署。'}</p>
+          <div className={css.actions}>
+            {job.request.subjects.filter(subject => subject === 'physics' || subject === 'chemistry').map(subject => {
+              const half = subject as 'physics' | 'chemistry'
+              const signed = job.approval?.versionHash === binding?.documentHash && job.approval?.checkHash === binding?.reportHash
+                ? job.approval?.[half] : undefined
+              return <button key={half} type="button" className={css.primary} disabled={!canApprove || signed !== undefined}
+                onClick={() => explicit(() => api.approve(job.id, reviewer, half, {
+                  expectedVersion: job.versions.length, documentHash: binding?.documentHash, checkHash: binding?.reportHash,
+                }))}>{SUBJECT_LABEL[half]}部分{signed === undefined ? '批准' : '已签署'}</button>
+            })}
+          </div>
+          {job.request.subjects.length > 1 && <p className={css.jobMeta}>物理与化学独立签署；先签任一部分不会自动批准另一部分。</p>}
         </div>
       )}
       {job.status === 'approved' && (
         <div className={css.actions}>
           <button type="button" className={css.primary} disabled={runnerActive}
             onClick={driveExport}>
-            {runnerActive ? 'AI 生成题图中…' : '导出 A4 试卷 + 答案解析（PDF/Word）'}
+            {runnerActive ? '正在验证并导出…' : '导出 A4 试卷 + 答案解析（PDF/Word）'}
           </button>
         </div>
       )}
@@ -1200,7 +1231,7 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate, onPolling, notify }: 
           any transformed ancestor instead of the viewport. */}
       {repairTarget !== null ? createPortal(
         <div className={css.modalOverlay} onClick={() => { setRepairTarget(null) }}>
-          <div className={css.modal} onClick={(e) => { e.stopPropagation() }}>
+          <div className={css.modal} role="dialog" aria-modal="true" aria-label={`退回修改 · 第 ${repairTarget} 题`} onClick={(e) => { e.stopPropagation() }}>
             <h3>退回修改 · 第 {repairTarget} 题</h3>
             <p className={css.jobMeta}>写下修改建议，AI 会在原题基础上修订（题型/分值/考点不变），修订后需重新审核。</p>
             <textarea
@@ -1211,13 +1242,12 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate, onPolling, notify }: 
             <div className={css.qActions}>
               <button type="button" onClick={() => { setRepairTarget(null) }}>取消</button>
               <button type="button" className={css.primary}
-                disabled={repairText.trim() === ''}
+                disabled={repairText.trim() === '' || runnerActive}
                 onClick={() => {
                   const no = repairTarget
                   const suggestion = repairText.trim()
                   setRepairTarget(null)
-                  setRepairPending({ jobId: job.id, no, version: job.versions.at(-1)?.version ?? 0, since: Date.now() })
-                  void run(async () => { await api.repairQuestion(job.id, no, suggestion, reviewer) })
+                  explicit(() => api.repairQuestion(job.id, no, suggestion, reviewer, job.versions.length))
                 }}>
                 提交修订
               </button>
@@ -1225,6 +1255,34 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate, onPolling, notify }: 
           </div>
         </div>,
         document.body,
+      ) : null}
+      {reviewTarget !== null && targetQuestion !== undefined ? createPortal(
+        <div className={css.modalOverlay} onClick={() => { setReviewTarget(null) }}>
+          <div className={css.modal} role="dialog" aria-modal="true" aria-label={`人工复核 · 第 ${reviewTarget} 题`}
+            onClick={event => { event.stopPropagation() }}>
+            <h3>人工复核 · 第 {reviewTarget} 题</h3>
+            <p className={css.jobMeta}>确认仅绑定眼前题目与当前报告；结构、总分、范围及缺必要图不能人工豁免。</p>
+            <ul className={css.findings}>{targetErrors.map((finding, index) => <li key={index}><Rich text={finding.detail} /></li>)}</ul>
+            <label className={css.field}>人工裁定理由
+              <textarea autoFocus rows={4} value={reviewText} onChange={event => { setReviewText(event.target.value) }}
+                placeholder="写明对题目条件、引擎分歧及解析评分点的核对依据" />
+            </label>
+            {targetErrors.length > 0 && <label className={css.reviewCheck}>
+              <input type="checkbox" checked={acknowledgeChecks} onChange={event => { setAcknowledgeChecks(event.target.checked) }} />
+              我已逐项阅读检查分歧，按上述理由作出人工裁定
+            </label>}
+            {targetCorrection !== undefined && <label className={css.reviewCheck}>
+              <input type="checkbox" checked={analysisConfirmed} onChange={event => { setAnalysisConfirmed(event.target.checked) }} />
+              我已核对更正后的最终答案、原解析、评分点和等价答案；如不一致应退回修订
+            </label>}
+            <div className={css.qActions}>
+              <button type="button" onClick={() => { setReviewTarget(null) }}>取消</button>
+              <button type="button" disabled={runnerActive || reviewText.trim() === ''
+                || targetErrors.length > 0 && !acknowledgeChecks || targetCorrection !== undefined && !analysisConfirmed}
+                onClick={() => { const no = reviewTarget; setReviewTarget(null); submitReview(no, reviewText.trim(), acknowledgeChecks, analysisConfirmed) }}>确认本题</button>
+            </div>
+          </div>
+        </div>, document.body,
       ) : null}
     </div>
   )
@@ -1245,6 +1303,7 @@ function FinalPanel({ jobs, exports_, api, t }: {
   return (
     <section className={css.panel}>
       <h2>已定稿试卷</h2>
+      <p className={css.sectionIntro}>查看当前定稿版本，准备打印与分享。历史文件独立保存，不会拿旧产物冒充当前版本。</p>
       {jobs.length === 0 && <Empty text="暂无已定稿的试卷 — 批准并导出的试卷会出现在这里" />}
       <div className={css.finalSplit}>
         <div className={css.finalList}>
@@ -1254,7 +1313,10 @@ function FinalPanel({ jobs, exports_, api, t }: {
           </div>
           <div className={css.finalRows}>
             {rows.map((job) => {
-              const bundle = exports_.find(e => e.paperId === job.id)
+              const current = job.versions.at(-1)
+              const bundle = [...exports_].filter(exported => exported.paperId === job.id
+                && exported.version === current?.version && exported.hash === current.hash)
+                .sort((left, right) => right.exportedAt.localeCompare(left.exportedAt))[0]
               /* Bind the download names to consts: the `!== undefined` checks
                below sit inside JSX closures, where narrowing on a property
                access does not survive — on a const it does. */
@@ -1277,6 +1339,7 @@ function FinalPanel({ jobs, exports_, api, t }: {
                     {bundle?.files.answerDocx !== undefined && (
                       <a href={api.fileUrl(job.id, bundle.files.answerDocx)} download>答案解析.docx</a>
                     )}
+                    {bundle === undefined && <span className={css.jobMeta}>当前版本尚未产出文件，请返回任务完成导出。</span>}
                   </div>
                 </div>
               )

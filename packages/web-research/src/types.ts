@@ -1,34 +1,43 @@
-/**
- * Public web research contract.
- *
- * The tool level (`physics_search_web`) stays a thin model-facing surface; the
- * retrieval logic lives here and owns no harness types. Every failure has a
- * stable code so the UI and the model can tell "no results" from "the network
- * is down" instead of receiving one generic sentence.
- */
-
+/** Harness-independent public research contracts. Errors never include request data. */
 export type ResearchErrorCode =
   | 'INVALID_QUERY'
+  | 'INVALID_CITATION'
   | 'NO_RESULTS'
+  | 'RESEARCH_CANCELLED'
+  | 'RESEARCH_TIMEOUT'
+  | 'RESEARCH_BUSY'
   | 'SEARCH_TIMEOUT'
   | 'SEARCH_RATE_LIMITED'
   | 'SEARCH_UNAVAILABLE'
   | 'SEARCH_PARSE_FAILED'
   | 'FETCH_BLOCKED'
   | 'FETCH_TIMEOUT'
+  | 'FETCH_RATE_LIMITED'
   | 'FETCH_TOO_LARGE'
   | 'FETCH_UNSUPPORTED_TYPE'
   | 'FETCH_UNAVAILABLE'
   | 'FETCH_PARSE_FAILED'
 
+/** Diagnostic codes and counts only: no query, response body, headers or raw errors. */
+export interface ResearchDiagnostic {
+  readonly stage: 'search' | 'read'
+  readonly code: ResearchErrorCode
+  readonly outcome: 'empty' | 'failed' | 'partial'
+  readonly provider?: string
+  readonly sourceId?: string
+  readonly count?: number
+}
+
 export class ResearchError extends Error {
-  constructor(readonly code: ResearchErrorCode, message: string) {
+  readonly diagnostics: readonly ResearchDiagnostic[]
+
+  constructor(readonly code: ResearchErrorCode, message: string, diagnostics: readonly ResearchDiagnostic[] = []) {
     super(message)
     this.name = 'ResearchError'
+    this.diagnostics = diagnostics
   }
 }
 
-/** One ranked search hit before any body is read. */
 export interface SearchHit {
   readonly title: string
   readonly url: string
@@ -41,17 +50,30 @@ export interface SearchResponse {
   readonly query: string
   readonly provider: string
   readonly hits: readonly SearchHit[]
+  readonly degraded: boolean
+  readonly diagnostics: readonly ResearchDiagnostic[]
 }
 
-/** What a provider adapter must implement. Free/SearXNG and paid/official adapters share this. */
+export interface SearchOptions {
+  readonly limit: number
+  readonly signal?: AbortSignal
+  /** Absolute round deadline, including time spent in earlier providers/pages. */
+  readonly deadlineAt?: number
+}
+
+export interface SearchProviderResult {
+  readonly hits: readonly SearchHit[]
+  readonly diagnostics?: readonly ResearchDiagnostic[]
+}
+
 export interface SearchProvider {
   readonly name: string
-  /** True only when the provider returns page content with the hit; otherwise a reader is needed. */
   readonly providesContent: boolean
-  search(query: string, options: { readonly limit: number; readonly signal?: AbortSignal }): Promise<readonly SearchHit[]>
+  search(query: string, options: SearchOptions): Promise<readonly SearchHit[]>
+  /** Additive: old adapters and callers can continue using search() returning an array. */
+  searchDetailed?(query: string, options: SearchOptions): Promise<SearchProviderResult>
 }
 
-/** A publicly readable page after extraction. Body is plain text, never executed. */
 export interface ReadDocument {
   readonly url: string
   readonly title: string
@@ -65,30 +87,37 @@ export interface ReadOptions {
   readonly timeoutMs?: number
   readonly maxRedirects?: number
   readonly signal?: AbortSignal
+  readonly deadlineAt?: number
 }
 
-/** Evidence passed to the model and the UI; source ids are stable within one research result. */
 export interface ResearchSource {
+  /** Legacy display handle. It is local to this result, not a cross-round citation. */
   readonly sourceId: string
+  /** Stable canonical-URL identity, independent of result rank. */
+  readonly sourceKey: string
+  /** Opaque research-scoped handle. Prefer this to bare s1 when citing. */
+  readonly citationId: string
   readonly title: string
   readonly url: string
   readonly provider: string
   readonly fetchedAt: string
-  /** `snippet` when only search metadata was read; `full-text` after a successful read. */
   readonly depth: 'snippet' | 'full-text'
   readonly snippet: string
-  /** Bounded quoted passage used for the citation; absent when only a snippet exists. */
   readonly excerpt?: string
-  readonly contentSha256?: string
+  /** Hash of the fetched plain text, or of the search snippet at snippet depth. */
+  readonly contentSha256: string
 }
 
 export interface ResearchResult {
+  readonly researchId: string
   readonly query: string
   readonly provider: string
   readonly searchedAt: string
   readonly sources: readonly ResearchSource[]
   readonly readCount: number
   readonly notes: readonly string[]
+  readonly degraded: boolean
+  readonly diagnostics: readonly ResearchDiagnostic[]
 }
 
 export interface ResearchOptions {
@@ -96,7 +125,9 @@ export interface ResearchOptions {
   readonly reader: PageReader
   readonly limit?: number
   readonly readLimit?: number
+  /** One budget for the entire round, not a new budget per page. */
   readonly timeoutMs?: number
+  readonly deadlineAt?: number
   readonly now?: () => Date
   readonly signal?: AbortSignal
 }

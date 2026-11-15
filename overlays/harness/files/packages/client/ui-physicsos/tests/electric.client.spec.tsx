@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { revealFullWorkbenchInspector } from './workbench-interaction-fixture.client.ts'
 import { useStudentAuth } from './student-auth-fixture.client.ts'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createElectricScene,
@@ -10,7 +10,7 @@ import {
   type PhysicsScene,
 } from '@physicsos/physics-scene'
 
-import { SceneChatCard } from '../src/client/SceneChatCard.tsx'
+import { SceneCardBody, SceneChatCard } from '../src/client/SceneChatCard.tsx'
 import { cardSession, solvedCardData } from './solved-card-fixture.client.ts'
 import type { PhysicsSceneRef } from '../src/client/surface-store.ts'
 import { PhysicsSurface, type PhysicsSurfaceProps } from '../src/client/LabWorkspace.tsx'
@@ -28,6 +28,7 @@ const neverHook = (() => {
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
 describe('Electric product slice', () => {
@@ -75,10 +76,12 @@ describe('Electric product slice', () => {
     expect(domainOfScene(composite)).toBe('composite')
   })
 
-  it('renders a verified editable Electric Lab and commits field changes through Scene Runtime', () => {
+  it('renders a verified editable Electric Lab and commits field changes through Scene Runtime', async () => {
     /* Driven through the real dispatcher, not a domain-specific component: there
        is one workspace shell, so the electric surface must be reachable purely by
        handing an electric scene to PhysicsSurface. */
+    vi.stubGlobal('innerWidth', 720)
+    vi.stubGlobal('innerHeight', 768)
     const surface = createPhysicsSurfaceController()
     const scene = createElectricScene()
     surface.open('lab', { sceneId: String(scene.id), scene })
@@ -98,7 +101,12 @@ describe('Electric product slice', () => {
     expect(container.querySelector('svg[role="img"]')).toBeTruthy()
     expect(screen.getByText('引擎已验证')).toBeTruthy()
     const inspectorToggle = screen.getByRole('button', { name: '检查器' })
+    /* The quick-parameter float starts open; exercise dismissal before reopening. */
+    expect(inspectorToggle.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByRole('complementary', { name: '快捷参数' })).toBeTruthy()
+    fireEvent.click(inspectorToggle)
     expect(inspectorToggle.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByRole('complementary', { name: /检查器|快捷参数/ })).toBeNull()
     fireEvent.click(inspectorToggle)
     revealFullWorkbenchInspector()
     expect(inspectorToggle.getAttribute('aria-expanded')).toBe('true')
@@ -108,23 +116,27 @@ describe('Electric product slice', () => {
     closeInspector.focus()
     fireEvent.keyDown(closeInspector, { key: 'Escape' })
     expect(inspectorToggle.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByRole('complementary', { name: /检查器|快捷参数/ })).toBeNull()
+    await waitFor(() => { expect(document.activeElement).toBe(inspectorToggle) })
     revealFullWorkbenchInspector()
     const fieldInput = screen.getByRole('textbox', { name: '场强' })
     if (!(fieldInput instanceof HTMLInputElement)) throw new Error('Expected electric field input.')
     fireEvent.change(fieldInput, { target: { value: '1.2' } })
+    expect(fieldInput.value).toBe('1.2')
+    expect(container.querySelector('[data-scene-revision="0"]')).toBeTruthy()
     fireEvent.blur(fieldInput)
     /* A committed edit is a scene command, so the revision must advance. */
     expect(container.querySelector('[data-scene-revision="1"]')).toBeTruthy()
     expect(fieldInput.value).toBe('1.2')
   })
 
-  it('keeps an Electric historical question in the code status shell until a renderer is generated', () => {
+  it('keeps an Electric historical question in the preview code status shell until a renderer is generated', () => {
     const data = solvedCardData('electric-01-perpendicular-deflection')
     let openedScene: PhysicsScene | undefined
     const openSceneInLab = (sceneRef: PhysicsSceneRef) => {
       openedScene = sceneRef.scene
     }
-    render(
+    const attachment = render(
       <SceneChatCard {...({
         node: { key: 'card:electric', kind: 'physics-scene-card', anchorSeq: 1.9, location: { kind: 'session' }, data },
         t,
@@ -132,10 +144,18 @@ describe('Electric product slice', () => {
         useChat: cardSession(),
       } as unknown as Parameters<typeof SceneChatCard>[0])} />,
     )
-
-    expect(screen.getByRole('button', { name: '在实验室中探索' }).hasAttribute('disabled')).toBe(true)
-    expect(openedScene).toBeUndefined()
-    expect(screen.getByText('这段历史记录还没有本题代码实验')).toBeTruthy()
+    expect(attachment.container.querySelector('[data-scene-attachment]')?.getAttribute('data-scene-attachment')).toBe(data.sceneId)
+    expect(attachment.container.querySelector('[data-code-experiment-shell]')).toBeNull()
     expect(screen.getByText('物理验证')).toBeTruthy()
+    attachment.unmount()
+
+    const preview = render(<SceneCardBody data={data} presentation="preview" t={t} openSceneInLab={openSceneInLab} />)
+    const explore = screen.getByRole('button', { name: '在实验室中探索' })
+    expect(explore.hasAttribute('disabled')).toBe(true)
+    fireEvent.click(explore)
+    expect(openedScene).toBeUndefined()
+    expect(preview.container.querySelector('[data-code-experiment-shell]')).toBeTruthy()
+    expect(preview.container.querySelector('[data-question-code-status="historical"]')).toBeTruthy()
+    expect(screen.getByText('这段历史记录还没有本题代码实验')).toBeTruthy()
   })
 })

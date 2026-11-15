@@ -15,7 +15,6 @@ export type PhysicsSurfaceId =
   | 'projects'
   | 'record'
   | 'paper'
-  | 'library'
   | 'contribute'
   | 'notice'
   | 'admin'
@@ -35,7 +34,6 @@ export const PHYSICS_PANEL_IDS = {
   projects: 'physicsos-projects' as MainPanelId,
   paper: 'physicsos-paper' as MainPanelId,
   notice: 'physicsos-notice' as MainPanelId,
-  library: 'physicsos-library' as MainPanelId,
   contribute: 'physicsos-contribute' as MainPanelId,
   record: 'physicsos-record' as MainPanelId,
   admin: 'physicsos-admin' as MainPanelId,
@@ -48,7 +46,6 @@ const SURFACE_BY_PANEL: Readonly<Record<string, PhysicsSurfaceId>> = {
   [PHYSICS_PANEL_IDS.projects]: 'projects',
   [PHYSICS_PANEL_IDS.paper]: 'paper',
   [PHYSICS_PANEL_IDS.notice]: 'notice',
-  [PHYSICS_PANEL_IDS.library]: 'library',
   [PHYSICS_PANEL_IDS.contribute]: 'contribute',
   [PHYSICS_PANEL_IDS.record]: 'record',
   [PHYSICS_PANEL_IDS.admin]: 'admin',
@@ -57,12 +54,12 @@ const SURFACE_BY_PANEL: Readonly<Record<string, PhysicsSurfaceId>> = {
 /**
  * Interpret one shell panel selection as a product surface.
  * @param panelId - active `main` key, or null for the Conversation.
- * @returns the surface, undefined when the panel is not PhysicsOS's.
+ * @returns the surface; the removed library panel restores Home, and foreign panels return undefined.
  */
 export function physicsSurfaceOfPanel(
   panelId: string | null | undefined,
 ): PhysicsSurfaceId | undefined {
-  if (panelId === null) return 'home'
+  if (panelId === null || panelId === 'physicsos-library') return 'home'
   if (panelId === undefined) return undefined
   return SURFACE_BY_PANEL[panelId]
 }
@@ -484,8 +481,9 @@ export function createPhysicsSurfaceController(
       const current = store.getSnapshot()
       /* Only the field the shell owns moves: an adopted panel never drops the
          active scene, the picker flag, or build mode. */
-      if (current.surface === surface) return
-      store.set({ ...current, surface })
+      if (current.surface !== surface) store.set({ ...current, surface })
+      // A removed panel can still be restored by an older shell snapshot.
+      if (panelId === 'physicsos-library') navigation?.selectSurface('home')
     },
   }
 }

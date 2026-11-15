@@ -177,13 +177,12 @@ export const EXPERIMENT_MODEL_KINDS: Readonly<Record<string, ExperimentModelKind
 }
 
 /**
- * The two runtimes that never fork an experimental branch, so the branch badge
- * and its restore entry point stay unreachable for them. Every other runtime
- * goes through `forkExperimentalScene`.
+ * The magnetic-circular runtime never forks an experimental branch. The modern
+ * runtime now forks successful physical edits and restores the protected origin;
+ * its six editable conditions do not imply a timeline or measurement tools.
  */
 const NON_BRANCHABLE_IDS: ReadonlySet<string> = new Set([
   'magnetic-circular',
-  'photoelectric-effect',
 ])
 
 /**

@@ -1,296 +1,169 @@
-/* Circuit apparatus in the platform's scene coordinates. The two terminal
- * anchors are ±0.75 along the local a→b axis, as in circuit-builder.ts.
- * Ratings, readings, switch state and direction are exclusively snapshot facts. */
-const TERMINAL_HALF = 0.75;
-const point = (p) => p && Number.isFinite(p.x) && Number.isFinite(p.y);
+// All eight circuits use the same terminal contract: local a=-0.75, b=+0.75.
+// XY and authored wire bends are schematic facts; depth is hardware only.
+import { finite, positive, isPoint, offset, scope, entityScope, pathSpan } from './apparatus-geometry.js';
+import { apparatusColors as c, finishes, apparatusFrame, instrumentCase, fastener, bindingTerminal, digitalMeter } from './apparatus.js';
 
-function currentAnnotation(object) {
+export const CIRCUIT_TERMINAL_HALF = 0.75;
+const hasText = text => text !== undefined && text !== null && text !== '';
+
+function annotation(object) {
   object?.traverse(child => {
     child.renderOrder = 12;
-    for (const material of Array.isArray(child.material) ? child.material : [child.material]) {
-      if (material) { material.depthTest = false; material.depthWrite = false; }
-    }
+    for (const material of Array.isArray(child.material) ? child.material : [child.material]) if (material) { material.depthTest = false; material.depthWrite = false; }
   });
   return object;
 }
 
-function finish(object, properties) {
-  if (object?.material) Object.assign(object.material, properties);
-  return object;
+function wire(kit, points, radius, color, key, tag) {
+  if (!Array.isArray(points) || points.length < 2 || !points.every(isPoint)) return;
+  // No Catmull smoothing, no inferred junctions, no current-dependent motion.
+  return kit.tube(points, radius, color, { ...finishes.rubber, curve: 'polyline', key, tag });
 }
 
-// Instrument cases have moulded corners and a small bevel rather than sharp
-// toy-block edges. These dimensions are apparatus styling, not circuit facts.
-function caseBody(kit, at, width, height, depth, color, tag, rotation = 0, radius = 0.08) {
-  const T = kit.THREE, x = -width / 2, y = -height / 2;
-  const r = Math.min(radius, width / 4, height / 4);
-  const shape = new T.Shape();
-  shape.moveTo(x + r, y); shape.lineTo(x + width - r, y);
-  shape.quadraticCurveTo(x + width, y, x + width, y + r);
-  shape.lineTo(x + width, y + height - r);
-  shape.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
-  shape.lineTo(x + r, y + height);
-  shape.quadraticCurveTo(x, y + height, x, y + height - r);
-  shape.lineTo(x, y + r); shape.quadraticCurveTo(x, y, x + r, y);
-  const geometry = new T.ExtrudeGeometry(shape, { depth, bevelEnabled: true, bevelSize: r * 0.16, bevelThickness: r * 0.16, bevelSegments: 2, curveSegments: 6 });
-  geometry.translate(0, 0, -depth / 2);
-  const material = new T.MeshPhysicalMaterial({ color, roughness: 0.42, metalness: 0.08, clearcoat: 0.22, clearcoatRoughness: 0.38 });
-  const mesh = new T.Mesh(geometry, material);
-  mesh.position.set(at.x, at.y, at.z || 0); mesh.rotation.z = rotation * Math.PI / 180;
-  mesh.name = tag; mesh.castShadow = true; mesh.receiveShadow = true;
-  kit.group.add(mesh);
-  return mesh;
-}
-
-function screw(kit, at, radius = 0.039, tag = 'apparatus-screw', rotation = 0) {
-  finish(kit.cylinder({ ...at, z: (at.z || 0) - radius * 0.3 }, { ...at, z: (at.z || 0) + radius * 0.22 }, radius, kit.palette.metal, { tag }), { metalness: 0.85, roughness: 0.25 });
-  const c = Math.cos(rotation), s = Math.sin(rotation);
-  kit.line([{ x: at.x - c * radius * 0.62, y: at.y - s * radius * 0.62, z: (at.z || 0) + radius * 0.25 },
-    { x: at.x + c * radius * 0.62, y: at.y + s * radius * 0.62, z: (at.z || 0) + radius * 0.25 }], '#5b6461', { tag: `${tag}:slot` });
-}
-
-function localPoint(component, x, y = 0, z = 0) {
-  const angle = (component.rotation || 0) * Math.PI / 180;
-  return {
-    x: component.at.x + x * Math.cos(angle) - y * Math.sin(angle),
-    y: component.at.y + x * Math.sin(angle) + y * Math.cos(angle),
-    z: (component.at.z || 0) + z,
-  };
-}
-
-function wirePath(kit, points, radius, color, tag) {
-  // Separate straight cylinders keep every authored bend and junction exact;
-  // a smoothed spline would cut corners and can change apparent connectivity.
-  for (let index = 1; index < points.length; index += 1) {
-    if (point(points[index - 1]) && point(points[index])) {
-      kit.cylinder(points[index - 1], points[index], radius, color, { tag });
-    }
+function moduleBase(f, kit, id, width = 1.25, height = 0.74, z = -0.17, depth = 0.16) {
+  f.box('base', [0, 0, z], width, height, depth, '#e3dfca', { ...finishes.ceramic, tag: `${id}:base` });
+  for (const x of [-0.42, 0.42]) for (const y of [-0.33, 0.33]) {
+    fastener(kit, f.at(x * width, y * height, z + depth / 2 + 0.008), 0.025, `base-screw:${x}:${y}`, f.rotation);
   }
 }
 
-function componentFrame(component, kit) {
-  const at = (x, y = 0, z = 0) => localPoint(component, x, y, z);
-  const { palette: p } = kit;
-  const cylinder = (a, b, radius, color, tag = component.id) => kit.cylinder(at(...a), at(...b), radius, color, { tag });
-  const box = (xyz, width, height, depth, color, tag = component.id) => kit.box(at(...xyz), width, height, depth, color, { rotation: component.rotation, tag });
-  const terminal = (x, color) => {
-    kit.sphere(at(x), 0.066, color, { tag: `${component.id}:terminal:${x < 0 ? 'a' : 'b'}` });
-    finish(cylinder([x, 0, -0.08], [x, 0, 0.025], 0.092, p.metal), { metalness: 0.8, roughness: 0.22 });
-    cylinder([x, 0, -0.10], [x, 0, -0.067], 0.113, color === p.metal ? '#345b51' : color, `${component.id}:terminal-collar`);
-    screw(kit, at(x, 0, 0.058), 0.046, `${component.id}:binding-screw`, Math.PI / 4);
-  };
-  const lead = (a, b) => cylinder(a, b, 0.036, p.metal);
-  return { at, cylinder, box, terminal, lead };
+function source(component, f, kit) {
+  moduleBase(f, kit, component.id, 1.3, 0.86, -0.19, 0.19);
+  f.box('holder-liner', [0, 0, -0.079], 1.12, 0.65, 0.026, '#435d4c', finishes.rubber);
+  f.rod('cell', [-0.49, 0, 0.05], [0.4, 0, 0.05], 0.234, '#537d62', finishes.enamel);
+  f.rod('positive-cap', [0.4, 0, 0.05], [0.53, 0, 0.05], 0.234, c.brass, finishes.brass);
+  f.rod('negative-cap', [-0.54, 0, 0.05], [-0.49, 0, 0.05], 0.224, c.alloy, finishes.aluminum);
+  for (const x of [-0.45, 0.35]) f.rod(`crimp:${x}`, [x - 0.016, 0, 0.05], [x + 0.016, 0, 0.05], 0.24, c.alloy, finishes.aluminum);
+  for (const x of [-0.28, 0.16]) for (const y of [-0.23, 0.23]) f.box(`clip:${x}:${y}`, [x, y, 0.035], 0.047, 0.1, 0.17, '#4b6451', finishes.rubber);
+  f.box('cell-label', [-0.04, 0, 0.287], 0.43, 0.16, 0.011, c.ceramic, finishes.ceramic);
+  f.rod('lead:a', [-CIRCUIT_TERMINAL_HALF, 0, 0], [-0.54, 0, 0.05], 0.034, c.alloy, finishes.aluminum);
+  f.rod('lead:b', [0.53, 0, 0.05], [CIRCUIT_TERMINAL_HALF, 0, 0], 0.034, c.alloy, finishes.aluminum);
+  f.label('negative', '−', [-0.48, 0.31, 0.13], { size: 12, priority: 4, tag: `${component.id}:negative` });
+  f.label('positive', '+', [0.48, 0.31, 0.13], { size: 12, priority: 4, tag: `${component.id}:positive` });
+  // One cartridge is apparatus styling, never a cell count inferred from volts.
 }
 
-function drawSource(component, kit, frame) {
-  const { palette: p } = kit;
-  const { at, box, cylinder, lead } = frame;
-  caseBody(kit, at(0, 0, -0.19), 1.3, 0.86, 0.19, '#d8ddd3', `${component.id}:holder`, component.rotation);
-  caseBody(kit, at(0, 0, -0.086), 1.13, 0.66, 0.025, '#334c45', `${component.id}:holder-liner`, component.rotation, 0.055);
-  finish(cylinder([-0.49, 0, 0.05], [0.4, 0, 0.05], 0.235, '#397967'), { roughness: 0.3, metalness: 0.22 });
-  finish(cylinder([0.4, 0, 0.05], [0.53, 0, 0.05], 0.235, '#c7a678'), { roughness: 0.25, metalness: 0.7 });
-  cylinder([-0.54, 0, 0.05], [-0.49, 0, 0.05], 0.225, p.metal);
-  // Crimped cell shoulders and two retaining clips read as a real battery
-  // cartridge without inferring a cell count from its voltage rating.
-  for (const x of [-0.45, 0.35]) finish(cylinder([x - 0.018, 0, 0.05], [x + 0.018, 0, 0.05], 0.244, p.metal), { metalness: 0.8, roughness: 0.2 });
-  for (const x of [-0.28, 0.16]) {
-    box([x, 0.23, 0.035], 0.05, 0.1, 0.18, '#334c45');
-    box([x, -0.23, 0.035], 0.05, 0.1, 0.18, '#334c45');
+function knifeSwitch(component, f, kit) {
+  moduleBase(f, kit, component.id, 1.29, 0.71, -0.16, 0.19);
+  f.box('trim', [0, 0, -0.245], 1.18, 0.61, 0.042, '#5b634d', finishes.rubber);
+  for (const [side, x] of [['a', -0.48], ['b', 0.48]]) {
+    f.rod(`lead:${side}`, [Math.sign(x) * CIRCUIT_TERMINAL_HALF, 0, 0], [x, 0, 0], 0.033, c.alloy, finishes.aluminum);
+    f.box(`contact-seat:${side}`, [x, 0, 0.015], 0.13, 0.26, 0.1, c.brass, finishes.brass);
+    f.sphere(`contact:${side}`, [x, 0, 0.08], 0.073, c.alloy, finishes.aluminum);
   }
-  box([-0.04, 0, 0.286], 0.44, 0.17, 0.01, '#e2e8d8');
-  for (const x of [-0.15, -0.09, -0.03, 0.03, 0.09]) box([x, -0.01, 0.294], 0.015, 0.095, 0.008, '#537568');
-  for (const x of [-0.53, 0.53]) for (const y of [-0.32, 0.32]) screw(kit, at(x, y, -0.078), 0.027, `${component.id}:mounting-screw`);
-  lead([-TERMINAL_HALF, 0, 0], [-0.54, 0, 0.05]);
-  lead([0.53, 0, 0.05], [TERMINAL_HALF, 0, 0]);
-  // Polarity is fixed to the a→b axis, including when the source is rotated.
-  kit.label('−', at(-0.48, 0.31, 0.13), { size: 12, color: p.blue, priority: 4, tag: `${component.id}:negative` });
-  kit.label('+', at(0.48, 0.31, 0.13), { size: 12, color: p.red, priority: 4, tag: `${component.id}:positive` });
+  for (const y of [-0.075, 0.075]) f.box(`fork:${y}`, [0.48, y, 0.105], 0.16, 0.023, 0.15, c.brass, finishes.brass);
+  const closed = component.closed === true, end = closed ? [0.48, 0, 0.085] : [0.31, 0.48, 0.15];
+  // Stable lever identity survives an open/closed state change.
+  f.rod('lever', [-0.48, 0, 0.085], end, 0.048, '#b39154', { ...finishes.brass, tag: `${component.id}:${closed ? 'closed' : 'open'}-lever` });
+  f.rod('handle', [-0.48 + (end[0] + 0.48) * 0.56, end[1] * 0.56, end[2]], end, 0.079, c.rubber, finishes.rubber);
+  fastener(kit, f.at(-0.48, 0, 0.135), 0.038, 'pivot-screw', f.rotation);
+  f.label('state', closed ? '闭合' : '断开', [0, -0.43, 0.04], { size: 10, tag: `${component.id}:state` });
 }
 
-function drawSwitch(component, kit, frame) {
-  const { palette: p } = kit;
-  const { at, box, cylinder, lead } = frame;
-  caseBody(kit, at(0, 0, -0.16), 1.29, 0.71, 0.19, '#d9d4be', `${component.id}:insulating-base`, component.rotation);
-  caseBody(kit, at(0, 0, -0.245), 1.18, 0.61, 0.045, '#424d44', `${component.id}:base-trim`, component.rotation, 0.045);
-  for (const x of [-0.51, 0.51]) for (const y of [-0.25, 0.25]) screw(kit, at(x, y, -0.047), 0.026, `${component.id}:mounting-screw`);
-  lead([-TERMINAL_HALF, 0], [-0.48, 0]);
-  lead([0.48, 0], [TERMINAL_HALF, 0]);
-  for (const x of [-0.48, 0.48]) {
-    box([x, 0, 0.015], 0.13, 0.26, 0.1, '#bd9d70');
-    kit.sphere(at(x, 0, 0.08), 0.075, p.metal, { tag: `${component.id}:contact` });
-  }
-  for (const y of [-0.075, 0.075]) box([0.48, y, 0.105], 0.16, 0.024, 0.15, '#bd9d70', `${component.id}:contact-fork`);
-  const closed = component.closed === true;
-  const end = closed ? [0.48, 0, 0.085] : [0.31, 0.48, 0.15];
-  cylinder([-0.48, 0, 0.085], end, 0.052, '#b68a4e', `${component.id}:${closed ? 'closed' : 'open'}-lever`);
-  const startHandle = [-0.48 + (end[0] + 0.48) * 0.55, end[1] * 0.55, end[2]];
-  finish(cylinder(startHandle, end, 0.085, p.ink, `${component.id}:handle`), { roughness: 0.32 });
-  screw(kit, at(-0.48, 0, 0.135), 0.041, `${component.id}:pivot-screw`, Math.PI / 3);
-  kit.label(closed ? '闭合' : '断开', at(0, -0.43, 0.04), { color: closed ? p.green : p.muted, size: 10, tag: `${component.id}:state` });
+function meter(component, f, kit) {
+  const current = component.kind === 'ammeter', observable = current ? 'current' : 'voltage';
+  f.rod('lead:a', [-CIRCUIT_TERMINAL_HALF, 0, 0], [-0.59, 0, 0], 0.034, c.alloy, finishes.aluminum);
+  f.rod('lead:b', [0.59, 0, 0], [CIRCUIT_TERMINAL_HALF, 0, 0], 0.034, c.alloy, finishes.aluminum);
+  digitalMeter(kit, component.at, { key: 'meter', rotation: f.rotation, tag: component.id, unit: current ? 'A' : 'V', reading: component.reading, showReading: kit.visible(observable) });
 }
 
-function drawMeter(component, kit, frame) {
-  const { palette: p } = kit;
-  const { at, cylinder, lead, box } = frame;
-  const color = component.kind === 'ammeter' ? p.orange : p.blue;
-  lead([-TERMINAL_HALF, 0], [-0.59, 0]);
-  lead([0.59, 0], [TERMINAL_HALF, 0]);
-  caseBody(kit, at(0, 0, 0.015), 1.18, 1.02, 0.4, '#35584e', `${component.id}:housing`, component.rotation, 0.11);
-  caseBody(kit, at(0, 0, 0.226), 1.09, 0.92, 0.036, '#263c35', `${component.id}:gasket`, component.rotation, 0.09);
-  caseBody(kit, at(0, 0, 0.25), 1.03, 0.85, 0.035, '#e9e7d9', `${component.id}:faceplate`, component.rotation, 0.072);
-  for (const x of [-0.445, 0.445]) for (const y of [-0.35, 0.35]) screw(kit, at(x, y, 0.279), 0.026, `${component.id}:face-screw`, Math.PI / 4);
-  // A digital face avoids inventing an analogue needle range not in snapshot.
-  caseBody(kit, at(0, 0.065, 0.28), 0.84, 0.32, 0.026, '#6d7c67', `${component.id}:display-bezel`, component.rotation, 0.027);
-  caseBody(kit, at(0, 0.065, 0.297), 0.77, 0.253, 0.014, '#dbe5ce', `${component.id}:display`, component.rotation, 0.018);
-  kit.label(component.kind === 'ammeter' ? 'A' : 'V', at(0, 0.315, 0.308), { color, size: 11, priority: 4, tag: `${component.id}:unit` });
-  finish(cylinder([0.265, -0.24, 0.277], [0.265, -0.24, 0.348], 0.105, '#34473e', `${component.id}:range-knob`), { roughness: 0.3 });
-  for (let i = 0; i < 12; i += 1) {
-    const a = Math.PI * 2 * i / 12;
-    cylinder([0.265 + Math.cos(a) * 0.1, -0.24 + Math.sin(a) * 0.1, 0.298], [0.265 + Math.cos(a) * 0.1, -0.24 + Math.sin(a) * 0.1, 0.34], 0.01, '#202f2a', `${component.id}:knob-grip`);
-  }
-  box([0.265, -0.19, 0.351], 0.012, 0.054, 0.008, '#e7e6d6');
-  finish(kit.sphere(at(-0.34, -0.235, 0.292), 0.028, '#6ba77c', { tag: `${component.id}:status-led` }), { emissive: new kit.THREE.Color('#294c30'), emissiveIntensity: 0.4, roughness: 0.2 });
-  for (const x of [-0.24, -0.11, 0.02]) caseBody(kit, at(x, -0.245, 0.298), 0.079, 0.079, 0.026, '#a0aa92', `${component.id}:front-key`, component.rotation, 0.018);
-  for (const x of [-0.44, 0.44]) box([x, -0.51, -0.08], 0.22, 0.055, 0.35, '#34443a', `${component.id}:rubber-foot`);
-  const observable = component.kind === 'ammeter' ? 'current' : 'voltage';
-  if (kit.visible(observable) && component.reading) {
-    kit.label(component.reading, at(0, 0.065, 0.315), { color: '#304238', size: 11, priority: 5, tag: `${component.id}:reading` });
-  }
-}
-
-function drawResistor(component, kit, frame, lamp) {
-  const { palette: p } = kit;
-  const { at, box, cylinder, lead } = frame;
-  caseBody(kit, at(0, 0, -0.17), 1.25, 0.74, 0.16, '#e3ddc8', `${component.id}:base`, component.rotation);
-  for (const x of [-0.53, 0.53]) for (const y of [-0.27, 0.27]) screw(kit, at(x, y, -0.073), 0.025, `${component.id}:mounting-screw`);
+function resistor(component, f, kit, lamp) {
+  moduleBase(f, kit, component.id);
   if (lamp) {
-    lead([-TERMINAL_HALF, 0], [-0.3, 0]);
-    lead([0.3, 0], [TERMINAL_HALF, 0]);
-    cylinder([0, 0, -0.03], [0, 0, 0.14], 0.3, p.metal);
-    for (const z of [0.025, 0.06, 0.095, 0.13]) kit.circle(at(0, 0, z), 0.303, '#7a8074', { tag: `${component.id}:socket-thread` });
-    const glow = kit.visible('power') && Number.isFinite(component.glow) ? Math.max(0, Math.min(1, component.glow)) : 0;
-    const bulb = kit.sphere(at(0, 0, 0.34), 0.36, glow > 0 ? '#ffdea2' : '#c6dcda', { opacity: 0.4 + glow * 0.22, tag: `${component.id}:bulb` });
-    if (bulb?.material?.emissive) {
-      bulb.material.emissive.set('#df9a35');
-      bulb.material.emissiveIntensity = glow * 0.8;
-    }
-    wirePath(kit, [at(-0.12, -0.12, 0.18), at(-0.12, 0.03, 0.37), at(-0.06, 0.09, 0.4), at(0, -0.02, 0.4), at(0.06, 0.09, 0.4), at(0.12, 0.03, 0.37), at(0.12, -0.12, 0.18)], 0.015, glow > 0 ? p.orange : p.ink, `${component.id}:filament`);
+    f.rod('lead:a', [-CIRCUIT_TERMINAL_HALF, 0, 0], [-0.3, 0, 0], 0.034, c.alloy, finishes.aluminum);
+    f.rod('lead:b', [0.3, 0, 0], [CIRCUIT_TERMINAL_HALF, 0, 0], 0.034, c.alloy, finishes.aluminum);
+    f.rod('socket', [0, 0, -0.03], [0, 0, 0.14], 0.3, c.alloy, finishes.aluminum);
+    for (const z of [0.025, 0.06, 0.095, 0.13]) kit.torus(f.at(0, 0, z), 0.301, 0.008, '#718677', { ...finishes.brushed, axis: 'z', key: `socket-thread:${z}` });
+    const glow = kit.visible('power') && finite(component.glow) ? Math.min(1, Math.max(0, component.glow)) : 0;
+    f.sphere('bulb', [0, 0, 0.34], 0.36, glow > 0 ? '#f5d9a8' : '#c5dbcf', { ...finishes.glass, opacity: 0.27 + glow * 0.16, emissive: '#bd8a3c', emissiveIntensity: glow * 0.6, tag: `${component.id}:bulb` });
+    wire(kit, [[-0.12, -0.12, 0.18], [-0.12, 0.03, 0.37], [-0.06, 0.09, 0.4], [0, -0.02, 0.4], [0.06, 0.09, 0.4], [0.12, 0.03, 0.37], [0.12, -0.12, 0.18]].map(p => f.at(...p)), 0.013, glow > 0 ? '#bb9755' : c.rubber, 'filament', `${component.id}:filament`);
   } else {
-    lead([-TERMINAL_HALF, 0], [-0.47, 0]);
-    lead([0.47, 0], [TERMINAL_HALF, 0]);
-    finish(cylinder([-0.43, 0, 0.07], [0.43, 0, 0.07], 0.185, '#e0d8bd'), { roughness: 0.37 });
-    for (const x of [-0.43, 0.43]) cylinder([x - 0.04, 0, 0.07], [x + 0.04, 0, 0.07], 0.19, p.metal);
-    const winding = Array.from({ length: 121 }, (_, i) => {
-      const t = i / 120;
-      return at(-0.34 + 0.68 * t, Math.sin(t * Math.PI * 20) * 0.19, 0.07 + Math.cos(t * Math.PI * 20) * 0.19);
+    f.rod('lead:a', [-CIRCUIT_TERMINAL_HALF, 0, 0], [-0.47, 0, 0], 0.034, c.alloy, finishes.aluminum);
+    f.rod('lead:b', [0.47, 0, 0], [CIRCUIT_TERMINAL_HALF, 0, 0], 0.034, c.alloy, finishes.aluminum);
+    f.rod('ceramic-body', [-0.43, 0, 0.07], [0.43, 0, 0.07], 0.183, '#ddd7ba', finishes.ceramic);
+    for (const x of [-0.43, 0.43]) f.rod(`cap:${x}`, [x - 0.038, 0, 0.07], [x + 0.038, 0, 0.07], 0.188, c.alloy, finishes.aluminum);
+    const winding = Array.from({ length: 121 }, (_, station) => {
+      const t = station / 120;
+      return f.at(-0.34 + 0.68 * t, Math.sin(t * Math.PI * 20) * 0.189, 0.07 + Math.cos(t * Math.PI * 20) * 0.189);
     });
-    finish(kit.tube(winding, 0.015, '#8c6e4e', { tag: `${component.id}:resistance-wire` }), { roughness: 0.25, metalness: 0.62 });
-    for (const x of [-0.45, 0.45]) box([x, 0, -0.025], 0.1, 0.37, 0.17, '#425b4d', `${component.id}:ceramic-support`);
+    kit.tube(winding, 0.012, '#a68b57', { ...finishes.brass, curve: 'polyline', key: 'resistance-wire', tag: `${component.id}:resistance-wire` });
+    for (const x of [-0.45, 0.45]) f.box(`support:${x}`, [x, 0, -0.025], 0.095, 0.36, 0.16, '#586f55', finishes.enamel);
   }
 }
 
-function drawRheostat(component, kit, frame) {
-  const { palette: p } = kit;
-  const { at, box, cylinder, lead } = frame;
-  caseBody(kit, at(0, 0, -0.23), 1.3, 0.87, 0.15, '#dcd9c5', `${component.id}:base`, component.rotation);
-  for (const x of [-0.53, 0.53]) for (const y of [-0.32, 0.32]) screw(kit, at(x, y, -0.136), 0.027, `${component.id}:mounting-screw`);
-  cylinder([-0.51, 0, 0.01], [0.51, 0, 0.01], 0.185, '#e5e0d2');
-  const winding = Array.from({ length: 169 }, (_, i) => {
-    const t = i / 168;
-    return at(-0.5 + t, Math.sin(t * Math.PI * 28) * 0.194, 0.01 + Math.cos(t * Math.PI * 28) * 0.194);
+function rheostat(component, f, kit) {
+  moduleBase(f, kit, component.id, 1.3, 0.87, -0.23, 0.15);
+  f.rod('ceramic-former', [-0.51, 0, 0.01], [0.51, 0, 0.01], 0.183, '#e1ddce', finishes.ceramic);
+  const points = Array.from({ length: 169 }, (_, station) => {
+    const t = station / 168;
+    return f.at(-0.5 + t, Math.sin(t * Math.PI * 28) * 0.193, 0.01 + Math.cos(t * Math.PI * 28) * 0.193);
   });
-  finish(kit.tube(winding, 0.018, '#ad8051', { tag: `${component.id}:winding` }), { roughness: 0.24, metalness: 0.7 });
-  for (const x of [-0.57, 0.57]) box([x, 0.1, -0.035], 0.1, 0.66, 0.22, p.green);
-  cylinder([-0.58, 0.34, 0.21], [0.58, 0.34, 0.21], 0.035, p.metal, `${component.id}:slider-rail`);
-  lead([-TERMINAL_HALF, 0], [-0.5, 0]);
-  wirePath(kit, [at(TERMINAL_HALF, 0), at(0.66, 0), at(0.66, 0.34, 0.21), at(0.58, 0.34, 0.21)], 0.032, p.metal, `${component.id}:slider-terminal`);
-  if (Number.isFinite(component.sliderPosition)) {
-    const x = -0.5 + Math.max(0, Math.min(1, component.sliderPosition));
-    cylinder([x, 0.34, 0.21], [x, 0.13, 0.2], 0.044, p.metal, `${component.id}:slider-contact`);
-    caseBody(kit, at(x, 0.34, 0.29), 0.2, 0.21, 0.14, p.ink, `${component.id}:slider`, component.rotation, 0.04);
-    for (const dy of [-0.06, 0, 0.06]) box([x, 0.34 + dy, 0.367], 0.14, 0.014, 0.009, '#75857a', `${component.id}:slider-grip`);
+  kit.tube(points, 0.014, '#ae8950', { ...finishes.brass, curve: 'polyline', key: 'winding', tag: `${component.id}:winding` });
+  for (const x of [-0.57, 0.57]) f.box(`support:${x}`, [x, 0.1, -0.035], 0.095, 0.65, 0.21, '#627b5e', finishes.enamel);
+  f.rod('slider-rail', [-0.58, 0.34, 0.21], [0.58, 0.34, 0.21], 0.033, c.alloy, finishes.aluminum);
+  f.rod('lead:a', [-CIRCUIT_TERMINAL_HALF, 0, 0], [-0.5, 0, 0], 0.034, c.alloy, finishes.aluminum);
+  wire(kit, [f.at(CIRCUIT_TERMINAL_HALF), f.at(0.66), f.at(0.66, 0.34, 0.21), f.at(0.58, 0.34, 0.21)], 0.031, c.alloy, 'slider-lead', `${component.id}:slider-terminal`);
+  if (finite(component.sliderPosition) && component.sliderPosition >= 0 && component.sliderPosition <= 1) {
+    const x = -0.5 + component.sliderPosition;
+    f.rod('slider-contact', [x, 0.34, 0.21], [x, 0.13, 0.2], 0.04, c.alloy, finishes.aluminum);
+    f.box('slider', [x, 0.34, 0.29], 0.19, 0.2, 0.14, c.rubber, { ...finishes.rubber, tag: `${component.id}:slider` });
+    for (const y of [-0.055, 0, 0.055]) f.box(`slider-grip:${y}`, [x, 0.34 + y, 0.366], 0.14, 0.012, 0.008, '#84947e', finishes.rubber);
   }
 }
 
-function drawFlowDirections(flow, kit) {
-  if (!Number.isFinite(flow.current) || flow.current === 0) return;
-  const points = flow.path || [];
-  let longest;
-  let maxLength = 0;
-  for (let i = 1; i < points.length; i += 1) {
-    const a = points[i - 1];
-    const b = points[i];
-    if (!point(a) || !point(b)) continue;
-    const length = Math.hypot(b.x - a.x, b.y - a.y);
-    if (length > maxLength) { maxLength = length; longest = [a, b]; }
-  }
-  if (!longest || maxLength === 0) return;
-  const [a, b] = flow.current > 0 ? longest : [...longest].reverse();
-  const half = Math.min(0.3, kit.unit * 0.22, maxLength * 0.18) / maxLength;
-  const middle = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, z: ((a.z || 0) + (b.z || 0)) / 2 };
-  currentAnnotation(kit.arrow(
-    { x: middle.x - (b.x - a.x) * half, y: middle.y - (b.y - a.y) * half, z: middle.z },
-    { x: middle.x + (b.x - a.x) * half, y: middle.y + (b.y - a.y) * half, z: middle.z },
-    kit.palette.orange,
-    { tag: `${flow.id}:direction` },
-  ));
+function board(view, kit) {
+  const anchors = [...(view.circuitComponents ?? []).map(item => item.at), ...(view.circuitWires ?? []).flatMap(item => item.points ?? [])].filter(isPoint);
+  if (!anchors.length) return;
+  scope(kit, 'circuit-bench', () => {
+    const left = Math.min(...anchors.map(p => p.x)) - 1.05, right = Math.max(...anchors.map(p => p.x)) + 1.05;
+    const bottom = Math.min(...anchors.map(p => p.y)) - 1.05, top = Math.max(...anchors.map(p => p.y)) + 1.05;
+    const z = Math.min(...anchors.map(p => p.z ?? 0)) - 0.43, center = { x: (left + right) / 2, y: (top + bottom) / 2, z };
+    instrumentCase(kit, center, right - left, top - bottom, 0.22, '#819678', { key: 'frame', tag: 'circuit-bench-frame' });
+    instrumentCase(kit, offset(center, 0, 0, 0.126), right - left - 0.12, top - bottom - 0.12, 0.029, '#ede5d4', { ...finishes.wood, key: 'surface', tag: 'circuit-bench-surface' });
+    for (const [side, x] of [['left', left + 0.21], ['right', right - 0.21]]) for (const [edge, y] of [['bottom', bottom + 0.21], ['top', top - 0.21]]) {
+      fastener(kit, { x, y, z: z + 0.15 }, 0.047, `fastener:${side}:${edge}`, 45);
+      kit.cylinder({ x, y, z: z - 0.21 }, { x, y, z: z - 0.11 }, 0.12, c.rubber, { ...finishes.rubber, key: `foot:${side}:${edge}` });
+    }
+  });
 }
 
 export function drawCircuits(snapshot, kit) {
-  const view = snapshot.view;
-  if (!view) return;
-  const { palette: p } = kit;
-  const components = view.circuitComponents || [];
-  const anchors = [...components.map(component => component.at), ...(view.circuitWires || []).flatMap(wire => wire.points || [])].filter(point);
-  if (anchors.length) {
-    const left = Math.min(...anchors.map(at => at.x)) - 1.07;
-    const right = Math.max(...anchors.map(at => at.x)) + 1.07;
-    const bottom = Math.min(...anchors.map(at => at.y)) - 1.07;
-    const top = Math.max(...anchors.map(at => at.y)) + 1.07;
-    const center = { x: (left + right) / 2, y: (top + bottom) / 2, z: -0.43 };
-    caseBody(kit, center, right - left, top - bottom, 0.22, '#b7c4b7', 'circuit-bench-frame', 0, 0.24);
-    caseBody(kit, { ...center, z: -0.304 }, right - left - 0.12, top - bottom - 0.12, 0.03, '#ece6d7', 'circuit-bench-surface', 0, 0.2);
-    for (const x of [left + 0.22, right - 0.22]) for (const y of [bottom + 0.22, top - 0.22]) {
-      screw(kit, { x, y, z: -0.279 }, 0.055, 'circuit-bench-fastener', Math.PI / 4);
-      finish(kit.cylinder({ x, y, z: -0.65 }, { x, y, z: -0.55 }, 0.13, '#405449', { tag: 'circuit-bench-foot' }), { roughness: 0.85 });
+  const view = snapshot?.view;
+  if (!view || !positive(kit.unit)) return;
+  scope(kit, 'circuits', () => {
+    board(view, kit);
+    for (const item of view.circuitWires ?? []) entityScope(kit, 'wire', item, () => wire(kit, item.points ?? [], Math.min(0.041, kit.unit * 0.03), '#4e7359', 'conductor', item.id));
+    for (const junction of view.circuitJunctions ?? []) if (isPoint(junction.at)) entityScope(kit, 'junction', junction, () => kit.sphere(junction.at, junction.branch ? 0.083 : 0.064, c.rubber, { ...finishes.rubber, key: 'contact', tag: junction.id }));
+    for (const component of view.circuitComponents ?? []) {
+      if (!isPoint(component.at)) continue;
+      entityScope(kit, 'component', component, () => {
+        const f = apparatusFrame(kit, component.at, finite(component.rotation) ? component.rotation : 0, component.rotationUnit ?? 'deg');
+        if (!f) return;
+        const kind = component.kind;
+        if (kind === 'voltage_source') source(component, f, kit);
+        else if (kind === 'switch') knifeSwitch(component, f, kit);
+        else if (kind === 'ammeter' || kind === 'voltmeter') meter(component, f, kit);
+        else if (kind === 'variable_resistor') rheostat(component, f, kit);
+        else if (kind === 'resistor') resistor(component, f, kit, snapshot.experimentId === 'bulb-power' && component.id === 'r0');
+        else return;
+        bindingTerminal(kit, f.at(-CIRCUIT_TERMINAL_HALF), 0.075, kind === 'voltage_source' ? '#5a7e97' : '#70876e', 'terminal:a');
+        bindingTerminal(kit, f.at(CIRCUIT_TERMINAL_HALF), 0.075, kind === 'voltage_source' ? '#b87862' : '#70876e', 'terminal:b');
+        const name = [component.label, component.value].filter(hasText).join(' · ');
+        if (name && kind !== 'ammeter' && kind !== 'voltmeter') f.label('nameplate', name, [0, 0.87, 0.1], { size: 11, priority: 3, tag: `${component.id}:nameplate` });
+        const readings = [kit.visible('current') && kind !== 'ammeter' ? component.currentText : undefined, kit.visible('voltage') ? component.voltageText : undefined, kit.visible('power') ? component.powerText : undefined].filter(hasText);
+        if (readings.length) f.label('readout', readings.join(' · '), [0, -0.82, 0.1], { color: c.muted, size: 10, tag: `${component.id}:readout` });
+        if (kit.visible('current') && (component.currentDirection === 'forward' || component.currentDirection === 'reverse') && !(kind === 'switch' && component.closed !== true)) {
+          const a = f.at(-0.3, -0.51, 0.1), b = f.at(0.3, -0.51, 0.1);
+          annotation(kit.arrow(component.currentDirection === 'reverse' ? b : a, component.currentDirection === 'reverse' ? a : b, '#b28a44', { key: 'current-direction', tag: `${component.id}:current-direction` }));
+        }
+      });
     }
-  }
-  for (const wire of view.circuitWires || []) {
-    wirePath(kit, wire.points || [], Math.min(0.043, kit.unit * 0.032), p.green, wire.id);
-  }
-  for (const junction of view.circuitJunctions || []) {
-    if (point(junction.at)) kit.sphere(junction.at, junction.branch ? 0.088 : 0.07, p.ink, { tag: junction.id });
-  }
-  for (const component of components) {
-    if (!point(component.at)) continue;
-    const frame = componentFrame(component, kit);
-    const kind = component.kind;
-    if (kind === 'voltage_source') drawSource(component, kit, frame);
-    else if (kind === 'switch') drawSwitch(component, kit, frame);
-    else if (kind === 'ammeter' || kind === 'voltmeter') drawMeter(component, kit, frame);
-    else if (kind === 'variable_resistor') drawRheostat(component, kit, frame);
-    else if (kind === 'resistor') drawResistor(component, kit, frame, snapshot.experimentId === 'bulb-power' && component.id === 'r0');
-    else continue;
-    frame.terminal(-TERMINAL_HALF, kind === 'voltage_source' ? p.blue : p.metal);
-    frame.terminal(TERMINAL_HALF, kind === 'voltage_source' ? p.red : p.metal);
-    const name = [component.label, component.value].filter(Boolean).join(' · ');
-    if (name && kind !== 'ammeter' && kind !== 'voltmeter') {
-      kit.label(name, { ...component.at, y: component.at.y + 0.88, z: (component.at.z || 0) + 0.1 }, { color: p.ink, size: 11, priority: 3, tag: `${component.id}:nameplate` });
+    if (kit.visible('current')) for (const flow of view.chargeFlows ?? []) {
+      if (!finite(flow.current) || flow.current === 0) continue;
+      entityScope(kit, 'current-flow', flow, () => {
+        const path = flow.current > 0 ? flow.path : flow.path?.slice().reverse(), marker = pathSpan(path, 0.5, Math.min(0.48, kit.unit * 0.4));
+        if (marker) annotation(kit.arrow(marker.from, marker.to, '#b28a44', { key: 'direction', tag: `${flow.id}:direction` }));
+      });
     }
-    // These strings were formatted by the runtime; no display parses or solves
-    // voltage, current, resistance, power or any analogue meter range.
-    const readings = [
-      kit.visible('current') && kind !== 'ammeter' && component.currentText,
-      kit.visible('voltage') && component.voltageText,
-      kit.visible('power') && component.powerText,
-    ].filter(Boolean);
-    if (readings.length) kit.label(readings.join(' · '), { ...component.at, y: component.at.y - 0.82, z: (component.at.z || 0) + 0.1 }, { color: p.muted, size: 10, priority: 1, tag: `${component.id}:readout` });
-    if (kit.visible('current') && component.currentDirection && !(kind === 'switch' && component.closed !== true)) {
-      const a = frame.at(-0.32, -0.51, 0.1);
-      const b = frame.at(0.32, -0.51, 0.1);
-      currentAnnotation(kit.arrow(component.currentDirection === 'reverse' ? b : a, component.currentDirection === 'reverse' ? a : b, p.orange, { tag: `${component.id}:current-direction` }));
-    }
-  }
-  if (kit.visible('current')) for (const flow of view.chargeFlows || []) drawFlowDirections(flow, kit);
+  });
 }

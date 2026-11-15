@@ -21,7 +21,13 @@ const generated = new Map()
 const resolveSources = {
   name: 'physicsos-source-aliases',
   resolveId(id) {
-    if (id.startsWith('@physicsos/')) return resolve(root, 'packages', id.slice(11), 'src/index.ts')
+    if (id.startsWith('@physicsos/')) {
+      const [name, ...subpath] = id.slice(11).split('/')
+      const directory = resolve(root, 'packages', name)
+      if (subpath.length === 0) return join(directory, 'src/index.ts')
+      // Match the runtime compiler: subpath exports belong to the package, not a nested directory.
+      return createRequire(join(directory, 'package.json')).resolve(id)
+    }
     if (!id.startsWith('.') && !id.startsWith('/') && !id.startsWith('\0') && !id.startsWith('node:')) {
       try { return require.resolve(id) } catch { return null }
     }
@@ -86,6 +92,16 @@ try {
       const parameters = frame.inspector.flatMap(section => section.parameters ?? []).map(({id,label,unit,min,max,step,value}) => ({id,label,unit,...(min===undefined?{}:{min}),...(max===undefined?{}:{max}),...(step===undefined?{}:{step}),value}));
       const choices = frame.inspector.flatMap(section => section.choices ?? []);
       if(new Set(parameters.map(item=>item.id)).size !== parameters.length) throw new Error('Duplicate parameter: '+target.id);
+      if(target.id==='photoelectric-effect') {
+        // Read all six controls from the same live runtime as every other target.
+        // Fail on a stale/read-only projection; never repair it with copied defaults.
+        const units = {workFunction:'J',photonWavelength:'m',photonFrequency:'Hz',lightIntensity:'W/m²',cathodeArea:'m²',quantumEfficiency:''};
+        if(frame.status==='failed' || parameters.length!==Object.keys(units).length || choices.length!==0) throw new Error('Photoelectric runtime must expose its six verified parameters. Synchronize the runtime source before generating.');
+        for(const [id,unit] of Object.entries(units)) {
+          const parameter = parameters.find(item=>item.id===id);
+          if(!parameter || parameter.unit!==unit || !Number.isFinite(parameter.value) || !Number.isFinite(parameter.min) || !Number.isFinite(parameter.step) || parameter.step<=0 || (parameter.max!==undefined && !Number.isFinite(parameter.max)) || parameter.value<parameter.min || (parameter.max!==undefined && parameter.value>parameter.max)) throw new Error('Invalid photoelectric parameter source: '+id);
+        }
+      }
       profiles.push({id:target.id,label,domain:target.domain,parameters,choices});
       const { sampleReadout, ...plain } = frame;
       snapshots[target.id] = JSON.parse(JSON.stringify({...plain,experimentId:target.id,revision:frame.sceneRevision,source:'platform-engine'}));

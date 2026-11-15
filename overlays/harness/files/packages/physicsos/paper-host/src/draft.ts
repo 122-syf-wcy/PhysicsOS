@@ -11,10 +11,11 @@ import { paperUsageOf } from './model-usage.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import { BlockAssembler, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type {
-  BankItem, PaperDocument, PaperJob, PaperQuestion, SpecRow,
+  BankItem, ExamBlueprint, PaperDocument, PaperJob, PaperQuestion, SpecRow,
 } from '@physicsos/question-paper'
 import { paperQuestionSchema } from './domain.ts'
-import { blueprintById, mixCoefficient } from '@physicsos/question-paper'
+import { blueprintById, mixCoefficient, paperDiagramJsonSchema, sectionNotesForSpec } from '@physicsos/question-paper'
+import { PaperError } from './service.ts'
 import { z } from 'zod'
 
 /** Model route the deployment configures for drafting and solving. */
@@ -73,6 +74,8 @@ export function sanitizeQuestion(raw: unknown): unknown {
   const figure = q['figure']
   if (typeof figure === 'object' && figure !== null) {
     const f = { ...(figure as Record<string, unknown>) }
+    /* Model text cannot prove attachment ownership or fabricate an original scan. */
+    delete f['sourceAsset']
     if (f['kind'] !== 'line-diagram' && f['kind'] !== 'image') f['kind'] = 'line-diagram'
     /* The ref becomes the file name `fig-<ref>.png`, so it is normalised here
        rather than trusted: the model is told to use lowercase letters, digits
@@ -108,6 +111,7 @@ export function sanitizeQuestion(raw: unknown): unknown {
    transient empty completion cost a few seconds instead of a failed section. */
 const EMPTY_RESPONSE_ATTEMPTS = 3
 const EMPTY_RESPONSE_BACKOFF_MS = 1_500
+const MODEL_ATTEMPT_TIMEOUT_MS = 10 * 60_000
 
 const isRetryableEmpty = (_message: string, code: string): boolean => code === 'EMPTY_RESPONSE'
 
@@ -119,6 +123,11 @@ export async function callModel(ctx: Context, route: PaperModelRoute, system: st
     route.receipts?.signal.throwIfAborted()
     const receipt = await route.receipts?.begin(route, route.receipts.signal)
     if (route.receipts?.signal.aborted) { await receipt?.abandon(); route.receipts.signal.throwIfAborted() }
+    const controller = new AbortController()
+    const abort = () => { controller.abort(route.receipts?.signal.reason) }
+    route.receipts?.signal.addEventListener('abort', abort, { once: true })
+    const timeout = setTimeout(() => { controller.abort(new PaperError(504, 'MODEL_TIMEOUT',
+      '模型当前尝试超时；已停止接续并保留原稿，可显式重试，不会自动重放')) }, MODEL_ATTEMPT_TIMEOUT_MS)
     try {
     for await (const chunk of ctx.llm.stream({
       provider: route.provider,
@@ -137,11 +146,19 @@ export async function callModel(ctx: Context, route: PaperModelRoute, system: st
          of the biggest section observed. */
       maxTokens: 32768,
       temperature: 0.4,
-      ...(route.receipts ? { signal: route.receipts.signal } : {}),
+      signal: controller.signal,
     })) {
       assembler.push(chunk)
     }
-    } finally { await receipt?.finish(paperUsageOf(assembler)) }
+    } catch (error) {
+      if (controller.signal.aborted && controller.signal.reason instanceof PaperError) throw controller.signal.reason
+      throw error
+    } finally {
+      clearTimeout(timeout)
+      route.receipts?.signal.removeEventListener('abort', abort)
+      await receipt?.finish(paperUsageOf(assembler))
+    }
+    if (controller.signal.aborted && controller.signal.reason instanceof PaperError) throw controller.signal.reason
     /* Adapter failures arrive as a terminal finish chunk, not a throw —
        surface them instead of parsing an empty text as "no JSON". */
     const finish = assembler.finish
@@ -180,6 +197,15 @@ export function extractJson(text: string): unknown {
   return JSON.parse(candidate.slice(start).replace(/```\s*$/, '').trimEnd())
 }
 
+const DIAGRAM_RULES = `题图使用确定性规格，不调用绘图模型猜测物理关系。
+- figure.kind 写 line-diagram，figure.ref 为全卷唯一短标识；figure.studentCaption 只写中性图名（如「电路图」「示意图」），figure.caption 是内部说明，不向学生展示。
+- 需要题图必须输出 figure.diagram，规范见下方 JSON Schema。坐标 x 向右、y 向上，圆弧弧度；scale=schematic 表示示意，禁止暗示未验证的比例或读数。
+- 每个图元 role 明确 given 或 solution。学生图只展示 given：受力分析题待求力箭头、待求光路、答案构造必须 solution，不得冒充题目已知。
+- 图中数据、角标、接线、方向与题干给定一致。角度数值必须与真实几何一致。电路由 circuit-component 的 a/b 端口和 circuit-wire 建立，不凭画线相碰假设电气连接。
+- 禁止 URL、外链、原始 SVG/path、CSS、sourceAsset 附件 id 或哈希；模型不能声称拥有已验证原图。
+- 无法给出校验通过的图时不要编造，可明确留缺口供人工修订，缺必要图会阻断批准。
+JSON Schema：${JSON.stringify(paperDiagramJsonSchema())}`
+
 const SYSTEM = `你是贵州省初高中学业水平考试的资深命题教师，熟悉人教版教材与贵州本土考情。按给定的双向细目表逐题命制试题，输出严格 JSON 数组，不要输出其他文字。
 
 每道题的字段：
@@ -190,7 +216,7 @@ const SYSTEM = `你是贵州省初高中学业水平考试的资深命题教师�
 - stem: 题干（公式一律 LaTeX，行内 $...$，独立成行 $$...$$，分式用 \\dfrac）
 - options: 选择题必填，["A. ...", "B. ...", ...]
 - subQuestions: 非选择题可带小问 [{no, text, score}]
-- figure: 需要配图时 {kind:"line-diagram", ref, caption}；不需要则省略（规则见下方「配图」一节）
+- figure: 需要配图时 {kind:"line-diagram", ref, caption, studentCaption?, diagram}；diagram 必须符合确定性图元规范；不需要则省略
 - answer: {result, steps:[推导步骤], gradingPoints:[{text,score}], equivalents?}，gradingPoints 分值合计必须等于 score
 - knowledge: 考点标签数组（与细目表一致）
 - ability: 识记|理解|应用|分析|探究
@@ -259,8 +285,9 @@ const SYSTEM = `你是贵州省初高中学业水平考试的资深命题教师�
 
 figure 字段的写法：
 - ref: 全卷唯一的短标识，只用小写字母、数字和连字符（如 "q1-incline"、"q7-circuit"、"q12-ray"），不得重复，不得含空格或中文。
-- kind: 一律写 "line-diagram"（本平台用黑白线稿，不用写实照片）。
-- caption: **这是直接交给绘图模型的作图指令，不是给学生看的图题名**。必须写成一句完整的、看得见几何关系的作图描述——列出要画的全部物体、相对位置、角度或长度标记、力的方向与作用点、元件连接方式、光线的出入射方向。只写"如图"或"受力示意图"会生成错误或缺元素的图。
+- kind: 一律写 "line-diagram"（本平台用黑白确定性图元，不用写实照片）。
+- caption: 仅内部几何关系说明，不是学生图题，也不能替代 diagram。列出真实已知的物体、相对位置、角度或长度、元件连接和给定光线；待学生求出的箭头/光路不得进入学生图。
+- diagram: ${DIAGRAM_RULES}
 
 caption 的正反例：
 - 差："物块在斜面上的受力示意图"（模型不知道斜角、不知道有哪些力、不知道方向）。
@@ -294,13 +321,15 @@ export async function draftSection(
   rows: readonly SpecRow[],
   priorError?: string,
   exemplars: readonly BankItem[] = [],
+  selectedBlueprint?: ExamBlueprint,
 ): Promise<PaperQuestion[]> {
   const request = job.request
   /* The blueprint's own grading rules for this section (multi-choice partial
      credit, "answer-only scores zero") ride along so the drafted questions
      and their gradingPoints follow the real marking convention. */
-  const sectionNote = blueprintById(job.blueprintId)
-    ?.sections.find(section => section.title === sectionTitle)?.note
+  const blueprint = selectedBlueprint ?? blueprintById(job.blueprintId)
+  const sectionNote = blueprint === undefined ? undefined
+    : sectionNotesForSpec(blueprint, job.specTable).find(section => section.title === sectionTitle)?.note
   const prompt = [
     `学段：${request.level === 'zhongkao' ? '初中（中考）' : '高中（高考选择性考试）'}`,
     `学科：${request.subjects.join('+')}　卷型：${request.kind}　教材：${request.textbook}`,
@@ -344,6 +373,9 @@ export async function draftSection(
   /* Generated questions are stamped 'generated' — this also scrubs any
      provenance the model fabricated, since bank lineage must come from the
      assembler, never from model output. */
+  const numbers = parsed.data.map(question => question.number)
+  if (numbers.length !== rows.length || new Set(numbers).size !== numbers.length
+    || rows.some(row => !numbers.includes(row.questionNo))) throw new Error(`section '${sectionTitle}' did not cover the requested question numbers exactly`)
   return parsed.data.map(q => ({ ...q, provenance: { mode: 'generated' as const }, status: 'draft' as const }))
 }
 
@@ -353,7 +385,8 @@ const REPAIR_SYSTEM = `你是贵州省初高中学业水平考试的资深命题
 纪律：
 - 题号、题型、分值不得改动；考点、能力、难度必须与细目表一致。
 - 只修改建议涉及的部分，其余保持原题不变。
-- 公式一律 LaTeX（行内 $...$）；改动后题目必须仍然可解、答案与评分点同步更新。`
+- 公式一律 LaTeX（行内 $...$）；改动后题目必须仍然可解、答案与评分点同步更新。
+${DIAGRAM_RULES}`
 
 /**
  * Revise one drafted question against the teacher's suggestion. Spec-bound
@@ -393,6 +426,7 @@ export async function repairQuestion(
   return {
     ...parsed.data,
     number: question.number,
+    subject: question.subject,
     ...(spec === undefined ? {} : {
       kind: spec.kind, score: spec.score, difficulty: spec.difficulty, ability: spec.ability,
       knowledge: [...new Set([...spec.knowledge, ...parsed.data.knowledge])],
@@ -414,7 +448,8 @@ answer{result,steps,gradingPoints[{text,score}]}；选择题另需 options 数�
 - 换表面：更换情境载体（如斜面换传送带、小球换滑块）、全部给定数值、选项表述与答案。
 - 数值必须真实可算、量级合理，重新计算答案与评分点；不得保留原题数值只改说法。
 - 题号、题型、分值按细目表；考点、能力、难度必须与细目表一致。
-- 原题有配图说明的，改编后需要配图则输出 figure 字段并同步 caption。`
+- 原题有配图说明的，改编后需要配图则输出 figure 字段并同步 diagram；不继承原图附件 id。
+${DIAGRAM_RULES}`
 
 /**
  * Adapt one verified bank item into a new question for the spec row: the
@@ -467,6 +502,7 @@ export async function adaptBankItem(
   return {
     ...data,
     number: row.questionNo,
+    subject: item.subject,
     kind: row.kind, score: row.score, difficulty: row.difficulty, ability: row.ability,
     knowledge: [...new Set([...row.knowledge, ...data.knowledge])],
     provenance: {
@@ -489,11 +525,16 @@ export function assembleDocument(
   job: PaperJob,
   sectionTitles: readonly string[],
   drafted: ReadonlyMap<string, readonly PaperQuestion[]>,
+  selectedBlueprint?: ExamBlueprint,
 ): PaperDocument {
   const request = job.request
+  const blueprint = selectedBlueprint ?? blueprintById(job.blueprintId)
+  const notes = new Map((blueprint === undefined ? [] : sectionNotesForSpec(blueprint, job.specTable))
+    .map(section => [section.title, section.note]))
+  const subjects = request.subjects.map(subject => subject === 'physics' ? '物理' : '化学').join('、')
   return {
     id: job.id,
-    title: `${request.targetYear} ${request.level === 'zhongkao' ? '贵州省中考' : '贵州省高考'}物理${{
+    title: `${request.targetYear} ${request.level === 'zhongkao' ? '贵州省中考' : '贵州省高考'}${subjects}${{
       unit: '单元测试卷', weekly: '周考卷', monthly: '月考卷',
       midterm: '期中卷', final: '期末卷', mock: '模拟预测卷',
     }[request.kind]}`,
@@ -509,9 +550,10 @@ export function assembleDocument(
     },
     sections: sectionTitles.map(title => ({
       title,
+      ...(notes.get(title) === undefined ? {} : { note: notes.get(title) }),
       items: drafted.get(title) ?? [],
     })),
     specTable: job.specTable,
-    policyLabel: '依据已核实政策编制的训练卷',
+    policyLabel: blueprint?.policyLabel ?? '训练卷：目标年份政策与命题范围请教师复核',
   }
 }

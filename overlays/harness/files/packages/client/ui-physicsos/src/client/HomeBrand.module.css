@@ -1,11 +1,10 @@
-.root { display: flex; flex-direction: column; align-items: center; gap: 13px; padding: 12px 0 22px; text-align: center; color: var(--dsw-alias-label-primary); }
-.product { display: inline-flex; align-items: center; gap: 9px; font-size: 14px; color: var(--dsw-alias-label-secondary); }
-.tagline { margin: 0; font-size: clamp(28px, 3.1vw, 42px); line-height: 1.35; font-weight: 500; letter-spacing: -.03em; }
-.support { margin: 0; font-size: 16px; line-height: 1.8; color: var(--dsw-alias-label-tertiary); }
+.root { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 2px 0 18px; text-align: center; color: var(--physics-ink-strong); }
+.product { display: inline-flex; align-items: center; gap: 10px; font-size: 23px; color: var(--physics-accent-strong); }
+.tagline { margin: 0; font-size: clamp(30px, 3.5vw, 46px); line-height: 1.3; font-weight: 550; letter-spacing: -.025em; text-wrap: balance; }
+.support { margin: 0; max-width: 36em; font-size: 19px; line-height: 1.65; color: var(--physics-ink-muted); text-wrap: balance; }
 .heroMark { display: block; border-radius: 8px; object-fit: contain; }
-:global([data-phase='hero'] [data-conversation-scroll]) { justify-content: flex-start; padding-top: clamp(24px, 3.6vh, 40px); }
+:global([data-phase='hero'] [data-conversation-scroll]) { justify-content: flex-start; padding-top: clamp(16px, 2.4vh, 26px); }
 :global([data-phase='hero'] [data-composer-card]) { border: 1px solid var(--physics-glass-border-soft); border-radius: 22px; background: var(--physics-glass-fill); box-shadow: var(--physics-glass-inset), 0 8px 30px color-mix(in srgb, var(--physics-ink) 5%, transparent); backdrop-filter: var(--physics-glass-blur); }
-@media (max-width: 600px) { .root { padding-top: 0; } :global([data-phase='hero'] [data-conversation-scroll]) { padding-top: 20px; } }
+@media (max-width: 600px) { .root { padding: 0 12px 10px; gap: 11px; } .support { font-size: 16px; line-height: 1.65; } .product { font-size: 19px; } :global([data-phase='hero'] [data-conversation-scroll]) { padding-top: 18px; } }
 
-.product { font-size: 21px; color: var(--physics-accent-strong); }
 :global(html[data-physicsos-ui] [data-phase='hero']) { --dsh-composer-card-max-width: 950px; }

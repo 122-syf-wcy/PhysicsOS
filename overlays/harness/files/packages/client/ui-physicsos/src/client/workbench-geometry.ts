@@ -22,8 +22,9 @@ export function workbenchSafeRect(scene: FloatRect, viewport: FloatRect, gap = W
   const top = Math.min(viewport.y + viewport.height, Math.max(scene.y, viewport.y))
   const right = Math.max(left, Math.min(scene.x + scene.width, viewport.x + viewport.width))
   const bottom = Math.max(top, Math.min(scene.y + scene.height, viewport.y + viewport.height))
-  const insetX = Math.min(gap, (right - left) / 2)
-  const insetY = Math.min(gap, (bottom - top) / 2)
+  // Decorative clearance yields to the chrome's 40px touch target in short viewports.
+  const insetX = Math.min(Math.max(0, gap), Math.max(0, (right - left - 40) / 2))
+  const insetY = Math.min(Math.max(0, gap), Math.max(0, (bottom - top - 40) / 2))
   return { x: left + insetX, y: top + insetY, width: right - left - 2 * insetX, height: bottom - top - 2 * insetY }
 }
 
@@ -61,7 +62,7 @@ export function layoutWorkbenchPanels(bounds: FloatRect, requests: readonly Work
     panels[panel.id] = {
       bounds,
       rect: fitWorkbenchFloat({ x, y: single ? bounds.y : y, width: panel.width, height: panel.height }, bounds),
-      visible: !single || panel.id === selected,
+      visible: bounds.width > 0 && bounds.height > 0 && (!single || panel.id === selected),
     }
     if (panel.placement === 'top-left') leftY += panel.height + WORKBENCH_GAP
     else rightY = y + panel.height + WORKBENCH_GAP

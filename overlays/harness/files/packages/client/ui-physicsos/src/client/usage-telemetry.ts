@@ -43,7 +43,7 @@ export function startUsageTelemetry(auth: AuthController, surface: PhysicsSurfac
       const name =
         active === 'paper'
           ? 'papers'
-          : active === 'library' || active === 'contribute'
+          : active === 'contribute'
             ? 'community'
             : active === 'notice'
               ? 'profile'

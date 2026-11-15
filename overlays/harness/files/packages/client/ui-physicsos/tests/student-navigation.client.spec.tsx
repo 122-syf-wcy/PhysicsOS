@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { SidebarNav } from '../src/client/SidebarNav.tsx'
+import { SidebarNav, type SidebarNavProps } from '../src/client/SidebarNav.tsx'
 import { RecentSpaces } from '../src/client/RecentSpaces.tsx'
 import { zh } from '../src/client/locales.ts'
 const t = (key: string) => ({ 'nav.projects': '项目' }[key] ?? (zh as Record<string,string>)[key] ?? key)
@@ -11,6 +11,26 @@ it('offers a chapter project entry beside experiments in student navigation', ()
  const view=render(<SidebarNav {...{wide:true,openSurface:open,t,usePhysicsSurface:(f:any)=>f({surface:'home'}),useAuth:(f:any)=>f({user:{role:'STUDENT'}})} as any} />)
  fireEvent.click(view.getByRole('button',{name:'项目'}))
  expect(open).toHaveBeenCalledWith('projects')
+})
+it.each(['STUDENT', 'TEACHER', 'SCHOOL_ADMIN', 'SUPER_ADMIN'] as const)('removes the resource entry from the rail and More menu for %s', role => {
+ const openSurface = vi.fn()
+ const props = {
+  wide: true,
+  t: (key: Parameters<SidebarNavProps['t']>[0]) => zh[key],
+  openSurface,
+  usePhysicsSurface: selector => selector({ surface: 'home' }),
+  useAuth: selector => selector({ status: 'authed', user: { id: 'nav-user', schoolId: 'nav-school', schoolName: 'School', username: 'student', displayName: 'Student', role } }),
+ } satisfies SidebarNavProps
+ const view = render(<SidebarNav {...props} />)
+ expect(view.queryByRole('button', { name: '资源库' })).toBeNull()
+ expect(view.queryByText('资源库')).toBeNull()
+ expect(view.queryByRole('button', { name: zh['nav.paper'] }) !== null).toBe(role !== 'STUDENT')
+ fireEvent.click(view.getByRole('button', { name: zh['nav.more'] }))
+ expect(view.queryByRole('menuitem', { name: '资源库' })).toBeNull()
+ expect(view.getByRole('menuitem', { name: zh['nav.contribute'] })).toBeTruthy()
+ fireEvent.click(view.getByRole('menuitem', { name: zh['nav.notice'] }))
+ expect(openSurface).toHaveBeenCalledWith('notice')
+ expect(openSurface).not.toHaveBeenCalledWith('library')
 })
 it('folds recent experiments and history independently and remembers both', () => {
  const props={wide:true,t,useRecentExperiments:(f:any)=>f({items:[{sceneId:'scene1',title:'动量实验',kind:'experiment',updatedAt:new Date().toISOString()}]}),useSessions:(f:any)=>f({ids:['session1'],byId:{session1:{id:'session1',displayTitle:'碰撞题思路',updatedAt:1,blank:false,origin:'user',retainedBy:{mainView:0}}}}),useWorkspaces:(f:any)=>f({archivedSessionIds:[]}),openSurface:vi.fn(),removeRecent:vi.fn(),requestSceneInCanvas:vi.fn(),openSession:vi.fn(),archiveSession:vi.fn()}

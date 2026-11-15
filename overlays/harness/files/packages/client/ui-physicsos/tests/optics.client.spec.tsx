@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { useStudentAuth } from './student-auth-fixture.client.ts'
 import { withOfficialRenderer } from './official-renderer-fixture.client.ts'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createConcaveMirrorScene,
@@ -448,7 +448,16 @@ describe('optics Lab surface', () => {
     expect(lab?.getAttribute('data-scene-revision')).toBe('0')
 
     expect(screen.getByRole('heading', { name: '凸透镜成像规律' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: '贡献实验' })).toBeTruthy()
+    const more = screen.getByRole('button', { name: zh['lab.more'] })
+    expect(more.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByRole('menuitem', { name: '贡献实验' })).toBeNull()
+    fireEvent.click(more)
+    expect(more.getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(screen.getByRole('menuitem', { name: '贡献实验' }))
+    const contribution = screen.getByRole('dialog', { name: '贡献实验' })
+    expect(more.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(within(contribution).getByRole('button', { name: '关闭贡献实验' }))
+    expect(screen.queryByRole('dialog', { name: '贡献实验' })).toBeNull()
   })
 
   it('commits a 物距 edit from the inspector as an auditable revision', () => {

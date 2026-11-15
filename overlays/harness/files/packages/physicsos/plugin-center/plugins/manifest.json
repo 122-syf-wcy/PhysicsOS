@@ -12,8 +12,8 @@
       ],
       "entry": "packages/physicsos/tool-physicsos/src/index.ts",
       "publisher": "PhysicsOS",
-      "sha256": "ff44f10ac98bb348b5b424ccafe6eb31ba4a393c7c8968941d101c8dcec0f6c3",
-      "signature": "ed25519:1+CNbBCRjcImZG2Z1hPmwgD/jNpcaO5P/bBt/QoFH4sV/Js/xITX6O+/rBAsLH1wVy9fr09gTOQ17pRn+EwEAg==",
+      "sha256": "ef124901bfaca6d76e7a1dce1997e941a31d5ed4e9bd0fe263352fc5d1d13d86",
+      "signature": "ed25519:NExKbglM+xmxMH7ZxZPMmLW+f6h5chkKfuggNkq1gNgpiUwVsHsqab76WzSVL7Wy7FLb0u660lflVZb57qGNDg==",
       "description": "PhysicsOS experiments, simulation, observation, and question-solving tools."
     },
     {
@@ -47,8 +47,8 @@
       ],
       "entry": "packages/physicsos/paper-host/src/index.ts",
       "publisher": "PhysicsOS",
-      "sha256": "8c0bef8ef0549758111a43ff019ac2445d8e7e3d3a3555026082c80cf2860984",
-      "signature": "ed25519:P3y01Xoka7qdKmp90Pxfyf5r5AxJAcO3xn1E/jC547iX7pjEzV/5HFxl97QaXHfC3zXfiZ1yI0U6/YbaCDAHDg==",
+      "sha256": "865d80bde7738f784faade1421841ca5032974b8c4e6f931e2dd3a3f72ccb8ec",
+      "signature": "ed25519:DZfF8TXRDAdf6MDi1qzBjXQaCA+PsiubpRVEhwHj/8ScxBtZYICYOKjdxF+8/fynWLyCq4SpE5PzJ3UBu7UtDw==",
       "description": "Question-paper intake, drafting, verification, approval, and export."
     },
     {

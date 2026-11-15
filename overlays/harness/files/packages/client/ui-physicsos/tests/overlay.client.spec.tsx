@@ -1,8 +1,11 @@
 // @vitest-environment jsdom
 import { revealFullWorkbenchInspector } from './workbench-interaction-fixture.client.ts'
 import { useStudentAuth } from './student-auth-fixture.client.ts'
+import { useState, useSyncExternalStore } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { PhysicsScenesProjection, PhysicsSceneSnapshot } from '@deepseek-ai/dsh-tool-physicsos/types'
 import { HomeActions } from '../src/client/HomeActions.tsx'
 import { HomeBelow, HomeHero, type HomeBelowProps, type HomeHeroProps } from '../src/client/HomeHero.tsx'
 import { PhysicsProfileSeat } from '../src/client/PhysicsProfileSeat.tsx'
@@ -11,12 +14,15 @@ import { STUDENT_PROFILES, TEACHER_PROFILES, runtimePresetOf } from '../src/clie
 import { HomeBrand, HomeBrandMark } from '../src/client/HomeBrand.tsx'
 import { PhysicsOSMark } from '../src/client/PhysicsOSMark.tsx'
 import { PhysicsSurface, type PhysicsSurfaceProps } from '../src/client/LabWorkspace.tsx'
-import { SceneChatCard } from '../src/client/SceneChatCard.tsx'
+import { SceneCardBody, SceneChatCard } from '../src/client/SceneChatCard.tsx'
+import { ChatPreview, type ChatPreviewProps } from '../src/client/ChatPreview.tsx'
+import { chatPreviewAccount, chatPreviewOwner, createChatPreviewStore } from '../src/client/chat-preview-store.ts'
+import type { PhysicsSceneCardData } from '../src/client/scene-chat-node.ts'
 import { RecentSpaces, type RecentSpacesProps } from '../src/client/RecentSpaces.tsx'
 import { SidebarBrandMark, SidebarBrandName } from '../src/client/SidebarBrand.tsx'
 import { SidebarFooter } from '../src/client/SidebarFooter.tsx'
 import {
-  AdminPanelIcon, LabPanelIcon, LibraryPanelIcon, NoticePanelIcon,
+  AdminPanelIcon, LabPanelIcon, NoticePanelIcon,
   PaperPanelIcon, RecordPanelIcon,
 } from '../src/client/SidebarPanels.tsx'
 import type { AuthUser } from '../src/client/auth-api.ts'
@@ -117,23 +123,60 @@ afterEach(() => {
 })
 
 
-/** Render the card a `physics_solve_question` turn leaves in the chat, driven
-    by a golden question through the real Question Runtime. */
+/** Runtime specs mount the published attachment beside an explicitly selected preview. */
 const renderSolved = (
   questionId: string,
   openSceneInLab: (ref: PhysicsSceneRef) => void = vi.fn(),
-) =>
-  render(
+) => {
+  const data = solvedCardData(questionId)
+  return render(<>
     <SceneChatCard {...({
       node: {
-        key: `card:${questionId}`, kind: 'physics-scene-card', anchorSeq: 1.9, location: { kind: 'session' },
-        data: solvedCardData(questionId),
+        key: `card:${questionId}`, kind: 'physics-scene-card', anchorSeq: 1.9, location: { kind: 'session' }, data,
       },
       t,
       openSceneInLab,
       useChat: cardSession(),
-    } as unknown as Parameters<typeof SceneChatCard>[0])} />,
-  )
+    } as unknown as Parameters<typeof SceneChatCard>[0])} />
+    <SceneCardBody data={data} presentation="preview" t={t} openSceneInLab={openSceneInLab} />
+  </>)
+}
+
+/** Attachment navigation uses the real Session-scoped selection store and sidebar body. */
+const renderConversationSolved = (data: PhysicsSceneCardData, openSceneInLab: (ref: PhysicsSceneRef) => void = vi.fn()) => {
+  const sessionId = 'solved-question-preview' as SessionId
+  const preview = createChatPreviewStore().create(sessionId)
+  const auth = useStudentAuth(state => state)
+  preview.actions.bindOwner(chatPreviewOwner(auth), chatPreviewAccount(auth))
+  const scene: PhysicsSceneSnapshot = {
+    sceneId: data.sceneId, revision: data.revision, domain: data.domain, title: data.title, cause: data.cause,
+    engineId: data.solve?.answers[0]?.provenance?.engineId ?? `engine-${data.domain}`, scene: data.scene,
+    ...(data.solve === undefined ? {} : { solve: data.solve }),
+    ...(data.visualization === undefined ? {} : { visualization: data.visualization }),
+  }
+  const projection: PhysicsScenesProjection = { latest: data.sceneId, scenes: { [data.sceneId]: scene } }
+  function useStore<S>(selector: (state: ReturnType<typeof preview.getSnapshot>) => S): S {
+    return selector(useSyncExternalStore(preview.subscribe, preview.getSnapshot))
+  }
+  const props = {
+    sessionId, actions: preview.actions, useStore, useAuth: useStudentAuth,
+    usePreviewSession: (selector: (id: SessionId) => unknown) => selector(sessionId),
+    useProjection: (_key: string, selector?: (value: PhysicsScenesProjection) => unknown) => selector === undefined ? projection : selector(projection),
+    t, openSceneInLab,
+  } as unknown as ChatPreviewProps
+  function Conversation() {
+    const [opened, setOpened] = useState(false)
+    return <>
+      <SceneChatCard {...({
+        node: { key: `card:${data.sceneId}`, kind: 'physics-scene-card', anchorSeq: 1.9, location: { kind: 'session' }, data },
+        t, openSceneInLab, useChat: cardSession(),
+        openScenePreview: (sceneId: string) => { preview.actions.select(sceneId); setOpened(true) },
+      } as unknown as Parameters<typeof SceneChatCard>[0])} />
+      {opened ? <ChatPreview {...props} /> : null}
+    </>
+  }
+  return { ...render(<Conversation />), preview }
+}
 
 describe('PhysicsOS overlay presentation', () => {
   it('renders the generated orbital-lens mark', () => {
@@ -168,7 +211,6 @@ describe('PhysicsOS overlay presentation', () => {
     for (const [Glyph, label] of [
       [LabPanelIcon, '物理实验室'],
       [NoticePanelIcon, '反馈'],
-      [LibraryPanelIcon, '资源库'],
       [RecordPanelIcon, '学习记录'],
       [PaperPanelIcon, '出卷专区'],
       [AdminPanelIcon, '管理后台'],
@@ -199,9 +241,8 @@ describe('PhysicsOS overlay presentation', () => {
         t={t}
       />,
     )
-    /* 学习记录 is an account-menu entry and 资源库 a nav-rail entry, so neither
-       is a row in the foot; this seat injected no record action, so the menu
-       does not offer 学习记录 either — absent, never dead. */
+    /* 学习记录 is an account-menu entry; the removed resource page is offered
+       nowhere. This seat injected no record action, so the menu offers neither. */
     expect(screen.queryByRole('button', { name: '学习记录' })).toBeNull()
     expect(screen.queryByRole('button', { name: '资源库' })).toBeNull()
   })
@@ -693,14 +734,30 @@ describe('PhysicsOS overlay presentation', () => {
     expect(screen.getByRole('button', { name: /1.00 T/ })).toBeTruthy()
   })
 
-  it('renders the real Question Runtime as a solved card in the conversation', () => {
-    renderSolved('01-proton-basic')
+  it('renders the verified question attachment and opens its real conversation preview', async () => {
+    const data = solvedCardData('01-proton-basic')
+    const published = JSON.stringify(data)
+    const { container, preview } = renderConversationSolved(data)
+    const attachment = container.querySelector<HTMLElement>('[data-scene-attachment]')!
+    expect(attachment.getAttribute('data-scene-attachment')).toBe(data.sceneId)
+    expect(within(attachment).getByText('题目理解')).toBeTruthy()
+    expect(within(attachment).getAllByText('质子垂直进入匀强磁场').length).toBeGreaterThan(0)
+    expect(within(attachment).getByText('已验证')).toBeTruthy()
+    expect(within(attachment).getAllByText(/轨道半径/).length).toBeGreaterThanOrEqual(1)
+    expect(attachment.querySelector('[data-preview-status="historical"]')).not.toBeNull()
+    expect(container.querySelector('[data-code-experiment-shell]')).toBeNull()
+    expect(screen.queryByRole('region', { name: zh['chatPreview.title'] })).toBeNull()
 
-    expect(screen.getByText('题目理解')).toBeTruthy()
-    expect(screen.getAllByText('质子垂直进入匀强磁场').length).toBeGreaterThan(0)
-    expect(screen.getByText('已验证')).toBeTruthy()
-    expect(screen.getAllByText(/轨道半径/).length).toBeGreaterThanOrEqual(1)
-    expect(screen.getByText('这段历史记录还没有本题代码实验')).toBeTruthy()
+    fireEvent.click(within(attachment).getByRole('button', { name: /^预览实验：/ }))
+    const selected = screen.getByRole('region', { name: zh['chatPreview.title'] })
+    expect(preview.getSnapshot().selectedSceneId).toBe(data.sceneId)
+    expect(selected.getAttribute('data-preview-scene')).toBe(data.sceneId)
+    expect(await within(selected).findByText('这段历史记录还没有本题代码实验')).toBeTruthy()
+    expect(selected.querySelector('[data-code-experiment-shell]')).not.toBeNull()
+    expect(selected.querySelector('[data-question-code-status="historical"]')).not.toBeNull()
+    expect(within(selected).getByRole('button', { name: '播放 / 暂停' })).toBeTruthy()
+    expect(attachment.querySelector('[data-code-experiment-shell]')).toBeNull()
+    expect(JSON.stringify(data)).toBe(published)
     expect(screen.queryByRole('img')).toBeNull()
   })
 
@@ -767,16 +824,24 @@ describe('PhysicsOS overlay presentation', () => {
     expect(answerText).toContain('75.00m')
   })
 
-  it('keeps a historical verified question in chat until its own code renderer exists', () => {
+  it('keeps a historical verified question in chat until its own code renderer exists', async () => {
     const open = vi.fn()
-    const view = renderSolved('mech-01-uniform-acceleration', open)
-    const button = screen.getByRole('button', { name: '在实验室中探索' }) as HTMLButtonElement
+    const data = solvedCardData('mech-01-uniform-acceleration')
+    const published = JSON.stringify(data)
+    const { container } = renderConversationSolved(data, open)
+    expect(screen.getByText('物理已验证')).toBeTruthy()
+    expect(container.querySelector('[data-code-experiment-shell]')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /^预览实验：/ }))
+    const preview = screen.getByRole('region', { name: zh['chatPreview.title'] })
+    const button = await within(preview).findByRole('button', { name: '在实验室中探索' }) as HTMLButtonElement
     expect(button.disabled).toBe(true)
     fireEvent.click(button)
     expect(open).not.toHaveBeenCalled()
-    expect(view.container.querySelector('[data-question-code-status="historical"]')).not.toBeNull()
+    expect(preview.querySelector('[data-question-code-status="historical"]')).not.toBeNull()
+    fireEvent.click(within(preview).getByRole('button', { name: '播放 / 暂停' }))
+    expect(within(preview).getByRole('button', { name: '播放 / 暂停' }).getAttribute('aria-pressed')).toBe('true')
+    expect(JSON.stringify(data)).toBe(published)
     expect(screen.getByText('物理已验证')).toBeTruthy()
-    expect(screen.getByRole('button', { name: '播放 / 暂停' })).toBeTruthy()
   })
 
   it('rejects a question text that names no physics, honestly', () => {

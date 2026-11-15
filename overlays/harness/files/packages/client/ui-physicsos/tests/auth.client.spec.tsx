@@ -13,7 +13,7 @@ import { AdminWorkspace } from '../src/client/AdminWorkspace.tsx'
 import { AuthGate } from '../src/client/AuthGate.tsx'
 import { SidebarBrandName } from '../src/client/SidebarBrand.tsx'
 import { SidebarFooter } from '../src/client/SidebarFooter.tsx'
-import { zh } from '../src/client/locales.ts'
+import { en, zh } from '../src/client/locales.ts'
 
 /* Auth V1 client specs: controller lifecycle (boot/login/logout/namespace),
    the gate's views — login is account+password with the school only surfacing
@@ -416,7 +416,7 @@ describe('AuthGate', () => {
     await waitFor(() => { expect(getByText('登录 PhysicsOS')).toBeTruthy() })
   })
 
-  it('shows the forgot receipt after a reset request — username only', async () => {
+  it('shows the forgot receipt after a reset request — username only when no school is selected', async () => {
     const props = gateProps({ status: 'guest' })
     const { getByText, container } = render(<AuthGate {...props} />)
     fireEvent.click(getByText('忘记密码'))
@@ -426,6 +426,271 @@ describe('AuthGate', () => {
     fireEvent.click(getByText('提交重置请求'))
     await waitFor(() => { expect(getByText(/已记录你的重置请求/)).toBeTruthy() })
     expect(props.forgotPassword).toHaveBeenCalledWith({ username: '2023123456' })
+  })
+
+  it('associates readable labels, focuses the invalid field and preserves keyboard submission', async () => {
+    const props = gateProps({ status: 'guest' })
+    const { getByLabelText, getByRole, container } = render(<AuthGate {...props} />)
+    const account = getByLabelText('账号') as HTMLInputElement
+    const password = getByLabelText('密码') as HTMLInputElement
+    const form = container.querySelector('form')!
+    fireEvent.submit(form)
+    expect(document.activeElement).toBe(account)
+    expect(account.getAttribute('aria-invalid')).toBe('true')
+    expect(document.getElementById(account.getAttribute('aria-describedby')!)?.getAttribute('role')).toBe('alert')
+    fireEvent.change(account, { target: { value: '  keyboard01  ' } })
+    fireEvent.change(password, { target: { value: 'keyboard-pass' } })
+    fireEvent.submit(form)
+    await waitFor(() => { expect(props.login).toHaveBeenCalledWith({ username: 'keyboard01', password: 'keyboard-pass', rememberDevice: false }) })
+    expect(getByRole('button', { name: '请稍候…' }).hasAttribute('disabled')).toBe(true)
+  })
+
+  it('does not choose an arbitrary same-name school or submit twice while login is pending', async () => {
+    let resolve!: () => void
+    const props = gateProps({ status: 'guest' })
+    props.login.mockImplementation(() => new Promise<void>((done) => { resolve = done }))
+    const { getByLabelText, container } = render(<AuthGate {...props} />)
+    fireEvent.change(getByLabelText('账号'), { target: { value: 'shared01' } })
+    fireEvent.change(getByLabelText('密码'), { target: { value: 'sharedpass1' } })
+    fireEvent.submit(container.querySelector('form')!)
+    fireEvent.submit(container.querySelector('form')!)
+    expect(props.login).toHaveBeenCalledTimes(1)
+    expect((getByLabelText('账号') as HTMLInputElement).matches(':disabled')).toBe(true)
+    resolve()
+    await Promise.resolve()
+  })
+
+  it('requires an explicit school choice after SCHOOL_REQUIRED instead of defaulting to the first tenant', async () => {
+    const props = gateProps({ status: 'guest' })
+    props.login.mockRejectedValue(apiError('SCHOOL_REQUIRED', '请选择所属学校', [
+      { id: 'school-one', name: '第一学校' }, { id: 'school-two', name: '第二学校' },
+    ]))
+    const { getByLabelText, getByText, getByRole } = render(<AuthGate {...props} />)
+    fireEvent.change(getByLabelText('账号'), { target: { value: 'shared01' } })
+    fireEvent.change(getByLabelText('密码'), { target: { value: 'sharedpass1' } })
+    fireEvent.click(getByText('登录 PhysicsOS'))
+    await waitFor(() => { expect(getByRole('combobox').textContent).toContain('选择你的学校') })
+    fireEvent.click(getByText('登录 PhysicsOS'))
+    await waitFor(() => { expect(getByRole('alert').textContent).toBe('请先选择所属学校，再继续提交') })
+    expect(props.login).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps password and confirmation visibility separate without losing the values', () => {
+    const props = gateProps({ status: 'guest' })
+    const { getByText, getByLabelText, getByRole } = render(<AuthGate {...props} />)
+    fireEvent.click(getByText('立即注册'))
+    const password = getByLabelText('密码') as HTMLInputElement
+    const confirm = getByLabelText('确认密码') as HTMLInputElement
+    fireEvent.change(password, { target: { value: 'private-pass-1' } })
+    fireEvent.change(confirm, { target: { value: 'private-pass-1' } })
+    fireEvent.click(getByRole('button', { name: '显示密码' }))
+    expect(password.type).toBe('text')
+    expect(confirm.type).toBe('password')
+    expect(getByRole('button', { name: '隐藏密码' }).getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(getByRole('button', { name: '显示确认密码' }))
+    expect(confirm.type).toBe('text')
+    expect(password.value).toBe('private-pass-1')
+    expect(confirm.value).toBe('private-pass-1')
+  })
+
+  it('supports school selection with ArrowDown and Enter without submitting the form', async () => {
+    const props = gateProps({ status: 'guest' })
+    props.searchSchools.mockResolvedValue({ schools: [
+      { id: 'same-east', name: '同名中学', city: '贵阳市', county: '南明区' },
+      { id: 'same-west', name: '同名中学', city: '贵阳市', county: '花溪区' },
+    ] })
+    const { getByText, getByLabelText, findAllByRole, container } = render(<AuthGate {...props} />)
+    fireEvent.click(getByText('立即注册'))
+    const school = getByLabelText('学校') as HTMLInputElement
+    fireEvent.change(school, { target: { value: '同名' } })
+    const rows = await findAllByRole('option')
+    expect(rows.map(row => row.textContent)).toEqual(['同名中学（贵阳市 南明区）', '同名中学（贵阳市 花溪区）'])
+    fireEvent.keyDown(school, { key: 'ArrowDown' })
+    fireEvent.keyDown(school, { key: 'ArrowDown' })
+    expect(school.getAttribute('aria-activedescendant')).toBe(rows[1]!.id)
+    fireEvent.keyDown(school, { key: 'Enter' })
+    expect(school.value).toBe('同名中学')
+    expect(school.getAttribute('aria-expanded')).toBe('false')
+    expect(props.register).not.toHaveBeenCalled()
+    fillRegister(container, { school: '同名中学', username: 'schoolkey01', displayName: '测试学生' })
+    fireEvent.click(getByText('创建 PhysicsOS 账号'))
+    await waitFor(() => { expect(props.register).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 'same-west' })) })
+  })
+
+  it('separates lookup network failure from an unlisted school and can retry', async () => {
+    const props = gateProps({ status: 'guest' })
+    props.searchSchools.mockRejectedValueOnce(new TypeError('Failed to fetch')).mockResolvedValueOnce({ schools: [] })
+    const { getByText, getByLabelText, findByTestId, queryByTestId } = render(<AuthGate {...props} />)
+    fireEvent.click(getByText('立即注册'))
+    fireEvent.change(getByLabelText('学校'), { target: { value: '新学校' } })
+    const failed = await findByTestId('school-lookup-failed')
+    expect(failed.textContent).toContain('暂时未连接')
+    expect(queryByTestId('school-not-found')).toBeNull()
+    fireEvent.click(getByText('重试搜索'))
+    expect((await findByTestId('school-not-found')).textContent).toContain('审核')
+    expect(props.searchSchools).toHaveBeenCalledTimes(2)
+  })
+
+  it('never permits a stale school lookup to overwrite the latest search', async () => {
+    let oldReply!: (value: { schools: SchoolRow[] }) => void
+    const props = gateProps({ status: 'guest' })
+    props.searchSchools.mockImplementation(async query => query === '旧学校'
+      ? await new Promise<{ schools: SchoolRow[] }>((resolve) => { oldReply = resolve })
+      : { schools: [{ id: 'new-school', name: '新学校' }] })
+    const { getByText, getByLabelText, findByTestId, queryByText } = render(<AuthGate {...props} />)
+    fireEvent.click(getByText('立即注册'))
+    fireEvent.change(getByLabelText('学校'), { target: { value: '旧学校' } })
+    await waitFor(() => { expect(props.searchSchools).toHaveBeenCalledWith('旧学校') })
+    fireEvent.change(getByLabelText('学校'), { target: { value: '新学校' } })
+    expect((await findByTestId('school-option')).textContent).toBe('新学校')
+    oldReply({ schools: [{ id: 'old-school', name: '旧学校结果' }] })
+    await waitFor(() => { expect(queryByText('旧学校结果')).toBeNull() })
+  })
+
+  it('focuses a network error, preserves entries, and makes the submit available to retry', async () => {
+    const props = gateProps({ status: 'guest' })
+    props.login.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    const { getByLabelText, getByText, findByRole, getByRole } = render(<AuthGate {...props} />)
+    fireEvent.change(getByLabelText('账号'), { target: { value: 'network01' } })
+    fireEvent.change(getByLabelText('密码'), { target: { value: 'network-pass' } })
+    fireEvent.click(getByText('登录 PhysicsOS'))
+    const alert = await findByRole('alert')
+    expect(alert.textContent).toContain('网络连接失败')
+    expect(document.activeElement).toBe(alert)
+    expect((getByLabelText('账号') as HTMLInputElement).value).toBe('network01')
+    expect((getByLabelText('密码') as HTMLInputElement).value).toBe('network-pass')
+    expect(getByRole('button', { name: '登录 PhysicsOS' }).hasAttribute('disabled')).toBe(false)
+  })
+
+  it('does not claim recovery success when the callback returns ok false', async () => {
+    const props = gateProps({ status: 'guest' })
+    props.forgotPassword.mockResolvedValue({ ok: false })
+    const { getByText, getByLabelText, findByRole, queryByText } = render(<AuthGate {...props} />)
+    fireEvent.click(getByText('忘记密码'))
+    fireEvent.change(getByLabelText('账号'), { target: { value: 'recovery01' } })
+    fireEvent.click(getByText('提交重置请求'))
+    expect((await findByRole('alert')).textContent).toBe('操作失败，请稍后再试')
+    expect(queryByText('找回请求已提交')).toBeNull()
+  })
+
+  it('passes a selected schoolId for recovery without changing the username-only default', async () => {
+    const props = gateProps({ status: 'guest' })
+    props.searchSchools.mockResolvedValue({ schools: [{ id: 'GZU', name: '贵州大学', city: '贵阳市' }] })
+    const { getByText, getByLabelText, findByTestId } = render(<AuthGate {...props} />)
+    fireEvent.click(getByText('忘记密码'))
+    fireEvent.change(getByLabelText('账号'), { target: { value: 'shared01' } })
+    fireEvent.change(getByLabelText('学校（选填）'), { target: { value: '贵州' } })
+    fireEvent.click(await findByTestId('school-option'))
+    fireEvent.click(getByText('提交重置请求'))
+    await waitFor(() => { expect(props.forgotPassword).toHaveBeenCalledWith({ username: 'shared01', schoolId: 'GZU' }) })
+  })
+
+  it('does not silently discard a typed recovery school without a chosen tenant', async () => {
+    const props = gateProps({ status: 'guest' })
+    const { getByText, getByLabelText, getByRole } = render(<AuthGate {...props} />)
+    fireEvent.click(getByText('忘记密码'))
+    fireEvent.change(getByLabelText('账号'), { target: { value: 'shared01' } })
+    fireEvent.change(getByLabelText('学校（选填）'), { target: { value: '同名中学' } })
+    fireEvent.click(getByText('提交重置请求'))
+    expect(getByRole('alert').textContent).toBe('请先选择所属学校，再继续提交')
+    expect(props.forgotPassword).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(getByLabelText('学校（选填）'))
+  })
+
+  it('shows the real pending receipt reference without showing an account as opened', async () => {
+    const props = gateProps({ status: 'guest' })
+    props.register.mockResolvedValue({ kind: 'pending', requestId: 'sr_real_reference', schoolName: '新学校', username: 'pending01', email: 'pending01@example.com' })
+    const { getByText, container, queryByText } = render(<AuthGate {...props} />)
+    fireEvent.click(getByText('立即注册'))
+    fillRegister(container, { school: '新学校', username: 'pending01', displayName: '测试学生' })
+    fireEvent.click(getByText('创建 PhysicsOS 账号'))
+    await waitFor(() => { expect(getByText('sr_real_reference')).toBeTruthy() })
+    expect(getByText('等待审核，不代表已开通账号')).toBeTruthy()
+    expect(queryByText('登录 PhysicsOS')).toBeNull()
+    expect(container.querySelector('input[type="password"]')).toBeNull()
+  })
+
+  it('keeps the form usable if story artwork fails and uses the approved character fallback', () => {
+    const { container, getByText, getByTestId } = render(<AuthGate {...gateProps({ status: 'guest' })} />)
+    const artwork = container.querySelector('[data-auth-artwork="welcome"] img') as HTMLImageElement
+    expect(artwork.width).toBe(880)
+    expect(artwork.height).toBe(1184)
+    expect(artwork.srcset).toContain('welcome-440.webp 440w')
+    expect(container.querySelector('[data-auth-artwork] source')?.getAttribute('srcset')).toContain('welcome-880.avif 880w')
+    fireEvent.error(artwork)
+    expect(getByTestId('auth-art-fallback').querySelector('[data-physicsos-mascot-edition="guizhou-v1"]')).toBeTruthy()
+    expect(getByText('登录 PhysicsOS')).toBeTruthy()
+  })
+
+  it('offers real role and culture help with source links, then returns focus to the trigger', () => {
+    const { getByRole, getByText } = render(<AuthGate {...gateProps({ status: 'guest' })} />)
+    const help = getByRole('button', { name: '登录帮助' })
+    help.focus()
+    fireEvent.click(help)
+    expect(getByRole('dialog', { name: '需要一点帮助？' }).textContent).toContain('不能在注册页自行提升')
+    fireEvent.click(getByRole('button', { name: '关闭' }))
+    expect(document.activeElement).toBe(help)
+    const culture = screen.getAllByRole('button', { name: '角色的贵州文化灵感' })[0]!
+    fireEvent.click(culture)
+    expect(getByText(/不是特定村寨/)).toBeTruthy()
+    expect(getByRole('link', { name: '雷山苗绣' }).getAttribute('href')).toBe('https://www.ihchina.cn/art/detail/id/13989.html')
+    expect(getByRole('link', { name: '苗族银饰锻制技艺' }).getAttribute('href')).toBe('https://www.ihchina.cn/art/detail/id/14331.html')
+  })
+
+  it('updates new auth copy and validation immediately when the existing locale t changes', () => {
+    const props = gateProps({ status: 'guest' })
+    const view = render(<AuthGate {...props} />)
+    fireEvent.submit(view.container.querySelector('form')!)
+    const english = (key: string): string => (en as Record<string, string>)[key] ?? key
+    view.rerender(<AuthGate {...props} t={english} />)
+    expect(view.getByRole('heading', { name: 'Welcome back to PhysicsOS' })).toBeTruthy()
+    expect(view.getByRole('button', { name: 'Sign-in help' })).toBeTruthy()
+    expect(view.getByRole('alert').textContent).toBe('Please enter your account and password')
+    expect(view.getByText('One entrance for students, teachers and administrators')).toBeTruthy()
+  })
+
+  it('redeems a reset token through the injected callback and clears it from query and fragment', async () => {
+    const originalUrl = window.location.href
+    const reset = vi.fn(async () => ({ ok: true }))
+    try {
+      window.history.replaceState({ route: 'preserved' }, '', '/?reset_token=query-token&keep=1#reset_token=fragment-token&panel=account')
+      const { getByLabelText, getByText, container } = render(<AuthGate {...gateProps({ status: 'guest' })} resetPassword={reset} />)
+      fireEvent.change(getByLabelText('密码'), { target: { value: 'new-private-pass' } })
+      fireEvent.change(getByLabelText('确认密码'), { target: { value: 'new-private-pass' } })
+      fireEvent.click(getByText('完成重置'))
+      await waitFor(() => { expect(getByText('密码已经更新。请使用新密码重新登录。')).toBeTruthy() })
+      expect(reset).toHaveBeenCalledWith({ token: 'query-token', newPassword: 'new-private-pass' })
+      expect(window.location.search).toBe('?keep=1')
+      expect(window.location.hash).toBe('#panel=account')
+      expect(window.history.state).toEqual({ route: 'preserved' })
+      expect(container.querySelector('input[type="password"]')).toBeNull()
+    } finally { window.history.replaceState({}, '', originalUrl) }
+  })
+
+  it('does not redeem a short or mismatched reset password and focuses confirmation', async () => {
+    const reset = vi.fn(async () => ({ ok: true }))
+    const { getByLabelText, getByText, getByRole } = render(<AuthGate {...gateProps({ status: 'guest' })} resetToken="reset-test-token" resetPassword={reset} />)
+    fireEvent.change(getByLabelText('密码'), { target: { value: 'short' } })
+    fireEvent.click(getByText('完成重置'))
+    expect(getByRole('alert').textContent).toBe('密码至少 8 位')
+    fireEvent.change(getByLabelText('密码'), { target: { value: 'long-new-password' } })
+    fireEvent.change(getByLabelText('确认密码'), { target: { value: 'different-password' } })
+    fireEvent.click(getByText('完成重置'))
+    expect(getByRole('alert').textContent).toBe('两次输入的密码不一致')
+    expect(document.activeElement).toBe(getByLabelText('确认密码'))
+    expect(reset).not.toHaveBeenCalled()
+  })
+
+  it('keeps an expired reset error honest and allows requesting another link', async () => {
+    const reset = vi.fn(async () => { throw apiError('INVALID_RESET_TOKEN', '重置链接无效或已过期') })
+    const { getByLabelText, getByText, findByRole, container } = render(<AuthGate {...gateProps({ status: 'guest' })} resetToken="expired-token" resetPassword={reset} />)
+    fireEvent.change(getByLabelText('密码'), { target: { value: 'long-new-password' } })
+    fireEvent.change(getByLabelText('确认密码'), { target: { value: 'long-new-password' } })
+    fireEvent.click(getByText('完成重置'))
+    expect((await findByRole('alert')).textContent).toBe('重置链接无效或已过期')
+    fireEvent.click(getByText('重新申请重置链接'))
+    expect(container.querySelector('[data-physicsos-auth-view="forgot"]')).toBeTruthy()
+    expect(getByText('提交重置请求')).toBeTruthy()
   })
 })
 

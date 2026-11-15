@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "collection": "PhysicsOS authentication heritage illustrations",
+  "assets": [
+    {
+      "filename": "welcome-440.webp",
+      "width": 440,
+      "height": 592,
+      "bytes": 64744,
+      "sha256": "e6a93a014d8f4a68c04d931132bc4cc531c82efafca209ea6108a73380cf064d",
+      "sourceSha256": "32df79255d5e02941d6bfd015b837d6461271f705890ba6e884fcd45e08ac100"
+    },
+    {
+      "filename": "welcome-440.avif",
+      "width": 440,
+      "height": 592,
+      "bytes": 29424,
+      "sha256": "46fffab6f4209bc30ed4bffc9d7245b33c63cea46da75c3d7f658ce9605e65f9",
+      "sourceSha256": "32df79255d5e02941d6bfd015b837d6461271f705890ba6e884fcd45e08ac100"
+    },
+    {
+      "filename": "welcome-880.webp",
+      "width": 880,
+      "height": 1184,
+      "bytes": 212146,
+      "sha256": "ea1faeb92d07e07193b9bb6234200500781d3c7a065ae635be7c575c60ebeb6d",
+      "sourceSha256": "32df79255d5e02941d6bfd015b837d6461271f705890ba6e884fcd45e08ac100"
+    },
+    {
+      "filename": "welcome-880.avif",
+      "width": 880,
+      "height": 1184,
+      "bytes": 95814,
+      "sha256": "6e5e4c52b993c5b109a445252a1dc77e859e5cbc0eb4774723b6cfd44e2f2d1d",
+      "sourceSha256": "32df79255d5e02941d6bfd015b837d6461271f705890ba6e884fcd45e08ac100"
+    },
+    {
+      "filename": "join-440.webp",
+      "width": 440,
+      "height": 592,
+      "bytes": 65360,
+      "sha256": "f1f52eee1404bb5a9ee7ce8c249b2275392283477e86e414b233e71b591dc55d",
+      "sourceSha256": "e73c2dad0295e684dc5f31a9f585c62c0abe277d172613ab024d0ae6d72d9b29"
+    },
+    {
+      "filename": "join-440.avif",
+      "width": 440,
+      "height": 592,
+      "bytes": 29401,
+      "sha256": "3e1e20e9f910516901ad50f7b3d0704df2300f0447a176d7ff9aa7b931454d9c",
+      "sourceSha256": "e73c2dad0295e684dc5f31a9f585c62c0abe277d172613ab024d0ae6d72d9b29"
+    },
+    {
+      "filename": "join-880.webp",
+      "width": 880,
+      "height": 1184,
+      "bytes": 228620,
+      "sha256": "0c5dfe95bcbe05ba68d0927ea72c72d6053bda94ac210ad854f9d89cfa41cc68",
+      "sourceSha256": "e73c2dad0295e684dc5f31a9f585c62c0abe277d172613ab024d0ae6d72d9b29"
+    },
+    {
+      "filename": "join-880.avif",
+      "width": 880,
+      "height": 1184,
+      "bytes": 101657,
+      "sha256": "37032872b52076e873560541db1d668f347f5a515d09ce21bd300d06550a3ee5",
+      "sourceSha256": "e73c2dad0295e684dc5f31a9f585c62c0abe277d172613ab024d0ae6d72d9b29"
+    }
+  ]
+}

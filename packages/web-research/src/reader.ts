@@ -1,14 +1,17 @@
-import { request as httpRequest } from 'node:http'
+import { request as httpRequest, type ClientRequest, type IncomingMessage, type RequestOptions } from 'node:http'
 import { request as httpsRequest } from 'node:https'
+import { isIP } from 'node:net'
+import { Readable, Writable } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
 import { createBrotliDecompress, createGunzip, createInflate } from 'node:zlib'
-import { assertPublicUrl, isBlockedAddress, resolvePublicAddresses, type AddressLookup } from './safety.ts'
+import { abortFailure, boundedInteger, createOperation, failure, isCancellation, type Operation } from './operation.ts'
+import { assertPublicUrl, isBlockedAddress, resolvePublicAddresses, urlHostname, type AddressLookup } from './safety.ts'
 import { ResearchError, type PageReader, type ReadDocument, type ReadOptions } from './types.ts'
 
 const DEFAULT_MAX_BYTES = 1_048_576
 const DEFAULT_TIMEOUT_MS = 12_000
 const DEFAULT_MAX_REDIRECTS = 3
 const USER_AGENT = 'PhysicsOS study reader'
-
 const ALLOWED_TYPES = new Set(['text/html', 'text/plain', 'application/xhtml+xml'])
 
 interface RawResponse {
@@ -18,13 +21,8 @@ interface RawResponse {
 }
 
 export interface SafeReaderOptions {
-  /** Injected in tests; the default resolves every address and rejects any private answer. */
   readonly lookup?: AddressLookup
-  /**
-   * Address admission. Defaults to rejecting loopback/private/link-local
-   * addresses. Only tests pass a different policy (to reach a local HTTP
-   * fixture); production construction must leave this unset.
-   */
+  /** Test-only fixture admission. Production must leave this unset. */
   readonly addressPolicy?: (address: string) => boolean
   readonly maxBytes?: number
   readonly timeoutMs?: number
@@ -32,111 +30,157 @@ export interface SafeReaderOptions {
   readonly userAgent?: string
 }
 
-const isAbort = (error: unknown): boolean => error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError' || (error as NodeJS.ErrnoException).code === 'ABORT_ERR')
+/** Internal export for a pure regression test of both Node lookup callback shapes. */
+export function pinnedLookup(address: string): NonNullable<RequestOptions['lookup']> {
+  const family = isIP(address)
+  if (family !== 4 && family !== 6) throw failure('FETCH_BLOCKED')
+  return (_hostname, options, callback) => {
+    if (options.all) {
+      const allCallback = callback as unknown as (error: NodeJS.ErrnoException | null, addresses: Array<{ address: string; family: number }>) => void
+      allCallback(null, [{ address, family }])
+    } else callback(null, address, family)
+  }
+}
 
-/**
- * One request with the connection bound to an already-validated address.
- *
- * `lookup` is the only DNS step the socket performs, and it returns the
- * checked address, so a hostname cannot re-resolve to a private address
- * between validation and connect. TLS keeps the original hostname as SNI.
- */
-function requestOnce(url: URL, address: string, options: { readonly timeoutMs: number; readonly maxBytes: number; readonly userAgent: string; readonly signal?: AbortSignal }): Promise<RawResponse> {
+/** Every connection has its own checked address; Host/SNI remain the original name. */
+function requestOnce(url: URL, address: string, options: { readonly operation: Operation; readonly maxBytes: number; readonly userAgent: string; readonly attemptMs: number }): Promise<RawResponse> {
+  const operation = createOperation({ signal: options.operation.signal, deadlineAt: options.operation.deadlineAt, timeoutMs: options.attemptMs }, options.attemptMs, 'FETCH_TIMEOUT')
   return new Promise((resolve, reject) => {
-    const client = url.protocol === 'https:' ? httpsRequest : httpRequest
     let settled = false
-    const fail = (error: unknown): void => {
+    let request: ClientRequest | undefined
+    let response: IncomingMessage | undefined
+    let cleanupResponse = (): void => {}
+    const absorbError = (): void => {}
+    const onRequestError = (): void => fail(operation.signal.aborted ? abortFailure(operation.signal) : failure('FETCH_UNAVAILABLE'))
+    const onRequestClose = (): void => request?.removeListener('error', absorbError)
+    const finish = (error: unknown, value?: RawResponse): void => {
       if (settled) return
       settled = true
-      reject(error)
+      operation.signal.removeEventListener('abort', onAbort)
+      operation.dispose()
+      cleanupResponse()
+      request?.removeListener('error', onRequestError)
+      // Keep a no-op error listener only until close to absorb delayed socket
+      // errors after destroy; remove resource-capturing callbacks immediately.
+      if (request !== undefined && !request.closed) {
+        request.on('error', absorbError)
+        request.once('close', onRequestClose)
+      }
+      // agent:false prevents an old keep-alive socket bypassing a new DNS check.
+      response?.destroy()
+      request?.destroy()
+      if (error !== undefined) reject(error)
+      else resolve(value!)
     }
-    // The socket is bound to this already-checked address; the resolver is
-    // never consulted again, so DNS cannot rotate between check and connect.
-    // TLS keeps the original hostname as SNI because `hostname` is a name.
-    const lookup = (_hostname: string, first: unknown, second?: unknown): void => {
-      const callback = (typeof first === 'function' ? first : second) as (error: NodeJS.ErrnoException | null, address: string, family: number) => void
-      callback(null, address, address.includes(':') ? 6 : 4)
-    }
-    const req = client({
-      protocol: url.protocol,
-      hostname: url.hostname.replace(/^\[|\]$/g, ''),
-      port: url.port === '' ? undefined : Number(url.port),
-      path: url.pathname + url.search,
-      method: 'GET',
-      headers: { accept: 'text/html,application/xhtml+xml,text/plain;q=0.9', 'accept-encoding': 'gzip, deflate, br', 'user-agent': options.userAgent },
-      lookup: lookup as never,
-      signal: options.signal,
-      timeout: options.timeoutMs,
-    }, response => {
-      const chunks: Buffer[] = []
-      let size = 0
-      response.on('data', (chunk: Buffer) => {
-        size += chunk.byteLength
-        if (size > options.maxBytes * 4) {
-          req.destroy()
-          fail(new ResearchError('FETCH_TOO_LARGE', '网页内容过大，已停止读取。'))
-          return
-        }
-        chunks.push(chunk)
-      })
-      response.on('error', fail)
-      response.on('end', () => {
-        if (settled) return
-        settled = true
+    const fail = (error: unknown): void => finish(error)
+    const onAbort = (): void => fail(abortFailure(operation.signal))
+    try {
+      operation.check()
+      operation.signal.addEventListener('abort', onAbort, { once: true })
+      const client = url.protocol === 'https:' ? httpsRequest : httpRequest
+      request = client({
+        protocol: url.protocol,
+        hostname: url.hostname.replace(/^\[|\]$/g, ''),
+        port: url.port === '' ? undefined : Number(url.port),
+        path: url.pathname + url.search,
+        method: 'GET',
+        headers: { accept: 'text/html,application/xhtml+xml,text/plain;q=0.9', 'accept-encoding': 'gzip, deflate, br', 'user-agent': options.userAgent },
+        lookup: pinnedLookup(address),
+        family: isIP(address),
+        autoSelectFamily: false,
+        agent: false,
+        maxHeaderSize: 16_384,
+      }, incoming => {
+        response = incoming
+        if (settled) { incoming.destroy(); return }
         const headers: Record<string, string | undefined> = {}
-        for (const [key, value] of Object.entries(response.headers)) headers[key.toLowerCase()] = Array.isArray(value) ? value[0] : value
-        resolve({ status: response.statusCode ?? 0, headers, body: Buffer.concat(chunks) })
+        for (const [key, value] of Object.entries(incoming.headers)) headers[key.toLowerCase()] = Array.isArray(value) ? value[0] : value
+        const status = incoming.statusCode ?? 0
+        const chunks: Buffer[] = []
+        let size = 0
+        const onError = (): void => fail(operation.signal.aborted ? abortFailure(operation.signal) : failure('FETCH_UNAVAILABLE'))
+        const onAborted = (): void => fail(failure('FETCH_UNAVAILABLE'))
+        const onData = (chunk: Buffer): void => {
+          if (settled) return
+          size += chunk.byteLength
+          if (size > options.maxBytes * 4) { fail(failure('FETCH_TOO_LARGE')); return }
+          chunks.push(chunk)
+        }
+        const onEnd = (): void => {
+          if (settled) return
+          try { operation.check(); finish(undefined, { status, headers, body: Buffer.concat(chunks) }) } catch (error) { fail(error) }
+        }
+        const onClose = (): void => { if (!incoming.complete) fail(failure('FETCH_UNAVAILABLE')) }
+        cleanupResponse = () => {
+          incoming.removeListener('error', onError)
+          incoming.removeListener('aborted', onAborted)
+          incoming.removeListener('data', onData)
+          incoming.removeListener('end', onEnd)
+          incoming.removeListener('close', onClose)
+          if (!incoming.closed) {
+            incoming.on('error', absorbError)
+            incoming.once('close', () => incoming.removeListener('error', absorbError))
+          }
+        }
+        incoming.on('error', onError)
+        incoming.on('aborted', onAborted)
+        incoming.on('close', onClose)
+        // Redirects/errors do not need a body. In particular, never retry a 429.
+        if (status < 200 || status >= 300) { finish(undefined, { status, headers, body: Buffer.alloc(0) }); return }
+        const contentType = (headers['content-type'] ?? '').split(';')[0]?.trim().toLowerCase() ?? ''
+        if (!ALLOWED_TYPES.has(contentType)) { fail(failure('FETCH_UNSUPPORTED_TYPE')); return }
+        incoming.on('data', onData)
+        incoming.on('end', onEnd)
       })
-    })
-    req.on('timeout', () => { req.destroy(); fail(new ResearchError('FETCH_TIMEOUT', '网页读取超时。')) })
-    req.on('error', error => {
-      if (isAbort(error)) fail(new ResearchError('FETCH_TIMEOUT', '网页读取超时。'))
-      else fail(new ResearchError('FETCH_UNAVAILABLE', '网页当前无法访问。'))
-    })
-    options.signal?.addEventListener('abort', () => { req.destroy(); fail(new ResearchError('FETCH_TIMEOUT', '网页读取已取消。')) }, { once: true })
-    req.end()
+      request.on('error', onRequestError)
+      request.end()
+    } catch (error) {
+      fail(error instanceof ResearchError ? error : failure('FETCH_UNAVAILABLE'))
+    }
   })
 }
 
-/**
- * Decompress with a hard output cap. Node's zlib has no synchronous streaming
- * helper here, so the async pipeline is used with a byte budget enforced while
- * writing, then the result is awaited.
- */
-async function inflate(body: Buffer, encoding: string | undefined, maxBytes: number): Promise<Buffer> {
+/** Async decompression with both an output cap and the same absolute deadline. */
+async function inflate(body: Buffer, encoding: string | undefined, maxBytes: number, operation: Operation): Promise<Buffer> {
+  operation.check()
   const normalized = (encoding ?? '').trim().toLowerCase()
   if (normalized === '' || normalized === 'identity') return body
-  const stream = normalized === 'br' ? createBrotliDecompress({ maxOutputLength: maxBytes })
-    : normalized === 'deflate' ? createInflate({ maxOutputLength: maxBytes })
-      : normalized === 'gzip' || normalized === 'x-gzip' ? createGunzip({ maxOutputLength: maxBytes })
+  const decoder = normalized === 'br' ? createBrotliDecompress()
+    : normalized === 'deflate' ? createInflate()
+      : normalized === 'gzip' || normalized === 'x-gzip' ? createGunzip()
         : undefined
-  if (stream === undefined) throw new ResearchError('FETCH_UNSUPPORTED_TYPE', '网页使用了不支持的压缩格式。')
-  return await new Promise<Buffer>((resolve, reject) => {
-    const chunks: Buffer[] = []
-    let size = 0
-    stream.on('data', (chunk: Buffer) => {
+  if (decoder === undefined) throw failure('FETCH_UNSUPPORTED_TYPE')
+  const chunks: Buffer[] = []
+  let size = 0
+  const output = new Writable({
+    write(chunk: Buffer, _encoding, callback) {
       size += chunk.byteLength
-      if (size > maxBytes) { stream.destroy(); reject(new ResearchError('FETCH_TOO_LARGE', '网页正文过大，已停止读取。')); return }
+      if (size > maxBytes) { callback(failure('FETCH_TOO_LARGE')); return }
       chunks.push(chunk)
-    })
-    stream.on('error', () => reject(new ResearchError('FETCH_PARSE_FAILED', '网页压缩格式无法解析。')))
-    stream.on('end', () => resolve(Buffer.concat(chunks)))
-    stream.end(body)
+      callback()
+    },
   })
+  try {
+    await operation.wait(() => pipeline(Readable.from([body]), decoder, output, { signal: operation.signal }))
+    operation.check()
+    return Buffer.concat(chunks)
+  } catch (error) {
+    if (operation.signal.aborted) throw abortFailure(operation.signal)
+    if (error instanceof ResearchError) throw error
+    throw failure('FETCH_PARSE_FAILED')
+  }
 }
 
-/** Protocol/shape checks only; test fixtures still go through the address policy. */
+/** Fixture-only shape checks; URL host and every resolved address are still admitted. */
 const relaxedUrl = (value: string | URL): URL => {
   let url: URL
-  try { url = value instanceof URL ? value : new URL(value) } catch { throw new ResearchError('FETCH_BLOCKED', '网页地址无效。') }
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new ResearchError('FETCH_BLOCKED', '只允许读取 HTTP(S) 公开网页。')
-  if (url.username !== '' || url.password !== '') throw new ResearchError('FETCH_BLOCKED', '网页地址不能携带账号信息。')
+  try { url = new URL(value instanceof URL ? value.href : value) } catch { throw failure('FETCH_BLOCKED') }
+  if ((url.protocol !== 'http:' && url.protocol !== 'https:') || url.username !== '' || url.password !== '' || url.hostname === '') throw failure('FETCH_BLOCKED')
   return url
 }
 
 const ENTITY = (name: string): string => ({ amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', mdash: '—', ndash: '–', hellip: '…' })[name] ?? ''
 
-/** Decode the entities that matter for readable prose; unknown numeric entities are kept as-is. */
 function decodeEntities(value: string): string {
   return value
     .replace(/&#(x[0-9a-f]+|[0-9]+);/gi, (_all, digits: string) => {
@@ -146,7 +190,7 @@ function decodeEntities(value: string): string {
     .replace(/&([a-z]+);/gi, (_all, name: string) => ENTITY(name.toLowerCase()))
 }
 
-/** Extract visible text from HTML without executing anything. */
+/** Extract visible text without executing HTML, scripts, tools or page instructions. */
 export function htmlToText(html: string): { title: string; text: string } {
   const withoutHead = html
     .replace(/<!--[\s\S]*?-->/g, ' ')
@@ -169,95 +213,90 @@ export function htmlToText(html: string): { title: string; text: string } {
 }
 
 export interface SafeReader extends PageReader {
-  /** Exposed for tests and callers that need to resolve a redirect hop manually. */
   readonly resolve: AddressLookup
 }
 
-/**
- * The only component allowed to fetch arbitrary public pages.
- *
- * Every hop (initial URL and each redirect) is parsed, screened, resolved and
- * connected to a checked address. No cookies, no scripts, no credential
- * headers, no POST bodies. The extracted text is untrusted data for the model.
- */
 export function createSafeReader(options: SafeReaderOptions = {}): SafeReader {
   const lookup = options.lookup ?? resolvePublicAddresses
-  const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES
-  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
-  const maxRedirects = options.maxRedirects ?? DEFAULT_MAX_REDIRECTS
+  const maxBytes = boundedInteger(options.maxBytes, DEFAULT_MAX_BYTES, 1, 4_194_304)
+  const timeoutMs = boundedInteger(options.timeoutMs, DEFAULT_TIMEOUT_MS, 1, 120_000)
+  const maxRedirects = boundedInteger(options.maxRedirects, DEFAULT_MAX_REDIRECTS, 0, 5)
   const userAgent = options.userAgent ?? USER_AGENT
-
-  const admit = (url: URL): void => {
-    if (options.addressPolicy === undefined) return
-    const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '')
-    if (!options.addressPolicy(host)) throw new ResearchError('FETCH_BLOCKED', '不读取本机或内网地址。')
+  const admitUrl = (value: string | URL): URL => {
+    const url = options.addressPolicy === undefined ? assertPublicUrl(value) : relaxedUrl(value)
+    if (options.addressPolicy !== undefined && !options.addressPolicy(urlHostname(url))) throw failure('FETCH_BLOCKED')
+    return url
   }
   const read = async (value: string, readOptions: ReadOptions = {}): Promise<ReadDocument> => {
-    // With a test-only address policy the literal checks above are relaxed,
-    // but every hop still goes through the resolver/connection check below.
-    let url = options.addressPolicy === undefined ? assertPublicUrl(value) : relaxedUrl(value)
-    admit(url)
-    const deadline = Date.now() + (readOptions.timeoutMs ?? timeoutMs)
-    const redirects = readOptions.maxRedirects ?? maxRedirects
-    const bytesLimit = readOptions.maxBytes ?? maxBytes
-    const combined = readOptions.signal === undefined
-      ? undefined
-      : AbortSignal.any([readOptions.signal, AbortSignal.timeout(Math.max(1, deadline - Date.now()))])
-    for (let hop = 0; ; hop++) {
-      const remaining = deadline - Date.now()
-      if (remaining <= 0) throw new ResearchError('FETCH_TIMEOUT', '网页读取超时。')
-      const addresses = await lookup(url.hostname.replace(/^\[|\]$/g, ''))
-      /* A host can publish several addresses (v4 and v6, several edges) and a
-         deployment's network may only reach some of them. Trying only the
-         first made every page fail as soon as DNS returned an unreachable v6
-         or a poisoned record first. Each address is checked before use and
-         the first that actually connects wins; all failing is a failure. */
-      let response: RawResponse | undefined
-      let lastError: unknown
-      for (const address of addresses) {
-        // Defense in depth for injected resolvers: unless a test policy opted
-        // in, a private answer is refused here even if the resolver did not.
-        if (options.addressPolicy === undefined && isBlockedAddress(address)) continue
-        try {
-          response = await requestOnce(url, address, {
-            timeoutMs: Math.max(1, deadline - Date.now()),
-            maxBytes: bytesLimit,
-            userAgent,
-            ...(combined === undefined ? {} : { signal: combined }),
-          })
-          break
-        } catch (error) { lastError = error }
+    const operation = createOperation({ ...readOptions, timeoutMs: Math.min(timeoutMs, boundedInteger(readOptions.timeoutMs, timeoutMs, 1, 120_000)) }, timeoutMs, 'FETCH_TIMEOUT')
+    try {
+      operation.check()
+      let url = admitUrl(value)
+      const redirects = Math.min(maxRedirects, boundedInteger(readOptions.maxRedirects, maxRedirects, 0, 5))
+      const bytesLimit = Math.min(maxBytes, boundedInteger(readOptions.maxBytes, maxBytes, 1, 4_194_304))
+      for (let hop = 0; ; hop++) {
+        operation.check()
+        const addresses = await operation.wait(() => lookup(urlHostname(url), {
+          signal: operation.signal, deadlineAt: operation.deadlineAt, timeoutMs: operation.remaining(),
+        }))
+        operation.check()
+        if (!Array.isArray(addresses) || addresses.length === 0) throw failure('FETCH_UNAVAILABLE')
+        // A mixed public/private answer is rejected as a whole, including injected DNS.
+        if (addresses.some(address => typeof address !== 'string' || isIP(address) === 0 || (options.addressPolicy === undefined ? isBlockedAddress(address) : !options.addressPolicy(address)))) {
+          throw failure('FETCH_BLOCKED')
+        }
+        const uniqueAddresses = [...new Set(addresses)]
+        let response: RawResponse | undefined
+        let lastError: unknown
+        for (const [index, address] of uniqueAddresses.entries()) {
+          operation.check()
+          try {
+            // Share the remaining budget fairly; a black-holed first edge must
+            // not consume every later address's chance to connect.
+            response = await requestOnce(url, address, {
+              operation, maxBytes: bytesLimit, userAgent,
+              attemptMs: Math.max(1, Math.floor(operation.remaining() / (uniqueAddresses.length - index))),
+            })
+            break
+          } catch (error) {
+            operation.check()
+            if (isCancellation(error)) throw error
+            // Size/type/security failures must not cause another download.
+            if (error instanceof ResearchError && error.code !== 'FETCH_UNAVAILABLE' && error.code !== 'FETCH_TIMEOUT') throw error
+            lastError = error
+          }
+        }
+        operation.check()
+        if (response === undefined) throw lastError instanceof ResearchError ? lastError : failure('FETCH_UNAVAILABLE')
+        if ([301, 302, 303, 307, 308].includes(response.status)) {
+          if (hop >= redirects) throw failure('FETCH_BLOCKED')
+          const location = response.headers.location
+          if (location === undefined) throw failure('FETCH_UNAVAILABLE')
+          let redirected: URL
+          try { redirected = new URL(location, url) } catch { throw failure('FETCH_BLOCKED') }
+          url = admitUrl(redirected)
+          continue
+        }
+        if (response.status === 429) throw failure('FETCH_RATE_LIMITED')
+        if (response.status < 200 || response.status >= 300) throw failure('FETCH_UNAVAILABLE')
+        const contentType = (response.headers['content-type'] ?? '').split(';')[0]?.trim().toLowerCase() ?? ''
+        const decoded = await inflate(response.body, response.headers['content-encoding'], bytesLimit, operation)
+        if (decoded.byteLength > bytesLimit) throw failure('FETCH_TOO_LARGE')
+        operation.check()
+        const raw = decoded.toString('utf8')
+        const parsed = contentType === 'text/plain' ? { title: '', text: raw.trim() } : htmlToText(raw)
+        operation.check()
+        if (parsed.text === '') throw failure('FETCH_PARSE_FAILED')
+        return {
+          url: url.toString(), title: parsed.title === '' ? url.hostname : parsed.title,
+          text: parsed.text.slice(0, 200_000), fetchedAt: new Date().toISOString(), contentType,
+        }
       }
-      if (response === undefined) {
-        throw lastError instanceof ResearchError
-          ? lastError
-          : new ResearchError('FETCH_UNAVAILABLE', '网页当前无法访问。')
-      }
-      if ([301, 302, 303, 307, 308].includes(response.status)) {
-        if (hop >= redirects) throw new ResearchError('FETCH_BLOCKED', '网页重定向次数过多。')
-        const location = response.headers.location
-        if (location === undefined) throw new ResearchError('FETCH_UNAVAILABLE', '网页重定向缺少目标地址。')
-        url = options.addressPolicy === undefined ? assertPublicUrl(new URL(location, url)) : relaxedUrl(new URL(location, url))
-        admit(url)
-        continue
-      }
-      if (response.status === 429) throw new ResearchError('FETCH_UNAVAILABLE', '网页当前限流，请稍后重试。')
-      if (response.status < 200 || response.status >= 300) throw new ResearchError('FETCH_UNAVAILABLE', '网页当前无法访问。')
-      const contentType = (response.headers['content-type'] ?? '').split(';')[0]?.trim().toLowerCase() ?? ''
-      if (!ALLOWED_TYPES.has(contentType)) throw new ResearchError('FETCH_UNSUPPORTED_TYPE', '该网页不是可阅读的文本页面。')
-      const decoded = await inflate(response.body, response.headers['content-encoding'], bytesLimit)
-      if (decoded.byteLength > bytesLimit) throw new ResearchError('FETCH_TOO_LARGE', '网页正文过大，已停止读取。')
-      const raw = decoded.toString('utf8')
-      const parsed = contentType === 'text/plain' ? { title: '', text: raw.trim() } : htmlToText(raw)
-      if (parsed.text === '') throw new ResearchError('FETCH_PARSE_FAILED', '没有从网页中提取到可读正文。')
-      return {
-        url: url.toString(),
-        title: parsed.title === '' ? url.hostname : parsed.title,
-        text: parsed.text.slice(0, 200_000),
-        fetchedAt: new Date().toISOString(),
-        contentType,
-      }
-    }
+    } catch (error) {
+      if (operation.signal.aborted) throw abortFailure(operation.signal)
+      if (error instanceof ResearchError) throw error
+      throw failure('FETCH_UNAVAILABLE')
+    } finally { operation.dispose() }
   }
   return { read, resolve: lookup }
 }

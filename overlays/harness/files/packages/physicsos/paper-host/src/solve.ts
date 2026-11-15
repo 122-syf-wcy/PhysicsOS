@@ -187,7 +187,9 @@ export function applyEngineAnswers(
       if (result === undefined || result.solvedAnswer === '' || answer === undefined) return question
       if (answer.result === result.solvedAnswer) return question
       state.changed = true
-      return { ...question, answer: { ...answer, result: result.solvedAnswer } }
+      return { ...question, status: 'flagged' as const,
+        reviewNote: '引擎已更正最终答案；保留的原解析、评分点与等价答案尚待人工复核',
+        answer: { ...answer, result: result.solvedAnswer } }
     }),
   }))
   return state.changed ? { ...document, sections } : undefined

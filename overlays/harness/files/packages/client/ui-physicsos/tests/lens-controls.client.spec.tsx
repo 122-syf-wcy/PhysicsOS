@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { useSyncExternalStore } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 import { createConvexLensScene } from '@physicsos/physics-scene'
 import { createOpticsWorkspaceRuntime } from '../src/client/physics/optics-workspace-runtime.ts'
 import { createExperimentSession } from '../src/client/experiments/experiment-session.ts'
@@ -13,6 +13,9 @@ it('Escape cancels the focused numeric draft without changing engine, revision o
   const runtime = createOpticsWorkspaceRuntime(createConvexLensScene())
   const saves: unknown[] = []
   const session = createExperimentSession(runtime, (scene) => saves.push(scene))
+  const bubbled = vi.fn()
+  document.addEventListener('keydown', bubbled)
+  onTestFinished(() => { document.removeEventListener('keydown', bubbled) })
   function Controls() {
     const snapshot = useSyncExternalStore(session.subscribe, session.getSnapshot)
     return (
@@ -29,7 +32,10 @@ it('Escape cancels the focused numeric draft without changing engine, revision o
   const input = screen.getByRole('textbox', { name: '物距' })
   input.focus()
   fireEvent.change(input, { target: { value: '20' } })
-  fireEvent.keyDown(input, { key: 'Escape' })
+  const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+  fireEvent(input, escape)
+  expect(escape.defaultPrevented).toBe(true)
+  expect(bubbled).not.toHaveBeenCalled()
   expect((input as HTMLInputElement).value).toBe('30')
   expect(runtime.getScene()).toEqual(original)
   expect(session.getSnapshot().sceneRevision).toBe(0)
@@ -47,4 +53,37 @@ it('Escape cancels the focused numeric draft without changing engine, revision o
   expect(contributionSnapshot(session.getSnapshot()).result.imageDistanceCm).toBeCloseTo(30)
   expect(runtime.getScene().revision).toBe(2)
   expect(saves).toHaveLength(2)
+})
+it('keeps IME closing keys, repeated keys and modified shortcuts out of numeric settlement', () => {
+  const runtime = createOpticsWorkspaceRuntime(createConvexLensScene())
+  const session = createExperimentSession(runtime, vi.fn())
+  function Controls() {
+    const snapshot = useSyncExternalStore(session.subscribe, session.getSnapshot)
+    return <LensControls snapshot={snapshot} preview={session.previewParameter} commit={session.commitParameter} cancel={session.cancelPreview} />
+  }
+  render(<Controls />)
+  const input = screen.getByRole('textbox', { name: '物距' }) as HTMLInputElement
+  input.focus()
+  fireEvent.change(input, { target: { value: '20' } })
+  fireEvent.compositionStart(input)
+  fireEvent.keyDown(input, { key: 'Enter' })
+  expect(document.activeElement).toBe(input)
+  expect(input.value).toBe('20')
+  expect(session.getSnapshot().sceneRevision).toBe(0)
+  fireEvent.compositionEnd(input)
+  fireEvent.keyDown(input, { key: 'Escape' })
+  expect(document.activeElement).toBe(input)
+  expect(input.value).toBe('20')
+  fireEvent.keyUp(input, { key: 'Escape' })
+  for (const options of [{ repeat: true }, { shiftKey: true }, { ctrlKey: true }, { metaKey: true }, { altKey: true }]) {
+    fireEvent.keyDown(input, { key: 'Escape', ...options })
+    expect(input.value).toBe('20')
+    expect(document.activeElement).toBe(input)
+  }
+  fireEvent.keyDown(input, { key: 'Enter', keyCode: 229 })
+  expect(session.getSnapshot().sceneRevision).toBe(0)
+  expect(document.activeElement).toBe(input)
+  fireEvent.keyDown(input, { key: 'Escape' })
+  expect(input.value).toBe('30')
+  expect(session.getSnapshot().sceneRevision).toBe(0)
 })

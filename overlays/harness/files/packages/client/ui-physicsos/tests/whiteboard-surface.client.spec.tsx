@@ -27,7 +27,7 @@ function fixture(documents: readonly WhiteboardSummary[] = []) {
     select(useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot))
   const props = {
     whiteboardController: controller, useWhiteboardState, openWhiteboardView, returnToExperiments,
-    t: (key: keyof typeof en) => en[key], renderFactorySlot: unused,
+    t: key => en[key as keyof typeof en] ?? key, renderFactorySlot: unused,
     useSessions: unused, useSessionStatus: unused, useSessionRetainInfo: unused,
     useWorkspaces: unused, usePanelInfo: unused, useResource: unused,
   } satisfies WhiteboardSurfaceProps

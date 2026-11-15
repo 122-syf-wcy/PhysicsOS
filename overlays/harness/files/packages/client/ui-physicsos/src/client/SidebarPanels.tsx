@@ -12,7 +12,7 @@ import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import { IconListPenOutlineMedium, IconShieldOutlineMedium } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
-  IconAnnouncement, IconLibrary, IconPhysicsLab, IconQuestionSheet,
+  IconAnnouncement, IconPhysicsLab, IconQuestionSheet,
 } from './icons/physics-icons.tsx'
 
 /** One product glyph, sized by the sidebar's own state. */
@@ -38,8 +38,6 @@ export const LabPanelIcon = panelGlyph(IconPhysicsLab)
 export const PaperPanelIcon = panelGlyph(IconQuestionSheet)
 /** 反馈 row glyph. */
 export const NoticePanelIcon = panelGlyph(IconAnnouncement)
-/** 资源库 row glyph. */
-export const LibraryPanelIcon = panelGlyph(IconLibrary)
 /** 学习记录 row glyph. */
 export const RecordPanelIcon = panelGlyph(IconListPenOutlineMedium)
 /** 管理后台 row glyph. */

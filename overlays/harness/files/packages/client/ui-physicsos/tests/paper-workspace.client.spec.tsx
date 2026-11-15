@@ -154,7 +154,7 @@ describe('PaperWorkspace', () => {
     expect(screen.queryByText(/^细目表$/)).toBeNull()
   })
 
-  it('one AI button auto-confirms the spec table, drafts, and only checks after drafting lands', async () => {
+  it('one explicit AI action confirms the table and lets the server continue checks without a client action', async () => {
     vi.useFakeTimers()
     try {
       /* spec-stage job with a spec table: the old flow demanded a manual
@@ -190,7 +190,7 @@ describe('PaperWorkspace', () => {
            runner drives the paper): spec ×2 → drafting ×2 → checking ×3 →
            review. The wide checking band keeps the runChecks transition
            deterministic regardless of which poll consumes which slot. */
-        const schedule = ['spec', 'spec', 'drafting', 'drafting', 'checking', 'checking', 'checking', 'review']
+        const schedule = ['spec', 'drafting', 'drafting', 'checking', 'checking', 'review']
         const calls = getJob.mock.calls.length
         const status = schedule[calls - 1] ?? 'review'
         sequence.push(`poll:${status}`)
@@ -209,19 +209,18 @@ describe('PaperWorkspace', () => {
       for (let i = 0; i < 20 && !sequence.includes('runDraft'); i += 1) {
         await vi.advanceTimersByTimeAsync(0)
       }
-      expect(sequence).toEqual(['poll:spec', 'poll:spec', 'confirmSpec', 'runDraft'])
-      /* Draft lands on the polls (drafting → checking); /check may only fire
-         after a poll observed 'checking'. */
-      for (let ms = 0; ms < 10_000; ms += 500) {
+      expect(sequence.slice(0, 3)).toEqual(['poll:spec', 'confirmSpec', 'runDraft'])
+      /* Read-only polls observe drafting → checking → review. A checking
+         observation must never trigger another server operation. */
+      for (let ms = 0; ms < 20_000 && !sequence.includes('poll:review'); ms += 500) {
         await vi.advanceTimersByTimeAsync(500)
-        if (sequence.includes('runChecks')) break
       }
       expect(sequence.indexOf('runDraft')).toBeGreaterThan(sequence.indexOf('confirmSpec'))
       const firstChecking = sequence.indexOf('poll:checking')
       expect(firstChecking).toBeGreaterThan(-1)
       expect(sequence.slice(0, firstChecking)).not.toContain('runChecks')
-      expect(api.runChecks).toHaveBeenCalledTimes(1)
-      /* The runner exits on the terminal poll, not earlier. */
+      expect(api.runChecks).not.toHaveBeenCalled()
+      /* Observation reaches the server's terminal state without an extra action. */
       for (let ms = 0; ms < 10_000 && !sequence.includes('poll:review'); ms += 500) {
         await vi.advanceTimersByTimeAsync(500)
       }
@@ -245,6 +244,22 @@ describe('PaperWorkspace', () => {
     /* The mascot wears its mood and the phase rail marks the live phase. */
     expect(document.querySelector('[data-mood="write"]')).toBeTruthy()
     expect(screen.getByText('● AI 起草')).toBeTruthy()
+  })
+
+  it('offers a checks-only retry on failure without re-confirming or redrafting', async () => {
+    const failed = job({ status: 'failed', lastError: 'synthetic check failed', document: {
+      id: 'doc-failed', title: '失败原稿', sections: [],
+      header: { examName: 'synthetic', grade: '九年级', subjectLine: '物理', totalScore: 90, minutes: 90, candidateFields: [] },
+    } })
+    const api = stubApi([failed])
+    api.runChecks = vi.fn().mockResolvedValue({ status: 'checking', job: { ...failed, status: 'checking' } })
+    render(<PaperWorkspace api={api} useAuth={useAuthAs('TEACHER')} useSessions={neverHook} useWorkspaces={neverHook} t={t} />)
+    fireEvent.click(screen.getByRole('button', { name: /草稿与审核/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /失败原稿/ }))
+    fireEvent.click(await screen.findByRole('button', { name: '仅重试检查当前稿' }))
+    await vi.waitFor(() => { expect(api.runChecks).toHaveBeenCalledWith(failed.id, failed.versions.length) })
+    expect(api.runDraft).not.toHaveBeenCalled()
+    expect(api.confirmSpec).not.toHaveBeenCalled()
   })
 
   it('submits region, school, kind and featured with a new source paper', async () => {
@@ -429,6 +444,10 @@ describe('PaperWorkspace polling', () => {
     const item = (number: number, status: string) => ({ number, subject: 'physics', kind: 'choice-single', score: 3,
       stem: `s${String(number)}`, knowledge: ['内能'], ability: '识记', difficulty: 'basic', status })
     const at = (updatedAt: string, second: string) => job({ updatedAt,
+      checkBinding: { version: 2, documentHash: 'h', requestHash: 'request', specHash: 'spec', reportHash: 'report',
+        questionHashes: { '1': 'q1', '2': 'q2' }, questionReports: { '1': 'c1', '2': 'c2' }, completedAt: updatedAt },
+      reviews: second === 'approved' ? [{ questionNo: 2, verdict: 'approved', reviewer: 'teacher', at: updatedAt,
+        version: 2, questionHash: 'q2', checkHash: 'c2' }] : [],
       document: { ...titled('试卷A'), sections: [{ title: '选择题', items: [item(1, 'pending'), item(2, second)] as never }] } as never })
     const shown = at('2026-10-05T00:00:00.000Z', 'pending')
     const approved = at('2026-10-05T00:00:05.000Z', 'approved')
@@ -440,11 +459,10 @@ describe('PaperWorkspace polling', () => {
     await openStudio(api)
     fireEvent.click(screen.getByRole('button', { name: /试卷A/ }))
     await vi.advanceTimersByTimeAsync(0)
-    fireEvent.click(screen.getAllByRole('button', { name: '退回修改' })[0]!)
-    fireEvent.change(screen.getByPlaceholderText(/例如：数据改为/), { target: { value: '改数据' } })
-    fireEvent.click(screen.getByRole('button', { name: '提交修订' }))
-    await vi.advanceTimersByTimeAsync(3_000)
-    fireEvent.click(screen.getAllByRole('button', { name: '通过' })[1]!)
+    fireEvent.click(screen.getByRole('button', { name: '刷新任务状态' }))
+    await vi.advanceTimersByTimeAsync(0)
+    fireEvent.click(screen.getByRole('button', { name: '第2题，待审核' }))
+    fireEvent.click(screen.getByRole('button', { name: '通过' }))
     await vi.advanceTimersByTimeAsync(0)
     expect(screen.getAllByText('✓ 已通过')).toHaveLength(1)
     held.resolve({ ...shown, updatedAt: '2026-10-05T00:00:03.000Z' })
@@ -452,7 +470,7 @@ describe('PaperWorkspace polling', () => {
     expect(screen.getAllByText('✓ 已通过')).toHaveLength(1)
   })
 
-  it('keeps the selected paper while the AI runner drives another, and stops fetching after unmount', async () => {
+  it('keeps the selected paper after another operation starts and stops observing after unmount', async () => {
     vi.useFakeTimers()
     const row = { questionNo: 1, sectionTitle: '选择题', kind: 'choice-single', score: 3, knowledge: ['内能'], ability: '识记', difficulty: 'basic' }
     const a = job({ id: 'paper-a', status: 'spec', specTable: [row] as never, document: titled('试卷A') })

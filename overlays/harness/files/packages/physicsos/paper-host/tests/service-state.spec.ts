@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { PaperDocument, PaperJob, PaperRequest } from '@physicsos/question-paper'
+import { documentHash, type PaperDocument, type PaperJob, type PaperRequest, type SolveResult } from '@physicsos/question-paper'
 import type { PaperDomain } from '../src/domain.ts'
 import { PaperService } from '../src/service.ts'
 
@@ -51,9 +51,10 @@ const buildJob = (status: PaperJob['status']): PaperJob => ({
   id: 'paper-state',
   blueprintId: 'blueprint-state',
   request,
-  specTable: [],
-  document,
-  versions: [{ version: 1, hash: 'seed-hash', at: '2026-09-25T00:00:00.000Z', summary: 'seed' }],
+  specTable: [{ questionNo: 1, sectionTitle: '一、选择题', kind: 'choice-single', score: 3,
+    knowledge: ['声现象'], ability: '理解', difficulty: 'basic' }],
+  document: structuredClone(document),
+  versions: [{ version: 1, hash: documentHash(document), at: '2026-09-25T00:00:00.000Z', summary: 'seed' }],
   reviews: [],
   findings: [],
   solveReport: [],
@@ -72,6 +73,9 @@ const makeFakeDomain = (): PaperDomain => {
       return {
         get: (id: string) => map.get(id),
         put: async (id: string, record: unknown) => { map.set(id, record) },
+        update: async (id: string, update: (current: unknown) => unknown) => {
+          const next = update(map.get(id)); map.set(id, next); return next
+        },
         entries: () => map.entries(),
       }
     },
@@ -85,15 +89,17 @@ const seeded = async (status: PaperJob['status']) => {
   return { domain, service }
 }
 
+const solve: SolveResult[] = [{ questionNo: 1, draftAnswer: 'A', solvedAnswer: 'A', consistent: true }]
+
 describe('paper job state machine', () => {
   it('requires checking before results and review before a verdict', async () => {
     const { service } = await seeded('review')
 
-    await expect(service.recordCheckResults('paper-state', [], []))
+    await expect(service.recordCheckResults('paper-state', [], solve))
       .rejects.toMatchObject({ status: 409, code: 'BAD_STATE' })
 
     await service.markStage('paper-state', 'checking')
-    expect((await service.recordCheckResults('paper-state', [], [])).status).toBe('review')
+    expect((await service.recordCheckResults('paper-state', [], solve)).status).toBe('review')
     expect((await service.reviewQuestion('paper-state', 1, 'approved', 'teacher')).status).toBe('review')
   })
 

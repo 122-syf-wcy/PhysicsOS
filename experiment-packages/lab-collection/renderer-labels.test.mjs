@@ -39,26 +39,39 @@ test('comparison paths and their angle labels use three matching distinguishable
   assert.deepEqual(labels.map(label => label.color), lines.map(line => line.color))
 })
 
-function paintLabels(labels, width = 390, height = 220) {
-  const element = tag => ({ tag, style: {}, dataset: {}, children: [], append(...nodes) { this.children.push(...nodes) }, setAttribute(name, value) { this[name] = value } })
-  const layer = { replaceChildren(fragment) { this.children = fragment.children } }
+function labelHarness(labels, width = 390, height = 220) {
+  let allocations = 0
+  const element = tag => {
+    allocations++
+    return { tag, style: {}, dataset: {}, children: [], append(...nodes) { for (const node of nodes) { node.parent = this; this.children.push(node) } },
+      remove() { if (this.parent) this.parent.children = this.parent.children.filter(node => node !== this) }, setAttribute(name, value) { this[name] = value } }
+  }
+  const layer = element('layer')
   const { paint, setState } = runInNewContext(`${source}\n({ paint, setState: value => { state = value } })`, {
     document: { createElement: element, createElementNS: (_, tag) => element(tag), createDocumentFragment: () => element('fragment') },
     fitCameraToBox() {},
     drawMechanics() {}, drawOptics() {}, drawWaves() {}, drawMatter() {}, drawCircuits() {}, drawFields() {},
   })
-  setState({
+  const state = {
     renderer: { getContext: () => ({ isContextLost: () => false }), getPixelRatio: () => 1, domElement: { width, height, dataset: {} }, render() {}, info: { render: { calls: 0, triangles: 0 } } },
     camera: { position: chain(), lookAt() {}, updateProjectionMatrix() {}, left: -1, right: 1, top: 1, bottom: -1 }, scene: {}, world: { updateMatrixWorld() {} },
     host: { clientWidth: width, clientHeight: height }, span: { x: 4, y: 4, z: 1 }, yaw: 0, pitch: 0, zoom: 1, pan: { x: 0, y: 0 },
     measure: { measureText: text => ({ width: text.length * 7 }) }, labels: layer,
-    kit: { group: { matrixWorld: {} }, labels: labels.map(label => ({
-      size: 11, color: '#111', priority: 3, ...label,
-      at: { clone() { return this }, applyMatrix4() { return this }, project() { return { x: label.x / width * 2 - 1, y: 1 - label.y / height * 2, z: 0 } } },
-    })) },
-  })
+    kit: { group: { matrixWorld: {} }, labels: labels.map((label, i) => {
+      const at = { x: label.x / width * 2 - 1, y: 1 - label.y / height * 2, z: 0,
+        clone() { return { ...this } }, copy(other) { this.x = other.x; this.y = other.y; this.z = other.z; return this }, applyMatrix4() { return this }, project() { return this } }
+      return { key: label.key ?? `label:${i}`, size: 11, color: '#111', priority: 3, ...label, at }
+    }) },
+  }
+  setState(state)
   assert.equal(paint(), true)
-  return layer.children
+  return { state, paint, layer, get allocations() { return allocations } }
+}
+function paintLabels(labels, width = 390, height = 220) {
+  const h = labelHarness(labels, width, height)
+  const nodes = h.layer.children.filter(node => !node.hidden)
+  for (const node of nodes) if (node.tag === 'svg') node.children = node.children.filter(line => line.style.display !== 'none')
+  return nodes
 }
 function boxes(nodes) {
   return nodes.filter(node => node.tag === 'span').map(node => {
@@ -78,6 +91,17 @@ function assertReadable(placed, width, height) {
   }
 }
 const forces = ['F合', 'a', 'mg', 'N', 'f', 'v'].map(text => ({ text, tag: text, x: 195, y: 110 }))
+
+test('keyed label DOM and leader nodes persist across readout/position updates without physics back-calculation', () => {
+  const h = labelHarness(forces), first = [...h.layer.children], allocations = h.allocations
+  for (let revision = 1; revision <= 50; revision++) {
+    for (const label of h.state.kit.labels) { label.text = `${label.key} ${revision} N`; label.at.x = 0.01 * revision }
+    assert.equal(h.paint(), true)
+  }
+  assert.equal(h.allocations, allocations, 'label DOM reallocated for stable entity/part keys')
+  assert.deepEqual(h.layer.children, first)
+  for (const label of h.state.kit.labels) assert.equal(label.at.x, 0.5, 'placement moved a scientific world anchor')
+})
 
 test('all six coincident force labels stay readable on a phone canvas', () => {
   const nodes = paintLabels(forces)

@@ -115,7 +115,7 @@ export interface PaperQuestionWire {
   readonly stem: string
   readonly options?: readonly string[]
   readonly subQuestions?: readonly { no: string; text: string; score: number }[]
-  readonly figure?: { kind: string; ref: string; caption?: string }
+  readonly figure?: { kind: string; ref: string; caption?: string; studentCaption?: string; diagram?: unknown; sourceAsset?: { id: string; sha256: string; mediaType: string } }
   readonly answer?: {
     result: string
     steps: readonly string[]
@@ -129,6 +129,31 @@ export interface PaperQuestionWire {
   readonly provenance?: { bankItemId?: string; mode: 'verbatim' | 'adapted' | 'generated'; sourceLabel?: string }
   status: string
   reviewNote?: string
+}
+
+export interface PaperPlanWire {
+  readonly request: PaperJobWire['request']
+  readonly specTable: readonly SpecRowWire[]
+  readonly requestedTotalScore: number
+  readonly totalScore: number
+  readonly questionCount: number
+  readonly normalized: boolean
+  readonly scorePolicy: 'blueprint-slot-sum'
+  readonly sections: readonly { title: string; note?: string; questionCount: number; totalScore: number }[]
+  readonly scope: { chapters: readonly string[]; exclude: readonly string[]; unassignedQuestionNos: readonly number[] }
+}
+
+export interface PaperOperationAccepted {
+  readonly status: string
+  readonly operationId?: string
+  readonly job?: PaperJobWire
+}
+export interface PaperReviewExpectation {
+  readonly expectedVersion?: number
+  readonly questionHash?: string
+  readonly checkHash?: string
+  readonly acknowledgeFindings?: boolean
+  readonly analysisConfirmed?: boolean
 }
 
 /** A paper-generation job and its lifecycle status. */
@@ -163,9 +188,19 @@ export interface PaperJobWire {
     sections: readonly { title: string; note?: string; items: readonly PaperQuestionWire[] }[]
   }
   readonly versions: readonly { version: number; hash: string; at: string; summary: string }[]
-  readonly reviews: readonly { questionNo: number; verdict: string; note?: string; reviewer: string; at: string; version: number }[]
+  readonly reviews: readonly { questionNo: number; verdict: string; note?: string; reviewer: string; at: string; version: number;
+    documentHash?: string; questionHash?: string; checkHash?: string; acknowledgedFindings?: readonly string[]; analysisConfirmed?: boolean }[]
   readonly findings: readonly { severity: string; code: string; detail: string; questionNo?: number }[]
-  readonly solveReport: readonly { questionNo: number; draftAnswer: string; solvedAnswer: string; consistent: boolean; note?: string }[]
+  readonly solveReport: readonly { questionNo: number; draftAnswer: string; solvedAnswer: string; consistent: boolean; note?: string; questionHash?: string; inputQuestionHash?: string }[]
+  readonly rowVersion?: number
+  readonly operation?: { id: string; kind: 'draft' | 'check' | 'repair' | 'replace'; phase: 'draft' | 'check' | 'repair' | 'replace' | 'figure';
+    state: 'running' | 'completed' | 'failed'; questionNo?: number; suggestion?: string; startedAt: string; updatedAt: string }
+  readonly checkBinding?: { documentHash: string; version: number; requestHash: string; specHash: string; reportHash: string;
+    questionHashes: Readonly<Record<string, string>>; questionReports: Readonly<Record<string, string>>; completedAt: string }
+  readonly figureAssets?: readonly { questionNo: number; questionHash: string; inputHash: string; path: string; sha256: string }[]
+  readonly answerCorrections?: readonly { questionNo: number; questionHash: string; originalResult: string; engineResult: string; at: string }[]
+  readonly recovery?: { hash: string; at: string }
+  readonly planSummary?: Omit<PaperPlanWire, 'request' | 'specTable' | 'scope'> & { unassignedQuestionNos: readonly number[] }
   /** The assembly plan the draft ran with — per-row supply mode + source. */
   readonly bankPlan?: readonly { questionNo: number; mode: 'verbatim' | 'adapt' | 'generate' | 'gap'; bankItemId?: string; candidates: number }[]
   readonly repairRounds: number
@@ -174,6 +209,7 @@ export interface PaperJobWire {
   readonly progress?: { stage: string; detail?: string; done: number; total: number; updatedAt: string }
   readonly approval?: {
     versionHash: string
+    checkHash?: string
     reviewer: string
     at: string
     physics?: { reviewer: string; at: string }
@@ -189,6 +225,8 @@ export interface ExportBundleRow {
   readonly paperId: string
   readonly version: number
   readonly hash: string
+  readonly contentHash?: string
+  readonly manifestPath?: string
   readonly files: { paperPdf?: string; paperDocx?: string; answerPdf?: string; answerDocx?: string }
   readonly exportedAt: string
 }
@@ -208,7 +246,7 @@ export interface BankItemRow {
   readonly stem: string
   readonly options?: readonly string[]
   readonly subQuestions?: readonly { no: string; text: string; score: number }[]
-  readonly figure?: { kind: string; ref: string; caption?: string }
+  readonly figure?: { kind: string; ref: string; caption?: string; studentCaption?: string; diagram?: unknown; sourceAsset?: { id: string; sha256: string; mediaType: string } }
   readonly answer: {
     result: string
     steps: readonly string[]
@@ -252,17 +290,23 @@ export interface PaperApi {
   verifyBlueprint: (id: string) => Promise<BlueprintRow>
   listJobs: () => Promise<PaperJobWire[]>
   createJob: (blueprintId: string, requestBody: PaperJobWire['request']) => Promise<PaperJobWire>
+  /** Same server plan as creation; optional for older injected clients. */
+  planJob?: (blueprintId: string, requestBody: PaperJobWire['request']) => Promise<PaperPlanWire>
   getJob: (id: string, init?: { signal?: AbortSignal }) => Promise<PaperJobWire>
-  confirmSpec: (id: string, specTable: readonly SpecRowWire[]) => Promise<PaperJobWire>
-  runDraft: (id: string) => Promise<{ status: string }>
-  runChecks: (id: string) => Promise<{ status: string }>
-  reviewQuestion: (id: string, questionNo: number, verdict: 'approved' | 'changes-requested', reviewer: string, note?: string) => Promise<PaperJobWire>
+  confirmSpec: (id: string, specTable: readonly SpecRowWire[], expectedVersion?: number) => Promise<PaperJobWire>
+  runDraft: (id: string, expectedVersion?: number) => Promise<PaperOperationAccepted>
+  runChecks: (id: string, expectedVersion?: number) => Promise<PaperOperationAccepted>
+  retryOperation?: (id: string, expectedVersion?: number) => Promise<PaperOperationAccepted>
+  restoreDraft?: (id: string, expectedVersion?: number) => Promise<PaperJobWire>
+  reviewQuestion: (id: string, questionNo: number, verdict: 'approved' | 'changes-requested', reviewer: string, note?: string,
+    expectation?: PaperReviewExpectation) => Promise<PaperJobWire>
   /** Ask the model to revise one question per the teacher's suggestion (202 async). */
-  repairQuestion: (id: string, questionNo: number, suggestion: string, reviewer: string) => Promise<unknown>
-  replaceQuestion: (id: string, questionNo: number, reviewer: string) => Promise<{ status: string }>
+  repairQuestion: (id: string, questionNo: number, suggestion: string, reviewer: string, expectedVersion?: number) => Promise<PaperOperationAccepted>
+  replaceQuestion: (id: string, questionNo: number, reviewer: string, expectedVersion?: number) => Promise<PaperOperationAccepted>
   /** Live assembly preview for the job's spec table. */
   bankPlan: (id: string) => Promise<BankPlanRow[]>
-  approve: (id: string, reviewer: string, subject: 'physics' | 'chemistry') => Promise<PaperJobWire>
+  approve: (id: string, reviewer: string, subject: 'physics' | 'chemistry',
+    expectation?: { expectedVersion?: number; documentHash?: string; checkHash?: string }) => Promise<PaperJobWire>
   runExport: (id: string) => Promise<{ files: ExportBundleRow['files'] }>
   listExports: () => Promise<ExportBundleRow[]>
   fileUrl: (jobId: string, name: string) => string
@@ -329,18 +373,21 @@ export function createPaperApi(): PaperApi {
     verifyBlueprint: id => post(`/blueprints/${id}/verify`, {}),
     listJobs: () => request('/jobs'),
     createJob: (blueprintId, requestBody) => post('/jobs', { blueprintId, request: requestBody }),
+    planJob: (blueprintId, requestBody) => post('/jobs/plan', { blueprintId, request: requestBody }),
     getJob: (id, init) => request(`/jobs/${id}`, { cache: 'no-store', ...init }),
-    confirmSpec: (id, specTable) => put(`/jobs/${id}/spec`, { specTable }),
-    runDraft: id => post(`/jobs/${id}/draft`, {}),
-    runChecks: id => post(`/jobs/${id}/check`, {}),
-    reviewQuestion: (id, questionNo, verdict, reviewer, note) =>
-      post(`/jobs/${id}/questions/${questionNo}/review`, { verdict, reviewer, note }),
-    repairQuestion: (id, questionNo, suggestion, reviewer) =>
-      post(`/jobs/${id}/questions/${questionNo}/repair`, { suggestion, reviewer }),
-    replaceQuestion: (id, questionNo, reviewer) =>
-      post(`/jobs/${id}/questions/${questionNo}/replace`, { reviewer }),
+    confirmSpec: (id, specTable, expectedVersion) => put(`/jobs/${id}/spec`, { specTable, expectedVersion }),
+    runDraft: (id, expectedVersion) => post(`/jobs/${id}/draft`, { expectedVersion }),
+    runChecks: (id, expectedVersion) => post(`/jobs/${id}/check`, { expectedVersion }),
+    retryOperation: (id, expectedVersion) => post(`/jobs/${id}/retry`, { expectedVersion }),
+    restoreDraft: (id, expectedVersion) => post(`/jobs/${id}/restore`, { expectedVersion }),
+    reviewQuestion: (id, questionNo, verdict, reviewer, note, expectation) =>
+      post(`/jobs/${id}/questions/${questionNo}/review`, { verdict, reviewer, note, ...expectation }),
+    repairQuestion: (id, questionNo, suggestion, reviewer, expectedVersion) =>
+      post(`/jobs/${id}/questions/${questionNo}/repair`, { suggestion, reviewer, expectedVersion }),
+    replaceQuestion: (id, questionNo, reviewer, expectedVersion) =>
+      post(`/jobs/${id}/questions/${questionNo}/replace`, { reviewer, expectedVersion }),
     bankPlan: id => request(`/jobs/${id}/bank-plan`),
-    approve: (id, reviewer, subject) => post(`/jobs/${id}/approve`, { reviewer, subject }),
+    approve: (id, reviewer, subject, expectation) => post(`/jobs/${id}/approve`, { reviewer, subject, ...expectation }),
     runExport: id => post(`/jobs/${id}/export`, {}),
     listExports: () => request('/exports'),
     fileUrl: (jobId, name) => `/physicsos/paper/jobs/${jobId}/files/${encodeURIComponent(name)}`,
