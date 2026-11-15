@@ -40,6 +40,38 @@ def inventory_fixture(files, mode='host'):
 
 
 class RuntimeDeltaTests(unittest.TestCase):
+    def test_repository_instruction_links_are_excluded_but_runtime_snapshots_stay_owned(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            repo = root / runtime.HARNESS
+            (repo / 'src').mkdir(parents=True)
+            (repo / 'src/index.js').write_text('export const value=1')
+            (repo / 'package.json').write_text(json.dumps({'name': 'repository-fixture'}))
+            for name in ['CLAUDE.md', 'packages/CLAUDE.md', 'vendor/CLAUDE.md', '.agents/notes/CLAUDE.md', '.claude/skills', '.cursor/rules', 'snapshots/case/expected.json']:
+                target = repo / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.symlink_to('deliberately-absent-metadata-target')
+            actual = repo / 'packages/fixture/src/snapshots/runtime.js'
+            actual.parent.mkdir(parents=True)
+            actual.write_text('export const snapshot=1')
+            request = {'root': str(root), 'selections': [{'root': runtime.HARNESS, 'mode': 'files', 'items': ['.']}]}
+            result = subprocess.run(['node', '-e', runtime.INVENTORY_JS], input=json.dumps(request), text=True, capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            files = json.loads(result.stdout)['files']
+            self.assertIn(runtime.HARNESS + '/src/index.js', files)
+            self.assertIn(runtime.HARNESS + '/packages/fixture/src/snapshots/runtime.js', files)
+            self.assertFalse(any(name in files for name in runtime.REPOSITORY_DOC_LINKS))
+            for name in runtime.REPOSITORY_DOC_LINKS | {runtime.HARNESS + '/snapshots/case/expected.json', runtime.HARNESS + '/.agents/notes/CLAUDE.md'}:
+                with self.assertRaises(ValueError): runtime.safe_code_path(name)
+            self.assertEqual(runtime.safe_code_path(runtime.HARNESS + '/packages/fixture/src/snapshots/runtime.js'), runtime.HARNESS + '/packages/fixture/src/snapshots/runtime.js')
+            for name in ['src/runtime-link.js', 'packages/fixture/src/CLAUDE.md']:
+                link = repo / name
+                link.symlink_to('index.js')
+                failed = subprocess.run(['node', '-e', runtime.INVENTORY_JS], input=json.dumps(request), text=True, capture_output=True)
+                self.assertNotEqual(failed.returncode, 0)
+                self.assertIn('Runtime export contains source link', failed.stderr)
+                link.unlink()
+
     def test_legacy_prefixes_normalize_to_real_paths_and_reject_unknown_ownership(self):
         result = runtime.normalize_manifest({'schemaVersion': 1, 'files': {
             'ui-physicsos/src/index.ts': sha('ui'),

@@ -22,7 +22,7 @@ HARNESS = 'vendor/deepseek-harness'
 HEX64 = re.compile(r'^[a-f0-9]{64}$')
 HEX40 = re.compile(r'^[a-f0-9]{40}$')
 IMAGE_ID = re.compile(r'^sha256:[a-f0-9]{64}$')
-EXCLUDED = {'node_modules', '.git', 'tests', 'test', '__tests__', 'fixtures', '__fixtures__', '__snapshots__', '.home', '.ssh', 'secrets', '.turbo', '.vite', '__pycache__', 'preview'}
+EXCLUDED = {'.agents', '.claude', '.cursor', 'node_modules', '.git', 'tests', 'test', '__tests__', 'fixtures', '__fixtures__', '__snapshots__', '.home', '.ssh', 'secrets', '.turbo', '.vite', '__pycache__', 'preview'}
 ROOT_CODE = {'overlays/harness/files/packages/physicsos/health-host/deployment.patch.yml', 'package.json', 'classroom-runtime-links.cjs', 'classroom-runtime-links.json', 'physicsos-runtime-update.cjs', 'physicsos-runtime-update.json'}
 METADATA = {'physicsos-runtime-manifest.json', 'canvas-source-manifest.json'}
 LEGACY_ROOTS = {
@@ -59,9 +59,12 @@ def safe_relative(value):
     return value
 
 
+REPOSITORY_DOC_LINKS = {HARNESS + '/' + name for name in ['CLAUDE.md', 'packages/CLAUDE.md', 'vendor/CLAUDE.md']}
+
+
 def excluded(value):
     parts = pathlib.PurePosixPath(value).parts
-    return bool(set(parts) & EXCLUDED) or any(p == '.env' or p.startswith('.env.') for p in parts) or value.endswith(('.pem', '.key', '.p12', '.pfx', '.log', '.pid', '.tsbuildinfo', '.map', '.spec.ts', '.test.ts', '.spec.tsx', '.test.tsx'))
+    return value in REPOSITORY_DOC_LINKS or value.startswith(HARNESS + '/snapshots/') or bool(set(parts) & EXCLUDED) or any(p == '.env' or p.startswith('.env.') for p in parts) or value.endswith(('.pem', '.key', '.p12', '.pfx', '.log', '.pid', '.tsbuildinfo', '.map', '.spec.ts', '.test.ts', '.spec.tsx', '.test.tsx'))
 
 
 def safe_owned_path(value):
@@ -238,7 +241,8 @@ INVENTORY_JS = r'''
 const f=require('fs'),p=require('path'),c=require('crypto'),{createRequire,builtinModules}=require('module');let s='';process.stdin.on('data',b=>s+=b);process.stdin.on('end',()=>{
 const doc=JSON.parse(s),root=doc.root||'/app',files={},packages={},workspace={};
 const safe=n=>{if(!n||p.isAbsolute(n)||n.split('/').includes('..')||/[\\\0\r\n]/.test(n))throw Error('Unsafe inventory path');return n;};
-const skip=n=>n.split('/').some(x=>['node_modules','.git','tests','test','__tests__','fixtures','__fixtures__','__snapshots__','.home','.ssh','secrets','.turbo','.vite','__pycache__','preview'].includes(x)||x==='.env'||x.startsWith('.env.'))||/\.(?:pem|key|p12|pfx|log|pid|tsbuildinfo|map|spec\.ts|test\.ts|spec\.tsx|test\.tsx)$/.test(n);
+const repositoryDocs=new Set(['CLAUDE.md','packages/CLAUDE.md','vendor/CLAUDE.md'].map(n=>'vendor/deepseek-harness/'+n));
+const skip=n=>repositoryDocs.has(n)||n.startsWith('vendor/deepseek-harness/snapshots/')||n.split('/').some(x=>['.agents','.claude','.cursor','node_modules','.git','tests','test','__tests__','fixtures','__fixtures__','__snapshots__','.home','.ssh','secrets','.turbo','.vite','__pycache__','preview'].includes(x)||x==='.env'||x.startsWith('.env.'))||/\.(?:pem|key|p12|pfx|log|pid|tsbuildinfo|map|spec\.ts|test\.ts|spec\.tsx|test\.tsx)$/.test(n);
 const visit=n=>{safe(n);if(skip(n))return;const abs=p.resolve(root,n);if(!abs.startsWith(root+'/'))throw Error('Inventory escaped root');if(!f.existsSync(abs))return;const st=f.lstatSync(abs);if(st.isSymbolicLink())throw Error('Runtime export contains source link');if(st.isDirectory()){for(const name of f.readdirSync(abs))visit(n+'/'+name);}else if(st.isFile()){const bytes=f.readFileSync(abs);files[n]={sha256:c.createHash('sha256').update(bytes).digest('hex'),bytes:bytes.length,mode:st.mode&511};}else throw Error('Non-file runtime code');};
 const pkg=n=>{const file=p.join(root,n,'package.json');if(!f.existsSync(file))return;const m=JSON.parse(f.readFileSync(file));if(m.name)workspace[m.name]=n;return {name:m.name,version:m.version,dependencies:m.dependencies||{},peerDependencies:m.peerDependencies||{}};};
 for(const row of doc.selections||[]){safe(row.root);for(const item of row.items||[])visit(item==='.'?row.root:row.root+'/'+safe(item));const m=pkg(row.root);if(m){m.mode=row.mode||'host';packages[row.root]=m;}}
