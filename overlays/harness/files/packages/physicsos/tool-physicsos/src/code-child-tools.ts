@@ -13,7 +13,7 @@ import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { defineTool, type ToolExecution } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-session-projection'
 import type { PhysicsSceneSnapshot } from './types.ts'
-import { MAX_CODE_PART_CHARACTERS, QuestionCodeParts } from './question-code-parts.ts'
+import { CODE_FILE_LIMITS, CODE_PART_TARGET_CHARACTERS, MAX_CODE_PART_CHARACTERS, QuestionCodeParts } from './question-code-parts.ts'
 
 /** The asset service the host provides when image generation is configured. */
 export interface AssetService {
@@ -69,11 +69,11 @@ export function registerWriteCodeTool(
 ): void {
   child.tools.register(defineTool({
     name: 'physics_write_experiment_code',
-    description: `提交实验JS或CSS，优先完整JS一次replace、CSS一次replace；同一任务最多10次（中断续写共用额度）。JS每次及合计最多${MAX_CODE_PART_CHARACTERS}、CSS合计最多6000字符；需要时可append。完成后structured_output只提交title/summary。`,
+    description: `分段提交实验JS或CSS，通常每段不超过${CODE_PART_TARGET_CHARACTERS}字符，首段replace，收到characters/remainingCharacters回执后再append后续原文，避免整文件截断。同一任务最多10次（中断续写共用额度）；每次硬限${MAX_CODE_PART_CHARACTERS}，JS合计${CODE_FILE_LIMITS.rendererJs}、CSS合计${CODE_FILE_LIMITS.stylesheet}字符。完成后structured_output只提交title/summary。`,
     parameters: {
       file: { type: 'string', required: true, enum: ['rendererJs', 'stylesheet'] },
       mode: { type: 'string', required: true, enum: ['replace', 'append'] },
-      content: { type: 'string', required: true, description: `源码原文，无Markdown；rendererJs每次及合计最多${MAX_CODE_PART_CHARACTERS}字符，stylesheet合计最多6000字符。优先整文件一次replace。` },
+      content: { type: 'string', required: true, description: `源码原文，无Markdown，建议按函数边界分成最多${CODE_PART_TARGET_CHARACTERS}字符的小段。rendererJs合计最多${CODE_FILE_LIMITS.rendererJs}、stylesheet合计最多${CODE_FILE_LIMITS.stylesheet}字符；单次仍允许最多${MAX_CODE_PART_CHARACTERS}字符。append不得重复已写片段。` },
     },
     output: { schema: { type: 'object', additionalProperties: true }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] },
     execute: (args, exec) => {

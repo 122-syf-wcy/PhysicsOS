@@ -16,14 +16,14 @@ import type { ObjectJsonSchema } from '@deepseek-ai/dsh-tools'
 import type { PhysicsSceneSnapshot } from './types.ts'
 import { startInProcessRun } from '@deepseek-ai/dsh-subagent-in-process-driver'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
-import { MAX_CODE_PART_CHARACTERS, QuestionCodeParts } from './question-code-parts.ts'
+import { CODE_PART_TARGET_CHARACTERS, MAX_CODE_PART_CHARACTERS, QuestionCodeParts } from './question-code-parts.ts'
 import { CodeCheckpoints } from './code-checkpoints.ts'
 import { codeChildGuard, registerAssetTool, registerWriteCodeTool, type AssetService, type CodeChildJob } from './code-child-tools.ts'
 import { generationError, isTransientDiagnostic } from './generation-errors.ts'
 
 export const CODE_PROVIDER_NAME = 'physics-question-code'
 export const CODE_PRESET_ID = 'physics-code-only'
-export const CODE_PERSONA = `你是PhysicsOS专用实验绘图作者，只绘制只读snapshot引擎事实，不解题或改条件。没有素材且提供素材工具时先生成一张环境/材质；已有素材直接复用。仅平台工具返回mode:native或可信任务提示时，删除Image/decode/图片路径，直接用原生Canvas/SVG完成画面，不重试生图。立即用physics_write_experiment_code优先完整JS一次提交（最多${MAX_CODE_PART_CHARACTERS}字符）、CSS一次提交（最多6000字符）；最后structured_output只提交title/summary。`
+export const CODE_PERSONA = `你是PhysicsOS专用实验绘图作者，只绘制只读snapshot引擎事实，不解题或改条件。没有素材且提供素材工具时先生成一张环境/材质；已有素材直接复用。仅平台工具返回mode:native或可信任务提示时，删除Image/decode/图片路径，直接用原生Canvas/SVG完成画面，不重试生图。立即用physics_write_experiment_code分段提交，通常每段不超过${CODE_PART_TARGET_CHARACTERS}字符，首段replace、收到回执后逐段append；不要在一次输出中规划并写完整大文件。完整JS合计最多${MAX_CODE_PART_CHARACTERS}字符、CSS合计最多6000字符；保留全部装置和科学标注，最后structured_output只提交title/summary。`
 
 /** Output cap per child request; never above the parent's own. */
 const CHILD_MAX_TOKENS = 8192

@@ -10,7 +10,7 @@ import type { CodeVisualizationSource } from '@physicsos/agent-tools'
 import type { PhysicsSceneSnapshot } from './types.ts'
 import { focusedRenderContract, QUESTION_CODE_ENTRY_EXAMPLE, QUESTION_CODE_LABEL_EXAMPLE } from './question-code-prompt-context.ts'
 import { questionComposition } from './question-code-composition.ts'
-import { MAX_CODE_PART_CHARACTERS } from './question-code-parts.ts'
+import { CODE_PART_TARGET_CHARACTERS, MAX_CODE_PART_CHARACTERS } from './question-code-parts.ts'
 import {
   isResumeCode,
   SOURCE_VALIDATION_HINTS,
@@ -74,7 +74,7 @@ export function questionCodePrompt(
     ).replace('let board,image,decoded;', 'let board;')
   return [
     `真实题目标签：${snapshot.title.slice(0, 240)}。hasVerifiedSolution=${String(hasVerifiedSolution)}；${hasVerifiedSolution ? '仅展示引擎已有结论。' : '仅当前/局部场景演示，不称整题已解。'}`,
-    `physics_write_experiment_code：完整JS一次replace、CSS一次replace，再structured_output提交title/summary；JS<=${MAX_CODE_PART_CHARACTERS}、CSS<=6000字符，可append，共10次。`,
+    `physics_write_experiment_code：按函数边界分段，通常每段<=${CODE_PART_TARGET_CHARACTERS}字符；首段replace，等回执后append，不重复已写代码。每次硬限/JS合计<=${MAX_CODE_PART_CHARACTERS}、CSS合计<=6000，共10次；全部写完再structured_output提交title/summary。`,
     'Canvas2D入口示例：#canvas铺满宿主，依clientWidth/clientHeight绘图，禁定宽高。仅普通函数；禁import/reexport、旧renderer、动态分派、fetch/外网/存储/parent/top/eval。',
     entryExample.replace(/\n/g, ''),
     '只读snapshot.view；origin/extent等比投影，y翻转一次，不拟合当前位置。斜面视窗局部跟随。禁解题/积分/自建时钟；from/to仅显示端点。缺省/零值合法，不造物体。',

@@ -450,7 +450,7 @@ describe('parent question code generation', () => {
     const block = h.start.mock.calls[0]?.[0]?.prompt[0]
     const prompt = block?.type === 'text' ? block.text : ''
     expect(prompt.length).toBeLessThanOrEqual(5000)
-    for (const essential of ['renderFrame(snapshot)', 'physics_write_experiment_code', '24000', '完整JS一次', '10次', 'Warm Lab', 'clientWidth/clientHeight', 'snapshot.view', 'crossOrigin', '.src', './assets/generated/owned.png', '摩擦力箭头', 'VectorVisual', 'InclineVisual']) expect(prompt).toContain(essential)
+    for (const essential of ['renderFrame(snapshot)', 'physics_write_experiment_code', '24000', '6000', '分段', '等回执后append', '10次', 'Warm Lab', 'clientWidth/clientHeight', 'snapshot.view', 'crossOrigin', '.src', './assets/generated/owned.png', '摩擦力箭头', 'VectorVisual', 'InclineVisual']) expect(prompt).toContain(essential)
     expect(prompt).toContain('ctx.arc(cx,cy,r,-s*k,-e*k,e>=s)')
     expect(prompt).toContain('angles.startAngle/endAngle')
     expect(prompt).toContain('入口示例')

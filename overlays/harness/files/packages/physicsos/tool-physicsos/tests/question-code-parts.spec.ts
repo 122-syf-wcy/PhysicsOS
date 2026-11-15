@@ -51,3 +51,28 @@ it('accepts the observed 10518-character JS response unchanged and a full 24000-
   expect(() => css.write('stylesheet', 'replace', 'c'.repeat(6001))).toThrow('CODE_SOURCE_TOO_LARGE')
   expect(css.source().stylesheet).toHaveLength(6000)
 })
+it('reports accepted source capacity so the next completion can checkpoint without duplicating the prefix', () => {
+  const parts = new QuestionCodeParts()
+  expect(parts.write('rendererJs', 'replace', 'a'.repeat(6000))).toMatchObject({
+    characters: 6000, remainingCharacters: 18000, remainingWrites: 9, suggestedPartCharacters: 6000,
+  })
+  const discarded = parts.stage('rendererJs', 'append', 'discarded')
+  discarded.discard()
+  expect(parts.write('rendererJs', 'append', 'b'.repeat(16000))).toMatchObject({
+    characters: 22000, remainingCharacters: 2000, remainingWrites: 7, suggestedPartCharacters: 2000,
+  })
+  expect(parts.source().rendererJs).toBe('a'.repeat(6000) + 'b'.repeat(16000))
+  expect(parts.write('rendererJs', 'append', 'c'.repeat(2000))).toMatchObject({
+    characters: 24000, remainingCharacters: 0, suggestedPartCharacters: 0,
+  })
+})
+it('fits a complete chunked source and one full repair inside the unchanged shared ten-write budget', () => {
+  const parts = new QuestionCodeParts()
+  for (const text of ['original', 'repaired']) {
+    const chunk = text.padEnd(6000, '.')
+    for (let i = 0; i < 4; i++) parts.write('rendererJs', i === 0 ? 'replace' : 'append', chunk)
+    parts.write('stylesheet', 'replace', text.padEnd(6000, ' '))
+    expect(parts.source()).toEqual({ rendererJs: chunk.repeat(4), stylesheet: text.padEnd(6000, ' ') })
+  }
+  expect(() => parts.write('rendererJs', 'append', '')).toThrow('CODE_WRITE_LIMIT')
+})
