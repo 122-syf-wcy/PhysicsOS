@@ -1,0 +1,56 @@
+{
+  "sourceRevision": "f4a646a654cd8cd00591f20b3867d0917911322a",
+  "applicationImage": "sha256:93cb03a815a86fa85a5997bbd907471e53dbc8ae10c94c756f1c1b8c0d5d2376",
+  "url": "https://physics.dongsiwei.com/",
+  "rootStatus": 200,
+  "headingVisible": true,
+  "loginVisible": true,
+  "pageErrors": [],
+  "anonymousConsole": {
+    "total": 16,
+    "unauthorized": 16,
+    "other": []
+  },
+  "desktopOverflow": false,
+  "brand": {
+    "status": 200,
+    "contentType": "image/png"
+  },
+  "imageStates": [
+    {
+      "src": "/physicsos/brand/physicsos-mark-128.png",
+      "complete": true,
+      "naturalWidth": 128
+    },
+    {
+      "src": "/physicsos/brand/physicsos-mark-128.png",
+      "complete": true,
+      "naturalWidth": 128
+    },
+    {
+      "src": "/physicsos/lab-empty-hero.jpg",
+      "complete": true,
+      "naturalWidth": 1200
+    },
+    {
+      "src": "/physicsos/brand/physicsos-mark-128.png",
+      "complete": true,
+      "naturalWidth": 128
+    },
+    {
+      "src": "/physicsos/brand/physicsos-mark-128.png",
+      "complete": true,
+      "naturalWidth": 128
+    }
+  ],
+  "method": "Anonymous browser boot and read-only GET; no product writes",
+  "mobileOverflow": false,
+  "website": {
+    "status": 200,
+    "heroVisible": true,
+    "desktopOverflow": false,
+    "pageErrors": [],
+    "mobileOverflow": false
+  },
+  "completedAt": "2026-11-15T14:17:39.971Z"
+}

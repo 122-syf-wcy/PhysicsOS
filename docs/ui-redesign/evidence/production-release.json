@@ -1,0 +1,91 @@
+{
+  "deployed": true,
+  "completedAt": "2026-11-15T14:30:43.464204+00:00",
+  "systemUrl": "https://physics.dongsiwei.com",
+  "officialSiteUrl": "https://physicsos.dongsiwei.com",
+  "app": {
+    "sourceRevision": "f4a646a654cd8cd00591f20b3867d0917911322a",
+    "checkoutRevision": "77227cae27ccbfa1865ff6ff7e4202d154383a7c",
+    "branch": "main",
+    "image": "sha256:93cb03a815a86fa85a5997bbd907471e53dbc8ae10c94c756f1c1b8c0d5d2376",
+    "oldImage": "sha256:a6137f69b11b246481f1d85f4c2a2061493f8ed3e9fb9c1874e5506244ea3312",
+    "healthy": true,
+    "sourceDigest": "c886603c6a8890dec0d9b287f828cd557fe50b850e7cf798636cac6f85bd5474",
+    "codeDigest": "21598f3d6167cd0a6f23cd84f1d7311b5bc264d48d867a3379e83499b85c42c9",
+    "acceptance": {
+      "readyJson": true,
+      "root": true,
+      "login": true,
+      "accountScope": true,
+      "protectedRead": true
+    }
+  },
+  "backup": {
+    "directory": "/opt/physicsos/backups/releases/20261115T140929Z-ui-f4-77227-canonical",
+    "consistent": true,
+    "manifest": "/opt/physicsos/backups/releases/20261115T140929Z-ui-f4-77227-canonical/paired-manifest.json",
+    "manifestSha256": "8e261902bfcb340dc35f7af8c139491ff2a81905e7d73a35592961768337d38e",
+    "files": {
+      "postgres.dump": {
+        "size": 1139140,
+        "sha256": "f53f53c3c4e5dab8c676c2cf7b9b318025685719324df9fa9afb40a453e7aca2"
+      },
+      "app_data.tar.gz": {
+        "size": 230757692,
+        "sha256": "c1241d30dc8d9ccd62e0b4b72eed959fc16eeab9e25049b097e9e097b79755df"
+      },
+      "redis_data.tar.gz": {
+        "size": 33299,
+        "sha256": "96d67cb02c214911aa0e0e87a5e8b5e39d72504af83592f209dfa41f35c3b4ac"
+      }
+    },
+    "rollbackTag": "physicsos:rollback-20261115T140936829Z-1efe18cc",
+    "oldAppImagePreserved": true,
+    "originalRecoveryPointPreserved": true
+  },
+  "writer": {
+    "count": 1,
+    "ownerMatchesActualApp": true,
+    "receipt": "/opt/physicsos/.physicsos-release/ui-publish-20261115/production-unique-writer.json"
+  },
+  "worker": {
+    "image": "sha256:b179e714b47d2571c4c146894a96fe0014661e76f5948f0f2e85f2f847a3d950",
+    "oldImage": "sha256:9f3fb866902c410dcc3de7f307eda48267bf1aa8b135e436c96f6c18e0a020bd",
+    "healthy": true,
+    "pinned": true,
+    "acceptance": {
+      "healthHTTP": 200,
+      "healthOK": true,
+      "uid": 1001,
+      "mainChrome": [
+        {
+          "noSandbox": false,
+          "capEff": "0000000000000000",
+          "noNewPrivs": "1"
+        }
+      ]
+    },
+    "recordDir": "/opt/physicsos/.physicsos-release/ui-worker-production-f77/20261115T142444Z-f457049a",
+    "oldImageRetainedTag": "physicsos-validation:ui-before-f77-20261115T142444Z-f457049a",
+    "appAndOtherServicesUnchanged": true
+  },
+  "formalReceipts": {
+    "appPublish": "/opt/physicsos/backups/releases/20261115T140929Z-ui-f4-77227-canonical/success.json",
+    "pairedRecovery": "/opt/physicsos/backups/releases/20261115T140929Z-ui-f4-77227-canonical/paired-recovery.json",
+    "worker": "/opt/physicsos/.physicsos-release/ui-worker-production-f77/20261115T142444Z-f457049a/record.json",
+    "projectionFinalization": "/opt/physicsos/.physicsos-release/ui-source-projection-finalization.json"
+  },
+  "knownLimitations": [
+    "Existing model generation retry may reach MAX_TOKENS; no successful animation claimed for the single old-A retry.",
+    "Settings retains a legacy Agent preset navigation entry beside the new learning mode."
+  ],
+  "verificationSummary": {
+    "uiStartupProfileTests": 125,
+    "clientAggregateTsc": "passed",
+    "coldRuntimeFiles": 14724,
+    "signedPluginEntries": 12,
+    "readerResearchTests": 21,
+    "workerStrictColdCases": 8,
+    "sourceTmpfsRestoredAndRemoved": true
+  }
+}

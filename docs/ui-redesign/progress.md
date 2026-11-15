@@ -1,5 +1,13 @@
 # UI redesign progress — 2026-11-14
 
+## Production application published — 2026-11-15
+
+- Official locked publication completed with exit 0. Actual running application is `sha256:93cb03a815a86fa85a5997bbd907471e53dbc8ae10c94c756f1c1b8c0d5d2376`, source `f4a646a654cd8cd00591f20b3867d0917911322a`, release checkout `77227cae27ccbfa1865ff6ff7e4202d154383a7c`. The fresh paired database/file recovery point is `/opt/physicsos/backups/releases/20261115T140929Z-ui-f4-77227-canonical`; the previous actual application image is preserved.
+- Formal HTTPS readiness, real SUPER_ADMIN login, account scope and protected dashboard read passed. Independent public GET verification passed the website entry, all 17 asset hashes/lengths and the real developer template ZIP hash/CRC, with no feedback POST.
+- Independent Chrome verified the actual system login/home and website on 1360px/390px: page errors 0 and no horizontal overflow. All system brand images loaded, and the approved silverwork girl rendered on the website. Anonymous protected API/WebSocket attempts returned the expected unauthorized responses; no other console errors were observed.
+- The independent validation worker publication completed with exit 0: actual image `sha256:b179e714b47d2571c4c146894a96fe0014661e76f5948f0f2e85f2f847a3d950` is healthy; authenticated health HTTP 200, uid 1001, real Chrome sandbox enabled, effective capabilities zero and NoNewPrivs 1. The application remained healthy. SQL verified exactly one database writer, matching the current production application.
+- Application and worker are published. See [release report](release-report.md) and [production receipt](evidence/production-release.json) for final status and retained limitations. Earlier progress entries below are historical, not the current release status.
+
 ## Final integration and release gates — 2026-11-15
 
 - The UI source checkpoint is b734b5e1. Its complete server build passed build:lib and build:web; client TypeScript and 118 focused regression tests passed. The approved cat startup splash is retained.

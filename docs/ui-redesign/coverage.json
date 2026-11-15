@@ -4,14 +4,14 @@
   "sourceRoot": "/Users/dongsiwei/Desktop/PhysicsOS-UI",
   "sourceRevision": "f4a646a654cd8cd00591f20b3867d0917911322a",
   "designManifest": "/Users/dongsiwei/Desktop/PhysicsOS/design-refs/ui-redesign-2026-11-14/manifest.json",
-  "status": "ui-implemented-critical-candidate-checks-completed-awaiting-publication",
+  "status": "published-production-health-authentication-critical-reads-and-public-smoke-passed",
   "notes": [
     "Entry names describe existing product panels and local component states; only explicitly identified URL/hash entries are claimed as routes.",
     "Role sets are observed client entry gates and must still be checked against server scope/host guards in candidate tests.",
-    "Source presence is not implementation completion. Screenshots/tests are intentionally empty.",
+    "Source presence alone is not validation; actual screenshots/tests are attached only where performed.",
     "Settings, conversation and shell retain upstream packages through overlay projection; mapped product components are integration/action origins.",
-    "Some target overlay/menu/detail compositions may still need implementation. Known uncertainty is recorded per item.",
-    "Candidate evidence is tied to CE2/f005 or an explicitly identified source preview. It does not claim that every state has passed on the final deployed image.",
+    "Unexecuted per-state visual, interaction and permission checks remain explicit.",
+    "Evidence identifies its exact candidate/source revision. Selected final f4 checks and production smoke checks do not claim every state has passed on the final deployed image.",
     "All 62 design records are mapped. This is not a claim that every flow or every role was visually tested pixel-for-pixel. Historical/inherited limits and unexecuted checks remain explicit."
   ],
   "items": [
@@ -133,7 +133,7 @@
         "返回主实验"
       ],
       "mappingNotes": "对话主体由上游 ui-conversation 提供，不能另建 Agent Loop。",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "候选截图；最终镜像待复验",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
@@ -220,7 +220,7 @@
         "真实模板封面"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "截图已取，含明确待复验/缺口",
       "interactionValidation": "部分真实闭环通过",
       "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
@@ -316,7 +316,7 @@
         "社区及透镜独立分支"
       ],
       "mappingNotes": "包括PhysicsCanvas、透镜及社区/题目代码运行分支，不能仅按单个内置实验验收。",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "截图已取，含明确待复验/缺口",
       "interactionValidation": "部分真实闭环通过",
       "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
@@ -448,7 +448,7 @@
         "关闭返回"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "截图已取，含明确待复验/缺口",
       "interactionValidation": "部分真实闭环通过",
       "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
@@ -536,7 +536,7 @@
         "账户范围持久化"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "截图已取，含明确待复验/缺口",
       "interactionValidation": "部分真实闭环通过",
       "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
@@ -612,7 +612,7 @@
         "离线草稿与同步状态"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "截图已取，含明确待复验/缺口",
       "interactionValidation": "部分真实闭环通过",
       "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
@@ -698,7 +698,7 @@
         "保存重开"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "截图已取，含明确待复验/缺口",
       "interactionValidation": "部分真实闭环通过",
       "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
@@ -821,7 +821,7 @@
         "账号范围"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "截图已取，含明确待复验/缺口",
       "interactionValidation": "部分真实闭环通过",
       "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
@@ -903,7 +903,7 @@
         "错误与未配置反馈"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "待验收",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
@@ -968,7 +968,7 @@
         "失败重试"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "待验收",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
@@ -1030,7 +1030,7 @@
         "定稿门槛"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "待验收",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
@@ -1096,7 +1096,7 @@
         "真实审核状态"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "待验收",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
@@ -1160,7 +1160,7 @@
         "批量确认"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "待验收",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
@@ -1224,7 +1224,7 @@
         "真实统计"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "待验收",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
@@ -1294,7 +1294,7 @@
         "公告读取"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "候选截图；最终镜像待复验",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
@@ -1362,7 +1362,7 @@
         "真实掌握记录"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "候选截图；最终镜像待复验",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
@@ -1431,7 +1431,7 @@
         "失败重试"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "未验",
       "interactionValidation": "未验",
       "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
@@ -1501,7 +1501,7 @@
         "重开真实内容"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "截图已取，含明确待复验/缺口",
       "interactionValidation": "部分真实闭环通过",
       "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
@@ -1584,7 +1584,7 @@
         "版本冲突与离线草稿"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "截图已取，含明确待复验/缺口",
       "interactionValidation": "部分真实闭环通过",
       "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
@@ -1684,7 +1684,7 @@
         "权限与失败态"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "待验收",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
@@ -1749,7 +1749,7 @@
         "关联实验"
       ],
       "mappingNotes": "设计稿为补充详情状态；现有 LibraryWorkspace 中是否已有完整详情容器待实现者核对。",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "候选截图；最终镜像待复验",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
@@ -1815,7 +1815,7 @@
         "会话建立后按账户重载"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "候选截图；最终镜像待复验",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
@@ -1887,7 +1887,7 @@
         "待审核分支"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "候选截图；最终镜像待复验",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
@@ -1957,7 +1957,7 @@
         "真实回执与失败"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "候选截图；最终镜像待复验",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
@@ -2026,7 +2026,7 @@
         "不泄漏token"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "候选截图；最终镜像待复验",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
@@ -2090,7 +2090,7 @@
         "不得伪造已登录"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "候选截图；最终镜像待复验",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
@@ -2388,7 +2388,7 @@
         "空/失败态"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "候选截图；最终镜像待复验",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
@@ -2539,7 +2539,7 @@
         "保留运维/审计入口"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "captured; pixel/design review pending",
       "interactionValidation": "entry/render verified",
       "permissionValidation": "待验收",
@@ -2612,7 +2612,7 @@
         "确认与审计"
       ],
       "mappingNotes": "AdminOpsPanel指标区仅SUPER_ADMIN渲染，校管保留批量用户运维；具体写入能力仍以host guard为准。",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "captured; pixel/design review pending",
       "interactionValidation": "entry/render verified",
       "permissionValidation": "待验收",
@@ -2690,7 +2690,7 @@
         "分页"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "captured; pixel/design review pending",
       "interactionValidation": "entry/render verified",
       "permissionValidation": "待验收",
@@ -2756,7 +2756,7 @@
         "审计"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "captured; pixel/design review pending",
       "interactionValidation": "entry/render verified",
       "permissionValidation": "待验收",
@@ -2822,7 +2822,7 @@
         "不泄漏重置凭据"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "captured; pixel/design review pending",
       "interactionValidation": "entry/render verified",
       "permissionValidation": "待验收",
@@ -2887,7 +2887,7 @@
         "权限范围与确认"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "captured; pixel/design review pending",
       "interactionValidation": "entry/render verified",
       "permissionValidation": "待验收",
@@ -2951,7 +2951,7 @@
         "真实状态/审计"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "captured; pixel/design review pending",
       "interactionValidation": "entry/render verified",
       "permissionValidation": "待验收",
@@ -3009,7 +3009,7 @@
         "确认/审计"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "captured; pixel/design review pending",
       "interactionValidation": "entry/render verified",
       "permissionValidation": "待验收",
@@ -3067,7 +3067,7 @@
         "审计"
       ],
       "mappingNotes": "前端当前仅SUPER_ADMIN可见，不擅自拓展给校管。",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "captured; pixel/design review pending",
       "interactionValidation": "entry/render verified",
       "permissionValidation": "待验收",
@@ -3132,7 +3132,7 @@
         "确认审计"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "captured; pixel/design review pending",
       "interactionValidation": "entry/render verified",
       "permissionValidation": "待验收",
@@ -3198,7 +3198,7 @@
         "学校范围"
       ],
       "mappingNotes": "需paperApi可用；以服务端核验权限为准。",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "captured; pixel/design review pending",
       "interactionValidation": "entry/render verified",
       "permissionValidation": "待验收",
@@ -3264,7 +3264,7 @@
         "失败重试"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "captured; pixel/design review pending",
       "interactionValidation": "entry/render verified",
       "permissionValidation": "待验收",
@@ -3332,7 +3332,7 @@
         "持久化"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "captured; pixel/design review pending",
       "interactionValidation": "entry/render verified",
       "permissionValidation": "待验收",
@@ -3397,7 +3397,7 @@
         "版本冲突处理"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "captured; pixel/design review pending",
       "interactionValidation": "entry/render verified",
       "permissionValidation": "待验收",
@@ -3462,7 +3462,7 @@
         "持久化与冲突"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "captured; pixel/design review pending",
       "interactionValidation": "entry/render verified",
       "permissionValidation": "待验收",
@@ -3520,7 +3520,7 @@
         "可转展示但不自动公开"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "captured; pixel/design review pending",
       "interactionValidation": "entry/render verified",
       "permissionValidation": "待验收",
@@ -3587,7 +3587,7 @@
         "缺加密配置禁止凭据写入"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "captured; pixel/design review pending",
       "interactionValidation": "entry/render verified",
       "permissionValidation": "待验收",
@@ -4049,7 +4049,7 @@
         "播放/测量"
       ],
       "mappingNotes": "电路沿用PhysicsCanvas与circuit-renderer/CircuitBuilderPanel独立逻辑，不能只修改通用三栏。",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "截图已取，含明确待复验/缺口",
       "interactionValidation": "部分真实闭环通过",
       "permissionValidation": "仅B校教师可达，五角色权限由root/admin矩阵提供",
@@ -4158,7 +4158,7 @@
         "收起/焦点"
       ],
       "mappingNotes": "新顶部抽屉是目标呈现，当前源码入口仍需壳层迁移后验收。",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "候选截图；最终镜像待复验",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
@@ -4233,7 +4233,7 @@
         "Escape/焦点"
       ],
       "mappingNotes": "更多菜单属于设计目标，原组件是现有动作来源；不能推断已实现。",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "候选截图；最终镜像待复验",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
@@ -4308,7 +4308,7 @@
         "新反馈跳转"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "候选截图；最终镜像待复验",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
@@ -4436,7 +4436,7 @@
         "验证输入"
       ],
       "mappingNotes": "当前策略为同一modelPool页面区域，不是独立路由或假造标签。",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "captured; pixel/design review pending",
       "interactionValidation": "entry/render verified",
       "permissionValidation": "待验收",
@@ -4497,7 +4497,7 @@
         "入库/恢复待核验"
       ],
       "mappingNotes": "",
-      "implementationStatus": "已实现；候选证据已记录，最终镜像复验中",
+      "implementationStatus": "已实现；候选证据已记录，最终镜像未逐项复测",
       "visualValidation": "待验收",
       "interactionValidation": "待验收",
       "permissionValidation": "待验收",
@@ -4541,5 +4541,11 @@
       }
     }
   ],
-  "updatedAt": "2026-11-15T13:51:58.007561+00:00"
+  "updatedAt": "2026-11-15T14:30:09.781763+00:00",
+  "productionEvidence": [
+    "docs/ui-redesign/evidence/production-release.json",
+    "docs/ui-redesign/evidence/production-browser.json",
+    "docs/ui-redesign/evidence/production-public-assets.json"
+  ],
+  "releaseReport": "docs/ui-redesign/release-report.md"
 }
