@@ -1,9 +1,21 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { chromium } from '@playwright/test'
 import { startValidationWorker } from '../src/server.ts'
 
 const token = 'v'.repeat(32)
 
 describe('validation worker boundary', () => {
+  it('explicitly enables the Chromium sandbox before starting any worker listener', async () => {
+    const refusal = new Error('sandbox launch probe')
+    const launch = vi.spyOn(chromium, 'launch').mockRejectedValueOnce(refusal)
+    try {
+      await expect(startValidationWorker({ token, screenshots: false })).rejects.toBe(refusal)
+      expect(launch).toHaveBeenCalledWith(expect.objectContaining({ chromiumSandbox: true }))
+    } finally {
+      launch.mockRestore()
+    }
+  })
+
   it('refuses to start without a long enough token', async () => {
     await expect(startValidationWorker({ token: 'short' })).rejects.toThrow('at least 24')
   }, 60_000)

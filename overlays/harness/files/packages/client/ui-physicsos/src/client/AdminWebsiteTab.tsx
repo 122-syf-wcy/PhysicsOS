@@ -262,7 +262,9 @@ export function AdminWebsiteTab({ api, t }: { api: WebsiteApi; t: Translate }): 
                   setSelectedEntry(entry.id)
                   change(value => ({ ...value, testimonials: reorder(value.testimonials, index, direction) }))
                 }}
-                onRemove={() => { change(value => ({ ...value, testimonials: value.testimonials.filter(item => item.id !== entry.id) })) }} />
+                onRemove={() => {
+                  change(value => ({ ...value, testimonials: value.testimonials.filter(item => item.id !== entry.id) }))
+                }} />
             </AdminCard>
           }) : draft.contributors.map((entry, index) => {
             if (entry.id !== activeEntryId) return null
@@ -283,7 +285,9 @@ export function AdminWebsiteTab({ api, t }: { api: WebsiteApi; t: Translate }): 
                   setSelectedEntry(entry.id)
                   change(value => ({ ...value, contributors: reorder(value.contributors, index, direction) }))
                 }}
-                onRemove={() => { change(value => ({ ...value, contributors: value.contributors.filter(item => item.id !== entry.id) })) }} />
+                onRemove={() => {
+                  change(value => ({ ...value, contributors: value.contributors.filter(item => item.id !== entry.id) }))
+                }} />
             </AdminCard>
           })}
         </div>

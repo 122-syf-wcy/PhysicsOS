@@ -204,6 +204,7 @@ export async function startValidationWorker(options: WorkerOptions): Promise<{ s
   if (options.token.length < 24) throw new Error('validation worker token must be at least 24 characters')
   const browser = await chromium.launch({
     headless: true,
+    chromiumSandbox: true,
     // Sandbox stays ON: this process is expected to be a non-root container
     // with a seccomp profile allowing user namespaces. Never add --no-sandbox.
     args: ['--disable-dev-shm-usage', '--disable-gpu', '--disable-http2'],

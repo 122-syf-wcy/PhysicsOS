@@ -394,7 +394,7 @@ export function ConvexLensPage({
                   controls.current?.querySelector('input')?.focus()
                 }}
               >
-              参数
+                参数
               </button>
             </div>
             <LensControls {...benchProps} />
@@ -408,7 +408,7 @@ export function ConvexLensPage({
                     commit(runtime.setObservable('rays', event.target.checked))
                   }}
                 />
-              主光线光路
+                主光线光路
               </label>
               <label>
                 <input
@@ -419,7 +419,7 @@ export function ConvexLensPage({
                     commit(runtime.setObservable('image', event.target.checked))
                   }}
                 />
-              显示像的位置
+                显示像的位置
               </label>
             </div>
             <div className={css.law}>

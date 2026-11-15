@@ -697,12 +697,8 @@
 			],
 			"action": "SCMP_ACT_ALLOW",
 			"args": [],
-			"comment": "",
-			"includes": {
-				"caps": [
-					"CAP_SYS_CHROOT"
-				]
-			},
+			"comment": "Chromium drops filesystem access inside its user namespace; outer container capabilities remain empty.",
+			"includes": {},
 			"excludes": {}
 		},
 		{

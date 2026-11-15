@@ -12810,7 +12810,7 @@ index 9ea8e7e868..47ad5cdd96 100644
  | [`tests/web-app.spec.ts`](tests/web-app.spec.ts) | dist 解析、回退席位、提示词段落、就绪宣告 |
  | [`tests/startup.spec.ts`](tests/startup.spec.ts) | 在真实 Loader 树上的命令行解析 |
 diff --git a/packages/bundle/web-app/cordis.patch.yml b/packages/bundle/web-app/cordis.patch.yml
-index c98289bc3e..6bed8537de 100644
+index c98289bc3e..dc54634557 100644
 --- a/packages/bundle/web-app/cordis.patch.yml
 +++ b/packages/bundle/web-app/cordis.patch.yml
 @@ -29,6 +29,42 @@
@@ -12975,7 +12975,7 @@ index c98289bc3e..6bed8537de 100644
      - id: ui-approval
        name: '@deepseek-ai/dsh-client-ui-approval'
 
-@@ -398,6 +530,7 @@
+@@ -398,21 +530,28 @@
      # are the companion rows below.
      - id: ui-settings-plugins
        name: '@deepseek-ai/dsh-client-ui-settings-plugins'
@@ -12983,7 +12983,28 @@ index c98289bc3e..6bed8537de 100644
 
      # The official settings pages: one companion package per host-plane
      # namespace, each registering its page into the Plugins page while the
-@@ -559,4 +692,4 @@
+     # Host serves the namespace.
++    # These optional pages target the disabled developer plugin-manager seat.
++    # Their Host capabilities stay enabled; the public product has no such sink.
+     - id: ui-settings-shell
+       name: '@deepseek-ai/dsh-client-ui-settings-shell'
++      disabled: true
+
+     - id: ui-settings-agent-loop
+       name: '@deepseek-ai/dsh-client-ui-settings-agent-loop'
++      disabled: true
+
+     - id: ui-settings-subagent
+       name: '@deepseek-ai/dsh-client-ui-settings-subagent'
++      disabled: true
+
+     - id: ui-settings-web-search
+       name: '@deepseek-ai/dsh-client-ui-settings-web-search'
++      disabled: true
+
+     # Plan control: the composer plan seat over the plan projection + /plan channel.
+     - id: ui-plan
+@@ -559,4 +698,4 @@
      - id: agent-preset-registry
        name: '@deepseek-ai/dsh-agent-preset-registry'
        config:
@@ -13093,10 +13114,10 @@ index 76c212e4e6..d152ff818c 100644
      ctx.inject(['systemPrompt'], (promptCtx) => {
 diff --git a/packages/bundle/web-app/tests/public-plugin-defaults.spec.ts b/packages/bundle/web-app/tests/public-plugin-defaults.spec.ts
 new file mode 100644
-index 0000000000..5a8d2758ea
+index 0000000000..c69de740c4
 --- /dev/null
 +++ b/packages/bundle/web-app/tests/public-plugin-defaults.spec.ts
-@@ -0,0 +1,25 @@
+@@ -0,0 +1,28 @@
 +import { fileURLToPath } from 'node:url'
 +import { applyEntryPatches } from '@deepseek-ai/cordis-plugin-include'
 +import { loadOverlayPatches } from '@deepseek-ai/dsh-app-boot'
@@ -13108,7 +13129,10 @@ index 0000000000..5a8d2758ea
 +  fileURLToPath(new URL('../cordis.patch.yml', import.meta.url))), () => {})
 +
 +describe('PhysicsOS public plugin availability', () => {
-+  it.each(['ui-plugin-manager', 'ui-settings-plugins', 'ui-settings-plugin-inventory', 'plugin-center'])(
++  it.each([
++    'ui-plugin-manager', 'ui-settings-plugins', 'ui-settings-plugin-inventory', 'plugin-center',
++    'ui-settings-shell', 'ui-settings-agent-loop', 'ui-settings-subagent', 'ui-settings-web-search',
++  ])(
 +    'does not admit the public %s surface in the shipped profile', id => {
 +      const row = composed().find(entry => entry.id === id)
 +      expect(row, `missing declaration for ${id}`).toBeDefined()
