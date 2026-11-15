@@ -458,7 +458,7 @@ export async function runScopedBuild({ builder, plan, sourceManifest, cacheRoot 
     await writeBuilderMarker(builder, 'physicsos-development-builder.json', receipt)
   }
   const evidence = []
-  const tool = async (cwd, name, args) => { const started = Date.now(); await command('docker', ['exec', '-u', '0', '-e', 'DSH_CLIENT_TITLE=PhysicsOS', builder, 'node', '-e', TOOL_SCRIPT, cwd, name, ...args], { log: true }); evidence.push({ tool: name, cwd, args, seconds: Math.round((Date.now() - started) / 100) / 10, exitCode: 0 }) }
+  const tool = async (cwd, name, args) => { const started = Date.now(); await command('docker', ['exec', '-u', '0', '-e', 'DSH_CLIENT_TITLE=PhysicsOS', '-e', 'DSH_CLIENT_COMMIT_HASH=' + plan.revision, builder, 'node', '-e', TOOL_SCRIPT, cwd, name, ...args], { log: true }); evidence.push({ tool: name, cwd, args, seconds: Math.round((Date.now() - started) / 100) / 10, exitCode: 0 }) }
   if (plan.resetSharedTypes) await command('docker', ['exec', '-u', '0', builder, 'rm', '-rf', '/app/' + HARNESS + '/lib/physicsos-types'])
   if (plan.sharedTypes) await tool('/app/' + HARNESS, 'typescript', ['-b', 'tsconfig.physicsos.json'])
   for (const pkg of plan.packageScopes) {
