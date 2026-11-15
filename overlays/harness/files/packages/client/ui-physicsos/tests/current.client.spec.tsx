@@ -529,6 +529,7 @@ describe('motor rig', () => {
 
   it.each([-60, 0, 60, 90, 120, 180])('carries the engine readings at θ = %s° without changing raw quantities or frame metadata', angle => {
     const runtime = createCurrentWorkspaceRuntime(createMotorScene({ coilAngle: angle }))
+    if (typeof runtime.captureRaw !== 'function') throw new Error('The actual motor runtime must provide held raw evidence.')
     const before = structuredClone(runtime.captureRaw())
     const model = resolveCurrentModel(before.scene)
     if (model.type !== 'motor' || before.result === undefined) throw new Error('Expected actual motor evidence.')

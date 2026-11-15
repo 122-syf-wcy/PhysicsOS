@@ -262,6 +262,26 @@ describe('PaperWorkspace', () => {
     expect(api.confirmSpec).not.toHaveBeenCalled()
   })
 
+  it.each(['missing-binding', 'stale-binding', 'missing-question-hash'] as const)('disables review/signature with %s instead of sending undefined or fake evidence', async (scenario) => {
+    const binding: NonNullable<PaperJobWire['checkBinding']> = { version: 2, documentHash: 'h', requestHash: 'request',
+      specHash: 'spec', reportHash: 'report', questionHashes: scenario === 'missing-question-hash' ? {} : { '1': 'q1' },
+      questionReports: { '1': 'c1' }, completedAt: '2026-11-16' }
+    const draft = job({ document: { id: 'doc', title: '证据缺失原稿',
+      header: { examName: 'synthetic', grade: '九年级', subjectLine: '物理', totalScore: 3, minutes: 60, candidateFields: [] },
+      sections: [{ title: '选择题', items: [{ number: 1, subject: 'physics', kind: 'choice-single', score: 3,
+        stem: '合成题干', knowledge: ['声现象'], ability: '理解', difficulty: 'basic', status: 'checked' }] }],
+    }, ...(scenario === 'missing-binding' ? {} : { checkBinding: { ...binding, version: scenario === 'stale-binding' ? 1 : 2 } }) })
+    const api = stubApi([draft])
+    render(<PaperWorkspace api={api} useAuth={useAuthAs('TEACHER')} useSessions={neverHook} useWorkspaces={neverHook} t={t} />)
+    fireEvent.click(screen.getByRole('button', { name: /草稿与审核/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /证据缺失原稿/ }))
+    expect((await screen.findByRole('button', { name: '通过' })).hasAttribute('disabled')).toBe(true)
+    expect(screen.getByRole('button', { name: '物理部分批准' }).hasAttribute('disabled')).toBe(true)
+    expect(screen.getByText('本题缺少完整的当前检查证据，请先完成当前版本检查后再审核。')).toBeTruthy()
+    expect(api.reviewQuestion).not.toHaveBeenCalled()
+    expect(api.approve).not.toHaveBeenCalled()
+  })
+
   it('submits region, school, kind and featured with a new source paper', async () => {
     const api = stubApi()
     render(<PaperWorkspace api={api} useAuth={useAuthAs('TEACHER')} useSessions={neverHook} useWorkspaces={neverHook} t={t} />)

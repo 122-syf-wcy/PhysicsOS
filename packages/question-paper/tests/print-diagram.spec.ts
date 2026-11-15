@@ -50,6 +50,8 @@ describe('deterministic paper diagram spec', () => {
     expect(paperCircuitTerminalPoint(rotated, 'b')[0]).toBeCloseTo(100)
     expect(paperCircuitTerminalPoint(rotated, 'b')[1]).toBeCloseTo(118)
     expect(() => parsePaperDiagram({ ...circuit, primitives: [...components, { id: 'wire', role: 'given', type: 'circuit-wire', from: { componentId: 'R1', terminal: 'b' }, to: { componentId: 'absent', terminal: 'a' }, via: [] }] })).toThrow('未知元件')
+    expect(() => parsePaperDiagram({ ...circuit, primitives: [...components, { id: 'wire', role: 'given', type: 'circuit-wire', from: { componentId: 'R1', terminal: 'positive' }, to: { componentId: 'R2', terminal: 'a' }, via: [] }] })).toThrow('端点须为 a 或 b')
+    expect(() => parsePaperDiagram({ ...circuit, primitives: [...components.map((p) => p.id === 'R2' ? { ...p, role: 'solution' } : p), circuit.primitives[2]] })).toThrow('学生不可见的解题元件')
     expect(() => parsePaperDiagram({ ...circuit, primitives: [...components.map((p) => p.id === 'R2' ? { ...p, at: [200, 130] } : p), circuit.primitives[2]] })).toThrow('横平竖直')
     expect(() => parsePaperDiagram({ ...circuit, primitives: [{ ...components[0]!, reading: 4 }] })).toThrow('不支持属性 reading')
   })
@@ -74,6 +76,16 @@ describe('student-safe labels and cache content identity', () => {
     expect(studentFigureCaption(question({ kind: 'line-diagram', ref: 'legacy', caption: '内部指令：箭头向上，选项 B 正确' }))).toBe('图 1')
     expect(() => parsePaperFigure({ kind: 'line-diagram', ref: 'f', diagram, studentCaption: '支持力方向向上' })).toThrow('中性图名')
     expect(() => parsePaperFigure({ kind: 'image', ref: 'f', sourceAsset: { id: 'https://internal/', sha256: 'a'.repeat(64), mediaType: 'image/png' } })).toThrow('标识')
+  })
+
+  it('narrows validated figure kinds and source digests without accepting invalid primitive data', () => {
+    expect(parsePaperFigure({ kind: 'line-diagram', ref: 'valid-diagram', diagram }).kind).toBe('line-diagram')
+    const sourceAsset = { id: 'synthetic-owned-asset', sha256: 'a'.repeat(64), mediaType: 'image/png' }
+    expect(parsePaperFigure({ kind: 'image', ref: 'valid-image', sourceAsset }).sourceAsset).toEqual(sourceAsset)
+    expect(() => parsePaperFigure({ kind: 'svg', ref: 'bad-kind' })).toThrow('figure.kind 不支持')
+    expect(() => parsePaperFigure({ kind: 'image', ref: 'bad-digest', sourceAsset: { ...sourceAsset, sha256: 123 } })).toThrow('真实 SHA-256')
+    expect(() => parsePaperFigure({ kind: 'image', ref: 'bad-digest', sourceAsset: { ...sourceAsset, sha256: 'not-a-hash' } })).toThrow('真实 SHA-256')
+    expect(() => parsePaperFigure({ kind: 'image', ref: 'bad-mime', sourceAsset: { ...sourceAsset, mediaType: 'image/svg+xml' } })).toThrow('真实栅格图')
   })
 
   it('changes the input hash for same-ref diagram/caption/stem changes but not review metadata', () => {

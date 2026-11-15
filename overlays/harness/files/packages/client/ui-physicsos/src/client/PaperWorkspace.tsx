@@ -954,11 +954,24 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate, notify }: {
     () => job.document?.sections.flatMap(s => s.items) ?? [],
     [job.document],
   )
-  const binding = job.checkBinding?.version === job.versions.at(-1)?.version
-    && job.checkBinding.documentHash === job.versions.at(-1)?.hash ? job.checkBinding : undefined
-  const currentReview = (no: number) => [...job.reviews].reverse().find(record => record.questionNo === no
-    && record.questionHash === binding?.questionHashes[String(no)]
-    && record.checkHash === binding?.questionReports[String(no)])
+  const currentVersion = job.versions.at(-1)
+  const reportedBinding = job.checkBinding
+  const binding = reportedBinding !== undefined && currentVersion !== undefined
+    && reportedBinding.version === currentVersion.version && reportedBinding.documentHash === currentVersion.hash
+    && reportedBinding.documentHash.trim() !== '' && reportedBinding.reportHash.trim() !== '' ? reportedBinding : undefined
+  const questionEvidence = (no: number) => {
+    if (binding === undefined) return undefined
+    const questionHash = binding.questionHashes[String(no)]
+    const checkHash = binding.questionReports[String(no)]
+    return questionHash !== undefined && questionHash.trim() !== '' && checkHash !== undefined && checkHash.trim() !== ''
+      ? { questionHash, checkHash } : undefined
+  }
+  const currentReview = (no: number) => {
+    const evidence = questionEvidence(no)
+    if (evidence === undefined) return undefined
+    return [...job.reviews].reverse().find(record => record.questionNo === no
+      && record.questionHash === evidence.questionHash && record.checkHash === evidence.checkHash)
+  }
   const reviewed = (no: number) => binding !== undefined && currentReview(no)?.verdict === 'approved'
   const approvedCount = questions.filter(question => reviewed(question.number)).length
   const canReview = job.status === 'review' && binding !== undefined && !runnerActive
@@ -972,11 +985,25 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate, notify }: {
   const shownQuestion = questions.find(question => question.number === focusedQuestion)
     ?? questions.find(question => !reviewed(question.number)) ?? questions[0]
   const shownIndex = questions.findIndex(question => question.number === shownQuestion?.number)
-  const submitReview = (no: number, note?: string, acknowledgeFindings = false, confirmedAnalysis = false) =>
-    explicit(() => api.reviewQuestion(job.id, no, 'approved', reviewer, note, {
-      expectedVersion: job.versions.length, questionHash: binding?.questionHashes[String(no)],
-      checkHash: binding?.questionReports[String(no)], acknowledgeFindings, analysisConfirmed: confirmedAnalysis,
-    }))
+  const submitReview = (no: number, note?: string, acknowledgeFindings = false, confirmedAnalysis = false) => {
+    const evidence = questionEvidence(no)
+    if (!canReview || evidence === undefined || binding === undefined) {
+      notify('当前题目缺少有效检查证据，请先完成当前版本检查后再审核。')
+      return
+    }
+    const expectation = { expectedVersion: job.versions.length, ...evidence,
+      acknowledgeFindings, analysisConfirmed: confirmedAnalysis }
+    explicit(() => api.reviewQuestion(job.id, no, 'approved', reviewer, note, expectation))
+  }
+  const submitApproval = (subject: 'physics' | 'chemistry') => {
+    if (!canApprove || binding === undefined) {
+      notify('请完成当前版本检查、逐题审核及阻断项处理后再签署。')
+      return
+    }
+    const expectation = { expectedVersion: job.versions.length,
+      documentHash: binding.documentHash, checkHash: binding.reportHash }
+    explicit(() => api.approve(job.id, reviewer, subject, expectation))
+  }
 
   return (
     <div>
@@ -1162,8 +1189,9 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate, notify }: {
                     .map((finding, index) => <li key={index} className={finding.severity === 'error' ? css.findingError : css.findingWarn}><Rich text={finding.detail} /></li>)}</ul>
                   {job.findings.every(finding => finding.questionNo !== q.number) && <p className={css.jobMeta}>{binding === undefined ? '尚未完成当前版本检查' : '当前报告无本题专项发现，仍须人工审核'}</p>}
                 </details>
+                {job.status === 'review' && questionEvidence(q.number) === undefined && <p className={css.planNotice}>本题缺少完整的当前检查证据，请先完成当前版本检查后再审核。</p>}
                 <div className={css.qActions}>
-                  <button type="button" disabled={!canReview || reviewed(q.number)}
+                  <button type="button" disabled={!canReview || questionEvidence(q.number) === undefined || reviewed(q.number)}
                     onClick={() => {
                       const errors = job.findings.filter(finding => finding.questionNo === q.number && finding.severity === 'error')
                       const corrected = job.answerCorrections?.some(correction => correction.questionNo === q.number
@@ -1209,9 +1237,7 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate, notify }: {
               const signed = job.approval?.versionHash === binding?.documentHash && job.approval?.checkHash === binding?.reportHash
                 ? job.approval?.[half] : undefined
               return <button key={half} type="button" className={css.primary} disabled={!canApprove || signed !== undefined}
-                onClick={() => explicit(() => api.approve(job.id, reviewer, half, {
-                  expectedVersion: job.versions.length, documentHash: binding?.documentHash, checkHash: binding?.reportHash,
-                }))}>{SUBJECT_LABEL[half]}部分{signed === undefined ? '批准' : '已签署'}</button>
+                onClick={() => { submitApproval(half) }}>{SUBJECT_LABEL[half]}部分{signed === undefined ? '批准' : '已签署'}</button>
             })}
           </div>
           {job.request.subjects.length > 1 && <p className={css.jobMeta}>物理与化学独立签署；先签任一部分不会自动批准另一部分。</p>}

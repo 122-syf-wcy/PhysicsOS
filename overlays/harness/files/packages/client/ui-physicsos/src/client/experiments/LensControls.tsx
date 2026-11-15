@@ -172,6 +172,7 @@ export function LensControls(props: LensBenchProps) {
         <summary>更多装置参数</summary>
         <Parameter
           {...props}
+          guardKey={guardKey}
           id="object-height"
           label="物高"
           symbol="h"

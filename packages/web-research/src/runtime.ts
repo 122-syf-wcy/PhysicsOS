@@ -201,7 +201,7 @@ export function createResearchRuntime(dependencies: ResearchRuntimeDependencies,
 
   const research = async (query: string, signal?: AbortSignal, options?: { readonly read?: boolean }): Promise<ResearchResult> => {
     const normalized = normalizeResearchQuery(query)
-    const operation = createOperation({ signal, timeoutMs }, timeoutMs, 'RESEARCH_TIMEOUT')
+    const operation = createOperation({ timeoutMs, ...(signal === undefined ? {} : { signal }) }, timeoutMs, 'RESEARCH_TIMEOUT')
     let ownedByWaiter = false
     try {
       operation.check()

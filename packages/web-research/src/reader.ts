@@ -1,6 +1,6 @@
 import { request as httpRequest, type ClientRequest, type IncomingMessage, type RequestOptions } from 'node:http'
 import { request as httpsRequest } from 'node:https'
-import { isIP } from 'node:net'
+import { isIP, type TcpNetConnectOpts } from 'node:net'
 import { Readable, Writable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { createBrotliDecompress, createGunzip, createInflate } from 'node:zlib'
@@ -52,7 +52,7 @@ function requestOnce(url: URL, address: string, options: { readonly operation: O
     let cleanupResponse = (): void => {}
     const absorbError = (): void => {}
     const onRequestError = (): void => fail(operation.signal.aborted ? abortFailure(operation.signal) : failure('FETCH_UNAVAILABLE'))
-    const onRequestClose = (): void => request?.removeListener('error', absorbError)
+    const onRequestClose = (): void => { request?.removeListener('error', absorbError) }
     const finish = (error: unknown, value?: RawResponse): void => {
       if (settled) return
       settled = true
@@ -78,10 +78,13 @@ function requestOnce(url: URL, address: string, options: { readonly operation: O
       operation.check()
       operation.signal.addEventListener('abort', onAbort, { once: true })
       const client = url.protocol === 'https:' ? httpsRequest : httpRequest
-      request = client({
+      // HTTP accepts socket connect options at runtime. Older Node typings do
+      // not expose autoSelectFamily on RequestOptions, so type that one option
+      // through the public net API rather than asserting the whole object.
+      const requestOptions: RequestOptions & Pick<TcpNetConnectOpts, 'autoSelectFamily'> = {
         protocol: url.protocol,
         hostname: url.hostname.replace(/^\[|\]$/g, ''),
-        port: url.port === '' ? undefined : Number(url.port),
+        ...(url.port === '' ? {} : { port: Number(url.port) }),
         path: url.pathname + url.search,
         method: 'GET',
         headers: { accept: 'text/html,application/xhtml+xml,text/plain;q=0.9', 'accept-encoding': 'gzip, deflate, br', 'user-agent': options.userAgent },
@@ -90,7 +93,8 @@ function requestOnce(url: URL, address: string, options: { readonly operation: O
         autoSelectFamily: false,
         agent: false,
         maxHeaderSize: 16_384,
-      }, incoming => {
+      }
+      request = client(requestOptions, incoming => {
         response = incoming
         if (settled) { incoming.destroy(); return }
         const headers: Record<string, string | undefined> = {}

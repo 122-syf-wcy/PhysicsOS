@@ -80,7 +80,7 @@ describe('search cancellation and round deadline', () => {
   it('does not fallback after caller cancellation and discards a late provider success', async () => {
     const caller = new AbortController()
     let complete!: (hits: readonly SearchHit[]) => void
-    const primary: SearchProvider = { name: 'primary', providesContent: false, search: vi.fn(() => new Promise(resolve => { complete = resolve })) }
+    const primary: SearchProvider = { name: 'primary', providesContent: false, search: vi.fn(() => new Promise<readonly SearchHit[]>(resolve => { complete = resolve })) }
     const fallbackSearch = vi.fn(async () => [hit])
     const fallback: SearchProvider = { name: 'fallback', providesContent: false, search: fallbackSearch }
     const pending = searchWeb('力', { providers: [primary, fallback], signal: caller.signal, limit: 5 }).catch(error => error)

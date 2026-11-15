@@ -2,14 +2,16 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { GOLDEN_QUESTIONS } from '@physicsos/question-core'
+import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { LabStudySection, type LabStudySectionProps } from '../src/client/LabStudySection.tsx'
 import { PhysicsSurface } from '../src/client/LabWorkspace.tsx'
 import { ExperimentPicker } from '../src/client/ExperimentPicker.tsx'
-import { zh, type PhysicsosKey } from '../src/client/locales.ts'
+import { zh } from '../src/client/locales.ts'
 import { createPaperApi, type AnnotationRow, type SourcePaperRow } from '../src/client/paper-api.ts'
 import { buildLibraryItems } from '../src/client/physics/library-curriculum.ts'
 
-const t = (key: PhysicsosKey): string => zh[key]
+const translations: Readonly<Record<string, string>> = zh
+const t: TranslateNS<'physicsos'> = key => translations[key] ?? key
 const paper = (over: Partial<SourcePaperRow> = {}): SourcePaperRow => ({
   id: 'p1', year: 2025, level: 'zhongkao', subject: 'physics',
   examName: '2025 贵阳中考物理真题', evidenceTier: 'original-scan',
@@ -68,7 +70,7 @@ describe('inline study inside the experiment centre', () => {
     const deniedWrite = vi.fn(() => { throw new Error('student writes forbidden') })
     const paperApi = { ...createPaperApi(), ...api, addSource: deniedWrite, createJob: deniedWrite }
     const practiceQuestion = vi.fn().mockResolvedValue({ ok: true })
-    const unused = (() => { throw new Error('unused session/workspace hook') }) as never
+    const unused = (): never => { throw new Error('unused session/workspace hook') }
     render(<PhysicsSurface t={t} paperApi={paperApi} practiceQuestion={practiceQuestion}
       useAuth={selector => selector({ status: 'authed', user: { id: 'student', schoolId: 'school', schoolName: 'School',
         username: 'student', displayName: 'Student', role: 'STUDENT' } })}

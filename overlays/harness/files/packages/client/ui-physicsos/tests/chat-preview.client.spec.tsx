@@ -70,7 +70,8 @@ function fixture(initial?: PhysicsSceneSnapshot) {
     useAuth: hook(auth), usePreviewSession: hook(mounted), revealPreview, questionCodeOwner, regenerateQuestionCode,
     openSceneInLab: vi.fn(), requestSceneInCanvas: vi.fn(), t }
   function Screen({ collapsed = false, showPreview = true }: { collapsed?: boolean; showPreview?: boolean }) {
-    return <><ChatPreviewEntry {...used as ChatPreviewEntryProps} />
+    // This focused fixture omits unused SessionStandard hooks; the real-slot test below supplies them.
+    return <><ChatPreviewEntry {...used as unknown as ChatPreviewEntryProps} />
       {showPreview ? <aside hidden={collapsed}><ChatPreview {...used as ChatPreviewProps} /></aside> : null}</>
   }
   const publish = (scene: PhysicsSceneSnapshot, latest = scene.sceneId) => projection.set({ latest, scenes: { ...projection.getSnapshot().scenes, [scene.sceneId]: scene } })

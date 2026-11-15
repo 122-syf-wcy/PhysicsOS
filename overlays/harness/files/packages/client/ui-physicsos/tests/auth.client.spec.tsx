@@ -98,7 +98,7 @@ const gateProps = (state: AuthState) => ({
   useAuth: <S,>(selector: (state: AuthState) => S): S => selector(state),
   login: vi.fn(async () => {}),
   register: vi.fn(async (): Promise<RegisterOutcome> => ({ kind: 'registered', user: USER })),
-  searchSchools: vi.fn(async () => ({ schools: [] as SchoolRow[] })),
+  searchSchools: vi.fn<AuthApi['searchSchools']>(async (_query: string) => ({ schools: [] })),
   forgotPassword: vi.fn(async () => ({ ok: true })),
   useSessions: neverHook,
   useWorkspaces: neverHook,

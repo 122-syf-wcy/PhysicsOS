@@ -1,10 +1,21 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
+import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { SidebarNav, type SidebarNavProps } from '../src/client/SidebarNav.tsx'
 import { RecentSpaces } from '../src/client/RecentSpaces.tsx'
 import { zh } from '../src/client/locales.ts'
-const t = (key: string) => ({ 'nav.projects': '项目' }[key] ?? (zh as Record<string,string>)[key] ?? key)
+const translations: Readonly<Record<string, string>> = zh
+const t: TranslateNS<'physicsos'> = key => translations[key] ?? key
+const unusedRuntimeHook = (): never => { throw new Error('unexpected runtime hook read in sidebar navigation fixture') }
+const unusedRuntimeProps = {
+ usePanelInfo: unusedRuntimeHook,
+ useSessions: unusedRuntimeHook,
+ useSessionStatus: unusedRuntimeHook,
+ useSessionRetainInfo: unusedRuntimeHook,
+ useWorkspaces: unusedRuntimeHook,
+ useResource: unusedRuntimeHook,
+} satisfies Pick<SidebarNavProps, 'usePanelInfo' | 'useSessions' | 'useSessionStatus' | 'useSessionRetainInfo' | 'useWorkspaces' | 'useResource'>
 afterEach(() => { cleanup(); localStorage.clear() })
 it('offers a chapter project entry beside experiments in student navigation', () => {
  const open = vi.fn()
@@ -15,8 +26,9 @@ it('offers a chapter project entry beside experiments in student navigation', ()
 it.each(['STUDENT', 'TEACHER', 'SCHOOL_ADMIN', 'SUPER_ADMIN'] as const)('removes the resource entry from the rail and More menu for %s', role => {
  const openSurface = vi.fn()
  const props = {
+  ...unusedRuntimeProps,
   wide: true,
-  t: (key: Parameters<SidebarNavProps['t']>[0]) => zh[key],
+  t,
   openSurface,
   usePhysicsSurface: selector => selector({ surface: 'home' }),
   useAuth: selector => selector({ status: 'authed', user: { id: 'nav-user', schoolId: 'nav-school', schoolName: 'School', username: 'student', displayName: 'Student', role } }),

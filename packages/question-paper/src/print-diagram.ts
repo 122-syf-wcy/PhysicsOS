@@ -176,8 +176,9 @@ export function parsePaperDiagram(input: unknown): PaperDiagramSpec {
       keys(p, [...common, 'from', 'to', 'via'])
       const terminal = (input: unknown): CircuitTerminal => {
         const t = record(input, '电路端点'); keys(t, ['componentId', 'terminal'])
-        if (t.terminal !== 'a' && t.terminal !== 'b') fail('端点须为 a 或 b（电源 a 负、b 正）')
-        return { componentId: idOf(t.componentId), terminal: t.terminal }
+        const terminal = t.terminal
+        if (terminal !== 'a' && terminal !== 'b') return fail('端点须为 a 或 b（电源 a 负、b 正）')
+        return { componentId: idOf(t.componentId), terminal }
       }
       return { ...base, type: p.type, from: terminal(p.from), to: terminal(p.to), via: list(p.via, '导线拐点', 0, 32).map(point) }
     }
@@ -221,7 +222,8 @@ export function parsePaperDiagram(input: unknown): PaperDiagramSpec {
 /** Legacy figures stay readable; only explicit specs/assets can be rendered. */
 export function parsePaperFigure(input: unknown): DiagramPaperFigure {
   const f = record(input, 'figure'); keys(f, ['kind', 'ref', 'caption', 'studentCaption', 'diagram', 'sourceAsset'])
-  if (f.kind !== 'line-diagram' && f.kind !== 'image') fail('figure.kind 不支持')
+  const kind = f.kind
+  if (kind !== 'line-diagram' && kind !== 'image') return fail('figure.kind 不支持')
   const ref = text(f.ref, 'figure.ref', 128)
   if (/[/\\]/.test(ref)) fail('figure.ref 不得包含路径分隔符')
   const caption = f.caption === undefined ? undefined : typeof f.caption === 'string' && f.caption.length <= 6000 && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(f.caption) ? f.caption : fail('内部图指令不是限额内文本')
@@ -234,11 +236,13 @@ export function parsePaperFigure(input: unknown): DiagramPaperFigure {
     const source = record(f.sourceAsset, '来源附件'); keys(source, ['id', 'sha256', 'mediaType'])
     const id = text(source.id, '来源附件 id', 128)
     if (!/^[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(id)) fail('来源附件 id 不是可安全解析的标识')
-    if (typeof source.sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(source.sha256)) fail('来源附件须带真实 SHA-256')
-    if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(String(source.mediaType))) fail('来源附件须为受支持的真实栅格图')
-    sourceAsset = { id, sha256: source.sha256, mediaType: source.mediaType as SourceFigureAsset['mediaType'] }
+    const sha256 = source.sha256
+    if (typeof sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(sha256)) return fail('来源附件须带真实 SHA-256')
+    const mediaType = source.mediaType
+    if (mediaType !== 'image/png' && mediaType !== 'image/jpeg' && mediaType !== 'image/webp' && mediaType !== 'image/gif') return fail('来源附件须为受支持的真实栅格图')
+    sourceAsset = { id, sha256, mediaType }
   }
-  return { kind: f.kind, ref, ...(caption === undefined ? {} : { caption }), ...(studentCaption === undefined ? {} : { studentCaption }), ...(f.diagram === undefined ? {} : { diagram: parsePaperDiagram(f.diagram) }), ...(sourceAsset === undefined ? {} : { sourceAsset }) }
+  return { kind, ref, ...(caption === undefined ? {} : { caption }), ...(studentCaption === undefined ? {} : { studentCaption }), ...(f.diagram === undefined ? {} : { diagram: parsePaperDiagram(f.diagram) }), ...(sourceAsset === undefined ? {} : { sourceAsset }) }
 }
 
 function angleRange(vertex: DiagramPoint, first: DiagramPoint, second: DiagramPoint): { start: number; end: number } {
@@ -255,7 +259,8 @@ export function paperCircuitTerminalPoint(component: Extract<PaperDiagramPrimiti
 function circuitWirePoints(wire: Extract<PaperDiagramPrimitive, { type: 'circuit-wire' }>, components: ReadonlyMap<string, Extract<PaperDiagramPrimitive, { type: 'circuit-component' }>>): DiagramPoint[] {
   const endpoint = (terminal: CircuitTerminal): DiagramPoint => {
     const component = components.get(terminal.componentId)
-    if (component === undefined || (wire.role === 'given' && component.role !== 'given')) fail('导线引用未知元件或学生不可见的解题元件')
+    if (component === undefined) return fail('导线引用未知元件或学生不可见的解题元件')
+    if (wire.role === 'given' && component.role !== 'given') return fail('导线引用未知元件或学生不可见的解题元件')
     return paperCircuitTerminalPoint(component, terminal.terminal)
   }
   return [endpoint(wire.from), ...wire.via, endpoint(wire.to)]
