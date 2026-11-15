@@ -3,7 +3,7 @@
 .tagline { margin: 0; font-size: clamp(28px, 3.1vw, 42px); line-height: 1.35; font-weight: 500; letter-spacing: -.03em; }
 .support { margin: 0; font-size: 16px; line-height: 1.8; color: var(--dsw-alias-label-tertiary); }
 .heroMark { display: block; border-radius: 8px; object-fit: contain; }
-:global([data-phase='hero'] [data-conversation-scroll]) { justify-content: flex-start; padding-top: clamp(28px, 5vh, 50px); }
+:global([data-phase='hero'] [data-conversation-scroll]) { justify-content: flex-start; padding-top: clamp(24px, 3.6vh, 40px); }
 :global([data-phase='hero'] [data-composer-card]) { border: 1px solid var(--physics-glass-border-soft); border-radius: 22px; background: var(--physics-glass-fill); box-shadow: var(--physics-glass-inset), 0 8px 30px color-mix(in srgb, var(--physics-ink) 5%, transparent); backdrop-filter: var(--physics-glass-blur); }
 @media (max-width: 600px) { .root { padding-top: 0; } :global([data-phase='hero'] [data-conversation-scroll]) { padding-top: 20px; } }
 

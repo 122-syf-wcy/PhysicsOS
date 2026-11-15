@@ -28,6 +28,30 @@ $$('#main-nav a').forEach(a => a.addEventListener('click', () => {
   $('#menu-toggle').setAttribute('aria-label', '打开导航');
 }));
 
+// Feature tabs remain ordinary product links inside each selected panel.
+const featureTabs = $$('.feature-selector [data-feature]');
+function selectFeature(key) {
+  if (!featureTabs.some(button => button.dataset.feature === key)) return;
+  featureTabs.forEach(button => {
+    const selected = button.dataset.feature === key;
+    button.setAttribute('aria-selected', String(selected)); button.tabIndex = selected ? 0 : -1;
+    document.getElementById(button.getAttribute('aria-controls')).hidden = !selected;
+  });
+  syncExperimentFrame();
+}
+featureTabs.forEach((button, index) => {
+  button.addEventListener('click', () => selectFeature(button.dataset.feature));
+  button.addEventListener('keydown', event => {
+    let next;
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') next = (index + 1) % featureTabs.length;
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') next = (index + featureTabs.length - 1) % featureTabs.length;
+    if (event.key === 'Home') next = 0;
+    if (event.key === 'End') next = featureTabs.length - 1;
+    if (next !== undefined) { event.preventDefault(); selectFeature(featureTabs[next].dataset.feature); featureTabs[next].focus(); }
+  });
+});
+$$('[data-feature-link]').forEach(link => link.addEventListener('click', () => selectFeature(link.dataset.featureLink)));
+
 let content = { testimonials: [], contributors: [] };
 let contentSnapshot = null;
 let loadingContent = false;
@@ -170,11 +194,11 @@ reloadContent(); updateCarouselPause();
 
 // Small conceptual illustrations, separate from the production physics engine.
 const canvas = $('#experiment-canvas'); const ctx = canvas.getContext('2d');
-let width = 600, height = 350, experiment = 'wave', time = 0;
+let width = 600, height = 350, experiment = 'orbit', time = 0, playbackSpeed = 1;
 let playing = !reducedMotion.matches, stageVisible = false, lastFrame = null, experimentFrame = null;
 const presets = {
   wave: { title: '原来，波是这样\n「走」过去的。', description: '试着改变频率，观察波形的变化。看见每个质点的运动，理解波如何传递能量。', caption: '波向前走，质点留在原地。', formula: 'v = λf', label: '波源频率', value: 15, min: 5, max: 30, unit: v => `${(v / 10).toFixed(1)} Hz` },
-  orbit: { title: '换个磁场，\n轨迹也会不一样。', description: '增大磁场强度，粒子的轨道半径会怎样？轻轻拖动滑块，看看方向与轨迹之间的关系。', caption: '洛伦兹力改变方向，不改变速率。', formula: 'r = mv / qB', label: '磁场强度', value: 10, min: 5, max: 20, unit: v => `${(v / 10).toFixed(1)} T` },
+  orbit: { title: '换个磁场，\n轨迹也会不一样。', description: '增大磁场强度，粒子的轨道半径会怎样？轻轻拖动滑块，看看方向与轨迹之间的关系。', caption: '洛伦兹力改变方向，不改变速率。', formula: 'v = 2000000 m/s', label: '磁场强度', value: 5, min: 2, max: 20, unit: v => `${(v / 10).toFixed(1)} T` },
   projectile: { title: '同样的起点，\n不同的远方。', description: '在同一初速度下，试着改变抛射角度。忽略空气阻力时，什么角度会让小球飞得最远？', caption: '水平方向匀速，竖直方向受重力。', formula: 'R = v₀² sin(2θ) / g', label: '抛射角度', value: 45, min: 15, max: 75, unit: v => `${v}°` },
 };
 function pauseLabel() {
@@ -183,6 +207,8 @@ function pauseLabel() {
 }
 function selectExperiment(key) {
   experiment = key; time = 0; const preset = presets[key];
+  $('#experiment-time').max = key === 'orbit' ? 130 : 6.5;
+  $('#experiment-time').step = key === 'orbit' ? .1 : .05;
   $$('.experiment-tabs button').forEach(button => {
     const selected = button.dataset.experiment === key;
     button.setAttribute('aria-selected', String(selected)); button.tabIndex = selected ? 0 : -1;
@@ -196,7 +222,7 @@ function selectExperiment(key) {
   $('#range-value').textContent = preset.unit(preset.value);
   const endpoints = $$('.range-endpoints span');
   [endpoints[0].textContent, endpoints[1].textContent] = key === 'wave' ? ['慢一点', '快一点'] : key === 'orbit' ? ['弱一点', '强一点'] : ['低一点', '高一点'];
-  draw();
+  updateExperimentReadout(); updateExperimentTime(); draw();
 }
 $$('.experiment-tabs button').forEach((button, i, buttons) => {
   button.addEventListener('click', () => selectExperiment(button.dataset.experiment));
@@ -208,7 +234,29 @@ $$('.experiment-tabs button').forEach((button, i, buttons) => {
     if (next !== undefined) { event.preventDefault(); selectExperiment(buttons[next].dataset.experiment); buttons[next].focus(); }
   });
 });
-$('#experiment-range').addEventListener('input', event => { $('#range-value').textContent = presets[experiment].unit(+event.target.value); draw(); });
+function updateExperimentReadout() {
+  const value = +$('#experiment-range').value;
+  $('#range-value').textContent = presets[experiment].unit(value);
+  const field = $('#stage-field');
+  field.replaceChildren(document.createTextNode(experiment === 'orbit' ? `B = ${(value / 10).toFixed(2)} T ⊗` : experiment === 'wave' ? `f = ${(value / 10).toFixed(1)} Hz` : `θ = ${value}°`));
+  const note = make('small', '', experiment === 'orbit' ? '垂直纸面向里' : experiment === 'wave' ? '波向前传播' : '忽略空气阻力'); field.append(note);
+}
+function updateExperimentTime() {
+  const value = experiment === 'orbit' ? time * 20 : time;
+  $('#experiment-time').value = value;
+  $('#experiment-time-value').textContent = `${value.toFixed(1)} ${experiment === 'orbit' ? 'ns' : 's'}`;
+}
+$('#experiment-range').addEventListener('input', () => { updateExperimentReadout(); draw(); });
+$('#experiment-time').addEventListener('input', event => {
+  playing = false; time = Math.max(0, Math.min(+event.target.max, +event.target.value)) / (experiment === 'orbit' ? 20 : 1);
+  pauseLabel(); updateExperimentTime(); draw(); syncExperimentFrame();
+});
+$('#step-experiment').addEventListener('click', () => {
+  playing = false; time = (time + .05) % 6.5;
+  pauseLabel(); updateExperimentTime(); draw(); syncExperimentFrame();
+});
+$('#reset-experiment').addEventListener('click', () => { time = 0; updateExperimentTime(); draw(); });
+$('#experiment-speed').addEventListener('change', event => { playbackSpeed = Number(event.target.value); });
 $('#pause-experiment').addEventListener('click', () => { playing = !playing; pauseLabel(); syncExperimentFrame(); });
 function dot(x, y, radius, color = '#8cb761') {
   const gradient = ctx.createRadialGradient(x - radius * .35, y - radius * .45, 0, x, y, radius);
@@ -239,15 +287,27 @@ function draw() {
     ctx.strokeStyle = '#a3b992'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(width - 129, 72); ctx.lineTo(width - 57, 72); ctx.lineTo(width - 63, 68); ctx.moveTo(width - 57, 72); ctx.lineTo(width - 63, 76); ctx.stroke();
     ctx.fillStyle = '#9cae8b'; ctx.font = '8px sans-serif'; ctx.fillText('能量传播方向', width - 94, 64);
   } else if (experiment === 'orbit') {
-    const radius = Math.min(height * .34, width * .32) * (10 / value) * .7;
-    const cx = width / 2, cy = height * .52, angle = time * value / 12;
-    ctx.fillStyle = '#c0ceb6'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
-    for (let x = margin + 5; x < width - margin; x += 46) for (let y = 84; y < height - 60; y += 42) ctx.fillText('×', x, y);
-    ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.strokeStyle = '#97b77e'; ctx.lineWidth = 2; ctx.stroke();
+    const field = value / 10, radius = Math.min(height * .35, width * .28) * (.5 / field);
+    const cx = width * .51, cy = height * .44;
+    // Proton q/m in SI; presentation time advances at 20 ns per wall second.
+    const angle = -time * 20e-9 * 9.5788e7 * field;
+    ctx.fillStyle = '#cbd0d3'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+    for (let x = margin + 5; x < width - margin; x += 70) for (let y = 58; y < height - 60; y += 58) ctx.fillText('×', x, y);
+    ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.strokeStyle = '#0088ff'; ctx.lineWidth = 1.6; ctx.stroke();
     const x = cx + radius * Math.cos(angle), y = cy + radius * Math.sin(angle);
-    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(x, y); ctx.setLineDash([3, 4]); ctx.strokeStyle = '#a0b28d99'; ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]);
-    dot(x, y, 10, '#9dc4c5'); dot(cx, cy, 3, '#afbf98');
-    ctx.fillStyle = '#839b6c'; ctx.font = 'italic 13px Georgia'; ctx.fillText('r', cx + (x - cx) / 2 + 9, cy + (y - cy) / 2 - 6);
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(x, y); ctx.setLineDash([3, 3]); ctx.strokeStyle = '#8ba9a0'; ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]);
+    function arrow(dx, dy, length, color, label) {
+      const endX = x + dx * length, endY = y + dy * length;
+      ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(endX, endY); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(endX, endY); ctx.lineTo(endX - dx * 8 + dy * 4, endY - dy * 8 - dx * 4); ctx.lineTo(endX - dx * 8 - dy * 4, endY - dy * 8 + dx * 4); ctx.closePath(); ctx.fill();
+      ctx.font = 'italic 17px Georgia'; ctx.fillText(label, endX + 10, endY + 7);
+    }
+    arrow(Math.sin(angle), -Math.cos(angle), 67, '#0088ff', 'v');
+    arrow(-Math.cos(angle), -Math.sin(angle), 38, '#61bd95', 'F');
+    dot(x, y, 11, '#ffd23d'); dot(cx, cy, 3, '#4c6874');
+    ctx.fillStyle = '#345c48'; ctx.font = 'italic 600 13px Georgia';
+    ctx.fillText(`R = ${(2e6 / (9.5788e7 * field) * 100).toFixed(2)} cm`, cx + (x - cx) / 2, cy + (y - cy) / 2 - 11);
+    ctx.font = '14px sans-serif'; ctx.fillStyle = '#293922'; ctx.fillText('+', x, y + 5);
   } else {
     const angle = value * Math.PI / 180; const startX = margin, ground = height - 70;
     const maxRange = width - margin * 2, flightTime = 2 * Math.sin(angle);
@@ -269,7 +329,7 @@ new IntersectionObserver(([entry]) => {
   syncExperimentFrame();
 }).observe($('.experiment-stage'));
 function experimentShouldRun() {
-  return Boolean(ctx) && playing && stageVisible && !document.hidden && !globalMotionPaused;
+  return Boolean(ctx) && playing && stageVisible && !$('#feature-panel-experiment').hidden && !document.hidden && !globalMotionPaused;
 }
 function syncExperimentFrame() {
   if (!experimentShouldRun()) {
@@ -285,8 +345,8 @@ function frame(timestamp) {
   if (!experimentShouldRun()) { lastFrame = null; return; }
   const delta = lastFrame === null ? 0 : Math.min((timestamp - lastFrame) / 1000, .05);
   lastFrame = timestamp;
-  time += delta;
-  draw();
+  time = (time + delta * playbackSpeed) % 6.5;
+  updateExperimentTime(); draw();
   syncExperimentFrame();
 }
 document.addEventListener('visibilitychange', syncExperimentFrame);
@@ -301,17 +361,21 @@ reducedMotion.addEventListener('change', event => {
   if (event.matches) { playing = false; carouselPaused = true; pauseLabel(); updateCarouselPause(); }
   syncExperimentFrame();
 });
-pauseLabel(); syncExperimentFrame();
+selectExperiment('orbit'); updateExperimentTime(); pauseLabel(); syncExperimentFrame();
 
 // Drafts stay in memory; a server receipt is required before showing success.
 const dialog = $('#feedback-dialog'); let returnFocus; let selectedImages = []; let fileBusy = false; let savingFeedback = false;
 const allowedImages = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
 function closeDialog() { if (savingFeedback) return; dialog.close(); returnFocus?.focus(); }
 $$('.feedback-trigger').forEach(button => button.addEventListener('click', () => {
-  returnFocus = button; $('#feedback-form-view').hidden = false; $('#feedback-success').hidden = true;
+  returnFocus = button; dialog.classList.remove('is-success'); $('#feedback-form-view').hidden = false; $('#feedback-success').hidden = true;
   dialog.showModal(); $('#feedback-body').focus();
 }));
 $('.dialog-close').addEventListener('click', closeDialog); $('.dialog-done').addEventListener('click', closeDialog);
+$('#feedback-again').addEventListener('click', () => {
+  dialog.classList.remove('is-success'); $('#feedback-form-view').hidden = false; $('#feedback-success').hidden = true;
+  $('#feedback-body').focus();
+});
 dialog.addEventListener('click', event => {
   const r = dialog.getBoundingClientRect();
   if (event.target === dialog && (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom)) closeDialog();
@@ -367,7 +431,7 @@ $('#feedback-form').addEventListener('submit', async event => {
   button.textContent = '正在发送…'; error.textContent = '';
   try {
     const receipt = await sendFeedback(await prepareFeedback(draft));
-    $('#feedback-form-view').hidden = true; $('#feedback-success').hidden = false;
+    dialog.classList.add('is-success'); $('#feedback-form-view').hidden = true; $('#feedback-success').hidden = false;
     $('#feedback-receipt').textContent = `反馈编号：${receipt.id}`;
     form.reset(); selectedImages.forEach(entry => URL.revokeObjectURL(entry.url)); selectedImages = []; imagePreviews();
     $('#feedback-count').textContent = '0 / 2000'; $('.dialog-done').focus();

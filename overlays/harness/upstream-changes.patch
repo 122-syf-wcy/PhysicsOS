@@ -13873,7 +13873,7 @@ index 9028a48508..b833a707c5 100644
    },
    "scripts": {
 diff --git a/packages/client/ui-conversation/src/client/apply.ts b/packages/client/ui-conversation/src/client/apply.ts
-index 942444d3b7..2f44c10a4f 100644
+index 942444d3b7..b8e99f758c 100644
 --- a/packages/client/ui-conversation/src/client/apply.ts
 +++ b/packages/client/ui-conversation/src/client/apply.ts
 @@ -314,6 +314,8 @@ export function apply(ctx: Context, config: Config = Config({})): void {
@@ -13885,8 +13885,16 @@ index 942444d3b7..2f44c10a4f 100644
        'conversation.hero.brand.mark': { kind: 'single', scope: 'root' },
        'conversation.hero.workspace': { kind: 'single', scope: 'root' },
        'conversation.hero.agentPreset': { kind: 'single', scope: 'session-maybe' },
+@@ -420,6 +422,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
+     name: 'conversation.composer.bar',
+     locale: NS,
+     children: {
++      'conversation.hero.agentPreset': { kind: 'single', scope: 'session-maybe' },
+       'conversation.input.attachments': { kind: 'single', scope: 'session-maybe' },
+       'conversation.input.overlay': { kind: 'list', scope: 'session' },
+       'conversation.input.permission': { kind: 'single', scope: 'session' },
 diff --git a/packages/client/ui-conversation/src/client/contract/slots.ts b/packages/client/ui-conversation/src/client/contract/slots.ts
-index 61f7d8ff8b..167bfd5102 100644
+index 61f7d8ff8b..12d2e78218 100644
 --- a/packages/client/ui-conversation/src/client/contract/slots.ts
 +++ b/packages/client/ui-conversation/src/client/contract/slots.ts
 @@ -197,6 +197,19 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -13918,6 +13926,35 @@ index 61f7d8ff8b..167bfd5102 100644
          'conversation.hero.brand.mark': { kind: 'single'; scope: 'root' }
          'conversation.hero.workspace': { kind: 'single'; scope: 'root' }
          'conversation.hero.agentPreset': { kind: 'single'; scope: 'session-maybe' }
+@@ -426,7 +441,7 @@ export type ComposerBarProps =
+     | 'conversation.input.permission'
+     | 'conversation.input.left' | 'conversation.input.plan'
+     | 'conversation.input.right' | 'conversation.input.model' | 'conversation.input.activity'
+-    | 'conversation.composer.dock'
++    | 'conversation.composer.dock' | 'conversation.hero.agentPreset'
+   >
+   & InjectFace<ComposerBarInjected>
+   & PropsLocale<'conversation'>
+diff --git a/packages/client/ui-conversation/src/client/locales.ts b/packages/client/ui-conversation/src/client/locales.ts
+index 88ae0697f7..7e8b9d5275 100644
+--- a/packages/client/ui-conversation/src/client/locales.ts
++++ b/packages/client/ui-conversation/src/client/locales.ts
+@@ -21,6 +21,7 @@ export const zh = {
+   'placeholder.unavailable': '会话不可用',
+   'placeholder.parentOffline': '父会话已离线，无法继续发送；仍可停止当前运行',
+   'placeholder.hero': '描述你想要构建的内容, / 调用指令, @ 文件或对话',
++  'placeholder.physicsosHero': '描述一个物理问题，或拖入一张试题图片…',
+   'placeholder.workspace': '选择一个工作区开始',
+   'placeholder.steerQueue': 'Cmd/Ctrl+Enter 插话发送全部排队消息',
+   'input.commands': '添加文件或调用指令',
+@@ -391,6 +392,7 @@ export const en = {
+   'placeholder.unavailable': 'Session unavailable',
+   'placeholder.parentOffline': 'Parent session offline; sending is unavailable but you can still stop the run',
+   'placeholder.hero': 'Describe what you want to build, / commands, @ files or sessions',
++  'placeholder.physicsosHero': 'Describe a physics question, or drop in a question image…',
+   'placeholder.workspace': 'Choose a workspace to start',
+   'placeholder.steerQueue': 'Cmd/Ctrl+Enter steers all queued messages',
+   'input.commands': 'Add files or run commands',
 diff --git a/packages/client/ui-conversation/src/client/service.ts b/packages/client/ui-conversation/src/client/service.ts
 index 2ef2309ccf..47b65fe732 100644
 --- a/packages/client/ui-conversation/src/client/service.ts
@@ -13945,10 +13982,36 @@ index 2ef2309ccf..47b65fe732 100644
        mediaType: imageMediaType(file.type),
        data: await base64ImageOf(file),
 diff --git a/packages/client/ui-conversation/src/client/skeleton/ConversationContent.tsx b/packages/client/ui-conversation/src/client/skeleton/ConversationContent.tsx
-index 15bfdd8732..10ca7e2ff4 100644
+index 15bfdd8732..ddc85e33a2 100644
 --- a/packages/client/ui-conversation/src/client/skeleton/ConversationContent.tsx
 +++ b/packages/client/ui-conversation/src/client/skeleton/ConversationContent.tsx
-@@ -162,10 +162,19 @@ export function ConversationContent(props: ConversationContentProps) {
+@@ -107,8 +107,9 @@ export function ConversationContent(props: ConversationContentProps) {
+     ? undefined
+     : workspaceDisplayTitle(storedChipTitle, t('workspace.defaultName'))
+
++  const productUI = document.documentElement.hasAttribute('data-physicsos-ui')
+   const heroWorkspaceRow = (
+-    <div className={css.heroWorkspaceRow}>
++    <div className={css.heroWorkspaceRow} style={productUI ? { display: 'none' } : undefined}>
+       <WorkspaceChip
+         buttonRef={pickerAnchor}
+         label={chipTitle}
+@@ -129,7 +130,7 @@ export function ConversationContent(props: ConversationContentProps) {
+         },
+         onClose: () => { setPickerOpen(false) },
+       })}
+-      {renderSlot('conversation.hero.agentPreset', {})}
++      {!productUI && renderSlot('conversation.hero.agentPreset', {})}
+     </div>
+   )
+
+@@ -157,15 +158,24 @@ export function ConversationContent(props: ConversationContentProps) {
+         // block keeps the model seat live because choosing a model is how the
+         // user clears it.
+         ? { blocked: composerBlock, placeholder: composerBlock.reason }
+-        : hero ? { placeholder: t('placeholder.hero') } : {}),
++        : hero ? { placeholder: t(productUI ? 'placeholder.physicsosHero' : 'placeholder.hero') } : {}),
+   })
 
    const composerBar = (
      <div className={clsx(css.composerStack, hero && css.composerHero)}>
@@ -13970,10 +14033,10 @@ index 15bfdd8732..10ca7e2ff4 100644
    )
 
 diff --git a/packages/client/ui-conversation/src/client/skeleton/ConversationRoot.module.css b/packages/client/ui-conversation/src/client/skeleton/ConversationRoot.module.css
-index 3aa0a9d1f9..d159f89af7 100644
+index 3aa0a9d1f9..07c16c3e9b 100644
 --- a/packages/client/ui-conversation/src/client/skeleton/ConversationRoot.module.css
 +++ b/packages/client/ui-conversation/src/client/skeleton/ConversationRoot.module.css
-@@ -543,3 +543,8 @@ button.crumb:hover {
+@@ -543,3 +543,16 @@ button.crumb:hover {
  .embeddedBody[data-content-phase='settling'] .composerSeat {
    visibility: hidden;
  }
@@ -13982,8 +14045,29 @@ index 3aa0a9d1f9..d159f89af7 100644
 +:global(html[data-physicsos-ui]) .heroWorkspaceRow { margin: 0 0 8px; padding-left: 0; }
 +:global(html[data-physicsos-ui]) .composerHero { padding-bottom: 20px; }
 +:global(html[data-physicsos-ui]) .headerBlank { display: none; }
++
++:global(html[data-physicsos-ui]) .root[data-phase='hero'] .body {
++  --dsh-composer-card-max-width: 950px;
++}
++:global(html[data-physicsos-ui]) .root[data-phase='hero'] .composerHero { margin-right: 32px; }
++@media (max-width: 600px) {
++  :global(html[data-physicsos-ui]) .root[data-phase='hero'] .composerHero { margin-right: 0; }
++}
+diff --git a/packages/client/ui-conversation/src/client/skeleton/InputBar.module.css b/packages/client/ui-conversation/src/client/skeleton/InputBar.module.css
+index 4676f4cd7d..db9f3eb005 100644
+--- a/packages/client/ui-conversation/src/client/skeleton/InputBar.module.css
++++ b/packages/client/ui-conversation/src/client/skeleton/InputBar.module.css
+@@ -416,3 +416,8 @@
+ .activity { display: flex; align-items: center; flex: none; }
+ .activity:empty { display: none; }
+ .activityExpanded { flex: 1; min-width: 0; }
++
++:global(html[data-physicsos-ui]) .hero .input { min-height: 78px; }
++@media (max-width: 600px) {
++  :global(html[data-physicsos-ui]) .hero .input { min-height: 66px; }
++}
 diff --git a/packages/client/ui-conversation/src/client/skeleton/InputBar.tsx b/packages/client/ui-conversation/src/client/skeleton/InputBar.tsx
-index f004aba1e9..af397aa2c7 100644
+index f004aba1e9..a154fecf36 100644
 --- a/packages/client/ui-conversation/src/client/skeleton/InputBar.tsx
 +++ b/packages/client/ui-conversation/src/client/skeleton/InputBar.tsx
 @@ -1,3 +1,4 @@
@@ -14000,6 +14084,14 @@ index f004aba1e9..af397aa2c7 100644
          const imageAttachments = attachments.filter(attachment => attachment.kind === 'image')
          if (imageAttachments.length + images.length > imageLimits.maxImagesPerMessage) {
            return t('image.tooMany', { count: imageLimits.maxImagesPerMessage })
+@@ -443,6 +444,7 @@ export const InputBar = memo(function InputBar({
+               {sessionId === undefined ? null : renderSlot('conversation.input.permission', { locked })}
+               {sessionId === undefined ? null : renderSlot('conversation.input.plan', { locked })}
+             </div>
++            {variant === 'hero' && document.documentElement.hasAttribute('data-physicsos-ui') && renderSlot('conversation.hero.agentPreset', {})}
+             {input === undefined || sessionId === undefined
+               ? null
+               : renderSlot('conversation.input.left', {})}
 diff --git a/packages/client/ui-layout/src/client/AppFrame.module.css b/packages/client/ui-layout/src/client/AppFrame.module.css
 index 4f450df3c9..b417d55183 100644
 --- a/packages/client/ui-layout/src/client/AppFrame.module.css
@@ -14942,7 +15034,7 @@ index bebfb96c53..230afcc99c 100644
        canGoBack: () => state.back, canGoForward: () => state.forward, clearHistory: vi.fn(),
        goBack: vi.fn(), goForward: vi.fn(), reload: vi.fn(), isLoading: () => state.loading,
 diff --git a/packages/client/ui-sidebar/src/client/SidebarRoot.module.css b/packages/client/ui-sidebar/src/client/SidebarRoot.module.css
-index ac1116f04c..c9870fb203 100644
+index ac1116f04c..82d9207c1a 100644
 --- a/packages/client/ui-sidebar/src/client/SidebarRoot.module.css
 +++ b/packages/client/ui-sidebar/src/client/SidebarRoot.module.css
 @@ -11,6 +11,7 @@
@@ -15052,7 +15144,7 @@ index ac1116f04c..c9870fb203 100644
 +.historyButton { border: 0; border-radius: 8px; padding: 7px 10px; color: var(--dsw-alias-label-secondary); background: transparent; font: inherit; font-size: 12px; cursor: pointer; }
 +.historyButton:hover { background: var(--dsw-alias-interactive-bg-hover); }
 +.productHeaderActions { margin-left: auto; display: flex; align-items: center; gap: 12px; }
-+.productRail { position: absolute; left: 18px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; align-items: center; gap: 5px; max-height: calc(100% - 150px); overflow: auto; padding: 9px 6px; border: 1px solid var(--physics-glass-border); border-radius: 30px; background: var(--physics-glass-fill); box-shadow: var(--physics-glass-rim), var(--physics-glass-lift); backdrop-filter: var(--physics-glass-blur); pointer-events: auto; }
++.productRail { position: absolute; left: 30px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; align-items: center; gap: 5px; max-height: calc(100% - 150px); overflow: auto; padding: 16px 13px; border: 1px solid var(--physics-glass-border); border-radius: 40px; background: var(--physics-glass-fill); box-shadow: var(--physics-glass-rim), var(--physics-glass-lift); backdrop-filter: var(--physics-glass-blur); pointer-events: auto; }
 +.historyDrawer { position: absolute; right: 18px; top: max(68px, var(--dsh-frame-top-clearance, 0px)); bottom: 18px; width: min(380px, calc(100vw - 36px)); max-height: none; margin: 0; }
 +.productHistory { display: flex; flex-direction: column; height: calc(100dvh - 190px); min-height: 120px; overflow: auto; }
 +:global(html[data-platform='darwin']) .productHeader { padding-left: 88px; }
@@ -15425,16 +15517,13 @@ index 45d5410a37..e648afed7a 100644
      expect(declarations('.brandName')?.get('font-size')).toBe('18px')
      expect(declarations('.fallbackBrandName')?.get('font-size')).toBe('17px')
 diff --git a/packages/client/web/src/boot-page.module.css b/packages/client/web/src/boot-page.module.css
-index f154c42761..6540713fc1 100644
+index f154c42761..7f9c468cc1 100644
 --- a/packages/client/web/src/boot-page.module.css
 +++ b/packages/client/web/src/boot-page.module.css
-@@ -1,72 +1,260 @@
+@@ -1,72 +1,267 @@
  /* The framework-free boot page cannot depend on theme delivery succeeding. */
 
-+/* A full-bleed white scene, not a themed card: it must look identical before
-+   any theme/alias delivery runs. Dark mode keeps the white canvas on purpose —
-+   the artwork is a lit campus morning, and a night variant would need a second
-+   illustration for a page that lives for under a second. */
++/* Independent brand surface available before client theme delivery. */
  .boot {
 -  --dsh-boot-label-primary: #0f1115;
 -  --dsh-boot-label-secondary: #61666b;
@@ -15451,7 +15540,7 @@ index f154c42761..6540713fc1 100644
 +  position: relative;
 +  height: 100%;
 +  overflow: hidden;
-+  background: #fff;
++  background: radial-gradient(ellipse at 80% 65%, #e8f0e7, transparent 55%), #fbfaf6;
 +  /* A text stack that reads as designed rather than system-default: a
 +     geometric-ish grotesque for the wordmark where the OS has one, falling
 +     back through the platform UI faces. No webfont — this page paints before
@@ -15482,7 +15571,10 @@ index f154c42761..6540713fc1 100644
 +   picture itself takes the full bleed and the img inside fills it. */
 +.boot > picture {
 +  position: absolute;
-+  inset: 0;
++  top: 12%;
++  bottom: 12%;
++  right: 8%;
++  width: 36%;
 +  display: block;
 +}
 +
@@ -15492,8 +15584,8 @@ index f154c42761..6540713fc1 100644
 -  display: grid;
 -  place-items: center;
 -  background: var(--dsw-alias-bg-base, var(--dsh-boot-bg, Canvas));
-+  object-fit: cover;
-+  object-position: right center;
++  object-fit: contain;
++  object-position: center;
 +  animation: cover-in 900ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
  }
 
@@ -15560,8 +15652,8 @@ index f154c42761..6540713fc1 100644
 +  margin-top: 18px;
 +  border-radius: 2px;
 +  background: linear-gradient(90deg, var(--dsh-boot-accent-from), var(--dsh-boot-accent-to));
-+}
-+
+ }
+
 +.tagline {
 +  margin-top: 22px;
 +  /* Wide enough that the sentence breaks at its own comma, not mid-word;
@@ -15585,8 +15677,8 @@ index f154c42761..6540713fc1 100644
 +    opacity: 1;
 +    transform: none;
 +  }
- }
-
++}
++
 +/* Progress read-out. The width comes from the real plugin ratio
 +   (--dsh-boot-progress); a light sweep travels across it so a slow plugin
 +   never looks like a hang. */
@@ -15632,8 +15724,10 @@ index f154c42761..6540713fc1 100644
 +  inset: 0;
 +  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 55%), transparent);
 +  animation: sweep 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-+}
-+
+ }
+
+-@keyframes spin {
+-  to { transform: rotate(360deg); }
 +@keyframes sweep {
 +  from {
 +    transform: translateX(-100%);
@@ -15642,10 +15736,8 @@ index f154c42761..6540713fc1 100644
 +  to {
 +    transform: translateX(100%);
 +  }
- }
-
--@keyframes spin {
--  to { transform: rotate(360deg); }
++}
++
 +.hint {
 +  margin-top: 14px;
 +  font-size: 12.5px;
@@ -15659,6 +15751,13 @@ index f154c42761..6540713fc1 100644
 +   carries its own white headroom, so the copy goes there — above the figures
 +   rather than over them — and the artwork needs no wash at all. */
 +@media (width <= 860px) {
++  .boot > picture {
++    top: 35%;
++    bottom: 16%;
++    right: 10%;
++    width: 80%;
++  }
++
 +  .cover {
 +    object-position: 50% center;
 +  }
@@ -15728,7 +15827,7 @@ index f154c42761..6540713fc1 100644
  }
 
  .failed {
-@@ -80,7 +268,7 @@
+@@ -80,7 +275,7 @@
    font-size: 14px;
    line-height: 22px;
    font-weight: 600;
@@ -15737,7 +15836,7 @@ index f154c42761..6540713fc1 100644
  }
 
  .failedItem {
-@@ -98,6 +286,6 @@
+@@ -98,6 +293,6 @@
    );
    font-size: 12px;
    line-height: 18px;
@@ -15746,50 +15845,30 @@ index f154c42761..6540713fc1 100644
    white-space: pre-wrap;
  }
 diff --git a/packages/client/web/src/boot-page.ts b/packages/client/web/src/boot-page.ts
-index 23b27ad4bc..c9b4bfa6a8 100644
+index 23b27ad4bc..dc9771730b 100644
 --- a/packages/client/web/src/boot-page.ts
 +++ b/packages/client/web/src/boot-page.ts
-@@ -14,34 +14,142 @@ function div(className: string | undefined, text?: string): HTMLDivElement {
+@@ -14,34 +14,122 @@ function div(className: string | undefined, text?: string): HTMLDivElement {
    return el
  }
 
-+/**
-+ * Create the cover picture. A `<picture>` rather than a bare `<img>` because
-+ * the composition is orientation-specific: the wide art puts the figures right
-+ * and the copy left, while a portrait viewport needs a crop that keeps all
-+ * three characters. `source` swaps between them at the same breakpoint the
-+ * stylesheet uses, so no script has to react to a resize.
-+ * @param className - module class applied to the img.
-+ * @param alt - accessible name; empty because the page states the product name in text.
-+ * @returns the picture element carrying both orientations.
-+ */
++/** Create a responsive original Guizhou-inspired girl illustration. */
 +function coverPicture(className: string, alt: string): HTMLPictureElement {
 +  const picture = document.createElement('picture')
-+
-+  const portrait = document.createElement('source')
-+  portrait.media = '(max-width: 860px)'
-+  portrait.srcset = [
-+    '/physicsos/splash/splash-portrait-720.webp 720w',
-+    '/physicsos/splash/splash-portrait-1080.webp 1080w',
-+  ].join(', ')
-+  portrait.sizes = '100vw'
-+
-+  const wide = document.createElement('source')
-+  wide.media = '(min-width: 861px)'
-+  wide.srcset = [
-+    '/physicsos/splash/splash-1280.webp 1280w',
-+    '/physicsos/splash/splash-1920.webp 1920w',
-+    '/physicsos/splash/splash-2560.webp 2560w',
-+  ].join(', ')
-+  wide.sizes = '100vw'
-+
++  for (const [media, state] of [['(max-width: 860px)', 'complete'], ['(min-width: 861px)', 'wave']] as const) {
++    const source = document.createElement('source')
++    source.media = media
++    source.type = 'image/avif'
++    source.srcset = [160, 320, 640].map(size => `/physicsos/mascot/guizhou/v1/mascot-${state}-${String(size)}.avif ${String(size)}w`).join(', ')
++    source.sizes = '(max-width: 860px) 80vw, 36vw'
++    picture.append(source)
++  }
 +  const fallback = document.createElement('img')
 +  fallback.className = className
-+  fallback.src = '/physicsos/splash/splash-1920.webp'
++  fallback.src = '/physicsos/mascot/guizhou/v1/mascot-wave-320.png'
 +  fallback.alt = alt
 +  fallback.decoding = 'async'
-+
-+  picture.append(portrait, wide, fallback)
++  picture.append(fallback)
 +  return picture
 +}
 +
@@ -15897,7 +15976,7 @@ index 23b27ad4bc..c9b4bfa6a8 100644
    }
 
    /**
-@@ -71,33 +179,63 @@ export class BootPage {
+@@ -71,33 +159,63 @@ export class BootPage {
     */
    fail(message: string): void {
      this.failure = message
@@ -15981,10 +16060,10 @@ index 6602223c4c..b167712d44 100644
        console.error(reason)
        if (onFailure !== undefined) onFailure(reason)
 diff --git a/packages/client/web/tests/boot-page.client.spec.ts b/packages/client/web/tests/boot-page.client.spec.ts
-index 33612e8a47..aaa08bfde5 100644
+index 33612e8a47..807e590259 100644
 --- a/packages/client/web/tests/boot-page.client.spec.ts
 +++ b/packages/client/web/tests/boot-page.client.spec.ts
-@@ -1,21 +1,41 @@
+@@ -1,21 +1,42 @@
  // @vitest-environment jsdom
 -import { afterEach, describe, expect, it } from 'vitest'
 +import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -16022,17 +16101,18 @@ index 33612e8a47..aaa08bfde5 100644
 +      '(max-width: 860px)',
 +      '(min-width: 861px)',
 +    ])
-+    // The portrait crop and the wide crop are different files: the wide art
-+    // puts the figures right, so reusing it on a phone would cut two of them.
++    // Approved no-cat IP poses remain legible in both viewport orientations.
 +    const portrait = sources[0]?.getAttribute('srcset') ?? ''
 +    const wide = sources[1]?.getAttribute('srcset') ?? ''
-+    expect(portrait).toContain('splash-portrait-')
-+    expect(wide).toContain('splash-1920.webp')
++    expect(portrait).toContain('mascot-complete-320.avif')
++    expect(wide).toContain('mascot-wave-640.avif')
 +    expect(portrait).not.toBe(wide)
++    expect(el.querySelector('img')?.getAttribute('src')).toContain('/mascot/guizhou/v1/mascot-wave-320.png')
++    expect(el.innerHTML).not.toContain('/physicsos/splash/')
    })
 
    it('keeps loading while entries are active or loading', () => {
-@@ -29,8 +49,35 @@ describe('BootPage', () => {
+@@ -29,8 +50,35 @@ describe('BootPage', () => {
      expect(el.querySelector('[data-dsh-boot-spinner]')).toBe(spinner)
      page.setState('b', 'active')
      expect(spinner?.style.getPropertyValue('--dsh-boot-arc')).toBe('288deg')
@@ -16070,7 +16150,7 @@ index 33612e8a47..aaa08bfde5 100644
    })
 
    it('lists failed entries', () => {
-@@ -41,7 +88,7 @@ describe('BootPage', () => {
+@@ -41,7 +89,7 @@ describe('BootPage', () => {
      expect(el.textContent).toContain('@deepseek-ai/dsh-client-ui-layout')
      expect(el.textContent).toContain('@deepseek-ai/dsh-client-ui-tool')
      expect(el.textContent).not.toContain('ok')
@@ -16079,7 +16159,7 @@ index 33612e8a47..aaa08bfde5 100644
    })
 
    it('shows the complete sweep report', () => {
-@@ -50,7 +97,7 @@ describe('BootPage', () => {
+@@ -50,7 +98,7 @@ describe('BootPage', () => {
      page.fail(report)
      page.setState('a', 'active')
      expect(el.textContent).toContain(report)
