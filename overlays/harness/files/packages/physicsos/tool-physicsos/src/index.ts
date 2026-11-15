@@ -551,7 +551,7 @@ export function apply(ctx: Context, config: Config): void {
     isConcurrencySafe: () => true,
     execute: async (args, exec) => {
       try {
-        return await research.present(args.query, exec.signal) as unknown as AnyObject
+        return await research.present(args.query, exec.signal, { read: args.read !== false }) as unknown as AnyObject
       } catch (error) {
         if (error instanceof ResearchError) {
           throw new HarnessError(researchFailureMessage(error.code), error.code, { cause: error })

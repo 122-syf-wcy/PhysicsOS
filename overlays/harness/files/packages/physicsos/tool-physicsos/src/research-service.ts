@@ -25,9 +25,9 @@ export interface ResearchServiceConfig {
 }
 
 export interface ResearchService {
-  research(query: string, signal?: AbortSignal): Promise<ResearchResult>
+  research(query: string, signal?: AbortSignal, options?: { readonly read?: boolean }): Promise<ResearchResult>
   /** Tool-facing JSON: compact, numbered, and explicit about what was actually read. */
-  present(query: string, signal?: AbortSignal): Promise<Record<string, unknown>>
+  present(query: string, signal?: AbortSignal, options?: { readonly read?: boolean }): Promise<Record<string, unknown>>
 }
 
 const failureMessage = (code: string): string => {
@@ -63,16 +63,18 @@ export function createResearchService(config: ResearchServiceConfig = {}): Resea
   ]
   const reader = createSafeReader(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs })
   return {
-    async research(query, signal) {
+    async research(query, signal, options) {
       return await researchQuestion(query, { providers, reader }, {
         limit: config.limit ?? 5,
-        readLimit: config.readLimit ?? 3,
+        // `read: false` means "summaries only": skip full-text fetching and say
+        // so, instead of paying for page reads the caller did not ask for.
+        readLimit: options?.read === false ? 0 : config.readLimit ?? 3,
         ...(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs }),
         ...(signal === undefined ? {} : { signal }),
       })
     },
-    async present(query, signal) {
-      const result = await this.research(query, signal)
+    async present(query, signal, options) {
+      const result = await this.research(query, signal, options)
       /* Tool results are strictly serialised as lossless JSON, so an absent
          value must be omitted, never sent as `undefined`. */
       return {
