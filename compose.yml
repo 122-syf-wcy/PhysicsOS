@@ -118,10 +118,12 @@ services:
       PHYSICSOS_PANDOC: ${PHYSICSOS_PANDOC:-/usr/bin/pandoc}
       PHYSICSOS_SOFFICE: ${PHYSICSOS_SOFFICE:-/usr/bin/soffice}
       PHYSICSOS_DATABASE_SSL: ${PHYSICSOS_DATABASE_SSL:-false}
-      # Research: only set when the self-hosted SearXNG profile is running.
-      # Unset leaves the keyless RSS fallback as the only source; no paid
-      # provider is ever enabled by default.
-      PHYSICSOS_RESEARCH_SEARXNG_URL: ${PHYSICSOS_RESEARCH_SEARXNG_URL:-}
+      # Research: the self-hosted SearXNG sibling on the compose network. It is
+      # the primary source; the keyless Bing RSS adapter stays as an explicit
+      # fallback and no paid provider is ever enabled by default. SearXNG has no
+      # published port and is only reachable from this network, so no API key is
+      # required; unset this only to run a deployment with search disabled.
+      PHYSICSOS_RESEARCH_SEARXNG_URL: ${PHYSICSOS_RESEARCH_SEARXNG_URL:-http://searxng:8080/search}
       PHYSICSOS_RESEARCH_SEARXNG_KEY_FILE: ${PHYSICSOS_RESEARCH_SEARXNG_KEY_FILE:-}
       # Validation worker endpoint seen from the app container (profiles:
       # validation). Unset disables isolated acceptance.
@@ -289,10 +291,10 @@ services:
         max-file: '3'
 
   # Self-hosted metasearch used by the research tool. It aggregates upstream
-  # engines; it does not own a web index. Disabled by default and only wired
-  # to the app when PHYSICSOS_RESEARCH_SEARXNG_URL is set.
+  # engines; it does not own a web index. Always on: the app's default search
+  # URL points here, and the per-engine availability is verified at deploy time
+  # rather than assumed.
   searxng:
-    profiles: ['research']
     image: ${PHYSICSOS_SEARXNG_IMAGE:-searxng/searxng:latest}
     restart: unless-stopped
     environment:
@@ -304,6 +306,19 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "python3 -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/healthz',timeout=4).status==200 else 1)\""
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
     logging:
       driver: json-file
       options:

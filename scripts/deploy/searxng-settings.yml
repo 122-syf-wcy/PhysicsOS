@@ -13,12 +13,18 @@ use_default_settings: true
 general:
   instance_name: 'PhysicsOS Research'
   enable_metrics: false
+  # Required by the wikipedia/wikidata/openstreetmap engines; without it they
+  # refuse to register at startup. This instance is private, so it is the
+  # operator's contact, not a public one.
+  contact_url: 'https://physics.dongsiwei.com'
 
 server:
   bind_address: '0.0.0.0'
   port: 8080
   limiter: false
   public_instance: false
+  # Replaced at deploy time by PHYSICSOS_SEARXNG_SECRET; the literal here only
+  # keeps a bare local run bootable.
   secret_key: 'change-in-deployment'
   image_proxy: false
 
@@ -33,21 +39,28 @@ search:
 ui:
   static_use_hash: true
 
-# Keep only engines that answer without an API key and are suitable for
-# educational lookups. Anything requiring credentials stays off; a deployment
-# that adds one documents it here rather than enabling it silently.
+# Keep only engines that answer without an API key and return usable results
+# for Chinese physics queries. Measured on the production host (2026-11-15)
+# with 贵州高考物理真题:
+#   duckduckgo 10/10 relevant, startpage 20 relevant, brave 16 relevant
+#   bing 0, baidu 0, google 0 (blocked/empty from this host), qwant 0
+# so the three working ones are enabled and the rest stay off. Anything
+# requiring credentials also stays off; a deployment that adds one documents
+# it here rather than enabling it silently.
 engines:
+  - name: duckduckgo
+    disabled: false
+  - name: startpage
+    disabled: false
+  - name: brave
+    disabled: false
   - name: wikipedia
     disabled: false
   - name: wikidata
     disabled: false
-  - name: duckduckgo
-    disabled: false
   - name: bing
-    disabled: false
-  - name: baidu
-    disabled: false
-  - name: google
     disabled: true
-  - name: brave
+  - name: baidu
+    disabled: true
+  - name: google
     disabled: true
