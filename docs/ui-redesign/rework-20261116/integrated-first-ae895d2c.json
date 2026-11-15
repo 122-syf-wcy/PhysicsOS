@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "sourceRevision": "ae895d2c20f33a6d95beb21a9badfe55d65f6bbd",
+  "builder": "physicsos-ui-verify-8f5d9c9630ac",
+  "server": "107.151.246.59",
+  "sourceAndDependencies": {
+    "fetch": 0,
+    "project": 0,
+    "sync": 0,
+    "unchangedDependencyProof": 0,
+    "rootFrozenInstall": 0,
+    "harnessFrozenInstall": 0,
+    "exactSourceCheck": 0,
+    "installPolicy": "Bounded reuse of identical previously verified package integrity and policy inputs; no new package versions or persistent trust changes"
+  },
+  "initialTypechecks": {
+    "questionPaper": 2,
+    "webResearch": 2,
+    "aggregateHost": 137,
+    "aggregateClient": 2,
+    "status": "failed",
+    "diagnostics": "Strict parser/request/optional evidence typing and test fixture signatures; corrections are in later source. Host was terminated with exit 137 under a 2.25 GiB builder limit; rerun uses a 1536 MiB JavaScript heap. This is not a passing typecheck."
+  },
+  "runtimeTests": {
+    "questionPaper": { "exit": 0, "files": 6, "passed": 67, "skipped": 0, "seconds": 4.46 },
+    "webResearch": { "exit": 0, "files": 5, "passed": 185, "skipped": 0, "seconds": 4.12 },
+    "paperHost": { "exit": 0, "filesPassed": 13, "filesSkipped": 1, "passed": 100, "skipped": 1, "seconds": 50.32 },
+    "researchTool": { "exit": 0, "files": 1, "passed": 14, "skipped": 0, "seconds": 9.87 },
+    "totalPassed": 366,
+    "totalSkipped": 1,
+    "realLibreOfficeNotRun": true,
+    "claims": "Source-backed unit and integration behavior in Docker; not a final-image browser, production or actual PDF-output acceptance"
+  },
+  "typeEvidenceDirectory": "/opt/physicsos/.physicsos-release/rework-ae895d2c-check-20261116",
+  "unitEvidenceDirectory": "/opt/physicsos/.physicsos-release/rework-ae895d2c-unit-first-20261116",
+  "productionSwitched": false,
+  "finalAcceptanceRequired": true
+}

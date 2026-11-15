@@ -93,6 +93,27 @@ class CandidateSafety(unittest.TestCase):
         self.assertEqual(candidate.redirect_pool('http://127.0.0.1:38972/v1', 38972, 13982), 'http://127.0.0.1:13982/v1')
         self.assertEqual(candidate.redirect_pool('https://provider.example/v1', 38972, 13982), 'https://provider.example/v1')
 
+    def test_profile_route_is_rewritten_only_for_a_new_seed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / 'cordis.patch.yml'
+            target.write_text('provider: http://127.0.0.1:38972/v1\n')
+            candidate.prepare_profile_pool(target, 38972, 13982, True)
+            self.assertEqual(target.read_text(), 'provider: http://127.0.0.1:13982/v1\n')
+            original = target.stat()
+            candidate.prepare_profile_pool(target, 38972, 13982, False)
+            self.assertEqual(target.stat().st_ino, original.st_ino)
+            self.assertEqual(target.stat().st_mtime_ns, original.st_mtime_ns)
+            self.assertEqual(target.read_text(), 'provider: http://127.0.0.1:13982/v1\n')
+
+    def test_existing_production_route_is_rejected_without_rewriting_profile(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / 'cordis.patch.yml'
+            original = 'provider: http://localhost:38972/v1\n'
+            target.write_text(original)
+            with self.assertRaisesRegex(RuntimeError, 'production model route'):
+                candidate.prepare_profile_pool(target, 38972, 13982, False)
+            self.assertEqual(target.read_text(), original)
+
     def test_start_healthcheck_uses_private_candidate_port(self):
         for port, url in [(13188, 'http://127.0.0.1:13188/readyz'), (14188, 'http://127.0.0.1:14188/readyz')]:
             with self.subTest(port=port), tempfile.TemporaryDirectory() as tmp:

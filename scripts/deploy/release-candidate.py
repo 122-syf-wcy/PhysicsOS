@@ -112,6 +112,18 @@ def redirect_pool(value, old_port, new_port):
     return re.sub(r'(https?://)(127\.0\.0\.1|localhost|\[::1\]):' + str(old_port) + r'\b', lambda match: match.group(1) + match.group(2) + ':' + str(new_port), value)
 
 
+def prepare_profile_pool(path, old_port, new_port, seeded):
+    if not path.exists():
+        return
+    original = path.read_text()
+    redirected = redirect_pool(original, old_port, new_port)
+    if redirected == original:
+        return
+    if not seeded:
+        raise RuntimeError('Existing candidate profile still references the production model route')
+    path.write_text(redirected)
+
+
 @contextlib.contextmanager
 def settle_mutations():
     cancelled = [False]
@@ -297,8 +309,10 @@ def prepare(config, image_name):
     profile = paths['home'] / 'profiles/web'
     profile.mkdir(parents=True, exist_ok=True, mode=0o700)
     for directory in [profile.parent, profile]: os.chown(directory, 999, 999)
+    seeded_profiles = set()
     for name in ['cordis.yml', 'cordis.patch.yml', 'package.json', 'pnpm-workspace.yaml']:
         if seed_profile_file(profile_source / name, profile / name):
+            seeded_profiles.add(name)
             os.chown(profile / name, 999, 999); (profile / name).chmod(0o600)
     port = config['httpPort']
     health = subprocess.check_output(['docker', 'run', '--rm', '--network', 'none', '--entrypoint', 'cat', image['Id'], '/app/overlays/harness/files/packages/physicsos/health-host/deployment.patch.yml'], text=True)
@@ -356,7 +370,7 @@ def prepare(config, image_name):
     base_url = urllib.parse.urlsplit(environment.get('DEEPSEEK_BASE_URL', ''))
     old_pool_port = base_url.port if base_url.hostname in ['127.0.0.1', 'localhost', '::1'] and base_url.port else int(environment.get('PHYSICSOS_MODEL_POOL_PORT', '3972'))
     profile_patch = profile / 'cordis.patch.yml'
-    if profile_patch.exists(): profile_patch.write_text(redirect_pool(profile_patch.read_text(), old_pool_port, config['modelPoolPort']))
+    prepare_profile_pool(profile_patch, old_pool_port, config['modelPoolPort'], 'cordis.patch.yml' in seeded_profiles)
     environment = {name: value for name, value in environment.items() if name.endswith('_FILE') or (not re.search(r'KEY|PASSWORD|SECRET|TOKEN|CREDENTIAL|COOKIE|DATABASE_URL|REDIS_URL|SMTP|AUTHORIZATION', name) and not re.search(r'(?i)Bearer\s|[?&](?:token|api_key)=|://[^/\s]+:[^/\s]+@', value))}
     environment = {name: redirect_pool(value, old_pool_port, config['modelPoolPort']) for name, value in environment.items()}
     environment['REDIS_URL_FILE'] = ''
