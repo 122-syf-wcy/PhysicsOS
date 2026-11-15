@@ -51,6 +51,10 @@ import { createPhysicsProfileController } from './profile-store.ts'
 import { RecentSpaces } from './RecentSpaces.tsx'
 import { OptionalSceneChatCard as SceneChatCard } from './optional-surfaces.tsx'
 import { SceneTurnCard, type SceneTurnInjected } from './SceneTurnCard.tsx'
+import { ChatPreview, ChatPreviewEntry, ChatPreviewTitle, CHAT_PREVIEW_ID, CHAT_PREVIEW_KIND, type ChatPreviewInjected } from './ChatPreview.tsx'
+import { createChatPreviewStore, chatPreviewOwner } from './chat-preview-store.ts'
+import type { BoundActions } from '@deepseek-ai/dsh-client-ui-slots'
+import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { CanvasObservable } from './canvas/types.ts'
 import { PHYSICS_SCENE_TURN_KEY, physicsSceneCardDefinition, physicsSceneTurnDefinition, type PhysicsSceneCardData } from './scene-chat-node.ts'
@@ -377,12 +381,94 @@ export function apply(ctx: ClientContext): void {
       reportLearning(attempt)
     },
   })
+  const chatPreviewStore = createChatPreviewStore()
+  let revealChatPreview: (sessionId: SessionId, automatic?: boolean) => boolean = () => false
+  const attachmentFace = (sessionId: SessionId, actions: BoundActions<typeof chatPreviewStore>) => ({
+    ...sceneCardFace(),
+    openScenePreview: (sceneId: string): void => {
+      if (!revealChatPreview(sessionId)) return
+      actions.select(sceneId)
+    },
+  })
   ctx.slots.inject('conversation.chat.node', () => ctx.slots.register({
     name: 'conversation.chat.node',
     key: 'physics-scene-card',
     locale: NS,
-    inject: sceneCardFace,
+    store: chatPreviewStore,
+    inject: attachmentFace,
   }, SceneChatCard))
+
+  ctx.inject(['sidebarRight', 'sidebarRightTabs'], (scope) => {
+    const sidebar = scope.sidebarRight
+    let owner = chatPreviewOwner(auth.store.getSnapshot())
+    scope.effect(() => {
+      const syncOwner = (): void => {
+        const next = chatPreviewOwner(auth.store.getSnapshot())
+        if (next === owner) return
+        const previous = owner
+        owner = next
+        if (previous === undefined) return
+        questionCodeOwner.set(undefined)
+        for (const row of sidebar.openTabs.getSnapshot()) {
+          if (row.kind === CHAT_PREVIEW_KIND) sidebar.closeIn(row.sessionId, row.tabId)
+        }
+      }
+      const stop = auth.store.subscribe(syncOwner)
+      syncOwner()
+      return stop
+    }, 'ui-physicsos: preview account boundary')
+    revealChatPreview = (sessionId, automatic = false) => {
+      if (owner === undefined || owner !== chatPreviewOwner(auth.store.getSnapshot())
+        || sidebar.mounted.getSnapshot() !== sessionId) return false
+      const active = sidebar.active()
+      // New scenes update the selection without replacing another open page.
+      if (automatic && sidebar.isExpanded() && active !== undefined
+        && active.kind !== CHAT_PREVIEW_KIND && active.kind !== 'guide') return true
+      sidebar.openTab(CHAT_PREVIEW_KIND)
+      return true
+    }
+    scope.effect(() => () => { revealChatPreview = () => false }, 'ui-physicsos: preview navigation')
+    scope.effect(() => {
+      const deduplicate = (): void => {
+        const sessions = new Set<SessionId>()
+        for (const row of sidebar.openTabs.getSnapshot()) {
+          if (row.kind !== CHAT_PREVIEW_KIND) continue
+          if (sessions.has(row.sessionId)) sidebar.closeIn(row.sessionId, row.tabId)
+          else sessions.add(row.sessionId)
+        }
+      }
+      let queued = false
+      let disposed = false
+      const schedule = (): void => {
+        if (queued) return
+        queued = true
+        queueMicrotask(() => { queued = false; if (!disposed) deduplicate() })
+      }
+      const stop = sidebar.openTabs.subscribe(schedule)
+      schedule()
+      return () => { disposed = true; stop() }
+    }, 'ui-physicsos: one preview tab per Session')
+    scope.effect(() => scope.sidebarRightTabs.register({
+      id: CHAT_PREVIEW_ID, kind: CHAT_PREVIEW_KIND, keepMounted: true,
+      title: () => scope.locale.bind(NS)('chatPreview.title'),
+    }), 'ui-physicsos: experiment preview tab')
+    const previewFace = (sessionId: SessionId): ChatPreviewInjected => ({
+      ...sceneCardFace(),
+      hooks: { auth: auth.store, previewSession: sidebar.mounted },
+      revealPreview: automatic => revealChatPreview(sessionId, automatic),
+    })
+    scope.slots.inject('sidebar.right.pane.tab', () => scope.slots.register({
+      name: 'sidebar.right.pane.tab', key: CHAT_PREVIEW_ID, locale: NS, store: chatPreviewStore,
+      inject: previewFace,
+    }, ChatPreview))
+    scope.slots.inject('sidebar.right.pane.tab.title', () => scope.slots.register({
+      name: 'sidebar.right.pane.tab.title', key: CHAT_PREVIEW_ID, locale: NS,
+    }, ChatPreviewTitle))
+    scope.slots.inject('conversation.session.header.utilities', () => scope.slots.register({
+      name: 'conversation.session.header.utilities', id: 'physicsos-experiment-preview', locale: NS,
+      store: chatPreviewStore, inject: previewFace,
+    }, ChatPreviewEntry))
+  })
 
   /* The same card at the closing end of each Turn. A `physics/scene` event is
      not a message, so its node has no place in the conversation surface and
@@ -439,9 +525,9 @@ export function apply(ctx: ClientContext): void {
     turnSources.clear()
   }, 'ui-physicsos: turn scene sources')
   ctx.slots.inject('conversation.chat.turnTail', () => ctx.slots.register({
-    name: 'conversation.chat.turnTail', id: 'physicsos-scene-turn', locale: NS,
-    inject: (sessionId): ReturnType<typeof sceneCardFace> & SceneTurnInjected => ({
-      ...sceneCardFace(), keyedHooks: { physicsSceneTurn: key => physicsSceneTurnSource(sessionId, key) },
+    name: 'conversation.chat.turnTail', id: 'physicsos-scene-turn', locale: NS, store: chatPreviewStore,
+    inject: (sessionId, actions): ReturnType<typeof attachmentFace> & SceneTurnInjected => ({
+      ...attachmentFace(sessionId, actions), keyedHooks: { physicsSceneTurn: key => physicsSceneTurnSource(sessionId, key) },
     }),
   }, SceneTurnCard))
 

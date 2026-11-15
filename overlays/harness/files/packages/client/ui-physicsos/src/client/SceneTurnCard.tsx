@@ -1,13 +1,4 @@
-/**
- * The scene card at the closing end of a Turn.
- *
- * The conversation-flow card ({@link SceneChatCard}) renders from a
- * `physics/scene` *event*, and a scene event is not a message: it has no place
- * in the conversation surface, so that node never draws. This seat renders the
- * same card from the Turn's own published data instead — docked with the answer
- * it explains, which is where a reader looks for the physical world a question
- * was solved in.
- */
+/** A completed Turn's compact experiment attachment and durable solution. */
 
 import { useEffect } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -33,7 +24,7 @@ export type SceneTurnCardProps =
 
 /** Render this Turn's newest scene beside its answer, or nothing when it had none. */
 export function SceneTurnCard({
-  turn, t, openSceneInLab, requestSceneInCanvas, recordAttempt, regenerateQuestionCode, questionCodeOwner, endTurnHygiene, usePhysicsSceneTurn,
+  turn, t, openSceneInLab, openScenePreview, recordAttempt, endTurnHygiene, usePhysicsSceneTurn,
 }: SceneTurnCardProps) {
   const data = usePhysicsSceneTurn(String(turn.turn))
   /* The turn closed — this seat only exists once `turn/end` is in the log. That
@@ -45,11 +36,10 @@ export function SceneTurnCard({
   return (
     <SceneCardBody
       data={data}
+      presentation="attachment"
       t={t}
       openSceneInLab={openSceneInLab}
-      {...requestSceneInCanvas === undefined ? {} : { requestSceneInCanvas }}
-      {...questionCodeOwner === undefined ? {} : { questionCodeOwner }}
-      {...regenerateQuestionCode === undefined ? {} : { regenerateQuestionCode }}
+      {...openScenePreview === undefined ? {} : { openScenePreview }}
       {...recordAttempt === undefined ? {} : { recordAttempt }}
     />
   )

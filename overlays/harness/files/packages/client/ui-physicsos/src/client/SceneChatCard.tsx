@@ -1,12 +1,4 @@
-/**
- * Inline physics-scene card in the conversation flow.
- *
- * Rendered for every durable `physics/scene` snapshot (see scene-chat-node.ts),
- * so the physical world the agent built is visible where the tool call left it
- * instead of only behind 最近空间. The card owns a LOCAL playback runtime built
- * from the snapshot — it replays the published scene, it never mutates it; the
- * authoritative scene still lives in the host's EventStore.
- */
+/** Conversation attachments retain published solutions; the selected preview owns local playback. */
 
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import clsx from 'clsx'
@@ -58,6 +50,8 @@ export interface SceneChatCardInjected {
   /** Hand the card's scene to the Lab — the same verb 最近空间 rows use. */
   openSceneInLab: (ref: PhysicsSceneRef) => void
   requestSceneInCanvas?: (ref: PhysicsSceneRef) => void
+  /** Select an attachment in the owning Session's single preview. */
+  openScenePreview?: (sceneId: string) => void
   questionCodeOwner?: QuestionCodeOwnerStore
   /** Explicit user action queues generation in the selected owning chat. */
   regenerateQuestionCode?: QuestionCodeRegenerate
@@ -81,7 +75,7 @@ export type SceneChatCardProps =
 
 /** Props of the card body, shared by both entry points. */
 export type SceneCardBodyProps =
-  & { readonly data: PhysicsSceneCardData }
+  & { readonly data: PhysicsSceneCardData; readonly presentation?: 'preview' | 'attachment' }
   & InjectFace<SceneChatCardInjected>
   & PropsLocale<'physicsos'>
 
@@ -91,8 +85,35 @@ export type SceneCardBodyProps =
    lands in the same answer block (before the next user message). */
 const ANSWER_BOUNDARY = new Set(['user', 'steering'])
 
-export const SceneCardBody = memo(function SceneCardBody({
-  data, t, openSceneInLab, requestSceneInCanvas, recordAttempt, regenerateQuestionCode, questionCodeOwner,
+/** Attachments never allocate a runtime; only the selected sidebar body does. */
+export const SceneCardBody = memo(function SceneCardBody(props: SceneCardBodyProps) {
+  return props.presentation === 'attachment' ? <SceneAttachment {...props} /> : <SceneRuntimeBody {...props} />
+})
+
+function SceneAttachment({ data, t, openScenePreview, recordAttempt }: SceneCardBodyProps) {
+  const title = data.visualization?.status === 'ready' && data.visualization.rendererKind === 'independent'
+    ? data.visualization.title : data.title
+  const status = data.visualization?.status === 'ready' ? 'published' : data.visualization?.status ?? 'historical'
+  const verification: WorkspaceSnapshot['verification'] = (data.solve?.verification?.checks ?? []).map(check => ({
+    id: check.id, label: check.id, status: check.passed ? 'passed' : 'failed',
+    ...(check.message === undefined ? {} : { detail: check.message }),
+  }))
+  return <div className={css.attachment} data-scene-attachment={data.sceneId}>
+    <button className={css.attachmentButton} type="button" disabled={openScenePreview === undefined}
+      aria-label={t('chatPreview.openScene', { title })} onClick={() => { openScenePreview?.(data.sceneId) }}>
+      <IconPhysicsLab size={18} /><span className={css.attachmentTitle}>{title}</span>
+      <span className={css.attachmentStatus} data-preview-status={status}>{t(`chatPreview.status.${status}`)}</span>
+      <IconChevronRightOutlineMedium size={15} />
+    </button>
+    {data.visualization?.status === 'failed' ? <p className={css.attachmentFailure} role="status">{data.visualization.message}</p> : null}
+    {data.solve === undefined ? null : <SolveSection solve={data.solve} verification={verification} domain={data.domain}
+      bodyId={undefined} drawn={EMPTY_DRAWN} activeToken={null} onToggle={() => {}}
+      sceneTitle={data.title} revision={data.revision} recordAttempt={recordAttempt} t={t} />}
+  </div>
+}
+
+const SceneRuntimeBody = memo(function SceneRuntimeBody({
+  data, presentation, t, openSceneInLab, requestSceneInCanvas, recordAttempt, regenerateQuestionCode, questionCodeOwner,
 }: SceneCardBodyProps) {
   /* The snapshot invariant guarantees `scene` is the whole PhysicsScene at
      this revision (`scene.id === sceneId`, `scene.revision === revision`). */
@@ -122,12 +143,12 @@ export const SceneCardBody = memo(function SceneCardBody({
     hasVerifiedSolution: data.solve?.verification?.status === 'passed',
     ...(data.visualization === undefined ? {} : { originScene: scene }) })
   return (
-    <div className={css.card} data-scene-card={data.sceneId} data-code-experiment-shell>
+    <div className={clsx(css.card, presentation === 'preview' && css.previewCard)} data-scene-card={data.sceneId} data-code-experiment-shell>
       <header className={css.head}>
-        <div className={css.heading}>
-          <span className={css.badge}><IconPhysicsLab size={14} />本题代码实验</span>
+        {presentation === 'preview' ? null : <div className={css.heading}>
+          <span className={css.badge}><IconPhysicsLab size={14} />{t('chatPreview.codeExperiment')}</span>
           <h3 className={css.title} title={experimentTitle}>{experimentTitle}</h3>
-        </div>
+        </div>}
         <button
           type="button"
           className={css.open}
@@ -136,7 +157,7 @@ export const SceneCardBody = memo(function SceneCardBody({
             openSceneInLab(handover())
           }}
         >
-          在实验室中探索
+          {t('chatPreview.openInLab')}
         </button>
         {requestSceneInCanvas === undefined ? null : <button type="button" className={css.open}
           onClick={() => { requestSceneInCanvas(handover()) }}>{t('canvas.addToCanvas')}</button>}
@@ -146,7 +167,7 @@ export const SceneCardBody = memo(function SceneCardBody({
           {...(questionCodeOwner === undefined ? {} : { questionCodeOwner })}
           {...(data.visualization === undefined ? {} : { visualization: data.visualization })}
           {...(regenerateQuestionCode === undefined ? {} : { regenerateQuestionCode })} />
-        {data.solve === undefined ? null : <SolveSection solve={data.solve} verification={[]} domain={domain}
+        {data.solve === undefined || presentation === 'preview' ? null : <SolveSection solve={data.solve} verification={[]} domain={domain}
           bodyId={scene.bodies[0]?.id} drawn={EMPTY_DRAWN} activeToken={null} onToggle={() => {}}
           sceneTitle={data.title} revision={data.revision} recordAttempt={recordAttempt} t={t} />}</>
       ) : (
@@ -154,6 +175,7 @@ export const SceneCardBody = memo(function SceneCardBody({
           key={runtimeKey}
           runtime={runtime}
           scene={scene}
+          compact={presentation === 'preview'}
           {...(questionCodeOwner === undefined ? {} : { questionCodeOwner })}
           {...(data.visualization === undefined ? {} : { visualization: data.visualization })}
           {...(regenerateQuestionCode === undefined ? {} : { regenerateQuestionCode })}
@@ -184,6 +206,7 @@ function CardStage({
   visualization,
   questionCodeOwner,
   regenerateQuestionCode,
+  compact = false,
   t,
   solve,
   domain,
@@ -197,6 +220,7 @@ function CardStage({
   visualization?: CodeVisualizationState
   questionCodeOwner?: QuestionCodeOwnerStore
   regenerateQuestionCode?: QuestionCodeRegenerate
+  compact?: boolean
   t: Translate
   solve?: PhysicsSceneSolveSummary | undefined
   domain?: string | undefined
@@ -233,6 +257,14 @@ function CardStage({
     },
     [runtime, commit, highlightToken],
   )
+  const stepControls = <>
+    <button type="button" className={css.control} disabled={failed} aria-label={t('lab.stepBack')}
+      onClick={() => { commit(runtime.step(-clock.total * STEP_FRACTION)) }}><IconChevronLeftOutlineMedium size={13} /></button>
+    <button type="button" className={css.control} disabled={failed} aria-label={t('lab.step')}
+      onClick={() => { commit(runtime.step(clock.total * STEP_FRACTION)) }}><IconChevronRightOutlineMedium size={13} /></button>
+    <button type="button" className={css.control} disabled={failed} aria-label={t('lab.reset')}
+      onClick={() => { commit(runtime.seek(0)) }}><IconRefreshOutlineMedium size={13} /></button>
+  </>
 
   return (
     <>
@@ -254,39 +286,7 @@ function CardStage({
         >
           {running ? <IconPauseOutlineMedium size={14} /> : <IconPlayOutlineMedium size={14} />}
         </button>
-        <button
-          type="button"
-          className={css.control}
-          disabled={failed}
-          aria-label={t('lab.stepBack')}
-          onClick={() => {
-            commit(runtime.step(-clock.total * STEP_FRACTION))
-          }}
-        >
-          <IconChevronLeftOutlineMedium size={13} />
-        </button>
-        <button
-          type="button"
-          className={css.control}
-          disabled={failed}
-          aria-label={t('lab.step')}
-          onClick={() => {
-            commit(runtime.step(clock.total * STEP_FRACTION))
-          }}
-        >
-          <IconChevronRightOutlineMedium size={13} />
-        </button>
-        <button
-          type="button"
-          className={css.control}
-          disabled={failed}
-          aria-label={t('lab.reset')}
-          onClick={() => {
-            commit(runtime.seek(0))
-          }}
-        >
-          <IconRefreshOutlineMedium size={13} />
-        </button>
+        {compact ? null : stepControls}
         <CardClock source={frameSource} scale={clockScale} />
         <div className={css.trackWrap}>
           <TimelineScrubber
@@ -303,8 +303,10 @@ function CardStage({
           options={PLAYBACK_RATES.map(rate => ({ value: String(rate), label: `${rate}×` }))}
           onChange={(value) => { commit(runtime.setRate(Number(value))) }} />
       </div>
-      <QuestionCodeControls session={session} snapshot={snapshot} />
-      {solve === undefined ? null : (
+      {compact ? <details className={css.moreTransport}><summary>{t('chatPreview.playbackControls')}</summary>
+        <div>{stepControls}</div></details> : null}
+      <QuestionCodeControls session={session} snapshot={snapshot} compact={compact} t={t} />
+      {solve === undefined || compact ? null : (
         <SolveSection
           solve={solve}
           verification={snapshot.verification}
@@ -451,7 +453,7 @@ function SolveSection({
               )
             })}
           </ul>
-          <p className={css.solveHint}>{t('sceneCard.knownsHint')}</p>
+          {drawn.size === 0 ? null : <p className={css.solveHint}>{t('sceneCard.knownsHint')}</p>}
         </section>
       )}
       {solve.targets.length === 0 ? null : (
@@ -546,7 +548,7 @@ function SolveSection({
  * same answer block while it is still running.
  */
 export const SceneChatCard = memo(function SceneChatCard({
-  node, t, openSceneInLab, requestSceneInCanvas, recordAttempt, regenerateQuestionCode, questionCodeOwner, useChat,
+  node, t, openSceneInLab, openScenePreview, recordAttempt, useChat,
 }: SceneChatCardProps) {
   const superseded = useChat((snapshot) => {
     /* The Turn card covers this answer once the Turn closes. This card is what
@@ -583,9 +585,7 @@ export const SceneChatCard = memo(function SceneChatCard({
     return false
   })
   if (superseded) return null
-  return <SceneCardBody data={node.data} t={t} openSceneInLab={openSceneInLab}
-    {...(requestSceneInCanvas === undefined ? {} : { requestSceneInCanvas })}
-    {...(questionCodeOwner === undefined ? {} : { questionCodeOwner })}
-    {...(regenerateQuestionCode === undefined ? {} : { regenerateQuestionCode })}
+  return <SceneCardBody data={node.data} presentation="attachment" t={t} openSceneInLab={openSceneInLab}
+    {...(openScenePreview === undefined ? {} : { openScenePreview })}
     {...(recordAttempt === undefined ? {} : { recordAttempt })} />
 })

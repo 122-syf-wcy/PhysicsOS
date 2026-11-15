@@ -1,8 +1,11 @@
 /** Product panels reuse Dockkit's pointer capture, dragging and resize gestures. */
-import { useCallback, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useId, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { createIdMinter, FloatLayer, type DockIntents, type DockLabels, type FloatRect, type LayoutState } from '@deepseek-ai/dsh-client-ui-dockkit'
+import { fitWorkbenchFloat, readWorkbenchRect, workbenchSafeRect, type WorkbenchPanelLayout } from './workbench-geometry.ts'
 import css from './WorkbenchFloatPanel.module.css'
+
+export { fitWorkbenchFloat } from './workbench-geometry.ts'
 
 export interface WorkbenchFloatPanelProps {
   readonly id?: string
@@ -15,34 +18,92 @@ export interface WorkbenchFloatPanelProps {
   readonly placement?: 'top-left' | 'top-right' | 'bottom-right'
   readonly width?: number
   readonly height?: number
-  /** A deliberate reveal also opens the panel on narrow viewports. */
   readonly expanded?: boolean
   readonly desktopDefault?: boolean
   readonly className?: string | undefined
   readonly role?: 'region' | 'complementary'
+  /** Parent-coordinated placement and visibility for panels sharing the scene. */
+  readonly layout?: WorkbenchPanelLayout | undefined
+  /** Store only deliberate user geometry, never automatic placement. */
+  readonly storageKey?: string | undefined
+  readonly onActivate?: (() => void) | undefined
 }
 
-/** Keep the entire panel inside its owning workbench, including after resize. */
-export function fitWorkbenchFloat(rect: FloatRect, bounds: FloatRect): FloatRect {
-  const width = Math.min(Math.max(200, rect.width), Math.max(0, bounds.width))
-  const height = Math.min(Math.max(120, rect.height), Math.max(0, bounds.height))
-  return {
-    x: Math.min(Math.max(bounds.x, rect.x), bounds.x + bounds.width - width),
-    y: Math.min(Math.max(bounds.y, rect.y), bounds.y + bounds.height - height),
-    width,
-    height,
+const viewportRect = (): FloatRect => ({
+  x: window.visualViewport?.offsetLeft ?? 0, y: window.visualViewport?.offsetTop ?? 0,
+  width: window.visualViewport?.width ?? window.innerWidth,
+  height: window.visualViewport?.height ?? window.innerHeight,
+})
+
+function measureWorkbench(owner: HTMLElement): FloatRect {
+  const viewport = viewportRect()
+  const sceneElement = owner.querySelector<HTMLElement>('[data-workbench-viewport]')
+  const scene = sceneElement?.getBoundingClientRect()
+  const measured = owner.getBoundingClientRect()
+  const box = measured.width > 0 ? measured : viewport
+  const area = scene !== undefined && scene.width > 0 ? scene : box
+  const areaTop = area.y
+  const areaBottom = area.y + area.height
+  const topChrome = [...owner.querySelectorAll<HTMLElement>('[data-workbench-chrome="top"], :scope > header')]
+    .map(element => element.getBoundingClientRect())
+    .filter(rect => rect.width > 0 && rect.bottom > areaTop && rect.top < areaBottom)
+    .reduce((bottom, rect) => Math.max(bottom, rect.bottom), areaTop)
+  const bottomChrome = [...owner.querySelectorAll<HTMLElement>('[data-workbench-chrome="bottom"]')]
+    .map(element => element.getBoundingClientRect())
+    .filter(rect => rect.width > 0 && rect.bottom > areaTop && rect.top < areaBottom)
+    .reduce((top, rect) => Math.min(top, rect.top), areaBottom)
+  return workbenchSafeRect({
+    x: area.x, y: Math.min(areaBottom, topChrome), width: area.width,
+    height: Math.max(0, bottomChrome - Math.min(areaBottom, topChrome)),
+  }, viewport)
+}
+
+function observeWorkbench(owner: HTMLElement, measure: () => void): () => void {
+  const observer = new ResizeObserver(measure)
+  observer.observe(owner)
+  for (const element of owner.querySelectorAll('[data-workbench-viewport], [data-workbench-chrome], :scope > header')) observer.observe(element)
+  window.addEventListener('resize', measure)
+  window.addEventListener('scroll', measure, true)
+  window.visualViewport?.addEventListener('resize', measure)
+  window.visualViewport?.addEventListener('scroll', measure)
+  document.addEventListener('fullscreenchange', measure)
+  return () => {
+    observer.disconnect()
+    window.removeEventListener('resize', measure)
+    window.removeEventListener('scroll', measure, true)
+    window.visualViewport?.removeEventListener('resize', measure)
+    window.visualViewport?.removeEventListener('scroll', measure)
+    document.removeEventListener('fullscreenchange', measure)
   }
+}
+
+/** Measure the remaining scene track after real, wrapping host chrome has laid out. */
+export function useWorkbenchSafeRect(ownerRef: RefObject<HTMLElement>, layoutKey: string): FloatRect {
+  const [bounds, setBounds] = useState(() => workbenchSafeRect(viewportRect(), viewportRect()))
+  useLayoutEffect(() => {
+    const owner = ownerRef.current
+    if (owner === null) return
+    const measure = () => {
+      const next = measureWorkbench(owner)
+      setBounds(previous => previous.x === next.x && previous.y === next.y && previous.width === next.width && previous.height === next.height ? previous : next)
+    }
+    measure()
+    return observeWorkbench(owner, measure)
+  }, [ownerRef, layoutKey])
+  return bounds
 }
 
 /** UI-only geometry: business state remains in the existing runtime and controllers. */
 export function WorkbenchFloatPanel({ id, title, closeLabel, collapseLabel, onClose, onCollapse, children,
-  placement = 'top-right', width = 330, height = 300, expanded = false, desktopDefault = true, className, role = 'region',
+  placement = 'top-right', width = 330, height = 300, expanded = false, desktopDefault = true, className, role = 'region', layout, storageKey, onActivate,
 }: WorkbenchFloatPanelProps) {
   const anchor = useRef<HTMLSpanElement>(null)
   const layer = useRef<HTMLDivElement>(null)
   const ownerGroup = useRef('')
   const bounds = useRef<FloatRect>({ x: 0, y: 0, width: 0, height: 0 })
   const requestedSize = useRef({ width, height })
+  const manual = useRef<FloatRect>()
+  const restoredKey = useRef<string>()
   const [rect, setRect] = useState<FloatRect>()
   const [wide, setWide] = useState(false)
   const [portal, setPortal] = useState<Element | null>(null)
@@ -51,60 +112,43 @@ export function WorkbenchFloatPanel({ id, title, closeLabel, collapseLabel, onCl
     const mint = createIdMinter()
     return { root: mint.next('pane'), pane: mint.next('float'), tab: mint.next('tab') }
   })
-
+  const bx = layout?.bounds.x, by = layout?.bounds.y, bw = layout?.bounds.width, bh = layout?.bounds.height
+  const ax = layout?.rect.x, ay = layout?.rect.y, aw = layout?.rect.width, ah = layout?.rect.height
   useLayoutEffect(() => {
     const owner = anchor.current?.closest<HTMLElement>('[data-physicsos-surface], [data-physicsos-canvas-workspace], [data-physicsos-whiteboard-workspace]') ?? document.documentElement
-    const header = owner === document.documentElement ? null
-      : owner.querySelector<HTMLElement>(':scope > header') ?? owner.querySelector<HTMLElement>('header')
     ownerGroup.current = owner.dataset.workbenchFloatScope ?? identity
     owner.dataset.workbenchFloatScope = ownerGroup.current
-    let sizeChanged = requestedSize.current.width !== width || requestedSize.current.height !== height
-    requestedSize.current = { width, height }
+    if (restoredKey.current !== storageKey) {
+      restoredKey.current = storageKey
+      manual.current = undefined
+      if (storageKey !== undefined) {
+        let saved: string | null = null
+        try { saved = sessionStorage.getItem(`physicsos:float:${storageKey}`) }
+        catch { /* Storage may be disabled in embedded browsers. */ }
+        manual.current = readWorkbenchRect(saved)
+      }
+    }
+    if (requestedSize.current.width !== width || requestedSize.current.height !== height) {
+      if (manual.current !== undefined) manual.current = { ...manual.current, width, height }
+      requestedSize.current = { width, height }
+    }
     const measure = () => {
-      const measured = owner.getBoundingClientRect()
-      const box = measured.width > 0 && measured.height > 0 ? measured : {
-        left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight, width: window.innerWidth,
-      }
-      const headerBox = header?.getBoundingClientRect()
-      const headerBottom = headerBox !== undefined && headerBox.width > 0 && headerBox.height > 0
-        && headerBox.bottom > box.top && headerBox.top < box.bottom ? headerBox.bottom : undefined
-      const top = Math.max(66, box.top + 12, headerBottom === undefined ? 0 : headerBottom + 12)
-      const available = {
-        x: Math.max(8, box.left + 12), y: top,
-        width: Math.max(0, Math.min(window.innerWidth - 8, box.right - 12) - Math.max(8, box.left + 12)),
-        height: Math.max(0, Math.min(window.innerHeight - 16, box.bottom - 86) - top),
-      }
+      const available = bx !== undefined && by !== undefined && bw !== undefined && bh !== undefined
+        ? { x: bx, y: by, width: bw, height: bh } : measureWorkbench(owner)
       bounds.current = available
-      setWide(box.width >= 1080)
+      setWide(available.width >= 1000)
       setPortal(document.fullscreenElement ?? owner.closest('[role="dialog"][aria-modal="true"]') ?? document.body)
-      // Capture the one requested-size update before queuing a React updater;
-      // future observer callbacks only fit the user's settled geometry.
-      const applySize = sizeChanged
-      sizeChanged = false
-      setRect(previous => fitWorkbenchFloat(previous === undefined ? {
-        x: placement === 'top-left' ? available.x : available.x + available.width - width,
-        y: placement === 'bottom-right' ? available.y + available.height - height : available.y + (placement === 'top-left' && headerBottom === undefined ? 72 : 0),
-        width, height,
-      } : applySize ? { ...previous, width, height } : previous, available))
+      const automatic = ax !== undefined && ay !== undefined && aw !== undefined && ah !== undefined
+        ? { x: ax, y: ay, width: aw, height: ah }
+        : { x: placement === 'top-left' ? available.x : available.x + available.width - width,
+          y: placement === 'bottom-right' ? available.y + available.height - height : available.y, width, height }
+      setRect(fitWorkbenchFloat(manual.current ?? automatic, available))
     }
     measure()
-    const observer = new ResizeObserver(measure)
-    observer.observe(owner)
-    // Toolbar wrapping can change the protected band without changing the
-    // workbench's own box. Observe that band as well as the full workspace.
-    if (header !== null) observer.observe(header)
-    window.addEventListener('resize', measure)
-    document.addEventListener('fullscreenchange', measure)
-    return () => {
-      observer.disconnect()
-      window.removeEventListener('resize', measure)
-      document.removeEventListener('fullscreenchange', measure)
-    }
-  }, [width, height, placement, identity])
+    return observeWorkbench(owner, measure)
+  }, [width, height, placement, identity, storageKey, bx, by, bw, bh, ax, ay, aw, ah])
 
-  // This is presentation-only state on the owning workbench's DOM layers.
-  // Dockkit still owns the panel gestures and geometry. No module singleton,
-  // application store or business subscription is introduced for stacking.
+  const visible = layout?.visible ?? (expanded || (desktopDefault && wide))
   const raisePanel = useCallback(() => {
     const active = layer.current
     if (active === null || ownerGroup.current === '') return
@@ -115,14 +159,24 @@ export function WorkbenchFloatPanel({ id, title, closeLabel, collapseLabel, onCl
   }, [])
 
   useLayoutEffect(() => {
-    if (portal === null) return
+    if (portal === null || !visible) return
     if (expanded) raisePanel()
     if (!expanded || wide) return
     const previous = document.activeElement
     layer.current?.querySelector<HTMLButtonElement>('[data-dockkit-float-close]')?.focus({ preventScroll: true })
     return () => { if (previous instanceof HTMLElement && previous.isConnected) previous.focus({ preventScroll: true }) }
-  }, [expanded, portal, wide, raisePanel])
+  }, [expanded, portal, wide, visible, raisePanel])
 
+  const settle = (next: FloatRect) => {
+    raisePanel()
+    const fitted = fitWorkbenchFloat(next, bounds.current)
+    manual.current = fitted
+    setRect(fitted)
+    if (storageKey !== undefined) {
+      try { sessionStorage.setItem(`physicsos:float:${storageKey}`, JSON.stringify(fitted)) }
+      catch { /* Geometry remains usable for this mount when storage is unavailable. */ }
+    }
+  }
   const close = () => { onClose() }
   const collapse = () => { (onCollapse ?? onClose)() }
   const state: LayoutState | undefined = rect === undefined ? undefined : {
@@ -138,11 +192,8 @@ export function WorkbenchFloatPanel({ id, title, closeLabel, collapseLabel, onCl
     focusTab: raisePanel, focusPane: raisePanel, splitPane: noChange, addTab: noChange,
     closeTab: close, duplicateTab: noChange, floatTab: noChange, unfloatPane: collapse,
     placeTab: noChange, dropTab: noChange, resizeSplit: noChange,
-    moveFloat: (_id, x, y) => {
-      raisePanel()
-      setRect(previous => previous === undefined ? previous : fitWorkbenchFloat({ ...previous, x, y }, bounds.current))
-    },
-    resizeFloat: (_id, next) => { raisePanel(); setRect(fitWorkbenchFloat(next, bounds.current)) },
+    moveFloat: (_id, x, y) => { if (rect !== undefined) settle({ ...rect, x, y }) },
+    resizeFloat: (_id, next) => { settle(next) },
   }
   const labels: DockLabels = {
     emptyPane: title, splitPane: title, splitPaneDisabled: title, splitPaneNarrow: title,
@@ -151,10 +202,10 @@ export function WorkbenchFloatPanel({ id, title, closeLabel, collapseLabel, onCl
   }
   return <>
     <span ref={anchor} className={css.anchor} aria-hidden="true" />
-    {portal !== null && state !== undefined && (expanded || (desktopDefault && wide)) ? createPortal(
-      <div ref={layer} id={id} role={role} aria-label={title} className={`${css.layer} ${className ?? ''}`} data-workbench-float={placement} data-workbench-float-owner={ownerGroup.current}
-        onPointerDownCapture={(event) => { if (event.target instanceof Node && layer.current?.contains(event.target)) raisePanel() }}
-        onFocusCapture={(event) => { if (event.target instanceof Node && layer.current?.contains(event.target)) raisePanel() }}
+    {portal !== null && state !== undefined ? createPortal(
+      <div ref={layer} id={id} role={role} aria-label={title} hidden={!visible} className={`${css.layer} ${className ?? ''}`} data-workbench-float={placement} data-workbench-float-owner={ownerGroup.current}
+        onPointerDownCapture={(event) => { if (event.target instanceof Node && layer.current?.contains(event.target)) { raisePanel(); onActivate?.() } }}
+        onFocusCapture={(event) => { if (event.target instanceof Node && layer.current?.contains(event.target)) { raisePanel(); onActivate?.() } }}
         data-can-collapse={onCollapse !== undefined && collapseLabel !== closeLabel} onKeyDown={(event) => {
           // oxlint-disable-next-line typescript/no-deprecated -- Legacy IME 229 remains necessary on engines without isComposing.
           const composing = event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229

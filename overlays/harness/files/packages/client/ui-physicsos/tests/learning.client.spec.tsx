@@ -12,6 +12,7 @@ import {
 import { EXPERIMENT_SELF_CHECKS } from '@physicsos/question-core'
 
 import { AgentDrawer } from '../src/client/AgentDrawer.tsx'
+import { WorkbenchFloatPanel } from '../src/client/WorkbenchFloatPanel.tsx'
 import { ExperimentReportPanel } from '../src/client/ExperimentReportPanel.tsx'
 import { LearningRecordWorkspace } from '../src/client/LearningRecordWorkspace.tsx'
 import { SceneChatCard } from '../src/client/SceneChatCard.tsx'
@@ -145,19 +146,20 @@ describe('tutor scripts', () => {
 })
 
 describe('tutor mode in the drawer', () => {
-  it('walks 观察 → 提示 → 答案 and highlights through the shared tool path', () => {
+  it.each([false, true])('walks 观察 → 提示 → 答案 and highlights through the shared tool path (embedded=%s)', (embedded) => {
     const runtime = createCompositeWorkspaceRuntime(createVelocitySelectorScene())
     let latest = runtime.getSnapshot()
-    render(
-      <AgentDrawer
-        snapshot={latest}
-        runtime={runtime}
-        onSnapshot={(snapshot) => { latest = snapshot }}
-        onClose={vi.fn()}
-        t={t}
-      />,
-    )
+    const drawer = <AgentDrawer
+      snapshot={latest}
+      runtime={runtime}
+      onSnapshot={(snapshot) => { latest = snapshot }}
+      {...(embedded ? { embedded: true as const } : { onClose: vi.fn() })}
+      t={t}
+    />
+    render(embedded ? <WorkbenchFloatPanel title="AI 助教" closeLabel="收起" onClose={vi.fn()} expanded>{drawer}</WorkbenchFloatPanel> : drawer)
     fireEvent.click(screen.getByRole('tab', { name: '引导' }))
+    expect(screen.getByRole('tab', { name: '引导', selected: true })).toBeTruthy()
+    expect(screen.queryByRole('textbox')).toBeNull()
     expect(screen.getByText('速度选择器')).toBeTruthy()
     expect(screen.getByText('为什么这个粒子没有偏转？')).toBeTruthy()
     /* No hints revealed yet. */
@@ -177,26 +179,30 @@ describe('tutor mode in the drawer', () => {
     /* The ladder resets on demand. */
     fireEvent.click(screen.getByRole('button', { name: '重新开始' }))
     expect(screen.queryByText(/合力为零/)).toBeNull()
+    fireEvent.click(screen.getByRole('tab', { name: '问答' }))
+    expect(screen.getByRole('tab', { name: '问答', selected: true })).toBeTruthy()
+    expect(screen.getByRole('textbox', { name: '例如：水平速度在哪里？' })).toBeTruthy()
   })
 })
 
 /* ------------------------------------------------- lab 自测 in the drawer -- */
 
 describe('lab self-checks in the drawer', () => {
-  it('asks the topic probes on a circuit frame and records the re-practice link', () => {
+  it.each([false, true])('asks the topic probes on a circuit frame and records the re-practice link (embedded=%s)', (embedded) => {
     const runtime = createCircuitWorkspaceRuntime(createSeriesCircuitScene())
     const recordAttempt = vi.fn<(attempt: SelfCheckAttemptInput) => void>()
-    render(
-      <AgentDrawer
-        snapshot={runtime.getSnapshot()}
-        runtime={runtime}
-        onSnapshot={vi.fn()}
-        onClose={vi.fn()}
-        t={t}
-        recordAttempt={recordAttempt}
-      />,
-    )
+    const drawer = <AgentDrawer
+      snapshot={runtime.getSnapshot()}
+      runtime={runtime}
+      onSnapshot={vi.fn()}
+      {...(embedded ? { embedded: true as const } : { onClose: vi.fn() })}
+      t={t}
+      recordAttempt={recordAttempt}
+    />
+    render(embedded ? <WorkbenchFloatPanel title="AI 助教" closeLabel="收起" onClose={vi.fn()} expanded>{drawer}</WorkbenchFloatPanel> : drawer)
     fireEvent.click(screen.getByRole('tab', { name: '自测' }))
+    expect(screen.getByRole('tab', { name: '自测', selected: true })).toBeTruthy()
+    expect(screen.queryByRole('textbox')).toBeNull()
     /* Topic heading plus knowledge chips (串联电路 doubles as a node label). */
     expect(screen.getAllByText('串联电路').length).toBeGreaterThan(0)
     expect(screen.getByText('欧姆定律')).toBeTruthy()

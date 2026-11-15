@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { zh } from '../locales.ts'
+import { zh, type PhysicsosKey } from '../locales.ts'
 import { GlassSelect } from '../GlassSelect.tsx'
 import type { QuantityParameter, SceneTreeNode } from '../physics/scene-visual-model.ts'
 import type { WorkspaceSnapshot } from '../physics/workspace-runtime.ts'
@@ -8,7 +8,12 @@ import type { ExperimentSession } from './experiment-session.ts'
 import css from '../SceneChatCard.module.css'
 
 /** Controls read the exact same inspector and frame channel the code renderer receives. */
-export function QuestionCodeControls({ session, snapshot }: { session: ExperimentSession; snapshot: WorkspaceSnapshot }) {
+export function QuestionCodeControls({ session, snapshot, compact = false, t = key => zh[key] }: {
+  session: ExperimentSession; snapshot: WorkspaceSnapshot; compact?: boolean
+  t?: (key: PhysicsosKey, params?: Record<string, unknown>) => string
+}) {
+  const quickParameters = compact ? snapshot.inspector.flatMap(section => section.parameters ?? []).slice(0, 2) : []
+  const quickIds = new Set(quickParameters.map(parameter => parameter.id))
   const labels = new Map<string, string>()
   const visit = (nodes: readonly SceneTreeNode[]): void => {
     for (const node of nodes) {
@@ -19,25 +24,26 @@ export function QuestionCodeControls({ session, snapshot }: { session: Experimen
   visit(snapshot.tree)
   return <section className={css.parameters} aria-label="本题实验参数" data-question-code-controls>
     <div className={css.controlsHead}>
-      <h4>实验条件</h4>
+      <h4>{t('chatPreview.conditions')}</h4>
       <button type="button" className={css.restore} disabled={snapshot.branch?.canRestore !== true || session.runtime.restoreOrigin === undefined}
         onClick={() => {
           const restored = session.runtime.restoreOrigin?.()
           if (restored !== undefined) session.commit(restored)
-        }}>恢复原题</button>
+        }}>{t('chatPreview.restore')}</button>
     </div>
-    <details className={css.conditions} open><summary>调整条件<span>探索变化，保留原题</span></summary>
+    {compact ? <div className={css.quickParameters}>{quickParameters.map(parameter =>
+      <ParameterEditor key={parameter.id} parameter={parameter} session={session} />)}</div> : null}
+    <details className={css.conditions} open={!compact}><summary>{compact ? t('chatPreview.moreControls') : t('chatPreview.adjustConditions')}<span>{t('chatPreview.keepOriginal')}</span></summary>
       <div className={css.conditionGroups}>{snapshot.inspector.map(section =>
-        (section.parameters?.length ?? 0) + (section.choices?.length ?? 0) > 0 ?
+        (section.parameters?.filter(parameter => !quickIds.has(parameter.id)).length ?? 0) + (section.choices?.length ?? 0) > 0 ?
           <fieldset key={section.id}><legend>{section.title}</legend><div className={css.parameterGrid}>
-            {(section.parameters ?? []).map(parameter => <ParameterEditor key={parameter.id} parameter={parameter} session={session} />)}
+            {(section.parameters ?? []).filter(parameter => !quickIds.has(parameter.id)).map(parameter => <ParameterEditor key={parameter.id} parameter={parameter} session={session} />)}
             {(section.choices ?? []).map(choice => <div className={css.choice} key={choice.id}><span>{choice.label}</span>
               <GlassSelect value={choice.value} options={choice.options} ariaLabel={choice.label} onChange={(value) => {
                 applyUniversalContributionIntent(session, { type: 'choice/set', protocolVersion: 3, id: choice.id, value })
               }} />
             </div>)}
           </div></fieldset> : null)}</div>
-    </details>
     {snapshot.inspector.some(section => (section.derived?.length ?? 0) > 0) ? <div className={css.readings} aria-label="实验读数">
       {snapshot.inspector.flatMap(section => (section.derived ?? []).map(item => <div className={css.reading} key={`${section.id}:${item.id}`}>
         <span>{item.label}</span><output>{item.value}<small>{item.unit}</small></output>
@@ -47,6 +53,7 @@ export function QuestionCodeControls({ session, snapshot }: { session: Experimen
       <label className={css.visibility} key={key}><input type="checkbox" checked={enabled} onChange={(event) => {
         applyUniversalContributionIntent(session, { type: 'observable/set', protocolVersion: 3, key, enabled: event.target.checked })
       }} /><span>{labels.get(key) ?? (zh as Partial<Record<string, string>>)[`lab.observable.${key}`] ?? key}</span></label> : null)}</div></details>
+    </details>
   </section>
 }
 

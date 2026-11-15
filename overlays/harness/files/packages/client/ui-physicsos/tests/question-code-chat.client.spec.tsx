@@ -155,33 +155,26 @@ function connect(view: ReturnType<typeof render>) {
   message({ type: 'experiment/connected', protocolVersion: 3 })
   return { outbound, message, close }
 }
-it.each(['failed', 'ready'] as const)('renders a late %s generation from the same closed turn data source', async (status) => {
-  const f = await fixture()
+it.each(['failed', 'ready'] as const)('updates the compact attachment after a late %s generation without mounting another renderer', async (status) => {
+  const f = await fixture(), openScenePreview = vi.fn()
   const store = sceneTurnData({ ...f.data, visualization: { status: 'generating', jobId: 'direct-job',
     ownerSessionId: f.ref.ownerSessionId, sceneId: scene.id, sceneRevision: scene.revision, deadlineAt: Date.now() + 600_000 } })
   const turn = store.turn
   const view = render(<SceneTurnCard turn={turn} seq={1} openFile={vi.fn()} t={t} usePhysicsSceneTurn={sceneTurnHook(turn)}
-    questionCodeOwner={f.questionCodeOwner} openSceneInLab={f.openSceneInLab} {...sessionSeats} />)
-  await waitFor(() => { expect(view.container.querySelector('[data-question-code-status="generating"]')).not.toBeNull() })
-  // Only the Harness key changes and notifies; no props rerender or new Turn.
+    openScenePreview={openScenePreview} openSceneInLab={f.openSceneInLab} {...sessionSeats} />)
+  await waitFor(() => { expect(view.container.querySelector('[data-preview-status="generating"]')).not.toBeNull() })
   act(() => { store.publish({ ...f.data, visualization: status === 'ready' ? f.ref : {
     status: 'failed', jobId: 'direct-job', ownerSessionId: f.ref.ownerSessionId,
     sceneId: scene.id, sceneRevision: scene.revision, code: 'INVALID_SOURCE', message: '本题实验代码未通过校验。',
   } }) })
   expect(store.turn).toBe(turn)
-  expect(view.container.querySelector('[data-question-code-status="generating"]')).toBeNull()
-  if (status === 'failed') {
-    expect(view.container.querySelector('[data-question-code-status="failed"]')).not.toBeNull()
-    expect(view.getByText('本题实验代码未通过校验。')).toBeTruthy()
-    expect(f.fetch).not.toHaveBeenCalled()
-    return
-  }
-  await waitFor(() => { expect(view.container.querySelector('iframe')).not.toBeNull() })
-  const { outbound, message } = connect(view)
-  const frame = outbound[0]!
-  message({ type: 'experiment/rendered', protocolVersion: 3, frameId: frame.frameId, revision: scene.revision })
-  expect(view.container.querySelector('[data-question-code-status="ready"]')).not.toBeNull()
-  expect(view.getByText('本题实验代码')).toBeTruthy()
+  expect(view.container.querySelector(`[data-preview-status="${status === 'ready' ? 'published' : 'failed'}"]`)).not.toBeNull()
+  expect(view.container.querySelectorAll('[data-scene-attachment]')).toHaveLength(1)
+  expect(view.container.querySelector('iframe')).toBeNull()
+  if (status === 'failed') expect(view.getByText('本题实验代码未通过校验。')).toBeTruthy()
+  expect(f.fetch).not.toHaveBeenCalled()
+  fireEvent.click(view.getByRole('button'))
+  expect(openScenePreview).toHaveBeenCalledWith(scene.id)
 })
 function parameterValue(snapshot: UniversalExperimentSnapshot, id: string): unknown {
   return snapshot.inspector.flatMap(section => section !== null && typeof section === 'object'

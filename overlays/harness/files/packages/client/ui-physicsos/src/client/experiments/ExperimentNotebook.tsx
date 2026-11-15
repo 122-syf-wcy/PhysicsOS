@@ -2,12 +2,13 @@ import type { ExperimentSession } from './experiment-session.ts'
 import { NOTEBOOK_LIMIT, notebookTable } from './experiment-notebook.ts'
 import { exportTableCsv } from '../physics/export-csv.ts'
 import css from './ExperimentPage.module.css'
+import lensCss from './LensWorkspace.module.css'
 
-export function ExperimentNotebook({ session }: { session: ExperimentSession }) {
+export function ExperimentNotebook({ session, embedded = false }: { session: ExperimentSession; embedded?: boolean }) {
   const entries = session.getNotebook()
   const table = notebookTable(entries)
   return (
-    <section className={css.notebook} aria-label="实验记录区">
+    <section className={`${css.notebook} ${embedded ? lensCss.embeddedNotebook : ''}`} aria-label="实验记录区">
       <div className={css.sectionHeading}>
         <div>
           <span className={css.eyebrow}>OBSERVATIONS</span>

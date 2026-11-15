@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { createConvexLensScene } from '@physicsos/physics-scene'
 import { createOpticsWorkspaceRuntime } from '../src/client/physics/optics-workspace-runtime.ts'
@@ -7,11 +7,10 @@ import { ConvexLensPage } from '../src/client/experiments/ConvexLensPage.tsx'
 import { zh } from '../src/client/locales.ts'
 import { contributionApi } from '../src/client/experiments/contribution-api.ts'
 
-afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); sessionStorage.clear() })
 const mount = () => {
   const view = render(<ConvexLensPage runtime={createOpticsWorkspaceRuntime(createConvexLensScene())} t={key => zh[key]} />)
   fireEvent.click(screen.getByRole('button', { name: zh['lab.tab.data'] }))
-  fireEvent.click(screen.getByRole('button', { name: zh['lab.inspectorPanel'] }))
   return view
 }
 
@@ -19,7 +18,10 @@ it('offers an apparatus-first page with all five engine-backed imaging condition
   const {container} = mount()
   expect(screen.getByRole('heading',{name:'凸透镜成像规律'})).toBeTruthy()
   expect(screen.queryByRole('button',{name:'二维光路'})).toBeNull()
-  expect(screen.getByRole('button',{name:'贡献实验'})).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: zh['lab.more'] }))
+  const contribute = screen.getByRole('menuitem', { name: '贡献实验' })
+  expect(contribute).toBeTruthy()
+  fireEvent.keyDown(contribute, { key: 'Escape' })
   expect(screen.queryByRole('button',{name:'运行'})).toBeNull()
   fireEvent.click(screen.getByRole('button',{name:/投影仪.*1.5f/}))
   expect(screen.getAllByText(/倒立、放大的实像/).length).toBeGreaterThan(0)
@@ -33,14 +35,38 @@ it('offers an apparatus-first page with all five engine-backed imaging condition
 it('records readings, retains them after edits, and exposes report and tutor', () => {
   mount()
   fireEvent.click(screen.getByRole('button',{name:'记录本次'}))
+  fireEvent.click(screen.getByRole('button', { name: zh['lab.inspectorPanel'] }))
+  expect(screen.queryByRole('heading', { name: '调节装置' })).toBeNull()
   const input = screen.getByRole('textbox',{name:'物距'})
   fireEvent.change(input,{target:{value:'15'}})
   fireEvent.blur(input)
+  fireEvent.click(screen.getByRole('button', { name: zh['lab.tab.data'] }))
   fireEvent.click(screen.getByRole('button',{name:'记录本次'}))
   expect(screen.getByRole('table',{name:'实验记录'}).querySelectorAll('tbody tr')).toHaveLength(2)
-  fireEvent.click(screen.getByRole('button',{name:'实验报告'}))
+  fireEvent.click(screen.getByRole('button', { name: zh['lab.more'] }))
+  fireEvent.click(screen.getByRole('menuitem',{name:'实验报告'}))
   expect(screen.getByRole('dialog')).toBeTruthy()
   expect(screen.getAllByText(/测量记录/).length).toBeGreaterThan(0)
+})
+
+it.each([390, 320])('switches notebook, parameters and the single assistant shell at %ipx', width => {
+  vi.stubGlobal('innerWidth', width)
+  vi.stubGlobal('innerHeight', 568)
+  mount()
+  expect(screen.getByRole('region', { name: zh['lab.tab.data'] })).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: zh['lab.inspectorPanel'] }))
+  expect(screen.queryByRole('region', { name: zh['lab.tab.data'] })).toBeNull()
+  expect(screen.getAllByRole('complementary', { name: zh['lab.inspectorPanel'] })).toHaveLength(1)
+  fireEvent.click(screen.getByRole('button', { name: /AI 助教/ }))
+  expect(screen.queryByRole('complementary', { name: zh['lab.inspectorPanel'] })).toBeNull()
+  const assistants = screen.getAllByRole('complementary', { name: zh['lab.agent'] })
+  expect(assistants).toHaveLength(1)
+  expect(within(assistants[0]!).getAllByRole('button', { name: zh['lab.collapse'] })).toHaveLength(1)
+  fireEvent.click(within(assistants[0]!).getByRole('button', { name: zh['lab.collapse'] }))
+  expect(screen.queryByRole('complementary', { name: zh['lab.agent'] })).toBeNull()
+  const notebook = screen.getByRole('button', { name: zh['lab.tab.data'] })
+  if (notebook.getAttribute('aria-pressed') !== 'true') fireEvent.click(notebook)
+  expect(screen.getByRole('heading', { name: /我的实验记录/ })).toBeTruthy()
 })
 
 it.each([2, 3] as const)('requests embedded chrome only for the V3 package on the dedicated lens page (V%i)', async protocolVersion => {

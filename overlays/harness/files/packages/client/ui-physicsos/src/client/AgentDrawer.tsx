@@ -41,17 +41,20 @@ interface Turn {
   readonly effects: readonly { ok: boolean; detail: string }[]
 }
 
-export interface AgentDrawerProps {
+/** Embedded content delegates its title, dismissal and landmark to the enclosing panel. */
+export type AgentDrawerProps = {
   readonly snapshot: WorkspaceSnapshot
   readonly runtime: WorkspaceRuntime
   readonly onSnapshot: (snapshot: WorkspaceSnapshot) => void
-  readonly onClose: () => void
   readonly t: (key: PhysicsosKey) => string
   /** Write a lab self-check answer into the learning record. */
   readonly recordAttempt?: (attempt: SelfCheckAttemptInput) => void
-}
+} & (
+  { readonly embedded: true; readonly onClose?: never }
+  | { readonly embedded?: false; readonly onClose: () => void }
+)
 
-export function AgentDrawer({ snapshot, runtime, onSnapshot, onClose, t, recordAttempt }: AgentDrawerProps) {
+export function AgentDrawer({ snapshot, runtime, onSnapshot, onClose, embedded = false, t, recordAttempt }: AgentDrawerProps) {
   const [turns, setTurns] = useState<readonly Turn[]>([])
   /* 问答 answers ad-hoc questions; 引导 walks the tutor ladder; 自测 asks the
      bank's conceptual probes. One drawer, three teaching styles — all read the
@@ -61,6 +64,7 @@ export function AgentDrawer({ snapshot, runtime, onSnapshot, onClose, t, recordA
   const turnId = useRef(0)
   const clearTimer = useRef<number | undefined>(undefined)
   const bodyRef = useRef<HTMLDivElement>(null)
+  const composing = useRef(false)
 
   /* A submitted question lands at the bottom of the thread, so the scroll
      follows the newest card the same way a conversation does. */
@@ -92,16 +96,18 @@ export function AgentDrawer({ snapshot, runtime, onSnapshot, onClose, t, recordA
     onSnapshot(runtime.setHighlight([]))
   }, [runtime, onSnapshot])
 
-  /* The drawer is a non-modal side panel (complementary, no backdrop): Esc
-     closes it the same way the inspector's does, and the parent returns
-     focus to the re-mounted dock button. */
+  // Only the standalone drawer owns dismissal; embedded content uses its outer panel.
   useEffect(() => {
+    if (embedded || onClose === undefined) return
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+      // oxlint-disable-next-line typescript/no-deprecated -- Legacy IME 229 remains necessary on engines without isComposing.
+      const ime = composing.current || event.isComposing || event.keyCode === 229
+      if (event.key === 'Escape' && !event.defaultPrevented && !ime
+        && !event.ctrlKey && !event.altKey && !event.metaKey) onClose()
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => { window.removeEventListener('keydown', handleKeyDown) }
-  }, [onClose])
+  }, [embedded, onClose])
 
   const runTools = useCallback(
     (tools: readonly PhysicsAgentToolCall[]): readonly { ok: boolean; detail: string }[] => {
@@ -159,11 +165,12 @@ export function AgentDrawer({ snapshot, runtime, onSnapshot, onClose, t, recordA
   /* Losing the topic (e.g. the scene stopped being a circuit frame after a
      failure) removes the tab, so a stale 自测 selection falls back to 问答. */
   const activeMode = mode === 'selfcheck' && selfChecks === undefined ? 'ask' : mode
+  const Panel = embedded ? 'div' : 'aside'
 
   return (
-    <aside className={css.agentDrawer} aria-label={t('lab.agent')}>
-      <div className={css.panelHead}>
-        <h2 className={css.panelTitle}>{t('lab.agent')}</h2>
+    <Panel className={embedded ? css.agentEmbedded : css.agentDrawer} aria-label={embedded ? undefined : t('lab.agent')}>
+      <div className={embedded ? css.agentEmbeddedHead : css.panelHead}>
+        {embedded ? null : <h2 className={css.panelTitle}>{t('lab.agent')}</h2>}
         <div className={css.agentModeTabs} role="tablist" aria-label={t('lab.agent')}>
           {tabs.map(
             ([id, key]) => (
@@ -180,14 +187,14 @@ export function AgentDrawer({ snapshot, runtime, onSnapshot, onClose, t, recordA
             ),
           )}
         </div>
-        <button
+        {embedded ? null : <button
           type="button"
           className={clsx(css.tool, css.toolIcon)}
           aria-label={t('lab.collapse')}
           onClick={onClose}
         >
           <IconCloseOutlineMedium size={14} />
-        </button>
+        </button>}
       </div>
 
       {activeMode === 'selfcheck' && selfChecks !== undefined ? (
@@ -311,6 +318,7 @@ export function AgentDrawer({ snapshot, runtime, onSnapshot, onClose, t, recordA
           className={css.agentComposer}
           onSubmit={(event) => {
             event.preventDefault()
+            if (composing.current) return
             ask(draft)
             setDraft('')
           }}
@@ -322,6 +330,14 @@ export function AgentDrawer({ snapshot, runtime, onSnapshot, onClose, t, recordA
             placeholder={t('lab.agent.placeholder')}
             aria-label={t('lab.agent.placeholder')}
             onChange={(event) => { setDraft(event.target.value) }}
+            onCompositionStart={() => { composing.current = true }}
+            onCompositionEnd={() => { composing.current = false }}
+            onBlur={() => { composing.current = false }}
+            onKeyDown={(event) => {
+              // oxlint-disable-next-line typescript/no-deprecated -- Legacy IME 229 remains necessary on engines without isComposing.
+              const ime = composing.current || event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229
+              if (event.key === 'Enter' && ime) event.preventDefault()
+            }}
           />
           <button
             type="submit"
@@ -333,7 +349,7 @@ export function AgentDrawer({ snapshot, runtime, onSnapshot, onClose, t, recordA
           </button>
         </form>
       ) : null}
-    </aside>
+    </Panel>
   )
 }
 

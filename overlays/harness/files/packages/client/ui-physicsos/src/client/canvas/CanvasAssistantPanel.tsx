@@ -7,13 +7,19 @@ import type { CanvasAnnotationRevision, CanvasDocumentState } from './types.ts'
 import css from './CanvasWorkspace.module.css'
 
 const terminal = (job: CanvasAssistantJob): boolean => ['ready', 'error', 'cancelled'].includes(job.status)
-export function CanvasAssistantPanel(props: {
+/** Embedded content leaves its landmark, title and dismissal to the enclosing panel. */
+type CanvasAssistantPanelProps = {
   readonly canvasId: string; readonly document?: CanvasDocumentState | undefined; readonly commands: CanvasCommands
   readonly selectedNodeIds: readonly string[]; readonly viewport: CanvasAssistantRequest['viewport']; readonly t: CanvasWorkbenchProps['t']
   readonly getViewport?: () => CanvasAssistantRequest['viewport']
-  readonly onCandidate: (scene?: CanvasAnnotationScene) => void; readonly onClose: () => void
-}) {
-  const { t } = props
+  readonly onCandidate: (scene?: CanvasAnnotationScene) => void
+} & (
+  { readonly embedded: true; readonly onClose?: never }
+  | { readonly embedded?: false; readonly onClose: () => void }
+)
+
+export function CanvasAssistantPanel(props: CanvasAssistantPanelProps) {
+  const { t, embedded = false } = props
   const [prompt, setPrompt] = useState(''); const [job, setJob] = useState<CanvasAssistantJob>()
   const [requesting, setRequesting] = useState(false); const [cancelling, setCancelling] = useState(false); const [applying, setApplying] = useState(false)
   const [error, setError] = useState<string>(); const [image, setImage] = useState<CanvasAssistantRequest['image']>(); const [imageName, setImageName] = useState('')
@@ -127,21 +133,24 @@ export function CanvasAssistantPanel(props: {
       setImage({ mimeType: file.type as 'image/png' | 'image/jpeg' | 'image/webp', base64: data.slice(data.indexOf(',') + 1) }); setImageName(file.name)
     } catch (error) { if (mounted.current && imageRun.current === captured && current.current.canvasId === identity.canvasId && current.current.document?.namespace === identity.namespace) setError(error instanceof Error ? error.message : t('canvas.error.generic')) }
   }
-  return <aside className={css.agentPanel} role="complementary" aria-label={t('canvas.agentPanel')}>
-    <div className={css.agentHeader}><h2>{t('canvas.agentPanel')}</h2><Button size="sm" variant="ghost" aria-label={t('canvas.close')} onClick={props.onClose}>×</Button></div>
-    <p>{t('canvas.agentHint')}</p>
-    <textarea aria-label={t('canvas.agentPrompt')} placeholder={t('canvas.agentPrompt')} value={prompt} maxLength={4000} disabled={busy} onChange={event => setPrompt(event.currentTarget.value)} />
-    <label className={css.agentReference}>{t('canvas.agentReference')}<input type="file" accept="image/png,image/jpeg,image/webp" disabled={busy} onChange={event => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ''; void addImage(file) }} /></label>
-    {image ? <div className={css.agentReference}><span>{imageName}</span><Button size="sm" variant="ghost" onClick={() => { setImage(undefined); setImageName('') }}>{t('canvas.delete')}</Button></div> : null}
-    <div className={css.agentActions}><Button size="sm" variant="outline" disabled={!saveReady || busy} onClick={() => { void start('check') }}>{t('canvas.agentCheck')}</Button><Button size="sm" variant="primary" disabled={!saveReady || busy} onClick={() => { void start('draw') }}>{t('canvas.agentDraw')}</Button></div>
-    {!saveReady ? <p>{t('canvas.agentSaveFirst')}</p> : null}
-    {requesting || job ? <div className={css.agentStatus} role="status"><StateDot state={busy ? 'ongoing' : job?.status === 'error' ? 'warning' : 'done'} />{job ? t(`canvas.agentStatus.${job.status}`) : t('canvas.agentStatus.queued')}{busy ? <Button size="sm" variant="ghost" disabled={cancelling} onClick={() => { void cancel() }}>{t('canvas.agentCancel')}</Button> : null}</div> : null}
-    {stale ? <p className={css.agentError} role="alert">{t('canvas.agentStale')}</p> : null}
-    {error || job?.error ? <p className={css.agentError} role="alert">{error ?? job?.error}</p> : null}
-    {job?.result && !stale ? <div className={css.agentResult}><p>{job.result.summary}</p><ul>{job.result.findings.map((finding, index) => <li key={index} data-severity={finding.severity}>{finding.message}</li>)}</ul>
-      <div className={css.agentActions}>{job.result.scene.primitives.length ? <Button size="sm" variant="primary" disabled={busy} onClick={() => { void accept() }}>{t('canvas.agentAccept')}</Button> : null}<Button size="sm" variant="ghost" disabled={applying} onClick={() => { setJob(undefined); props.onCandidate(undefined) }}>{t('canvas.agentReject')}</Button></div>
-    </div> : null}
-    {job?.usage && job.usage.inputTokens !== undefined && job.usage.outputTokens !== undefined ? <p>{t('canvas.agentUsage')}: {job.usage.inputTokens} / {job.usage.outputTokens} tokens</p> : job?.usage?.totalTokens !== undefined ? <p>{t('canvas.agentUsage')}: {job.usage.totalTokens} tokens</p> : null}
-    <p>{t('canvas.agentModelHint')}</p>
-  </aside>
+  const Panel = embedded ? 'div' : 'aside'
+  return <Panel className={`${css.agentPanel}${embedded ? ` ${css.agentEmbedded}` : ''}`} aria-label={embedded ? undefined : t('canvas.agentPanel')}>
+    {embedded ? null : <div className={css.agentHeader}><h2>{t('canvas.agentPanel')}</h2><Button size="sm" variant="ghost" aria-label={t('canvas.close')} onClick={props.onClose}>×</Button></div>}
+    <div className={css.agentContent}>
+      <p>{t('canvas.agentHint')}</p>
+      <textarea aria-label={t('canvas.agentPrompt')} placeholder={t('canvas.agentPrompt')} value={prompt} maxLength={4000} disabled={busy} onChange={event => setPrompt(event.currentTarget.value)} />
+      <label className={css.agentReference}>{t('canvas.agentReference')}<input type="file" accept="image/png,image/jpeg,image/webp" disabled={busy} onChange={event => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ''; void addImage(file) }} /></label>
+      {image ? <div className={css.agentReference}><span>{imageName}</span><Button size="sm" variant="ghost" onClick={() => { setImage(undefined); setImageName('') }}>{t('canvas.delete')}</Button></div> : null}
+      <div className={css.agentActions}><Button size="sm" variant="outline" disabled={!saveReady || busy} onClick={() => { void start('check') }}>{t('canvas.agentCheck')}</Button><Button size="sm" variant="primary" disabled={!saveReady || busy} onClick={() => { void start('draw') }}>{t('canvas.agentDraw')}</Button></div>
+      {!saveReady ? <p>{t('canvas.agentSaveFirst')}</p> : null}
+      {requesting || job ? <div className={css.agentStatus} role="status"><StateDot state={busy ? 'ongoing' : job?.status === 'error' ? 'warning' : 'done'} />{job ? t(`canvas.agentStatus.${job.status}`) : t('canvas.agentStatus.queued')}{busy ? <Button size="sm" variant="ghost" disabled={cancelling} onClick={() => { void cancel() }}>{t('canvas.agentCancel')}</Button> : null}</div> : null}
+      {stale ? <p className={css.agentError} role="alert">{t('canvas.agentStale')}</p> : null}
+      {error || job?.error ? <p className={css.agentError} role="alert">{error ?? job?.error}</p> : null}
+      {job?.result && !stale ? <div className={css.agentResult}><p>{job.result.summary}</p><ul>{job.result.findings.map((finding, index) => <li key={index} data-severity={finding.severity}>{finding.message}</li>)}</ul>
+        <div className={css.agentActions}>{job.result.scene.primitives.length ? <Button size="sm" variant="primary" disabled={busy} onClick={() => { void accept() }}>{t('canvas.agentAccept')}</Button> : null}<Button size="sm" variant="ghost" disabled={applying} onClick={() => { setJob(undefined); props.onCandidate(undefined) }}>{t('canvas.agentReject')}</Button></div>
+      </div> : null}
+      {job?.usage && job.usage.inputTokens !== undefined && job.usage.outputTokens !== undefined ? <p>{t('canvas.agentUsage')}: {job.usage.inputTokens} / {job.usage.outputTokens} tokens</p> : job?.usage?.totalTokens !== undefined ? <p>{t('canvas.agentUsage')}: {job.usage.totalTokens} tokens</p> : null}
+      <p>{t('canvas.agentModelHint')}</p>
+    </div>
+  </Panel>
 }

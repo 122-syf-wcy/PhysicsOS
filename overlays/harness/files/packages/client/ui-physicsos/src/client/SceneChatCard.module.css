@@ -488,12 +488,6 @@
 }
 @media (max-width: 520px) {
   .card { padding: 12px; gap: 10px; border-radius: 22px; }
-  /* Use the chat gutter for the final experiment without widening other cards. */
-  :global([data-slot='conversation.chat.turnTail']) > .card {
-    width: calc(100% + 48px);
-    margin-inline: -24px;
-    padding: 8px;
-  }
   .labCover[data-private-question-code-workspace] { padding: 12px; }
   .labContent { gap: 10px; }
   .labHeader { align-items: flex-start; gap: 10px; }
@@ -525,6 +519,58 @@
   .codeActions > button { width: 100%; margin-left: 0; }
   .readings { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+/* Only the conversation attachment and its sidebar preview use these compact rules. */
+.attachment { display: grid; gap: 12px; min-width: 0; margin-block: 12px; }
+.attachmentButton {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0;
+  padding: 13px 14px; border: 1px solid var(--physics-glass-border-soft, var(--dsw-alias-border-l2));
+  border-radius: 13px; background: var(--physics-glass-fill, var(--dsw-alias-bg-module-platform));
+  color: var(--dsw-alias-label-primary); font: inherit; font-size: 13px; text-align: start; cursor: pointer;
+}
+.attachmentButton:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.attachmentButton:focus-visible { outline: 2px solid var(--physics-ink-link, var(--dsw-alias-label-link)); outline-offset: 3px; }
+.attachmentButton svg { flex: none; }
+.attachmentTitle { flex: 1; min-width: 0; overflow-wrap: anywhere; font-weight: 500; }
+.attachmentStatus { flex: none; padding: 2px 8px; border-radius: 8px; font-size: 11px; color: var(--dsw-alias-label-secondary); background: var(--dsw-alias-interactive-bg-hover); }
+.attachmentStatus[data-preview-status='failed'], .attachmentFailure { color: var(--physics-error, var(--dsw-alias-label-primary)); }
+.attachmentFailure { margin: 0; font-size: 12px; line-height: 1.6; }
+.attachment .solve { border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.attachment .solveSummary { padding-inline: 0; }
+.attachment .solveBlock { padding-inline: 0; }
+.previewCard { margin: 0; padding: 0; gap: 10px; border: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
+.previewCard .head { order: 5; flex-wrap: wrap; gap: 8px; }
+.previewCard .heading { display: none; }
+.previewCard .open { flex: 1 1 auto; max-width: none; min-height: 38px; font-size: 12px; }
+.previewCard .codeCanvas { border-radius: 14px; }
+.previewCard .codeStage { height: clamp(220px, 29vh, 320px); }
+.previewCard .codeStatus { min-height: 180px; padding: 16px; }
+.previewCard .codeStatus strong, .previewCard .frameOverlay strong { font-size: 14px; font-weight: 500; }
+.previewCard .codeMark { width: 36px; height: 36px; margin-bottom: 0; font-size: 15px; border-radius: 12px; }
+.previewCard .scopeNote { padding: 8px 10px; font-size: 11px; }
+.previewCard .scopeNote strong { font-weight: 500; }
+.previewCard .transport { display: grid; grid-template-columns: 34px 1fr 64px; gap: 6px; padding: 6px 0; border: 0; background: transparent; box-shadow: none; }
+.previewCard .controlPrimary { grid-column: 1; grid-row: 1; width: 32px; height: 32px; }
+.moreTransport { font-size: 12px; color: var(--dsw-alias-label-secondary); }
+.moreTransport summary { cursor: pointer; }
+.moreTransport > div { display: flex; gap: 8px; padding-block: 8px; }
+.moreTransport .control { width: 32px; height: 32px; }
+.previewCard .trackWrap { grid-column: 2; grid-row: 1; }
+.previewCard .rate { grid-column: 3; grid-row: 1; min-height: 30px; }
+.previewCard .clock { grid-column: 2; grid-row: 2; min-width: 0; text-align: start; }
+.previewCard .clockEnd { display: block; grid-column: 3; grid-row: 2; text-align: end; }
+.previewCard .parameters { padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.previewCard .controlsHead h4 { font-size: 12px; font-weight: 500; }
+.quickParameters { display: grid; gap: 8px; margin-top: 8px; }
+.previewCard .parameter { padding: 6px 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; gap: 4px; }
+.previewCard .parameter label { flex-wrap: nowrap; }
+.previewCard .parameter input[type='number'] { width: 96px; padding: 5px 7px; font-size: 12px; }
+.previewCard .parameterGrid { grid-template-columns: 1fr; }
+.previewCard .readings { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.previewCard .reading output { font-size: 15px; font-weight: 500; }
+.previewCard .codeActions { padding: 8px; gap: 6px; }
+.previewCard .source { flex-basis: auto; }
+.previewCard .codeActions > button { width: auto; }
+.previewCard .source > summary, .previewCard .codeActions > button { min-height: 30px; padding: 5px 8px; font-size: 11px; }
 :global(body[data-ds-dark-theme]) .controlPrimary { color: var(--physics-ink-link); background: linear-gradient(160deg, #47715ce8, #2b4d3df0); border-color: #b9d7c52e; }
 :global(body[data-ds-dark-theme]) .codeStatus { background: radial-gradient(ellipse at 15% 10%, #42675c30, transparent 60%); }
 @media (prefers-reduced-motion: reduce) {

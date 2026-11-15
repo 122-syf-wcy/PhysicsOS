@@ -4,6 +4,10 @@ import { Context } from '@deepseek-ai/cordis'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { apply, inject, PHYSICS_PANEL_IDS } from '@deepseek-ai/dsh-client-ui-physicsos/client'
+import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { AuthState } from '../src/client/auth-store.ts'
+import type { ChatPreviewInjected } from '../src/client/ChatPreview.tsx'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import {
   createExperimentSceneRef, findExperimentTemplate,
 } from '@deepseek-ai/dsh-client-ui-physicsos/src/client/physics/experiment-templates.ts'
@@ -43,6 +47,15 @@ async function bench() {
   }
   const connection = { api: { agentPresets: { select: vi.fn() } } }
   const conversationEvents = { register: vi.fn(() => () => {}) }
+  const sidebarRightTabs = { register: vi.fn(() => () => {}) }
+  const sidebarRight = {
+    mounted: { getSnapshot: () => 'session-1', subscribe: () => () => {} },
+    openTabs: { getSnapshot: () => [], subscribe: () => () => {} },
+    openTab: vi.fn(), closeIn: vi.fn(),
+    active: vi.fn<() => { kind: string } | undefined>(() => undefined), isExpanded: vi.fn(() => false),
+  }
+  ctx.provide('sidebarRightTabs', sidebarRightTabs as never)
+  ctx.provide('sidebarRight', sidebarRight as never)
   ctx.provide('workspaces', workspaces as never)
   ctx.provide('uiWorkspace', uiWorkspace as never)
   ctx.provide('layout', layout as never)
@@ -85,9 +98,13 @@ async function bench() {
       /* Declared by the chat view in the real tree; the bench declares it so
          the deferred keyed registration fires and can be counted. */
       'conversation.chat.node': { kind: 'keyed', scope: 'session' },
+      'conversation.chat.turnTail': { kind: 'list', scope: 'session' },
+      'conversation.session.header.utilities': { kind: 'list', scope: 'session' },
+      'sidebar.right.pane.tab': { kind: 'keyed', scope: 'session' },
+      'sidebar.right.pane.tab.title': { kind: 'keyed', scope: 'session' },
     },
   } as never, () => null)
-  return { ctx, slots, workspaces, layout, conversationEvents }
+  return { ctx, slots, workspaces, layout, conversationEvents, sidebarRightTabs, sidebarRight }
 }
 
 describe('ui-physicsos apply', () => {
@@ -95,6 +112,50 @@ describe('ui-physicsos apply', () => {
     expect(inject).toEqual([
       'slots', 'locale', 'workspaces', 'uiWorkspace', 'layout', 'sessions', 'uiConversation',
     ])
+  })
+
+  it('registers one retained experiment tab and one restoring header action without declaring another slot', async () => {
+    const b = await bench()
+    const fiber = b.ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+    expect(b.sidebarRightTabs.register).toHaveBeenCalledOnce()
+    expect(b.sidebarRightTabs.register).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'physicsos-experiment-preview', keepMounted: true,
+    }))
+    expect(b.slots.entries('sidebar.right.pane.tab').map(entry => entry.options.key))
+      .toEqual(['@deepseek-ai/dsh-client-ui-physicsos/experiment-preview'])
+    expect(b.slots.entries('conversation.session.header.utilities').map(entry => entry.options.id))
+      .toEqual(['physicsos-experiment-preview'])
+    expect(b.slots.entries('conversation.chat.turnTail')).toHaveLength(1)
+    expect(b.sidebarRight.openTab).not.toHaveBeenCalled()
+    await fiber.dispose()
+    expect(b.slots.entries('sidebar.right.pane.tab')).toHaveLength(0)
+  })
+
+  it('opens the preview automatically without replacing another selected sidebar page', async () => {
+    const b = await bench()
+    const fiber = b.ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+    const gate = b.slots.entries('shell.overlay').find(entry => entry.options.id === 'physicsos-auth-gate')!
+    const auth = (gate.inject as () => { hooks: { auth: SnapshotStore<AuthState> } })().hooks.auth
+    auth.set({ status: 'authed', user: { id: 'preview-student', schoolId: 'preview-school', schoolName: 'School',
+      username: 'student', displayName: 'Student', role: 'STUDENT' } })
+    const entry = b.slots.entries('conversation.session.header.utilities')[0]!
+    const face = (entry.inject as (id: SessionId) => ChatPreviewInjected)('session-1' as SessionId)
+    expect(face.revealPreview(true)).toBe(true)
+    expect(b.sidebarRight.openTab).toHaveBeenCalledWith('physicsos-experiment-preview')
+    b.sidebarRight.openTab.mockClear()
+    b.sidebarRight.isExpanded.mockReturnValue(true)
+    b.sidebarRight.active.mockReturnValue({ kind: 'text' })
+    expect(face.revealPreview(true)).toBe(true)
+    expect(b.sidebarRight.openTab).not.toHaveBeenCalled()
+    expect(face.revealPreview()).toBe(true)
+    expect(b.sidebarRight.openTab).toHaveBeenCalledWith('physicsos-experiment-preview')
+    const stale = (entry.inject as (id: SessionId) => ChatPreviewInjected)('session-2' as SessionId)
+    expect(stale.revealPreview()).toBe(false)
+    auth.set({ status: 'guest' })
+    expect(face.revealPreview()).toBe(false)
+    await fiber.dispose()
   })
 
   it('registers the product rail and leaves the shell rows to the rest', async () => {

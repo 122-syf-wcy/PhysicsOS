@@ -19,11 +19,10 @@ import {
   IconChevronLeftOutlineMedium,
   IconChevronRightOutlineMedium,
   IconDownloadOutlineMedium,
-  IconFullscreenOutlineMedium,
+  Menu,
   IconListPenOutlineMedium,
   IconPauseOutlineMedium,
   IconPlayOutlineMedium,
-  IconQuestionOutlineMedium,
   IconRefreshOutlineMedium,
   IconSparkleMedium,
   isBehindModal,
@@ -42,7 +41,8 @@ import { AgentDrawer } from './AgentDrawer.tsx'
 import { ExperimentGuidePanel } from './ExperimentGuidePanel.tsx'
 import { ExperimentReportPanel } from './ExperimentReportPanel.tsx'
 import { WorkspaceScenePanel } from './WorkspaceScenePanel.tsx'
-import { WorkbenchFloatPanel } from './WorkbenchFloatPanel.tsx'
+import { WorkbenchFloatPanel, useWorkbenchSafeRect } from './WorkbenchFloatPanel.tsx'
+import { layoutWorkbenchPanels, type WorkbenchPanelRequest } from './workbench-geometry.ts'
 import sceneCss from './WorkbenchScene.module.css'
 import { IconChatBubble, IconScene, IconVariable, IconVerified } from './icons/physics-icons.tsx'
 import { Mascot } from './Mascot.tsx'
@@ -224,6 +224,31 @@ export function PhysicsWorkspace({
     const priority = (unit: string) => unit === 'T' ? 0 : unit === 'm/s' ? 1 : 2
     return priority(left.unit) - priority(right.unit)
   }).slice(0, 2)
+  const [activePanel, setActivePanel] = useState('data')
+  const [moreOpen, setMoreOpen] = useState(false)
+  const safeRect = useWorkbenchSafeRect(coverRef, `${snapshot.domain}:${snapshot.title}:${snapshot.status}:${questionCodeVisualization !== undefined}:${snapshot.clock.total > 0}`)
+  const inspectorHeight = inspectorDetailed || quickParameters.length === 0 ? 380 : 210
+  const panelRequests: WorkbenchPanelRequest[] = []
+  if (!focused && dataOpen) panelRequests.push({ id: 'data', placement: 'top-right', width: 400, height: 310 })
+  if (!focused && !sceneCollapsed) panelRequests.push({ id: 'scene', placement: 'top-left', width: 230, height: 300 })
+  if (agentOpen) panelRequests.push({ id: 'agent', placement: 'bottom-right', width: 350, height: 430 })
+  else if (!focused && !inspectorCollapsed) panelRequests.push({ id: 'inspector', placement: 'bottom-right', width: 310, height: inspectorHeight })
+  const panelLayout = layoutWorkbenchPanels(safeRect, panelRequests, activePanel)
+  const showPanel = (id: string) => panelLayout.panels[id]?.visible === true
+  const panelKey = `${experimentId ?? snapshot.domain}:${snapshot.title}`
+  const toggleInspector = () => {
+    if (showPanel('inspector')) { setInspectorCollapsed(true); inspector.close(); return }
+    setInspectorCollapsed(false)
+    setAgentOpen(false)
+    setActivePanel('inspector')
+    inspector.reveal()
+  }
+  const toggleScene = () => {
+    if (showPanel('scene')) { setSceneCollapsed(true); sceneDrawer.close(); return }
+    setSceneCollapsed(false)
+    setActivePanel('scene')
+    sceneDrawer.reveal()
+  }
   /* Hover highlight is transient chrome, so it is kept out of the runtime until
      it actually needs to reach the canvas. */
   const highlightRef = useRef<string | undefined>(undefined)
@@ -543,7 +568,7 @@ export function PhysicsWorkspace({
       data-physicsos-surface="lab" data-physicsos-domain={snapshot.domain} data-physicsos-running={running ? 'true' : 'false'}
       data-scene-revision={snapshot.sceneRevision} data-verification-status={displayedStatus}>
       <div className={clsx(codeCss.labContent, sceneCss.questionContent)}>
-        <header className={clsx(codeCss.labHeader, sceneCss.questionHeader)}>
+        <header className={clsx(codeCss.labHeader, sceneCss.questionHeader)} data-workbench-chrome="top">
           <div className={codeCss.heading}>
             {onSwitchExperiment === undefined
               ? <span className={codeCss.badge}><IconScene size={14} />{t('lab.questionCode.trail')}</span>
@@ -565,10 +590,10 @@ export function PhysicsWorkspace({
           </button>}
           </div>
         </header>
-        <QuestionCodeCanvas presentation="workbench" visualization={questionCodeVisualization} scene={questionCodeScene} session={session}
+        <div className={sceneCss.questionViewport} data-workbench-viewport><QuestionCodeCanvas presentation="workbench" visualization={questionCodeVisualization} scene={questionCodeScene} session={session}
           hasVerifiedSolution={questionCodeHasVerifiedSolution === true}
-          {...(questionCodeOwner === undefined ? {} : { questionCodeOwner })} />
-        <div className={clsx(codeCss.transport, sceneCss.questionTransport)} aria-label={t('lab.timeline')} data-running={running}>
+          {...(questionCodeOwner === undefined ? {} : { questionCodeOwner })} /></div>
+        <div className={sceneCss.transportBand} data-workbench-chrome="bottom"><div className={clsx(codeCss.transport, sceneCss.questionTransport)} aria-label={t('lab.timeline')} data-running={running}>
           <button type="button" className={clsx(codeCss.control, codeCss.controlPrimary)} disabled={failed || clock.total <= 0}
             aria-label={ended ? t('lab.replay') : t('lab.playPause')} aria-pressed={running}
             onClick={() => { commit(runtime.setRunning(!running)) }}>
@@ -587,7 +612,7 @@ export function PhysicsWorkspace({
           <GlassSelect className={codeCss.rate} ariaLabel={t('lab.rate')} value={String(clock.rate)} disabled={failed || clock.total <= 0}
             options={PLAYBACK_RATES.map(rate => ({ value: String(rate), label: `${rate}×` }))}
             onChange={(value) => { commit(runtime.setRate(Number(value))) }} />
-        </div>
+        </div></div>
         {inspectorCollapsed ? null : <WorkbenchFloatPanel id={inspector.id} title={t('lab.inspectorPanel')} closeLabel={t('lab.closeInspector')} onClose={() => { setInspectorCollapsed(true); inspector.close() }} placement="bottom-right" width={320} height={350} expanded={inspector.open}>
           <QuestionCodeControls session={session} snapshot={snapshot} />
         </WorkbenchFloatPanel>}
@@ -614,10 +639,10 @@ export function PhysicsWorkspace({
       data-scene-drawer-open={sceneDrawer.open ? 'true' : undefined}
       data-inspector-drawer-open={inspector.open ? 'true' : undefined}
     >
-      <header className={clsx(css.toolbar, sceneCss.toolbar)}>
+      <header className={clsx(css.toolbar, sceneCss.toolbar)} data-workbench-chrome="top">
         <div className={clsx(css.sceneIdentity, sceneCss.sceneIdentity)}>
           {onSwitchExperiment === undefined ? null : (
-            <button type="button" className={css.crumb} onClick={onSwitchExperiment}>
+            <button type="button" className={clsx(css.crumb, sceneCss.crumb)} onClick={onSwitchExperiment}>
               <IconChevronLeftOutlineMedium size={13} />
               {t('lab.backToCenter')}
               <span className={css.crumbTrail}>/ {t(`lab.template.group.${snapshot.domain}`)}</span>
@@ -643,11 +668,14 @@ export function PhysicsWorkspace({
             </button>
           )}
           {readerSubtitle === undefined ? null : (
-            <span className={css.saveState} title={readerSubtitle}>{readerSubtitle}</span>
+            <span className={clsx(css.saveState, sceneCss.subtitle)} title={readerSubtitle}>{readerSubtitle}</span>
           )}
         </div>
         <div className={clsx(css.toolGroup, sceneCss.toolGroup)}>
-          <button type="button" className={clsx(css.tool, sceneCss.tool)} aria-pressed={dataOpen} onClick={() => { setDataTab('charts'); setDataOpen(value => !value) }}>
+          <button type="button" className={clsx(css.tool, sceneCss.tool)} aria-pressed={showPanel('data')} onClick={() => {
+            if (showPanel('data')) { setDataOpen(false); return }
+            setDataTab('charts'); setDataOpen(true); setActivePanel('data')
+          }}>
             <IconListPenOutlineMedium size={14} />{t('lab.tab.charts')}
           </button>
           {snapshot.branch === undefined ? null : (
@@ -684,72 +712,34 @@ export function PhysicsWorkspace({
           {/* Playback lives once, on the timeline under the bench; a second
               run/pause group up here only competed with it. */}
           {toolbarExtra}
-          {onAddToCanvas === undefined ? null : <WorkbenchAction label={t('canvas.addToCanvas')} onClick={onAddToCanvas} />}
-          {experimentMeta === undefined ? null : (
-            <button
-              type="button"
-              className={clsx(css.tool, sceneCss.tool)}
-              onClick={() => {
-                setGuideOpen(true)
-              }}
-            >
-              <IconQuestionOutlineMedium size={13} />
-              {t('lab.guide')}
-            </button>
-          )}
-          <button
-            type="button"
-            className={clsx(css.tool, sceneCss.tool)}
-            disabled={failed}
-            onClick={() => {
-              setReportOpen(true)
-            }}
-          >
-            <IconListPenOutlineMedium size={13} />
-            {t('lab.report.open')}
-          </button>
-          <button
-            type="button"
-            className={clsx(css.tool, focused && css.toolActive)}
-            aria-pressed={focused}
-            onClick={() => {
-              setFocused(value => !value)
-              /* Mode changes keep focus on the active toolbar control. */
-              if (inspector.open) inspector.toggle()
-              if (sceneDrawer.open) sceneDrawer.toggle()
-            }}
-          >
-            <IconFullscreenOutlineMedium size={13} />
-            {focused ? t('lab.focus.exit') : t('lab.focus.enter')}
-          </button>
+          <Menu open={moreOpen} portal autoFocus side="bottom" align="end" onClose={() => { setMoreOpen(false) }}
+            anchor={<button type="button" className={clsx(css.tool, sceneCss.tool)} aria-label={t('lab.more')}
+              aria-expanded={moreOpen} onClick={() => { setMoreOpen(value => !value) }}>{t('lab.more')}<IconChevronDownOutlineMedium size={13} /></button>}
+            items={[
+              ...(onAddToCanvas === undefined ? [] : [{ id: 'add', label: t('canvas.addToCanvas') }]),
+              ...(experimentMeta === undefined ? [] : [{ id: 'guide', label: t('lab.guide') }]),
+              { id: 'report', label: t('lab.report.open'), disabled: failed },
+              { id: 'focus', label: t(focused ? 'lab.focus.exit' : 'lab.focus.enter') },
+              ...(onReturnToChat === undefined ? [] : [{ id: 'chat', label: t('lab.backToChat') }]),
+            ]}
+            onSelect={id => {
+              setMoreOpen(false)
+              if (id === 'add') onAddToCanvas?.()
+              if (id === 'guide') setGuideOpen(true)
+              if (id === 'report') setReportOpen(true)
+              if (id === 'focus') setFocused(value => !value)
+              if (id === 'chat') onReturnToChat?.()
+            }} />
           {focused ? null : (
             <>
               <button
                 ref={sceneDrawer.triggerRef}
                 data-workbench-scene-toggle
                 type="button"
-                className={clsx(css.tool, css.sceneToggle, sceneDrawer.open && css.toolActive)}
+                className={clsx(css.tool, css.sceneToggle, showPanel('scene') && css.toolActive)}
                 aria-controls={sceneDrawer.id}
-                aria-expanded={sceneDrawer.open}
-                onClick={() => {
-                  /* A folded track restores without touching drawer state; a
-                     live flag is the only case where the toggle means that. */
-                  if (sceneCollapsed) {
-                    setSceneCollapsed(false)
-                    if (inspector.open) inspector.close()
-                    if (agentOpen) setAgentOpen(false)
-                    sceneDrawer.reveal()
-                    return
-                  }
-                  if (sceneDrawer.open || (coverRef.current?.clientWidth ?? 0) >= 1080) {
-                    setSceneCollapsed(true)
-                    sceneDrawer.close()
-                    return
-                  }
-                  if (inspector.open) inspector.toggle()
-                  if (agentOpen) setAgentOpen(false)
-                  sceneDrawer.toggle()
-                }}
+                aria-expanded={showPanel('scene')}
+                onClick={toggleScene}
               >
                 <IconScene size={14} />
                 {t('lab.scene.toggle')}
@@ -757,37 +747,21 @@ export function PhysicsWorkspace({
               <ResponsiveInspectorToggle
                 controller={{
                   ...inspector,
-                  toggle: () => {
-                    /* Inspector and agent share the right rail: either claim
-                       releases the other. */
-                    if (inspectorCollapsed) {
-                      setInspectorCollapsed(false)
-                      setAgentOpen(false)
-                      inspector.reveal()
-                      return
-                    }
-                    if (sceneDrawer.open) sceneDrawer.toggle()
-                    if (agentOpen) setAgentOpen(false)
-                    if (inspector.open || (coverRef.current?.clientWidth ?? 0) >= 1080) {
-                      setInspectorCollapsed(true)
-                      inspector.close()
-                    } else inspector.reveal()
-                  },
+                  open: showPanel('inspector'),
+                  toggle: toggleInspector,
                 }}
                 label={t('lab.inspectorPanel')}
               />
             </>
           )}
-          {agentOpen ? null : (
-            <button
+          <button
               ref={agentTriggerRef}
               type="button"
               className={css.agentDock}
+              aria-pressed={showPanel('agent')}
               onClick={() => {
-                /* The agent claims the right rail — open drawers there first
-                   release it, then the dock hands over. */
-                if (inspector.open) inspector.toggle()
-                if (sceneDrawer.open) sceneDrawer.toggle()
+                if (showPanel('agent')) { closeAgent(); return }
+                setActivePanel('agent')
                 setAgentOpen(true)
               }}
             >
@@ -795,13 +769,6 @@ export function PhysicsWorkspace({
               <IconSparkleMedium size={12} className={css.agentDockSpark} />
               {t('lab.agent')}
             </button>
-          )}
-          {onReturnToChat === undefined ? null : (
-            <button type="button" className={clsx(css.tool, sceneCss.tool)} onClick={onReturnToChat}>
-              <IconChatBubble size={13} />
-              {t('lab.backToChat')}
-            </button>
-          )}
         </div>
       </header>
 
@@ -855,6 +822,7 @@ export function PhysicsWorkspace({
               closeLabel={t('lab.scene.close')}
               collapseLabel={t('lab.scene.collapse')}
               onCollapse={() => { setSceneCollapsed(true) }}
+              layout={panelLayout.panels.scene} storageKey={`${panelKey}:scene`} onActivate={() => { setActivePanel('scene') }}
             >
               {buildMode === true && draft !== undefined && runtime.applyDraftEdit !== undefined ? (
                 <CircuitBuilderPanel
@@ -893,6 +861,7 @@ export function PhysicsWorkspace({
                  re-trigger it. */
               key={`${snapshot.domain}:${snapshot.title}`}
               className={clsx(css.canvas, sceneCss.canvas)}
+              data-workbench-viewport
               aria-label={t('lab.canvas')}
             >
               {/* The canvas is the renderer: it subscribes to the frame source
@@ -915,7 +884,7 @@ export function PhysicsWorkspace({
                 it (rather than disabling its buttons) is the honest default for
                 an experiment whose model has no time dimension. */}
             {capabilities.timeline ? (
-              <div className={clsx(css.timeline, sceneCss.timeline)} aria-label={t('lab.timeline')}>
+              <div className={sceneCss.transportBand} data-workbench-chrome="bottom"><div className={clsx(css.timeline, sceneCss.timeline)} aria-label={t('lab.timeline')}>
                 <button
                   type="button"
                   className={clsx(css.transport, css.transportPrimary)}
@@ -990,12 +959,12 @@ export function PhysicsWorkspace({
                     commit(runtime.setRate(Number(next)))
                   }}
                 />
-              </div>
+              </div></div>
             ) : null}
 
             {dataOpen && !focused ? <WorkbenchFloatPanel title={t('lab.tab.charts')} closeLabel={t('lab.collapse')}
               collapseLabel={t('lab.collapse')} onClose={() => { setDataOpen(false) }} placement="top-right" width={400} height={310}
-              expanded={dataOpen} desktopDefault={false}>
+              expanded={dataOpen} desktopDefault={false} layout={panelLayout.panels.data} storageKey={`${panelKey}:data`} onActivate={() => { setActivePanel('data') }}>
               <section className={sceneCss.floatData}>
                 <div className={clsx(css.dataHead, sceneCss.dataHead)}>
                   {(
@@ -1063,24 +1032,22 @@ export function PhysicsWorkspace({
           </div>
 
           {agentOpen ? (
-            /* The drawer docks in the inspector's rail at track widths; at
-               drawer widths its absolute positioning turns it into the same
-               overlay the inspector drawer uses. One element, both modes. */
-            <WorkbenchFloatPanel title={t('lab.agent')} closeLabel={t('lab.collapse')} onClose={closeAgent}
-              placement="bottom-right" width={350} height={430} expanded desktopDefault={false}>
-              <div className={sceneCss.floatAgent}><AgentDrawer
+            <WorkbenchFloatPanel role="complementary" title={t('lab.agent')} closeLabel={t('lab.collapse')} onClose={closeAgent}
+              placement="bottom-right" width={350} height={430} expanded desktopDefault={false}
+              layout={panelLayout.panels.agent} storageKey={`${panelKey}:agent`} onActivate={() => { setActivePanel('agent') }}>
+              <AgentDrawer embedded
                 snapshot={snapshot}
                 runtime={runtime}
                 onSnapshot={commit}
-                onClose={closeAgent}
                 t={t}
                 {...(recordAttempt === undefined ? {} : { recordAttempt })}
-              /></div></WorkbenchFloatPanel>
+              /></WorkbenchFloatPanel>
           ) : focused || inspectorCollapsed ? null : (
             <ResponsiveInspector
               controller={inspector}
               label={t(inspectorDetailed || quickParameters.length === 0 ? 'lab.inspectorPanel' : 'lab.quickParameters')}
-              height={inspectorDetailed || quickParameters.length === 0 ? 380 : 210}
+              height={inspectorHeight}
+              layout={panelLayout.panels.inspector} storageKey={`${panelKey}:inspector`} onActivate={() => { setActivePanel('inspector') }}
               closeLabel={t('lab.closeInspector')}
               collapseLabel={t('lab.inspector.collapse')}
               onCollapse={() => { setInspectorCollapsed(true) }}
@@ -1107,7 +1074,7 @@ export function PhysicsWorkspace({
                 parameter={parameter}
                 onCommit={(value) => { commit(runtime.editParameter(parameter.id, value)) }}
                 onFocusChange={highlight} />)}</div>}
-              {quickParameters.length > 0 ? <button type="button" className={sceneCss.moreParameters} onClick={() => { setInspectorDetailed(value => !value) }}>
+              {quickParameters.length > 0 ? <button type="button" className={sceneCss.moreParameters} onClick={() => { setActivePanel('inspector'); setInspectorDetailed(value => !value) }}>
                 {t(inspectorDetailed ? 'lab.fewerParameters' : 'lab.moreParameters')}
               </button> : null}
             </ResponsiveInspector>

@@ -14955,6 +14955,45 @@ index 74502b5cb3..a758b0f3d5 100644
 +:global(html[data-physicsos-ui]) .navCell.active { background: var(--physics-accent-soft); color: var(--physics-accent-strong); }
 +:global(html[data-physicsos-ui]) .options { padding: 0 32px 26px; }
 +@media(max-width:600px) { :global(html[data-physicsos-ui]) .panel { max-width: calc(100vw - 20px); height: calc(100dvh - 40px); } :global(html[data-physicsos-ui]) .nav { width: 130px; padding: 20px 8px; } :global(html[data-physicsos-ui]) .options { padding: 0 14px 20px; } }
+diff --git a/packages/client/ui-settings-general/src/client/index.ts b/packages/client/ui-settings-general/src/client/index.ts
+index 59209b8169..7b489369dc 100644
+--- a/packages/client/ui-settings-general/src/client/index.ts
++++ b/packages/client/ui-settings-general/src/client/index.ts
+@@ -133,7 +133,7 @@ export function apply(ctx: ClientContext): void {
+           if (version !== rowsVersion || revision !== rowsRevision) {
+             rowsVersion = version
+             rowsRevision = revision
+-            rows = ctx.slots.entries('settings.section')
++            rows = ctx.slots.entriesOfSlot('settings.section')
+               .map(e => ({
+                 /* v8 ignore next -- list-slot registration requires id (SlotCore rejects an entry without one) */
+                 id: e.options.id ?? '',
+diff --git a/packages/client/ui-settings-general/tests/shell.client.spec.ts b/packages/client/ui-settings-general/tests/shell.client.spec.ts
+index ee90396ccd..bf571d4c93 100644
+--- a/packages/client/ui-settings-general/tests/shell.client.spec.ts
++++ b/packages/client/ui-settings-general/tests/shell.client.spec.ts
+@@ -109,6 +109,21 @@ describe('ui-settings-general shell', () => {
+     off()
+   })
+
++  it('shows one navigation row for the winning section and restores the original on disposal', async ({ start }) => {
++    const c = await start()
++    const { sections } = injectedOf(c).hooks
++    const original = sections.getSnapshot().find(row => row.id === 'agent-presets')!
++    const remove = c.ctx.slots.register({
++      name: 'settings.section', id: 'agent-presets', priority: -1, order: 20, label: 'Learning modes',
++    }, () => null)
++    onTestFinished(remove)
++    const rows = sections.getSnapshot().filter(row => row.id === 'agent-presets')
++    expect(rows).toEqual([{ id: 'agent-presets', order: 20, label: 'Learning modes' }])
++    expect(sections.getSnapshot().map(row => row.id)).toEqual(PRODUCT_SECTIONS)
++    remove()
++    expect(sections.getSnapshot().filter(row => row.id === 'agent-presets')).toEqual([original])
++  })
++
+   it('shows Account first in Desktop while signed in and removes it on sign-out', async ({ start }) => {
+     vi.stubGlobal('dshDesktop', {})
+     onTestFinished(() => { vi.unstubAllGlobals() })
 diff --git a/packages/client/ui-settings-models/src/client/ModelsSection.tsx b/packages/client/ui-settings-models/src/client/ModelsSection.tsx
 index c3eae4041b..56aa451a3c 100644
 --- a/packages/client/ui-settings-models/src/client/ModelsSection.tsx
@@ -17126,7 +17165,7 @@ index 0f97822753..ab19295f3d 100644
      const dir = await scratch()
      const target = join(dir, 'document')
 diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
-index 36dc0506d3..d70ef5f223 100644
+index 36dc0506d3..fce20283f3 100644
 --- a/pnpm-lock.yaml
 +++ b/pnpm-lock.yaml
 @@ -8,6 +8,23 @@ overrides:
@@ -17400,7 +17439,7 @@ index 36dc0506d3..d70ef5f223 100644
        '@deepseek-ai/dsh-web-frontend':
          specifier: workspace:*
          version: link:../../../apps/web
-@@ -4151,6 +4213,184 @@ importers:
+@@ -4151,6 +4213,187 @@ importers:
          specifier: ^18.2.0
          version: 18.3.1
 
@@ -17542,6 +17581,9 @@ index 36dc0506d3..d70ef5f223 100644
 +      '@deepseek-ai/dsh-client-ui-sidebar':
 +        specifier: workspace:^
 +        version: link:../ui-sidebar
++      '@deepseek-ai/dsh-client-ui-sidebar-right':
++        specifier: workspace:*
++        version: link:../ui-sidebar-right
 +      '@deepseek-ai/dsh-client-ui-slots':
 +        specifier: workspace:^
 +        version: link:../ui-slots
@@ -17585,7 +17627,7 @@ index 36dc0506d3..d70ef5f223 100644
    packages/client/ui-plan:
      devDependencies:
        '@deepseek-ai/cordis':
-@@ -4348,7 +4588,7 @@ importers:
+@@ -4348,7 +4591,7 @@ importers:
          version: 3.0.0
        micromark-core-commonmark:
          specifier: ^2.0.3
@@ -17594,7 +17636,7 @@ index 36dc0506d3..d70ef5f223 100644
        micromark-extension-gfm:
          specifier: ^3.0.0
          version: 3.0.0
-@@ -4357,7 +4597,7 @@ importers:
+@@ -4357,7 +4600,7 @@ importers:
          version: 3.1.0
        micromark-factory-space:
          specifier: ^2.0.1
@@ -17603,7 +17645,7 @@ index 36dc0506d3..d70ef5f223 100644
        micromark-util-character:
          specifier: ^2.1.1
          version: 2.1.1
-@@ -4371,8 +4611,8 @@ importers:
+@@ -4371,8 +4614,8 @@ importers:
          specifier: ^2.0.1
          version: 2.0.1
        micromark-util-types:
@@ -17614,7 +17656,7 @@ index 36dc0506d3..d70ef5f223 100644
        react:
          specifier: ^18.2.0
          version: 18.3.1
-@@ -7144,8 +7384,8 @@ importers:
+@@ -7144,8 +7387,8 @@ importers:
          specifier: workspace:~
          version: link:../../../vendor/include
        js-yaml:
@@ -17625,7 +17667,7 @@ index 36dc0506d3..d70ef5f223 100644
 
    packages/experimental/api-speech-to-text:
      dependencies:
-@@ -7742,7 +7982,7 @@ importers:
+@@ -7742,7 +7985,7 @@ importers:
          version: link:../../host/webserver
        '@types/ws':
          specifier: ^8.18.1
@@ -17634,7 +17676,7 @@ index 36dc0506d3..d70ef5f223 100644
        playwright:
          specifier: ^1.49.0
          version: 1.61.1
-@@ -7908,8 +8148,8 @@ importers:
+@@ -7908,8 +8151,8 @@ importers:
          specifier: workspace:~
          version: link:../../../vendor/include
        js-yaml:
@@ -17645,7 +17687,7 @@ index 36dc0506d3..d70ef5f223 100644
 
    packages/experimental/webworker-packer:
      dependencies:
-@@ -7932,8 +8172,8 @@ importers:
+@@ -7932,8 +8175,8 @@ importers:
          specifier: workspace:*
          version: link:../../session/session-format-v3-to-v4
        js-yaml:
@@ -17656,7 +17698,7 @@ index 36dc0506d3..d70ef5f223 100644
        picomatch:
          specifier: ^4.0.4
          version: 4.0.4
-@@ -9490,7 +9730,7 @@ importers:
+@@ -9490,7 +9733,7 @@ importers:
          version: link:../../../vendor/schemastery
        '@earendil-works/pi-ai':
          specifier: ^0.85.1
@@ -17665,7 +17707,7 @@ index 36dc0506d3..d70ef5f223 100644
      devDependencies:
        '@deepseek-ai/cordis':
          specifier: workspace:~
-@@ -9818,7 +10058,7 @@ importers:
+@@ -9818,7 +10061,7 @@ importers:
          version: link:../../core/tools
        '@modelcontextprotocol/node':
          specifier: 2.0.0
@@ -17674,7 +17716,7 @@ index 36dc0506d3..d70ef5f223 100644
        '@modelcontextprotocol/server':
          specifier: 2.0.0
          version: 2.0.0
-@@ -9831,34 +10071,545 @@ importers:
+@@ -9831,34 +10074,545 @@ importers:
        zod:
          specifier: ^4.4.3
          version: 4.4.3
@@ -18235,7 +18277,7 @@ index 36dc0506d3..d70ef5f223 100644
 
    packages/plan/plan-mode:
      dependencies:
-@@ -9934,8 +10685,8 @@ importers:
+@@ -9934,8 +10688,8 @@ importers:
          specifier: ^4.0.9
          version: 4.0.9
        js-yaml:
@@ -18246,7 +18288,7 @@ index 36dc0506d3..d70ef5f223 100644
 
    packages/preset/agent-preset-registry:
      dependencies:
-@@ -9946,8 +10697,8 @@ importers:
+@@ -9946,8 +10700,8 @@ importers:
          specifier: link:../../../vendor/schemastery
          version: link:../../../vendor/schemastery
        js-yaml:
@@ -18257,7 +18299,7 @@ index 36dc0506d3..d70ef5f223 100644
        zod:
          specifier: ^4.4.3
          version: 4.4.3
-@@ -11818,8 +12569,8 @@ importers:
+@@ -11818,8 +12572,8 @@ importers:
          specifier: workspace:*
          version: link:../../core/tools
        sharp:
@@ -18268,7 +18310,7 @@ index 36dc0506d3..d70ef5f223 100644
 
    packages/ssh/fs-ssh:
      dependencies:
-@@ -11986,6 +12737,49 @@ importers:
+@@ -11986,6 +12740,49 @@ importers:
          specifier: workspace:*
          version: link:../storage
 
@@ -18318,7 +18360,7 @@ index 36dc0506d3..d70ef5f223 100644
    packages/storage/storage-sqlite:
      dependencies:
        '@deepseek-ai/schemastery':
-@@ -12853,11 +13647,11 @@ importers:
+@@ -12853,11 +13650,11 @@ importers:
          specifier: ^16.3.2
          version: 16.3.2(@testing-library/dom@10.4.2)(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
        js-yaml:
@@ -18334,7 +18376,7 @@ index 36dc0506d3..d70ef5f223 100644
      devDependencies:
        '@deepseek-ai/cordis':
          specifier: workspace:~
-@@ -13058,11 +13852,11 @@ importers:
+@@ -13058,11 +13855,11 @@ importers:
          specifier: workspace:*
          version: link:../../session/session-format
        js-yaml:
@@ -18350,7 +18392,7 @@ index 36dc0506d3..d70ef5f223 100644
      devDependencies:
        '@deepseek-ai/cordis':
          specifier: workspace:~
-@@ -13269,8 +14063,8 @@ importers:
+@@ -13269,8 +14066,8 @@ importers:
    packages/util/http-proxy:
      dependencies:
        undici:
@@ -18361,7 +18403,7 @@ index 36dc0506d3..d70ef5f223 100644
      devDependencies:
        '@deepseek-ai/cordis':
          specifier: workspace:~
-@@ -13416,8 +14210,8 @@ importers:
+@@ -13416,8 +14213,8 @@ importers:
          specifier: ^2.5.0
          version: 2.5.0
        undici:
@@ -18372,7 +18414,7 @@ index 36dc0506d3..d70ef5f223 100644
      devDependencies:
        '@deepseek-ai/cordis':
          specifier: workspace:~
-@@ -14335,8 +15129,8 @@ importers:
+@@ -14335,8 +15132,8 @@ importers:
          specifier: link:../cosmokit
          version: link:../cosmokit
        js-yaml:
@@ -18383,7 +18425,7 @@ index 36dc0506d3..d70ef5f223 100644
 
    vendor/loader:
      dependencies:
-@@ -14414,10 +15208,10 @@ importers:
+@@ -14414,10 +15211,10 @@ importers:
          version: 5.4.21(@types/node@25.9.3)(lightningcss@1.32.0)
        vitepress:
          specifier: ^1.6.4
@@ -18396,7 +18438,7 @@ index 36dc0506d3..d70ef5f223 100644
        vue:
          specifier: 3.5.39
          version: 3.5.39(typescript@6.0.3)
-@@ -14896,6 +15690,9 @@ packages:
+@@ -14896,6 +15693,9 @@ packages:
      engines: {node: '>=22.19.0'}
      hasBin: true
 
@@ -18406,7 +18448,7 @@ index 36dc0506d3..d70ef5f223 100644
    '@docsearch/css@3.8.2':
      resolution: {integrity: sha512-y05ayQFyUmCXze79+56v/4HpycYF3uFqB78pLPrSV5ZKAlDuIAAJNhaRi8tTdRNXh05yxX/TyNnzD6LwSM89vQ==}
 
-@@ -15513,11 +16310,11 @@ packages:
+@@ -15513,11 +16313,11 @@ packages:
        '@modelcontextprotocol/sdk':
          optional: true
 
@@ -18421,7 +18463,7 @@ index 36dc0506d3..d70ef5f223 100644
 
    '@humanfs/core@0.19.2':
      resolution: {integrity: sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA==}
-@@ -15552,160 +16349,160 @@ packages:
+@@ -15552,160 +16352,160 @@ packages:
      resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
      engines: {node: '>=18'}
 
@@ -18634,7 +18676,7 @@ index 36dc0506d3..d70ef5f223 100644
      engines: {node: '>=20.9.0'}
      cpu: [x64]
      os: [win32]
-@@ -15734,6 +16531,9 @@ packages:
+@@ -15734,6 +16534,9 @@ packages:
    '@jridgewell/sourcemap-codec@1.5.5':
      resolution: {integrity: sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==}
 
@@ -18644,7 +18686,7 @@ index 36dc0506d3..d70ef5f223 100644
    '@jridgewell/trace-mapping@0.3.31':
      resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
-@@ -15942,7 +16742,7 @@ packages:
+@@ -15942,7 +16745,7 @@ packages:
      engines: {node: '>=20'}
      peerDependencies:
        '@modelcontextprotocol/server': ^2.0.0
@@ -18653,7 +18695,7 @@ index 36dc0506d3..d70ef5f223 100644
      peerDependenciesMeta:
        hono:
          optional: true
-@@ -15959,10 +16759,12 @@ packages:
+@@ -15959,10 +16762,12 @@ packages:
 
    '@modelcontextprotocol/server-everything@2026.7.4':
      resolution: {integrity: sha512-ydMW/M6rk9tK23b+U38trsNLHhd5eF+ntiv2Vr+RPMDhbiKY/IKrZU25ukvSXVPUBvy7TxTPWpeV4KcYcXg72w==}
@@ -18666,7 +18708,7 @@ index 36dc0506d3..d70ef5f223 100644
      hasBin: true
 
    '@modelcontextprotocol/server@2.0.0':
-@@ -16940,6 +17742,9 @@ packages:
+@@ -16940,6 +17745,9 @@ packages:
    '@smithy/core@3.24.7':
      resolution: {integrity: sha512-KoUi4M1f3BG6kzN1FnCwL7oyFptTbyBJKjR6yhSib+JHRdUmM1o+VwsFtJ66NZCkCzVfJMWRHJNo0R0jznp0Pg==}
      engines: {node: '>=18.0.0'}
@@ -18676,7 +18718,7 @@ index 36dc0506d3..d70ef5f223 100644
 
    '@smithy/credential-provider-imds@4.3.9':
      resolution: {integrity: sha512-ZlfJ/4Fa3jYb+3eaohPfG9utX9HmdhFNcFtpoGAhUhdynAOmGXtmigbi7eEiONKM+ykHw8RwKuDEb85Lx7t7fA==}
-@@ -17059,6 +17864,9 @@ packages:
+@@ -17059,6 +17867,9 @@ packages:
    '@trycua/cua-driver@0.28.0':
      resolution: {integrity: sha512-n3ArFsQ9RzNQIiYpHJEjTGLIPPpnqXDJRp0sevRcrRThAG3H2Fh/gWooEb9k4ba3rNSAohUoPiG/EbdKLF1WRw==}
 
@@ -18686,7 +18728,7 @@ index 36dc0506d3..d70ef5f223 100644
    '@tybys/wasm-util@0.10.2':
      resolution: {integrity: sha512-RoBvJ2X0wuKlWFIjrwffGw1IqZHKQqzIchKaadZZfnNpsAYp2mM0h36JtPCjNDAHGgYez/15uMBpfGwchhiMgg==}
 
-@@ -17287,6 +18095,9 @@ packages:
+@@ -17287,6 +18098,9 @@ packages:
    '@types/papaparse@5.5.2':
      resolution: {integrity: sha512-gFnFp/JMzLHCwRf7tQHrNnfhN4eYBVYYI897CGX4MY1tzY9l2aLkVyx2IlKZ/SAqDbB3I1AOZW5gTMGGsqWliA==}
 
@@ -18696,7 +18738,7 @@ index 36dc0506d3..d70ef5f223 100644
    '@types/picomatch@3.0.2':
      resolution: {integrity: sha512-n0i8TD3UDB7paoMMxA3Y65vUncFJXjcUf7lQY7YyKGl6031FNjfsLs6pdLFCy2GNFxItPJG8GvvpbZc2skH7WA==}
 
-@@ -17334,6 +18145,12 @@ packages:
+@@ -17334,6 +18148,12 @@ packages:
    '@types/spdx-expression-parse@4.0.0':
      resolution: {integrity: sha512-odQzy87phelGS4inXOzjmusx4hoCVD0IbxUANxHzVkmTzMRTNnUPoq1urIl7S1qf09KcDWKLFIftPmLtgbsAHA==}
 
@@ -18709,7 +18751,7 @@ index 36dc0506d3..d70ef5f223 100644
    '@types/tough-cookie@4.0.5':
      resolution: {integrity: sha512-/Ad8+nIOV7Rl++6f1BdKxFSMgmoqEoYbHRpPcx3JEfv8VRsQe9Z4mCXeJBzxs7mbHY/XOZZuXlRNfhpVPbs6ZA==}
 
-@@ -17352,12 +18169,18 @@ packages:
+@@ -17352,12 +18172,18 @@ packages:
    '@types/web-bluetooth@0.0.21':
      resolution: {integrity: sha512-oIQLCGWtcFZy2JW77j9k8nHzAOpqMHLQejDA48XXMWH6tjCQHz5RCFz1bzsmROyL6PUm+LLnUiI4BCn221inxA==}
 
@@ -18728,7 +18770,7 @@ index 36dc0506d3..d70ef5f223 100644
    '@types/yauzl@2.10.3':
      resolution: {integrity: sha512-oJoftv0LSuaDZE3Le4DbKX+KS9G36NzOeSap90UIK0yMA/NhKJhqlSGtNDORNRaIbQfzjXDrQa0ytJ6mNRGz/Q==}
 
-@@ -17434,20 +18257,20 @@ packages:
+@@ -17434,20 +18260,20 @@ packages:
        vite: ^5.0.0 || ^6.0.0
        vue: ^3.2.25
 
@@ -18757,7 +18799,7 @@ index 36dc0506d3..d70ef5f223 100644
      peerDependencies:
        msw: ^2.4.9
        vite: ^6.0.0 || ^7.0.0 || ^8.0.0
-@@ -17457,20 +18280,23 @@ packages:
+@@ -17457,20 +18283,23 @@ packages:
        vite:
          optional: true
 
@@ -18789,7 +18831,7 @@ index 36dc0506d3..d70ef5f223 100644
 
    '@vscode/ripgrep-darwin-arm64@1.18.0':
      resolution: {integrity: sha512-r3ktHSvbFycQNF6sl7sNDPocpsI7J+mEzh1IaZFkY0spm3k2Z9t8hPAeOK7+p0l6p6/swkQC14XWX01low+94Q==}
-@@ -17623,6 +18449,9 @@ packages:
+@@ -17623,6 +18452,9 @@ packages:
    '@vueuse/shared@12.8.2':
      resolution: {integrity: sha512-dznP38YzxZoNloI0qpEfpkms8knDtaoQ6Y/sfS0L7Yki4zh40LFHEhur0odJC6xTHG5dxWVPiUWBXn+wCG2s5w==}
 
@@ -18799,7 +18841,7 @@ index 36dc0506d3..d70ef5f223 100644
    '@xmldom/xmldom@0.8.15':
      resolution: {integrity: sha512-/5NV/vDALVFDXgLmfsy9TRCBlKwO2LNBFzpzvb9iIj+jR+eSc6DLYYvVOdivT/jm7MtU6TebYuRmzEOI7w40UA==}
      engines: {node: '>=10.0.0'}
-@@ -17639,6 +18468,22 @@ packages:
+@@ -17639,6 +18471,22 @@ packages:
    '@xterm/xterm@6.0.0':
      resolution: {integrity: sha512-TQwDdQGtwwDt+2cgKDLn0IRaSxYu1tSUjgKarSDkUM0ZNiSRXFpjxEsvc/Zgc5kq5omJ+V0a8/kIM2WD3sMOYg==}
 
@@ -18822,7 +18864,7 @@ index 36dc0506d3..d70ef5f223 100644
    '@yao-pkg/pkg-fetch@3.6.4':
      resolution: {integrity: sha512-2JXvS9HbMudLlzEjSaJ7bLNnF/WlTv7iaTAJp2Tk8pBsgwCyL9p4rIN8cztHlyZF7qVzr1EaBjd7DQooFk0azQ==}
      hasBin: true
-@@ -17924,9 +18769,9 @@ packages:
+@@ -17924,9 +18772,9 @@ packages:
    brace-expansion@2.1.2:
      resolution: {integrity: sha512-w5JZcKgdhDOgOwm8H+KgbosopHMuGcl6qbulwjtz3SM7I7P3yW1eAjzMPLrIE+NQ9vjgANKHWeMHnrT0OXW1oA==}
 
@@ -18835,7 +18877,7 @@ index 36dc0506d3..d70ef5f223 100644
 
    brotli@1.3.3:
      resolution: {integrity: sha512-oTKjJdShmDuGW94SyyaoQvAjf30dZaHnjJ8uAF+u2/vGJkJbJPJAT1gDiOJP5v1Zb6f9KEyW/1HpuaWIXtGHPg==}
-@@ -18075,6 +18920,9 @@ packages:
+@@ -18075,6 +18923,9 @@ packages:
      resolution: {integrity: sha512-77PSwercCZU2Fc4sX94eF8k8Pxte6JAwL4/ICZLFjJLqegs7kCuAsqqj/70NQF6TvDpgFjkubQB2FW2ZZddvQg==}
      engines: {node: '>=8'}
 
@@ -18845,7 +18887,7 @@ index 36dc0506d3..d70ef5f223 100644
    cliui@7.0.4:
      resolution: {integrity: sha512-OcRE68cOsVMXp1Yvonl/fzkQOyjLSu/8bhPDfQt0e0/Eb283TKP20Fs2MqoPsr9SwA595rRCA+QMzYc9nBP+JQ==}
 
-@@ -18780,8 +19628,8 @@ packages:
+@@ -18780,8 +19631,8 @@ packages:
      resolution: {integrity: sha512-XYfuKMvj4O35f/pOXLObndIRvyQ+/+6AhODh+OKWj9S9498pHHn/IMszH+gt0fBCRWMNfk1ZSp5x3AifmnI2vg==}
      engines: {node: '>=6'}
 
@@ -18856,7 +18898,7 @@ index 36dc0506d3..d70ef5f223 100644
      engines: {node: '>=12.0.0'}
 
    exponential-backoff@3.1.3:
-@@ -18809,6 +19657,10 @@ packages:
+@@ -18809,6 +19660,10 @@ packages:
      resolution: {integrity: sha512-11Ndz7Nv+mvAC1j0ktTa7fAb0vLyGGX+rMHNBYQviQDGU0Hw7lhctJANqbPhu9nV9/izT/IntTgZ7Im/9LJs9g==}
      engines: {'0': node >=0.6.0}
 
@@ -18867,7 +18909,7 @@ index 36dc0506d3..d70ef5f223 100644
    fast-check@4.8.0:
      resolution: {integrity: sha512-GOJ158CUMnN6cSahsv4+ExARvIDuzzinFjkp0E9WtiBa5zcVeLozVkWaE4IzFcc+Y48Wp1EDlUZsXRyAztQcSg==}
      engines: {node: '>=12.17.0'}
-@@ -18832,8 +19684,8 @@ packages:
+@@ -18832,8 +19687,8 @@ packages:
    fast-sha256@1.3.0:
      resolution: {integrity: sha512-n11RGP/lrWEFI/bWdygLxhI+pVeo1ZYIVwvvPkW7azl/rOy+F3HYRZ2K5zeE9mmkhQppyv9sQFx0JM9UabnpPQ==}
 
@@ -18878,7 +18920,7 @@ index 36dc0506d3..d70ef5f223 100644
 
    fast-xml-builder@1.2.0:
      resolution: {integrity: sha512-00aAWieqff+ZJhsXA4g1g7M8k+7AYoMUUHF+/zFb5U6Uv/P0Vl4QZo84/IcufzYalLuEj9928bXN9PbbFzMF0Q==}
-@@ -19120,8 +19972,8 @@ packages:
+@@ -19120,8 +19975,8 @@ packages:
      resolution: {integrity: sha512-F/1DnUGPopORZi0ni+CvrCgHQ5FyEAHRLSApuYWMmrbSwoN2Mn/7k+Gl38gJnR7yyDZk6WLXwiGod1JOWNDKGw==}
      hasBin: true
 
@@ -18889,7 +18931,7 @@ index 36dc0506d3..d70ef5f223 100644
      engines: {node: '>=16.9.0'}
 
    hookable@5.5.3:
-@@ -19195,6 +20047,9 @@ packages:
+@@ -19195,6 +20050,9 @@ packages:
      resolution: {integrity: sha512-IKXpvIzjnC9XTAUbVBcMfGS0EPaIXtW6v+zr+RRp+hqULEpo0owZax6wyRwPOJbWbzjYspQwusTsfVr0ifh4uQ==}
      engines: {node: '>=0.10.0'}
 
@@ -18899,7 +18941,7 @@ index 36dc0506d3..d70ef5f223 100644
    ieee754@1.2.1:
      resolution: {integrity: sha512-dcyqhDvX1C46lXZcVqCpK+FtMRQVdIMN6/Df5js2zouUsqG7I6sFxitIC+7KYK29KdXOLHdu9zL4sFnoVQnqaA==}
 
-@@ -19243,8 +20098,8 @@ packages:
+@@ -19243,8 +20101,8 @@ packages:
      resolution: {integrity: sha512-DRsRnQrbzdFjaQ1oe4C6/EIUymIOEix1qROEJTF9dbMq+M4Zrm6VaLp6SD/B9IsiEjPZuBSnWWFN+udajugdWA==}
      engines: {node: '>=20'}
 
@@ -18910,7 +18952,7 @@ index 36dc0506d3..d70ef5f223 100644
      engines: {node: '>= 12'}
 
    ipaddr.js@1.9.1:
-@@ -19375,12 +20230,8 @@ packages:
+@@ -19375,12 +20233,8 @@ packages:
    js-tokens@4.0.0:
      resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
 
@@ -18925,7 +18967,7 @@ index 36dc0506d3..d70ef5f223 100644
      hasBin: true
 
    jsbi@4.3.2:
-@@ -19839,8 +20690,11 @@ packages:
+@@ -19839,8 +20693,11 @@ packages:
    mermaid@11.16.0:
      resolution: {integrity: sha512-Zvm3kbstgdpvIJPPItlL7fppIZ3kibvc1oZIGxdvk9t6UFz6flv+Jw7FtRGKwfcI8OckmH04LqG6LlS6X4B1pA==}
 
@@ -18939,7 +18981,7 @@ index 36dc0506d3..d70ef5f223 100644
 
    micromark-extension-gfm-autolink-literal@2.1.0:
      resolution: {integrity: sha512-oOg7knzhicgQ3t4QCjCWgTmfNhvQbDDnJeVu9v81r7NltNCVmhPy1fJRX27pISafdjL+SVc4d3l48Gb6pbRypw==}
-@@ -19872,8 +20726,8 @@ packages:
+@@ -19872,8 +20729,8 @@ packages:
    micromark-factory-label@2.0.1:
      resolution: {integrity: sha512-VFMekyQExqIW7xIChcXn4ok29YE3rnuyveW3wZQWWqF4Nv9Wk5rgJ99KzPvHjkmPXF93FXIbBp6YdW3t71/7Vg==}
 
@@ -18950,7 +18992,7 @@ index 36dc0506d3..d70ef5f223 100644
 
    micromark-factory-title@2.0.1:
      resolution: {integrity: sha512-5bZ+3CjhAd9eChYTHsjy6TGxpOFSKgKKJPJxr293jTbfry2KDoWkhBb6TcPVB4NmzaPhMs1Frm9AZH7OD4Cjzw==}
-@@ -19899,6 +20753,9 @@ packages:
+@@ -19899,6 +20756,9 @@ packages:
    micromark-util-decode-string@2.0.1:
      resolution: {integrity: sha512-nDV/77Fj6eH1ynwscYTOsbK7rR//Uj0bZXBwJZRfaLEJ1iGBR6kIfNmlNqaqJf649EP0F3NWNdeJi03elllNUQ==}
 
@@ -18960,7 +19002,7 @@ index 36dc0506d3..d70ef5f223 100644
    micromark-util-encode@2.0.1:
      resolution: {integrity: sha512-c3cVx2y4KqUnwopcO9b/SCdo2O67LwJJ/UyqGfbigahfegL9myoEFoDYZgkT7f36T0bLrM9hZTAaAyH+PCAXjw==}
 
-@@ -19920,8 +20777,8 @@ packages:
+@@ -19920,8 +20780,8 @@ packages:
    micromark-util-symbol@2.0.1:
      resolution: {integrity: sha512-vs5t8Apaud9N28kgCrRUdEed4UJ+wWNvicHLPxCa9ENlYuAY31M0ETy5y1vA33YoNPDFTghEbnh6efaE8h4x0Q==}
 
@@ -18971,7 +19013,7 @@ index 36dc0506d3..d70ef5f223 100644
 
    micromark@4.0.2:
      resolution: {integrity: sha512-zpe98Q6kvavpCr1NPVSCMebCKfD7CA2NqZ+rykeNhONIJBpc1tFKt9hucLGwha3jNTNI8lHpctWJWoimVF4PfA==}
-@@ -20016,8 +20873,8 @@ packages:
+@@ -20016,8 +20876,8 @@ packages:
    multistream@4.1.0:
      resolution: {integrity: sha512-J1XDiAmmNpRCBfIWJv+n0ymC4ABcf/Pl+5YvC5B/D2f/2+8PtHvCNxMPKiQcZyi922Hq69J2YOpb1pTywfifyw==}
 
@@ -18982,7 +19024,7 @@ index 36dc0506d3..d70ef5f223 100644
      engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
      hasBin: true
 
-@@ -20324,6 +21181,10 @@ packages:
+@@ -20324,6 +21184,10 @@ packages:
    pathe@2.0.3:
      resolution: {integrity: sha512-WUjGcAqP1gQacoQe+OBJsFA7Ld4DyXuUIjZ5cc75cLHvJ7dtNsTugphxIADwspS+AraAUePCKrSVtPLFj/F88w==}
 
@@ -18993,7 +19035,7 @@ index 36dc0506d3..d70ef5f223 100644
    pdfjs-dist@6.3.289:
      resolution: {integrity: sha512-ZHjSVpDa3D6izMq8/04lvkhkATUmL9px6ChPaXc1k6nU2Mrhlg1/7F0bdUqCwUjw3NsPTfPZsMDUU6ZIcRaeQw==}
      engines: {node: '>=22.13.0 || >=24'}
-@@ -20341,6 +21202,40 @@ packages:
+@@ -20341,6 +21205,40 @@ packages:
    performance-now@2.1.0:
      resolution: {integrity: sha512-7EAHlyLHI56VEIdK57uwHdHKIaAGbnXPiw0yWbarQZOKaKpvUIgW0jWRVLiatnM+XXlSwsanIBH/hzGMJulMow==}
 
@@ -19034,7 +19076,7 @@ index 36dc0506d3..d70ef5f223 100644
    picocolors@1.1.1:
      resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
 
-@@ -20395,10 +21290,26 @@ packages:
+@@ -20395,10 +21293,26 @@ packages:
      resolution: {integrity: sha512-rEwq/ZHlJIKw++XtLAO8PPuOQA/zaPJOZJ37BVuN97nLpMJeuDVLVGRwbFoBgLudgdTMP2hdRJP++H+8QOA3vg==}
      engines: {node: '>= 10.12'}
 
@@ -19063,7 +19105,7 @@ index 36dc0506d3..d70ef5f223 100644
    postject@1.0.0-alpha.6:
      resolution: {integrity: sha512-b9Eb8h2eVqNE8edvKdwqkrY6O7kAwmI8kcnBv1NScolYJbo59XUF0noFq+lxbC1yN20bmC0WBEbDC5H/7ASb0A==}
      engines: {node: '>=14.0.0'}
-@@ -20463,8 +21374,8 @@ packages:
+@@ -20463,8 +21377,8 @@ packages:
    property-information@7.2.0:
      resolution: {integrity: sha512-IAtzIB6sUiWaJYrX9smp3V46pBGbBeLFRGdh25kg1334VcBlD8HzhPeNIWQH9zhGmo2itIe25EHt9dQP7G5hmg==}
 
@@ -19074,7 +19116,7 @@ index 36dc0506d3..d70ef5f223 100644
      engines: {node: '>=12.0.0'}
 
    proxy-addr@2.0.8:
-@@ -20496,8 +21407,8 @@ packages:
+@@ -20496,8 +21410,8 @@ packages:
      resolution: {integrity: sha512-BbubeCEyTuQjVMakvJQ/Sxbc93F2pwmbsxONT/ZRrwU7Ua38d8unYTwXpTVLAKJ4BDuH9IGztCjQcd/N/39Dvg==}
      engines: {node: '>=16.0.0'}
 
@@ -19085,7 +19127,7 @@ index 36dc0506d3..d70ef5f223 100644
      engines: {node: '>=0.6'}
 
    quansync@1.0.0:
-@@ -20776,8 +21687,8 @@ packages:
+@@ -20776,8 +21690,8 @@ packages:
    setprototypeof@1.2.0:
      resolution: {integrity: sha512-E5LDX7Wrp85Kil5bhZv46j8jOeboKq5JMmYM3gVGdGH8xFpPWXUMsNrlODCrkoxMEeNi/XZIwuRvY4XNwYMJpw==}
 
@@ -19096,7 +19138,7 @@ index 36dc0506d3..d70ef5f223 100644
      engines: {node: '>=20.9.0'}
      peerDependencies:
        '@types/node': '*'
-@@ -20881,6 +21792,10 @@ packages:
+@@ -20881,6 +21795,10 @@ packages:
      resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
      engines: {node: '>=0.10.0'}
 
@@ -19107,7 +19149,7 @@ index 36dc0506d3..d70ef5f223 100644
    source-map-support@0.5.21:
      resolution: {integrity: sha512-uBHU3L3czsIyYXKX88fdrGovxdSCoTGDRZ6SYXtSRxLZUzHg5P/66Ht6uoUlHu9EZod+inXhKo3qQgwXUT/y1w==}
 
-@@ -20904,6 +21819,10 @@ packages:
+@@ -20904,6 +21822,10 @@ packages:
      resolution: {integrity: sha512-1POYv7uv2gXoyGFpBCmpDVSNV74IfsWlDW216UPjbWufNf+bSU6GdbDsxdcxtfwb4xlI3yxzOTKClUosxARYrQ==}
      engines: {node: '>=0.10.0'}
 
@@ -19118,7 +19160,7 @@ index 36dc0506d3..d70ef5f223 100644
    sprintf-js@1.1.3:
      resolution: {integrity: sha512-Oo+0REFV59/rz3gfJNKQiBlwfHaSESl1pcGyABQsnnIfWOFt6JNj5gCog2U6MLZ//IGYD+nA8nI+mTShREReaA==}
 
-@@ -21044,6 +21963,9 @@ packages:
+@@ -21044,6 +21966,9 @@ packages:
    text-decoder@1.2.7:
      resolution: {integrity: sha512-vlLytXkeP4xvEq2otHeJfSQIRyWxo/oZGEbXrtEEF9Hnmrdly59sUbzZ/QgyWuLYHctCHxFF4tRQZNQ9k60ExQ==}
 
@@ -19128,7 +19170,7 @@ index 36dc0506d3..d70ef5f223 100644
    tiny-async-pool@1.3.0:
      resolution: {integrity: sha512-01EAw5EDrcVrdgyCLgoSPvqznC0sVxDSVeiOz09FUpjh71G79VCqneOr+xvt7T1r76CF6ZZfPjHorN2+d+3mqA==}
 
-@@ -21240,12 +22162,12 @@ packages:
+@@ -21240,12 +22165,12 @@ packages:
      resolution: {integrity: sha512-LIY910g9TI13YS95lrMFrs8Rm/u/irgHeTWoKCoteeJ04CUJ92eEfj0rVn+7VKMPBpUPiUoBKfhNyLI23EE/KA==}
      engines: {node: '>=18.17'}
 
@@ -19145,7 +19187,7 @@ index 36dc0506d3..d70ef5f223 100644
      engines: {node: '>=22.19.0'}
 
    unicode-properties@1.4.1:
-@@ -21481,27 +22403,27 @@ packages:
+@@ -21481,27 +22406,27 @@ packages:
      hasBin: true
      peerDependencies:
        markdown-it-mathjax3: ^4
@@ -19182,7 +19224,7 @@ index 36dc0506d3..d70ef5f223 100644
        happy-dom: '*'
        jsdom: '*'
        vite: ^6.0.0 || ^7.0.0 || ^8.0.0
-@@ -21678,6 +22600,10 @@ packages:
+@@ -21678,6 +22603,10 @@ packages:
    xmlchars@2.2.0:
      resolution: {integrity: sha512-JZnDKK8B0RCDw84FNdDAIpZK+JuJw+s7Lz8nksI7SIuU3UXJJslUthsi+uWBUYOwPFwW7W7PRLRfUKpxjtjFCw==}
 
@@ -19193,7 +19235,7 @@ index 36dc0506d3..d70ef5f223 100644
    y18n@5.0.8:
      resolution: {integrity: sha512-0pfFzegeDWJHJIAmTLRP2DwHjdF5s7jo9tuztdQxAhINCdvS+3nGINqPd00AphqJR/0LhANUS6/+7SCb98YOfA==}
      engines: {node: '>=10'}
-@@ -21745,6 +22671,9 @@ packages:
+@@ -21745,6 +22674,9 @@ packages:
    zod@4.4.3:
      resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
 
@@ -19203,7 +19245,7 @@ index 36dc0506d3..d70ef5f223 100644
    zustand@4.4.7:
      resolution: {integrity: sha512-QFJWJMdlETcI69paJwhSMJz7PPWjVP8Sjhclxmxmxv/RYI7ZOvR5BHX+ktH0we9gTWQMxcne8q1OY8xxz604gw==}
      engines: {node: '>=12.7.0'}
-@@ -22402,6 +23331,8 @@ snapshots:
+@@ -22402,6 +23334,8 @@ snapshots:
        '@deepseek-ai/libreoffice-kit-win32-arm64': 0.1.1
        '@deepseek-ai/libreoffice-kit-win32-x64': 0.1.1
 
@@ -19212,7 +19254,7 @@ index 36dc0506d3..d70ef5f223 100644
    '@docsearch/css@3.8.2': {}
 
    '@docsearch/js@3.8.2(@algolia/client-search@5.55.2)(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(search-insights@2.17.3)':
-@@ -22430,12 +23361,12 @@ snapshots:
+@@ -22430,12 +23364,12 @@ snapshots:
      transitivePeerDependencies:
        - '@algolia/client-search'
 
@@ -19227,7 +19269,7 @@ index 36dc0506d3..d70ef5f223 100644
        '@smithy/node-http-handler': 4.7.3
        http-proxy-agent: 7.0.2
        https-proxy-agent: 7.0.6
-@@ -22489,7 +23420,7 @@ snapshots:
+@@ -22489,7 +23423,7 @@ snapshots:
        semver: 7.8.5
        sumchecker: 3.0.1
      optionalDependencies:
@@ -19236,7 +19278,7 @@ index 36dc0506d3..d70ef5f223 100644
      transitivePeerDependencies:
        - supports-color
 
-@@ -22890,22 +23821,22 @@ snapshots:
+@@ -22890,22 +23824,22 @@ snapshots:
        react-dom: 18.3.1(react@18.3.1)
        regenerator-runtime: 0.14.1
 
@@ -19264,7 +19306,7 @@ index 36dc0506d3..d70ef5f223 100644
 
    '@humanfs/core@0.19.2':
      dependencies:
-@@ -22937,108 +23868,108 @@ snapshots:
+@@ -22937,108 +23871,108 @@ snapshots:
 
    '@img/colour@1.1.0': {}
 
@@ -19411,7 +19453,7 @@ index 36dc0506d3..d70ef5f223 100644
      optional: true
 
    '@isaacs/cliui@8.0.2':
-@@ -23070,6 +24001,8 @@ snapshots:
+@@ -23070,6 +24004,8 @@ snapshots:
 
    '@jridgewell/sourcemap-codec@1.5.5': {}
 
@@ -19420,7 +19462,7 @@ index 36dc0506d3..d70ef5f223 100644
    '@jridgewell/trace-mapping@0.3.31':
      dependencies:
        '@jridgewell/resolve-uri': 3.1.2
-@@ -23273,16 +24206,16 @@ snapshots:
+@@ -23273,16 +24209,16 @@ snapshots:
      dependencies:
        zod: 4.4.3
 
@@ -19441,7 +19483,7 @@ index 36dc0506d3..d70ef5f223 100644
        ajv: 8.20.0
        ajv-formats: 3.0.1(ajv@8.20.0)
        content-type: 1.0.5
-@@ -23292,7 +24225,7 @@ snapshots:
+@@ -23292,7 +24228,7 @@ snapshots:
        eventsource-parser: 3.1.0
        express: 5.2.1
        express-rate-limit: 8.5.2(express@5.2.1)
@@ -19450,7 +19492,7 @@ index 36dc0506d3..d70ef5f223 100644
        jose: 6.2.3
        json-schema-typed: 8.0.2
        pkce-challenge: 5.0.1
-@@ -23302,6 +24235,29 @@ snapshots:
+@@ -23302,6 +24238,29 @@ snapshots:
      transitivePeerDependencies:
        - supports-color
 
@@ -19480,7 +19522,7 @@ index 36dc0506d3..d70ef5f223 100644
    '@modelcontextprotocol/server-everything@2026.7.4':
      dependencies:
        '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
-@@ -24127,6 +25083,8 @@ snapshots:
+@@ -24127,6 +25086,8 @@ snapshots:
        '@trycua/cua-driver-win32-arm64-msvc': 0.28.0
        '@trycua/cua-driver-win32-x64-msvc': 0.28.0
 
@@ -19489,7 +19531,7 @@ index 36dc0506d3..d70ef5f223 100644
    '@tybys/wasm-util@0.10.2':
      dependencies:
        tslib: 2.8.1
-@@ -24408,6 +25366,12 @@ snapshots:
+@@ -24408,6 +25369,12 @@ snapshots:
      dependencies:
        '@types/node': 22.20.0
 
@@ -19502,7 +19544,7 @@ index 36dc0506d3..d70ef5f223 100644
    '@types/picomatch@3.0.2': {}
 
    '@types/picomatch@4.0.3': {}
-@@ -24452,6 +25416,18 @@ snapshots:
+@@ -24452,6 +25419,18 @@ snapshots:
 
    '@types/spdx-expression-parse@4.0.0': {}
 
@@ -19521,7 +19563,7 @@ index 36dc0506d3..d70ef5f223 100644
    '@types/tough-cookie@4.0.5': {}
 
    '@types/trusted-types@2.0.7': {}
-@@ -24464,16 +25440,21 @@ snapshots:
+@@ -24464,16 +25443,21 @@ snapshots:
 
    '@types/web-bluetooth@0.0.21': {}
 
@@ -19544,7 +19586,7 @@ index 36dc0506d3..d70ef5f223 100644
 
    '@typescript-eslint/types@8.61.0': {}
 
-@@ -24538,10 +25519,10 @@ snapshots:
+@@ -24538,10 +25522,10 @@ snapshots:
        vite: 5.4.21(@types/node@25.9.3)(lightningcss@1.32.0)
        vue: 3.5.39(typescript@6.0.3)
 
@@ -19557,7 +19599,7 @@ index 36dc0506d3..d70ef5f223 100644
        ast-v8-to-istanbul: 1.0.4
        istanbul-lib-coverage: 3.2.2
        istanbul-lib-report: 3.0.1
-@@ -24550,62 +25531,64 @@ snapshots:
+@@ -24550,62 +25534,64 @@ snapshots:
        obug: 2.1.3
        std-env: 4.1.0
        tinyrainbow: 3.1.0
@@ -19640,7 +19682,7 @@ index 36dc0506d3..d70ef5f223 100644
        convert-source-map: 2.0.0
        tinyrainbow: 3.1.0
 
-@@ -24682,7 +25665,7 @@ snapshots:
+@@ -24682,7 +25668,7 @@ snapshots:
        '@vue/shared': 3.5.39
        estree-walker: 2.0.2
        magic-string: 0.30.21
@@ -19649,7 +19691,7 @@ index 36dc0506d3..d70ef5f223 100644
        source-map-js: 1.2.1
 
    '@vue/compiler-ssr@3.5.39':
-@@ -24759,6 +25742,8 @@ snapshots:
+@@ -24759,6 +25745,8 @@ snapshots:
      transitivePeerDependencies:
        - typescript
 
@@ -19658,7 +19700,7 @@ index 36dc0506d3..d70ef5f223 100644
    '@xmldom/xmldom@0.8.15': {}
 
    '@xterm/addon-fit@0.11.0': {}
-@@ -24769,13 +25754,38 @@ snapshots:
+@@ -24769,13 +25757,38 @@ snapshots:
 
    '@xterm/xterm@6.0.0': {}
 
@@ -19698,7 +19740,7 @@ index 36dc0506d3..d70ef5f223 100644
        yargs: 16.2.2
      transitivePeerDependencies:
        - bare-abort-controller
-@@ -24813,7 +25823,7 @@ snapshots:
+@@ -24813,7 +25826,7 @@ snapshots:
 
    '@yarnpkg/parsers@3.1.0':
      dependencies:
@@ -19707,7 +19749,7 @@ index 36dc0506d3..d70ef5f223 100644
        tslib: 2.8.1
 
    abbrev@4.0.0: {}
-@@ -24853,7 +25863,7 @@ snapshots:
+@@ -24853,7 +25866,7 @@ snapshots:
    ajv@8.20.0:
      dependencies:
        fast-deep-equal: 3.1.3
@@ -19716,7 +19758,7 @@ index 36dc0506d3..d70ef5f223 100644
        json-schema-traverse: 1.0.0
        require-from-string: 2.0.2
 
-@@ -24925,7 +25935,7 @@ snapshots:
+@@ -24925,7 +25938,7 @@ snapshots:
        hosted-git-info: 4.1.0
        isbinaryfile: 5.0.7
        jiti: 2.7.0
@@ -19725,7 +19767,7 @@ index 36dc0506d3..d70ef5f223 100644
        json5: 2.2.3
        lazy-val: 1.0.5
        minimatch: 10.2.5
-@@ -25108,7 +26118,7 @@ snapshots:
+@@ -25108,7 +26121,7 @@ snapshots:
        http-errors: 2.0.1
        iconv-lite: 0.7.3
        on-finished: 2.4.1
@@ -19734,7 +19776,7 @@ index 36dc0506d3..d70ef5f223 100644
        raw-body: 3.0.2
        type-is: 2.1.0
      transitivePeerDependencies:
-@@ -25128,7 +26138,7 @@ snapshots:
+@@ -25128,7 +26141,7 @@ snapshots:
      dependencies:
        balanced-match: 1.0.2
 
@@ -19743,7 +19785,7 @@ index 36dc0506d3..d70ef5f223 100644
      dependencies:
        balanced-match: 4.0.4
 
-@@ -25185,7 +26195,7 @@ snapshots:
+@@ -25185,7 +26198,7 @@ snapshots:
        fs-extra: 10.1.0
        http-proxy-agent: 7.0.2
        https-proxy-agent: 7.0.6
@@ -19752,7 +19794,7 @@ index 36dc0506d3..d70ef5f223 100644
        sanitize-filename: 1.6.4
        source-map-support: 0.5.21
        stat-mode: 1.0.0
-@@ -25271,6 +26281,8 @@ snapshots:
+@@ -25271,6 +26284,8 @@ snapshots:
 
    ci-info@4.4.0: {}
 
@@ -19761,7 +19803,7 @@ index 36dc0506d3..d70ef5f223 100644
    cliui@7.0.4:
      dependencies:
        string-width: 4.2.3
-@@ -25400,7 +26412,7 @@ snapshots:
+@@ -25400,7 +26415,7 @@ snapshots:
        mime-types: 2.1.35
        oauth-sign: 0.9.0
        performance-now: 2.1.0
@@ -19770,7 +19812,7 @@ index 36dc0506d3..d70ef5f223 100644
        safe-buffer: 5.2.1
        tough-cookie: 4.1.4
        tunnel-agent: 0.6.0
-@@ -25725,7 +26737,7 @@ snapshots:
+@@ -25725,7 +26740,7 @@ snapshots:
        app-builder-lib: 26.15.3(dmg-builder@26.15.3)(electron-builder-squirrel-windows@26.15.3)
        builder-util: 26.15.3
        fs-extra: 10.1.0
@@ -19779,7 +19821,7 @@ index 36dc0506d3..d70ef5f223 100644
      transitivePeerDependencies:
        - electron-builder-squirrel-windows
        - supports-color
-@@ -25818,7 +26830,7 @@ snapshots:
+@@ -25818,7 +26833,7 @@ snapshots:
      dependencies:
        builder-util-runtime: 9.7.0
        fs-extra: 10.1.0
@@ -19788,7 +19830,7 @@ index 36dc0506d3..d70ef5f223 100644
        lazy-val: 1.0.5
        lodash.escaperegexp: 4.1.2
        lodash.isequal: 4.5.0
-@@ -26134,14 +27146,14 @@ snapshots:
+@@ -26134,14 +27149,14 @@ snapshots:
 
    expand-template@2.0.3: {}
 
@@ -19805,7 +19847,7 @@ index 36dc0506d3..d70ef5f223 100644
 
    express@5.2.1:
      dependencies:
-@@ -26165,7 +27177,7 @@ snapshots:
+@@ -26165,7 +27180,7 @@ snapshots:
        once: 1.4.0
        parseurl: 1.3.3
        proxy-addr: 2.0.8
@@ -19814,7 +19856,7 @@ index 36dc0506d3..d70ef5f223 100644
        range-parser: 1.3.0
        router: 2.2.0
        send: 1.2.1
-@@ -26190,6 +27202,8 @@ snapshots:
+@@ -26190,6 +27205,8 @@ snapshots:
 
    extsprintf@1.3.0: {}
 
@@ -19823,7 +19865,7 @@ index 36dc0506d3..d70ef5f223 100644
    fast-check@4.8.0:
      dependencies:
        pure-rand: 8.4.0
-@@ -26209,7 +27223,7 @@ snapshots:
+@@ -26209,7 +27226,7 @@ snapshots:
 
    fast-sha256@1.3.0: {}
 
@@ -19832,7 +19874,7 @@ index 36dc0506d3..d70ef5f223 100644
 
    fast-xml-builder@1.2.0:
      dependencies:
-@@ -26579,7 +27593,7 @@ snapshots:
+@@ -26579,7 +27596,7 @@ snapshots:
 
    he@1.2.0: {}
 
@@ -19841,7 +19883,7 @@ index 36dc0506d3..d70ef5f223 100644
 
    hookable@5.5.3: {}
 
-@@ -26679,6 +27693,8 @@ snapshots:
+@@ -26679,6 +27696,8 @@ snapshots:
      dependencies:
        safer-buffer: 2.1.2
 
@@ -19850,7 +19892,7 @@ index 36dc0506d3..d70ef5f223 100644
    ieee754@1.2.1: {}
 
    ignore@5.3.2: {}
-@@ -26710,7 +27726,7 @@ snapshots:
+@@ -26710,7 +27729,7 @@ snapshots:
 
    into-stream@9.1.0: {}
 
@@ -19859,7 +19901,7 @@ index 36dc0506d3..d70ef5f223 100644
 
    ipaddr.js@1.9.1: {}
 
-@@ -26803,11 +27819,7 @@ snapshots:
+@@ -26803,11 +27822,7 @@ snapshots:
 
    js-tokens@4.0.0: {}
 
@@ -19872,7 +19914,7 @@ index 36dc0506d3..d70ef5f223 100644
      dependencies:
        argparse: 2.0.1
 
-@@ -26859,7 +27871,7 @@ snapshots:
+@@ -26859,7 +27874,7 @@ snapshots:
        saxes: 6.0.0
        symbol-tree: 3.2.4
        tough-cookie: 6.0.1
@@ -19881,7 +19923,7 @@ index 36dc0506d3..d70ef5f223 100644
        w3c-xmlserializer: 5.0.0
        webidl-conversions: 8.0.1
        whatwg-mimetype: 5.0.0
-@@ -27143,7 +28155,7 @@ snapshots:
+@@ -27143,7 +28158,7 @@ snapshots:
 
    magic-string@0.30.21:
      dependencies:
@@ -19890,7 +19932,7 @@ index 36dc0506d3..d70ef5f223 100644
 
    magicast@0.5.3:
      dependencies:
-@@ -27187,7 +28199,7 @@ snapshots:
+@@ -27187,7 +28202,7 @@ snapshots:
        micromark-util-decode-string: 2.0.1
        micromark-util-normalize-identifier: 2.0.1
        micromark-util-symbol: 2.0.1
@@ -19899,7 +19941,7 @@ index 36dc0506d3..d70ef5f223 100644
        unist-util-stringify-position: 4.0.0
      transitivePeerDependencies:
        - supports-color
-@@ -27324,42 +28336,45 @@ snapshots:
+@@ -27324,42 +28339,45 @@ snapshots:
        ts-dedent: 2.3.0
        uuid: 14.0.1
 
@@ -19952,7 +19994,7 @@ index 36dc0506d3..d70ef5f223 100644
 
    micromark-extension-gfm-strikethrough@2.1.0:
      dependencies:
-@@ -27368,27 +28383,27 @@ snapshots:
+@@ -27368,27 +28386,27 @@ snapshots:
        micromark-util-classify-character: 2.0.1
        micromark-util-resolve-all: 2.0.1
        micromark-util-symbol: 2.0.1
@@ -19986,7 +20028,7 @@ index 36dc0506d3..d70ef5f223 100644
 
    micromark-extension-gfm@3.0.0:
      dependencies:
-@@ -27399,54 +28414,54 @@ snapshots:
+@@ -27399,54 +28417,54 @@ snapshots:
        micromark-extension-gfm-tagfilter: 2.0.0
        micromark-extension-gfm-task-list-item: 2.1.0
        micromark-util-combine-extensions: 2.0.1
@@ -20053,7 +20095,7 @@ index 36dc0506d3..d70ef5f223 100644
 
    micromark-util-chunked@2.0.1:
      dependencies:
-@@ -27456,12 +28471,12 @@ snapshots:
+@@ -27456,12 +28474,12 @@ snapshots:
      dependencies:
        micromark-util-character: 2.1.1
        micromark-util-symbol: 2.0.1
@@ -20068,7 +20110,7 @@ index 36dc0506d3..d70ef5f223 100644
 
    micromark-util-decode-numeric-character-reference@2.0.2:
      dependencies:
-@@ -27474,6 +28489,10 @@ snapshots:
+@@ -27474,6 +28492,10 @@ snapshots:
        micromark-util-decode-numeric-character-reference: 2.0.2
        micromark-util-symbol: 2.0.1
 
@@ -20079,7 +20121,7 @@ index 36dc0506d3..d70ef5f223 100644
    micromark-util-encode@2.0.1: {}
 
    micromark-util-html-tag-name@2.0.1: {}
-@@ -27484,7 +28503,7 @@ snapshots:
+@@ -27484,7 +28506,7 @@ snapshots:
 
    micromark-util-resolve-all@2.0.1:
      dependencies:
@@ -20088,7 +20130,7 @@ index 36dc0506d3..d70ef5f223 100644
 
    micromark-util-sanitize-uri@2.0.1:
      dependencies:
-@@ -27497,11 +28516,11 @@ snapshots:
+@@ -27497,11 +28519,11 @@ snapshots:
        devlop: 1.1.0
        micromark-util-chunked: 2.0.1
        micromark-util-symbol: 2.0.1
@@ -20102,7 +20144,7 @@ index 36dc0506d3..d70ef5f223 100644
 
    micromark@4.0.2(supports-color@9.4.0):
      dependencies:
-@@ -27509,8 +28528,8 @@ snapshots:
+@@ -27509,8 +28531,8 @@ snapshots:
        debug: 4.4.3(supports-color@9.4.0)
        decode-named-character-reference: 1.3.0
        devlop: 1.1.0
@@ -20113,7 +20155,7 @@ index 36dc0506d3..d70ef5f223 100644
        micromark-util-character: 2.1.1
        micromark-util-chunked: 2.0.1
        micromark-util-combine-extensions: 2.0.1
-@@ -27521,7 +28540,7 @@ snapshots:
+@@ -27521,7 +28543,7 @@ snapshots:
        micromark-util-sanitize-uri: 2.0.1
        micromark-util-subtokenize: 2.1.0
        micromark-util-symbol: 2.0.1
@@ -20122,7 +20164,7 @@ index 36dc0506d3..d70ef5f223 100644
      transitivePeerDependencies:
        - supports-color
 
-@@ -27547,7 +28566,7 @@ snapshots:
+@@ -27547,7 +28569,7 @@ snapshots:
 
    minimatch@10.2.5:
      dependencies:
@@ -20131,7 +20173,7 @@ index 36dc0506d3..d70ef5f223 100644
 
    minimatch@3.1.5:
      dependencies:
-@@ -27592,7 +28611,7 @@ snapshots:
+@@ -27592,7 +28614,7 @@ snapshots:
        once: 1.4.0
        readable-stream: 3.6.2
 
@@ -20140,7 +20182,7 @@ index 36dc0506d3..d70ef5f223 100644
 
    napi-build-utils@2.0.0: {}
 
-@@ -27893,6 +28912,10 @@ snapshots:
+@@ -27893,6 +28915,10 @@ snapshots:
 
    pathe@2.0.3: {}
 
@@ -20151,7 +20193,7 @@ index 36dc0506d3..d70ef5f223 100644
    pdfjs-dist@6.3.289:
      optionalDependencies:
        '@napi-rs/canvas': 1.0.8
-@@ -27905,6 +28928,41 @@ snapshots:
+@@ -27905,6 +28931,41 @@ snapshots:
 
    performance-now@2.1.0: {}
 
@@ -20193,7 +20235,7 @@ index 36dc0506d3..d70ef5f223 100644
    picocolors@1.1.1: {}
 
    picomatch@4.0.4: {}
-@@ -27956,11 +29014,21 @@ snapshots:
+@@ -27956,11 +29017,21 @@ snapshots:
      transitivePeerDependencies:
        - supports-color
 
@@ -20218,7 +20260,7 @@ index 36dc0506d3..d70ef5f223 100644
 
    postject@1.0.0-alpha.6:
      dependencies:
-@@ -28020,7 +29088,7 @@ snapshots:
+@@ -28020,7 +29091,7 @@ snapshots:
 
    property-information@7.2.0: {}
 
@@ -20227,7 +20269,7 @@ index 36dc0506d3..d70ef5f223 100644
      dependencies:
        '@protobufjs/aspromise': 1.1.2
        '@protobufjs/base64': 1.1.2
-@@ -28065,7 +29133,7 @@ snapshots:
+@@ -28065,7 +29136,7 @@ snapshots:
 
    pvutils@1.2.0: {}
 
@@ -20236,7 +20278,7 @@ index 36dc0506d3..d70ef5f223 100644
      dependencies:
        es-define-property: 1.0.1
        side-channel: 1.1.1
-@@ -28411,37 +29479,37 @@ snapshots:
+@@ -28411,37 +29482,37 @@ snapshots:
 
    setprototypeof@1.2.0: {}
 
@@ -20300,7 +20342,7 @@ index 36dc0506d3..d70ef5f223 100644
        '@types/node': 22.20.0
 
    shebang-command@2.0.0:
-@@ -28551,6 +29619,8 @@ snapshots:
+@@ -28551,6 +29622,8 @@ snapshots:
 
    source-map-js@1.2.1: {}
 
@@ -20309,7 +20351,7 @@ index 36dc0506d3..d70ef5f223 100644
    source-map-support@0.5.21:
      dependencies:
        buffer-from: 1.1.2
-@@ -28571,6 +29641,8 @@ snapshots:
+@@ -28571,6 +29644,8 @@ snapshots:
 
    speakingurl@14.0.1: {}
 
@@ -20318,7 +20360,7 @@ index 36dc0506d3..d70ef5f223 100644
    sprintf-js@1.1.3:
      optional: true
 
-@@ -28763,6 +29835,8 @@ snapshots:
+@@ -28763,6 +29838,8 @@ snapshots:
      transitivePeerDependencies:
        - react-native-b4a
 
@@ -20327,7 +20369,7 @@ index 36dc0506d3..d70ef5f223 100644
    tiny-async-pool@1.3.0:
      dependencies:
        semver: 5.7.2
-@@ -28921,9 +29995,9 @@ snapshots:
+@@ -28921,9 +29998,9 @@ snapshots:
 
    undici@6.28.0: {}
 
@@ -20339,7 +20381,7 @@ index 36dc0506d3..d70ef5f223 100644
 
    unicode-properties@1.4.1:
      dependencies:
-@@ -28939,7 +30013,7 @@ snapshots:
+@@ -28939,7 +30016,7 @@ snapshots:
 
    union@0.5.0:
      dependencies:
@@ -20348,7 +20390,7 @@ index 36dc0506d3..d70ef5f223 100644
 
    unist-util-is@6.0.1:
      dependencies:
-@@ -29058,7 +30132,7 @@ snapshots:
+@@ -29058,7 +30135,7 @@ snapshots:
    vite@5.4.21(@types/node@25.9.3)(lightningcss@1.32.0):
      dependencies:
        esbuild: 0.21.5
@@ -20357,7 +20399,7 @@ index 36dc0506d3..d70ef5f223 100644
        rollup: 4.62.2
      optionalDependencies:
        '@types/node': 25.9.3
-@@ -29070,7 +30144,7 @@ snapshots:
+@@ -29070,7 +30147,7 @@ snapshots:
        esbuild: 0.25.12
        fdir: 6.5.0(picomatch@4.0.4)
        picomatch: 4.0.4
@@ -20366,7 +20408,7 @@ index 36dc0506d3..d70ef5f223 100644
        rollup: 4.62.2
        tinyglobby: 0.2.17
      optionalDependencies:
-@@ -29085,7 +30159,7 @@ snapshots:
+@@ -29085,7 +30162,7 @@ snapshots:
      dependencies:
        lightningcss: 1.32.0
        picomatch: 4.0.4
@@ -20375,7 +20417,7 @@ index 36dc0506d3..d70ef5f223 100644
        rolldown: 1.0.3
        tinyglobby: 0.2.17
      optionalDependencies:
-@@ -29100,7 +30174,7 @@ snapshots:
+@@ -29100,7 +30177,7 @@ snapshots:
      dependencies:
        lightningcss: 1.32.0
        picomatch: 4.0.4
@@ -20384,7 +20426,7 @@ index 36dc0506d3..d70ef5f223 100644
        rolldown: 1.0.3
        tinyglobby: 0.2.17
      optionalDependencies:
-@@ -29111,14 +30185,14 @@ snapshots:
+@@ -29111,14 +30188,14 @@ snapshots:
        tsx: 4.22.4
        yaml: 2.9.0
 
@@ -20402,7 +20444,7 @@ index 36dc0506d3..d70ef5f223 100644
      dependencies:
        '@docsearch/css': 3.8.2
        '@docsearch/js': 3.8.2(@algolia/client-search@5.55.2)(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(search-insights@2.17.3)
-@@ -29139,7 +30213,7 @@ snapshots:
+@@ -29139,7 +30216,7 @@ snapshots:
        vite: 5.4.21(@types/node@25.9.3)(lightningcss@1.32.0)
        vue: 3.5.39(typescript@6.0.3)
      optionalDependencies:
@@ -20411,7 +20453,7 @@ index 36dc0506d3..d70ef5f223 100644
      transitivePeerDependencies:
        - '@algolia/client-search'
        - '@types/node'
-@@ -29168,17 +30242,17 @@ snapshots:
+@@ -29168,17 +30245,17 @@ snapshots:
        - typescript
        - universal-cookie
 
@@ -20438,7 +20480,7 @@ index 36dc0506d3..d70ef5f223 100644
        magic-string: 0.30.21
        obug: 2.1.3
        pathe: 2.0.3
-@@ -29193,23 +30267,23 @@ snapshots:
+@@ -29193,23 +30270,23 @@ snapshots:
      optionalDependencies:
        '@opentelemetry/api': 1.9.1
        '@types/node': 22.20.0
@@ -20472,7 +20514,7 @@ index 36dc0506d3..d70ef5f223 100644
        magic-string: 0.30.21
        obug: 2.1.3
        pathe: 2.0.3
-@@ -29224,23 +30298,23 @@ snapshots:
+@@ -29224,23 +30301,23 @@ snapshots:
      optionalDependencies:
        '@opentelemetry/api': 1.9.1
        '@types/node': 22.20.0
@@ -20506,7 +20548,7 @@ index 36dc0506d3..d70ef5f223 100644
        magic-string: 0.30.21
        obug: 2.1.3
        pathe: 2.0.3
-@@ -29254,8 +30328,8 @@ snapshots:
+@@ -29254,8 +30331,8 @@ snapshots:
        why-is-node-running: 2.3.0
      optionalDependencies:
        '@opentelemetry/api': 1.9.1
@@ -20517,7 +20559,7 @@ index 36dc0506d3..d70ef5f223 100644
        happy-dom: 20.11.6
        jsdom: 29.1.1(@noble/hashes@2.3.0)
      transitivePeerDependencies:
-@@ -29383,6 +30457,8 @@ snapshots:
+@@ -29383,6 +30460,8 @@ snapshots:
 
    xmlchars@2.2.0: {}
 
@@ -20526,7 +20568,7 @@ index 36dc0506d3..d70ef5f223 100644
    y18n@5.0.8: {}
 
    yallist@3.1.1: {}
-@@ -29446,8 +30522,15 @@ snapshots:
+@@ -29446,8 +30525,15 @@ snapshots:
      dependencies:
        zod: 4.4.3
 

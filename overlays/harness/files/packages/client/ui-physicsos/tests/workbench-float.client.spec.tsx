@@ -4,6 +4,7 @@ import { Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WorkbenchFloatPanel, fitWorkbenchFloat } from '../src/client/WorkbenchFloatPanel.tsx'
+import { layoutWorkbenchPanels } from '../src/client/workbench-geometry.ts'
 import { ResponsiveInspector, useResponsiveInspector } from '../src/client/ResponsiveInspector.tsx'
 import { Chart } from '../src/client/workspace-parts.tsx'
 import { PhysicsCanvas } from '../src/client/physics/PhysicsCanvas.tsx'
@@ -13,8 +14,9 @@ import { MAGNETIC_SCENE_INPUT } from '../src/client/prototype/magnetic-scene.ts'
 beforeEach(() => {
   vi.stubGlobal('innerWidth', 1360)
   vi.stubGlobal('innerHeight', 900)
+  sessionStorage.clear()
 })
-afterEach(() => { cleanup(); vi.unstubAllGlobals() })
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
 
 const pointer = (target: Element | Window | Document | Node, type: string, x: number, y: number): void => {
   const event = new MouseEvent(type, { bubbles: true, clientX: x, clientY: y, button: 0 })
@@ -44,12 +46,12 @@ describe('workbench floating controls', () => {
     pointer(window, 'pointermove', -500, -500)
     pointer(window, 'pointerup', -500, -500)
     expect(Number.parseFloat(panel.style.left)).toBeGreaterThanOrEqual(12)
-    expect(Number.parseFloat(panel.style.top)).toBeGreaterThanOrEqual(66)
+    expect(Number.parseFloat(panel.style.top)).toBeGreaterThanOrEqual(12)
     const resize = panel.querySelector<HTMLElement>('[data-dockkit-float-resize]')!
     pointer(resize, 'pointerdown', 100, 100)
     pointer(window, 'pointerup', 5000, 5000)
     expect(Number.parseFloat(panel.style.left) + Number.parseFloat(panel.style.width)).toBeLessThanOrEqual(1348)
-    expect(Number.parseFloat(panel.style.top) + Number.parseFloat(panel.style.height)).toBeLessThanOrEqual(814)
+    expect(Number.parseFloat(panel.style.top) + Number.parseFloat(panel.style.height)).toBeLessThanOrEqual(888)
     expect(screen.getByRole('textbox', { name: 'Mass' })).toBe(input)
     expect(input.value).toBe('2.5')
   })
@@ -126,6 +128,74 @@ describe('workbench floating controls', () => {
     expect(settled).toEqual({ width: '360px', height: '400px' })
     fireEvent(window, new Event('resize'))
     expect({ width: panel.style.width, height: panel.style.height }).toEqual(settled)
+  })
+
+  it('switches compact panels without discarding an unfinished field and restores stacking when space returns', () => {
+    function Fixture({ height }: { height: number }) {
+      const [active, setActive] = useState('chart')
+      const layout = layoutWorkbenchPanels({ x: 82, y: 128, width: 1200, height }, [
+        { id: 'chart', placement: 'top-right', width: 400, height: 310 },
+        { id: 'params', placement: 'bottom-right', width: 310, height: 210 },
+      ], active)
+      return <div data-physicsos-surface="lab">
+        <button onClick={() => { setActive('chart') }}>Show charts</button><button onClick={() => { setActive('params') }}>Show parameters</button>
+        <WorkbenchFloatPanel title="Charts" closeLabel="Close charts" onClose={() => {}} expanded layout={layout.panels.chart}><p>Speed chart</p></WorkbenchFloatPanel>
+        <WorkbenchFloatPanel title="Parameters" closeLabel="Close parameters" onClose={() => {}} expanded layout={layout.panels.params}><input aria-label="Mass draft" defaultValue="1" /></WorkbenchFloatPanel>
+      </div>
+    }
+    const view = render(<Fixture height={510} />)
+    expect(screen.getByRole('region', { name: 'Charts' })).toBeTruthy()
+    expect(screen.queryByRole('region', { name: 'Parameters' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Show parameters' }))
+    const field = screen.getByRole('textbox', { name: 'Mass draft' }) as HTMLInputElement
+    fireEvent.change(field, { target: { value: '2.' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Show charts' }))
+    expect(screen.queryByRole('textbox', { name: 'Mass draft' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Show parameters' }))
+    expect(screen.getByRole('textbox', { name: 'Mass draft' })).toBe(field)
+    expect(field.value).toBe('2.')
+    view.rerender(<Fixture height={600} />)
+    const chart = screen.getByRole('region', { name: 'Charts' }).querySelector<HTMLElement>('[data-dockkit-float]')!
+    const params = screen.getByRole('region', { name: 'Parameters' }).querySelector<HTMLElement>('[data-dockkit-float]')!
+    expect(Number.parseFloat(chart.style.top) + Number.parseFloat(chart.style.height)).toBeLessThan(Number.parseFloat(params.style.top))
+  })
+
+  it('restores deliberate geometry into the new safe rectangle and retains a drag across remounts', () => {
+    sessionStorage.setItem('physicsos:float:restore-spec', JSON.stringify({ x: 1200, y: 700, width: 500, height: 500 }))
+    const bounds = { x: 12, y: 100, width: 296, height: 340 }
+    const props = { title: 'Restored', closeLabel: 'Close restored', onClose: () => {}, expanded: true,
+      storageKey: 'restore-spec', layout: { bounds, rect: bounds, visible: true } }
+    const view = render(<WorkbenchFloatPanel {...props}><input aria-label="Restored field" /></WorkbenchFloatPanel>)
+    const panel = document.querySelector<HTMLElement>('[data-dockkit-float]')!
+    expect([panel.style.left, panel.style.top, panel.style.width, panel.style.height]).toEqual(['12px', '100px', '296px', '340px'])
+    view.unmount()
+    const wideBounds = { x: 12, y: 100, width: 1200, height: 600 }
+    const wideProps = { ...props, layout: { bounds: wideBounds, rect: { ...wideBounds, width: 300, height: 240 }, visible: true } }
+    const next = render(<WorkbenchFloatPanel {...wideProps}><input aria-label="Restored field" /></WorkbenchFloatPanel>)
+    const float = document.querySelector<HTMLElement>('[data-dockkit-float]')!
+    const grip = float.querySelector<HTMLElement>('[data-dockkit-float-grip]')!
+    pointer(grip, 'pointerdown', 1100, 500)
+    pointer(window, 'pointerup', 900, 350)
+    const settled = { left: float.style.left, top: float.style.top }
+    next.unmount()
+    render(<WorkbenchFloatPanel {...wideProps}><input aria-label="Restored field" /></WorkbenchFloatPanel>)
+    const restored = document.querySelector<HTMLElement>('[data-dockkit-float]')!
+    expect({ left: restored.style.left, top: restored.style.top }).toEqual(settled)
+  })
+
+  it('bounds a panel by the measured scene viewport rather than an assumed playback height', () => {
+    const box = (x: number, y: number, width: number, height: number): DOMRect => ({ x, y, width, height, left: x, top: y, right: x + width, bottom: y + height, toJSON: () => ({}) })
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.hasAttribute('data-workbench-viewport')) return box(82, 180, 1278, 380)
+      if (this.hasAttribute('data-physicsos-surface')) return box(82, 58, 1278, 710)
+      return box(0, 0, 0, 0)
+    })
+    render(<div data-physicsos-surface="lab"><header>Wrapped toolbar</header><div data-workbench-viewport />
+      <WorkbenchFloatPanel title="Measured" closeLabel="Close measured" onClose={() => {}} expanded height={500}><input aria-label="Measured field" /></WorkbenchFloatPanel>
+    </div>)
+    const panel = document.querySelector<HTMLElement>('[data-dockkit-float]')!
+    expect(Number.parseFloat(panel.style.top)).toBe(192)
+    expect(Number.parseFloat(panel.style.top) + Number.parseFloat(panel.style.height)).toBe(548)
   })
 
   it('leaves IME and modal Escape with their owner while closing the focused inspector normally', () => {

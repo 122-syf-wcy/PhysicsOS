@@ -124,7 +124,8 @@ describe('a timeline-less experiment loses only the transport', () => {
     expect(screen.getByRole('region', { name: '场景与对象' })).toBeTruthy()
     expect(screen.getByRole('complementary', { name: /检查器|快捷参数/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: '检查器' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: '报告' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: zh['lab.more'] }))
+    expect(screen.getByRole('menuitem', { name: '报告' })).toBeTruthy()
     expect(screen.getByRole('img')).toBeTruthy()
   })
 

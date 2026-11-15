@@ -900,9 +900,10 @@
 }
 
 .chartCard {
+  box-sizing: border-box;
   min-width: 0;
   width: 100%;
-  max-width: 360px;
+  max-width: 100%;
   padding: 10px;
   border: 1px solid var(--dsw-alias-border-l1);
   border-radius: 10px;
@@ -913,8 +914,14 @@
   margin: 0 0 6px;
   color: var(--dsw-alias-label-primary);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 18px;
+}
+
+.chartCard svg { display: block; max-width: 100%; height: auto; }
+@container workbench-panel (max-width: 480px) {
+  .chartRow { grid-template-columns: minmax(0, 1fr); }
+  .chartCard { max-width: 100%; }
 }
 
 /* Experiment summary cards (要点 tab): the structured per-template metadata —
@@ -2944,3 +2951,32 @@
 .chartHoverPoint { fill: var(--physics-trajectory); stroke: var(--dsw-alias-bg-base); stroke-width: 2; }
 .chartTooltip { fill: var(--physics-glass-fill-strong); stroke: var(--physics-glass-border-soft); stroke-width: .5; }
 .chartTooltipText { fill: var(--physics-ink-strong); font-size: 9px; font-variant-numeric: tabular-nums; }
+
+/* Embedded assistants fill the float body; only the teaching content scrolls. */
+.agentEmbedded {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.agentEmbeddedHead {
+  flex: none;
+  display: flex;
+  padding: 2px 0 8px;
+}
+
+.agentEmbeddedHead .agentModeTabs {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+.agentEmbeddedHead .agentModeTab { flex: 1; padding-inline: 6px; }
+.agentEmbeddedHead .agentModeTabActive { font-weight: 500; }
+.agentEmbedded .agentBody { padding: 8px 2px; overscroll-behavior: contain; }
+.agentEmbedded .agentComposer { flex: none; padding: 8px 0 0; background: transparent; }
+.agentEmbedded .agentEmpty { padding: 10px 0; }

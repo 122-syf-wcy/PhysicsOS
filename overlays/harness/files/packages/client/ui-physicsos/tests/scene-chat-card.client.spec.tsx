@@ -303,7 +303,7 @@ describe('physics scene chat card', () => {
     expect(view.getByText('解题步骤')).toBeTruthy()
   })
 
-  it('renders the code shell, exact scene controls and transport for a historical scene', () => {
+  it('renders exact controls and transport when the selected historical scene is previewed', () => {
     const openSceneInLab = vi.fn()
     const data: PhysicsSceneCardData = {
       sceneId: ref.sceneId,
@@ -315,7 +315,7 @@ describe('physics scene chat card', () => {
       solve: undefined,
       scene: ref.scene as never,
     }
-    const view = render(<SceneChatCard {...cardProps(data, openSceneInLab)} />)
+    const view = render(<SceneCardBody data={data} openSceneInLab={openSceneInLab} t={t} />)
 
     expect(view.getByText('本题代码实验')).toBeTruthy()
     expect(view.getByText('斜抛运动')).toBeTruthy()
@@ -350,7 +350,7 @@ describe('physics scene chat card', () => {
       { key: 'user:next', kind: 'user', anchorSeq: 4 },
     ])} />)
     expect(superseded.container.querySelector('svg')).toBeNull()
-    expect(superseded.container.querySelector('[data-scene-card]')).toBeNull()
+    expect(superseded.container.querySelector('[data-scene-attachment]')).toBeNull()
 
     /* A user message in between means a new question: this card stays. */
     const kept = render(<SceneChatCard {...cardProps(data, vi.fn(), [
@@ -358,7 +358,7 @@ describe('physics scene chat card', () => {
       { key: 'user:next', kind: 'user', anchorSeq: 2.5 },
       { key: 'physics-scene-card:newer', kind: 'physics-scene-card', anchorSeq: 3.9 },
     ])} />)
-    expect(kept.container.querySelector('[data-scene-card]')).not.toBeNull()
+    expect(kept.container.querySelector('[data-scene-attachment]')).not.toBeNull()
   })
 
   it('yields to the Turn card once its Turn has closed', () => {
@@ -378,19 +378,19 @@ describe('physics scene chat card', () => {
        the same scene twice. */
     const yielded = render(<SceneChatCard {...cardProps(data, vi.fn(), [], undefined,
       { number: 1, state: { turn: 1, status: 'closed', data: turnData } })} />)
-    expect(yielded.container.querySelector('[data-scene-card]')).toBeNull()
+    expect(yielded.container.querySelector('[data-scene-attachment]')).toBeNull()
 
     /* While the Turn runs the Turn card does not exist yet: the inline card is
        the only thing showing the world being built, so it stays. */
     const kept = render(<SceneChatCard {...cardProps(data, vi.fn(), [], undefined,
       { number: 1, state: { turn: 1, status: 'open', data: turnData } })} />)
-    expect(kept.container.querySelector('[data-scene-card]')).not.toBeNull()
+    expect(kept.container.querySelector('[data-scene-attachment]')).not.toBeNull()
 
     /* A closed Turn that published no scene leaves this card alone: it is the
        fallback for logs whose scenes carry no turn number. */
     const unowned = render(<SceneChatCard {...cardProps(data, vi.fn(), [], undefined,
       { number: 1, state: { turn: 1, status: 'closed', data: new Map() } })} />)
-    expect(unowned.container.querySelector('[data-scene-card]')).not.toBeNull()
+    expect(unowned.container.querySelector('[data-scene-attachment]')).not.toBeNull()
   })
 
   it('rejects a structurally incomplete scene before mounting a runtime or renderer', () => {
@@ -407,7 +407,7 @@ describe('physics scene chat card', () => {
       solve: undefined,
       scene: broken as never,
     }
-    const view = render(<SceneChatCard {...cardProps(data)} />)
+    const view = render(<SceneCardBody data={data} openSceneInLab={vi.fn()} t={t} presentation="preview" />)
 
     expect(view.getByRole('alert').textContent)
       .toContain('无法导入这份文件，请检查格式和完整性')
@@ -427,14 +427,15 @@ describe('physics scene chat card', () => {
     expect(view.getByText('答案')).toBeTruthy()
     expect(view.getByText('解题步骤')).toBeTruthy()
     expect(view.getByText('物理验证')).toBeTruthy()
-    /* Knowns carry the recognized quantities; v0 is drawn so it is a control. */
-    expect(view.getAllByRole('button', { name: /在画布中高亮/ }).length).toBeGreaterThan(0)
+    /* The transcript preserves knowns without allocating another playback runtime. */
+    expect(view.queryAllByRole('button', { name: /在画布中高亮/ })).toHaveLength(0)
+    expect(view.container.querySelectorAll('iframe, [data-code-experiment-shell]')).toHaveLength(0)
     /* Answers restate the solved targets with units. */
     expect(view.container.textContent).toContain('20.00 m/s')
   })
 
   it('keeps known highlights in the shared local session while awaiting a code renderer', () => {
-    const view = render(<SceneChatCard {...cardProps(solvedCardData('mech-01-uniform-acceleration'))} />)
+    const view = render(<SceneCardBody data={solvedCardData('mech-01-uniform-acceleration')} openSceneInLab={vi.fn()} t={t} />)
     /* The spec's `t` does not interpolate, so every chip shares the raw
        template name — the MathText title picks the v0 one. */
     const chip = view.getAllByRole('button', { name: '在画布中高亮 {symbol}' })

@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { revealFullWorkbenchInspector } from './workbench-interaction-fixture.client.ts'
 import { useStudentAuth } from './student-auth-fixture.client.ts'
-import { afterEach, describe, expect, it } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, createEvent, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import {
   createEmfMeasurementScene,
   createMechanicsScene,
@@ -15,6 +15,8 @@ import {
 } from '@physicsos/physics-scene'
 
 import { PhysicsSurface, type PhysicsSurfaceProps } from '../src/client/LabWorkspace.tsx'
+import { AgentDrawer } from '../src/client/AgentDrawer.tsx'
+import { WorkbenchFloatPanel } from '../src/client/WorkbenchFloatPanel.tsx'
 import { createPhysicsSurfaceController } from '../src/client/surface-store.ts'
 import { createMechanicsWorkspaceRuntime } from '../src/client/physics/mechanics-workspace-runtime.ts'
 import { createElectricWorkspaceRuntime } from '../src/client/physics/electric-workspace-runtime.ts'
@@ -281,6 +283,13 @@ describe('agent drawer', () => {
     )
 
     fireEvent.click(screen.getByRole('button', { name: /AI 助教/ }))
+    const drawer = screen.getByRole('complementary', { name: 'AI 助教' })
+    expect(within(drawer).getAllByText('AI 助教')).toHaveLength(1)
+    expect(within(drawer).getAllByRole('button', { name: '收起' })).toHaveLength(1)
+    expect(within(drawer).queryByRole('complementary')).toBeNull()
+    expect(within(drawer).queryByRole('dialog')).toBeNull()
+    expect(within(drawer).getByRole('tab', { name: '问答', selected: true })).toBeTruthy()
+    expect(within(drawer).getByRole('tab', { name: '引导' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /这个高度是什么/ }))
 
     expect(screen.getByText('依据')).toBeTruthy()
@@ -293,7 +302,7 @@ describe('agent drawer', () => {
     ).toBe('0')
   })
 
-  it('closes on Escape and returns focus to the dock button', async () => {
+  it('closes on focused Escape and returns focus to the dock button', async () => {
     const surface = createPhysicsSurfaceController()
     const scene = projectileScene()
     surface.open('lab', { sceneId: String(scene.id), scene })
@@ -312,9 +321,15 @@ describe('agent drawer', () => {
     const dock = screen.getByRole('button', { name: /AI 助教/ })
     dock.focus()
     fireEvent.click(dock)
-    expect(screen.getByRole('complementary', { name: 'AI 助教' })).toBeTruthy()
-
+    const drawer = screen.getByRole('complementary', { name: 'AI 助教' })
+    const input = within(drawer).getByRole('textbox', { name: t('lab.agent.placeholder') })
+    input.focus()
     fireEvent.keyDown(window, { key: 'Escape' })
+    fireEvent.keyDown(input, { key: 'Escape', isComposing: true })
+    fireEvent.keyDown(input, { key: 'Escape', keyCode: 229 })
+    expect(screen.getByRole('complementary', { name: 'AI 助教' })).toBe(drawer)
+
+    fireEvent.keyDown(input, { key: 'Escape' })
     expect(screen.queryByRole('complementary', { name: 'AI 助教' })).toBeNull()
     /* The dock button unmounts while the drawer is open, so focus must be
        handed to the freshly re-mounted button, not left on <body>. The
@@ -354,6 +369,86 @@ describe('agent drawer', () => {
     const angle = screen.getByRole('textbox', { name: '倾角' })
     if (!(angle instanceof HTMLInputElement)) throw new Error('angle editor is not an input.')
     expect(angle.value).toBe('45')
+  })
+})
+
+describe('embedded agent drawer', () => {
+  it('delegates Escape and close to the outer float without a second landmark or header', () => {
+    const runtime = createMechanicsWorkspaceRuntime(projectileScene())
+    const onClose = vi.fn()
+    render(<WorkbenchFloatPanel title={t('lab.agent')} closeLabel={t('lab.collapse')} onClose={onClose} role="complementary" expanded>
+      <AgentDrawer embedded snapshot={runtime.getSnapshot()} runtime={runtime} onSnapshot={vi.fn()} t={t} />
+    </WorkbenchFloatPanel>)
+    const panel = screen.getByRole('complementary', { name: 'AI 助教' })
+    expect(within(panel).getAllByText('AI 助教')).toHaveLength(1)
+    expect(within(panel).getAllByRole('button', { name: '收起' })).toHaveLength(1)
+    expect(within(panel).queryByRole('complementary')).toBeNull()
+    expect(within(panel).queryByRole('dialog')).toBeNull()
+    expect(panel.querySelector('aside')).toBeNull()
+    const input = within(panel).getByRole('textbox', { name: t('lab.agent.placeholder') })
+    input.focus()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    fireEvent.keyDown(input, { key: 'Escape', isComposing: true })
+    fireEvent.keyDown(input, { key: 'Escape', keyCode: 229 })
+    const consumed = createEvent.keyDown(input, { key: 'Escape' })
+    consumed.preventDefault()
+    fireEvent(input, consumed)
+    expect(onClose).not.toHaveBeenCalled()
+    fireEvent.keyDown(input, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledOnce()
+    onClose.mockClear()
+    fireEvent.click(within(panel).getByRole('button', { name: '收起' }))
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+
+  it('retains standalone dismissal and removes it when the content becomes embedded', () => {
+    const runtime = createMechanicsWorkspaceRuntime(projectileScene())
+    const onClose = vi.fn()
+    const props = { snapshot: runtime.getSnapshot(), runtime, onSnapshot: vi.fn(), t }
+    const view = render(<AgentDrawer {...props} onClose={onClose} />)
+    expect(screen.getByRole('complementary', { name: 'AI 助教' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'AI 助教', level: 2 })).toBeTruthy()
+    fireEvent.keyDown(window, { key: 'Escape', isComposing: true })
+    expect(onClose).not.toHaveBeenCalled()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledOnce()
+    onClose.mockClear()
+    fireEvent.click(screen.getByRole('button', { name: '收起' }))
+    expect(onClose).toHaveBeenCalledOnce()
+    onClose.mockClear()
+    view.rerender(<AgentDrawer {...props} embedded />)
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(onClose).not.toHaveBeenCalled()
+    expect(screen.queryByRole('complementary')).toBeNull()
+    expect(screen.queryByRole('heading', { name: 'AI 助教' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '收起' })).toBeNull()
+  })
+
+  it('keeps composition in the input, then submits the completed question once', () => {
+    const runtime = createMechanicsWorkspaceRuntime(projectileScene())
+    render(<WorkbenchFloatPanel title={t('lab.agent')} closeLabel={t('lab.collapse')} onClose={vi.fn()} expanded>
+      <AgentDrawer embedded snapshot={runtime.getSnapshot()} runtime={runtime} onSnapshot={vi.fn()} t={t} />
+    </WorkbenchFloatPanel>)
+    const input = screen.getByRole('textbox', { name: t('lab.agent.placeholder') }) as HTMLInputElement
+    const form = input.form!
+    const question = '这个实验的高度是多少？'
+    fireEvent.compositionStart(input)
+    fireEvent.change(input, { target: { value: question } })
+    expect(fireEvent.keyDown(input, { key: 'Enter', isComposing: true })).toBe(false)
+    fireEvent.submit(form)
+    expect(screen.queryByText(question)).toBeNull()
+    expect(input.value).toBe(question)
+    fireEvent.compositionEnd(input)
+    expect(fireEvent.keyDown(input, { key: 'Enter', keyCode: 229 })).toBe(false)
+    expect(screen.queryByText(question)).toBeNull()
+    expect(fireEvent.keyDown(input, { key: 'Enter' })).toBe(true)
+    fireEvent.submit(form)
+    expect(screen.getAllByText(question)).toHaveLength(1)
+    expect(input.value).toBe('')
+    fireEvent.change(input, { target: { value: '水平速度为什么不变？' } })
+    fireEvent.click(screen.getByRole('button', { name: t('lab.agent.send') }))
+    expect(screen.getAllByText('水平速度为什么不变？')).toHaveLength(1)
+    expect(input.value).toBe('')
   })
 })
 

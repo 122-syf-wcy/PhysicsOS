@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { LoadingState } from '../LoadingState.tsx'
 import type { PhysicsWorkspaceProps } from '../PhysicsWorkspace.tsx'
 import { AgentDrawer } from '../AgentDrawer.tsx'
-import { WorkbenchAction } from '../WorkbenchAction.tsx'
+import { Menu } from '@deepseek-ai/dsh-client-ui-primitives'
 import { ExperimentGuidePanel } from '../ExperimentGuidePanel.tsx'
 import { ExperimentReportPanel } from '../ExperimentReportPanel.tsx'
 import { experimentMetaOf } from '../physics/experiment-summaries.ts'
@@ -23,7 +23,8 @@ import { useExperimentAppearance } from './use-experiment-appearance.ts'
 import { experimentHref } from './experiment-navigation.ts'
 import css from './ExperimentPage.module.css'
 import lensCss from './LensWorkspace.module.css'
-import { WorkbenchFloatPanel } from '../WorkbenchFloatPanel.tsx'
+import { WorkbenchFloatPanel, useWorkbenchSafeRect } from '../WorkbenchFloatPanel.tsx'
+import { layoutWorkbenchPanels, type WorkbenchPanelRequest } from '../workbench-geometry.ts'
 
 const ZONES = [
   { factor: 3, title: '照相机', condition: 'u = 3f', hint: '倒立 · 缩小' },
@@ -87,7 +88,25 @@ export function ConvexLensPage({
   const [panel, setPanel] = useState<'guide' | 'report' | 'agent' | undefined>(undefined)
   const [message, setMessage] = useState('')
   const root = useRef<HTMLDivElement>(null)
-  const controls = useRef<HTMLElement>(null)
+  const [activePanel, setActivePanel] = useState('controls')
+  const [moreOpen, setMoreOpen] = useState(false)
+  const safeRect = useWorkbenchSafeRect(root, `${release?.id ?? 'native'}:${message !== ''}:${snapshot.branch !== undefined}:${appearance.available}`)
+  const requests: WorkbenchPanelRequest[] = []
+  if (notebookOpen) requests.push({ id: 'notebook', placement: 'top-right', width: 380, height: 480 })
+  if (controlsOpen && panel !== 'agent') requests.push({ id: 'controls', placement: 'bottom-right', width: 310, height: 370 })
+  if (panel === 'agent') requests.push({ id: 'agent', placement: 'bottom-right', width: 350, height: 430 })
+  const panelLayout = layoutWorkbenchPanels(safeRect, requests, activePanel)
+  const showPanel = (id: string) => panelLayout.panels[id]?.visible === true
+  const share = () => {
+    const url = new URL(window.location.href)
+    url.hash = experimentHref('convex-lens')
+    const clipboard = navigator.clipboard as Clipboard | undefined
+    if (clipboard === undefined) { setMessage('请从地址栏复制实验链接。'); return }
+    void clipboard.writeText(url.toString()).then(
+      () => { setMessage('实验链接已复制，可分享给同学。') },
+      () => { setMessage('暂时无法复制，请从地址栏复制实验链接。') },
+    )
+  }
   const initial = useRef(
     snapshot.inspector
       .flatMap(section => section.parameters ?? [])
@@ -124,7 +143,7 @@ export function ConvexLensPage({
       data-image-kind={image?.nature ?? 'none'}
       data-screen-lit={String(screenLit)}
     >
-      <header className={`${css.header} ${lensCss.header}`}>
+      <div className={lensCss.topChrome} data-workbench-chrome="top"><header className={`${css.header} ${lensCss.header}`}>
         <div>
           <button
             type="button"
@@ -139,65 +158,39 @@ export function ConvexLensPage({
           </div>
           <p className={css.subtitle}>移动物体与光屏，让成像的规律自己浮现。</p>
         </div>
-        <div className={css.headerActions}>
-          <button type="button" className={css.subtleButton} aria-pressed={controlsOpen} onClick={() => { setControlsOpen(value => !value) }}>{t('lab.inspectorPanel')}</button>
-          <button type="button" className={css.subtleButton} aria-pressed={notebookOpen} onClick={() => { setNotebookOpen(value => !value) }}>{t('lab.tab.data')}</button>
-          {onAddToCanvas === undefined ? null : <WorkbenchAction label={t('canvas.addToCanvas')} onClick={onAddToCanvas} />}
-          <button
-            type="button"
-            className={css.subtleButton}
-            onClick={() => {
-              setContributing(true)
-            }}
-          >
-            贡献实验
-          </button>
-          <button
-            type="button"
-            className={css.subtleButton}
-            onClick={() => {
-              setPanel('guide')
-            }}
-          >
-            实验指南
-          </button>
-          <button
-            type="button"
-            className={css.subtleButton}
-            onClick={() => {
-              setPanel('report')
-            }}
-          >
-            实验报告
-          </button>
-          <button
-            type="button"
-            className={css.subtleButton}
-            onClick={() => {
-              const url = new URL(window.location.href)
-              url.hash = experimentHref('convex-lens')
-              const clipboard = navigator.clipboard as Clipboard | undefined
-              if (clipboard === undefined) {
-                setMessage('请从地址栏复制实验链接。')
-                return
-              }
-              void clipboard.writeText(url.toString()).then(
-                () => {
-                  setMessage('实验链接已复制，可分享给同学。')
-                },
-                () => {
-                  setMessage('暂时无法复制，请从地址栏复制实验链接。')
-                },
-              )
-            }}
-          >
-            分享实验
-          </button>
+        <div className={`${css.headerActions} ${lensCss.headerActions}`}>
+          <button type="button" className={css.subtleButton} aria-pressed={showPanel('controls')} onClick={() => {
+            if (showPanel('controls')) { setControlsOpen(false); return }
+            setControlsOpen(true); setPanel(undefined); setActivePanel('controls')
+          }}>{t('lab.inspectorPanel')}</button>
+          <button type="button" className={css.subtleButton} aria-pressed={showPanel('notebook')} onClick={() => {
+            if (showPanel('notebook')) { setNotebookOpen(false); return }
+            setNotebookOpen(true); setActivePanel('notebook')
+          }}>{t('lab.tab.data')}</button>
+          <Menu open={moreOpen} portal autoFocus side="bottom" align="end" onClose={() => { setMoreOpen(false) }}
+            anchor={<button type="button" className={css.subtleButton} aria-expanded={moreOpen} onClick={() => { setMoreOpen(value => !value) }}>{t('lab.more')}</button>}
+            items={[
+              ...(onAddToCanvas === undefined ? [] : [{ id: 'add', label: t('canvas.addToCanvas') }]),
+              { id: 'contribute', label: '贡献实验' }, { id: 'guide', label: '实验指南' },
+              { id: 'report', label: '实验报告' }, { id: 'share', label: '分享实验' },
+              ...(onReturnToChat === undefined ? [] : [{ id: 'chat', label: t('lab.backToChat') }]),
+            ]}
+            onSelect={id => {
+              setMoreOpen(false)
+              if (id === 'add') onAddToCanvas?.()
+              if (id === 'contribute') setContributing(true)
+              if (id === 'guide') setPanel('guide')
+              if (id === 'report') setPanel('report')
+              if (id === 'share') share()
+              if (id === 'chat') onReturnToChat?.()
+            }} />
           <button
             type="button"
             className={css.tutorButton}
+            aria-pressed={showPanel('agent')}
             onClick={() => {
-              setPanel('agent')
+              if (showPanel('agent')) { setPanel(undefined); return }
+              setPanel('agent'); setActivePanel('agent')
             }}
           >
             <span>✧</span> AI 助教
@@ -256,10 +249,10 @@ export function ConvexLensPage({
             <i>→</i>
           </button>
         ))}
-      </nav>
+      </nav></div>
       <div className={`${css.experimentGrid} ${lensCss.grid}`}>
         <section className={`${css.stageCard} ${lensCss.stageCard}`} aria-label="光学实验台">
-          <div className={`${css.stageToolbar} ${lensCss.stageToolbar}`}>
+          <div className={`${css.stageToolbar} ${lensCss.stageToolbar}`} data-workbench-chrome="top">
             <div className={css.viewSwitch}>
               <span>三维实验台{release ? ` · v${release.version}` : ''}</span>
             </div>
@@ -292,7 +285,7 @@ export function ConvexLensPage({
             </div>
           </div>
           <div className={`${css.stage} ${lensCss.stage}`}>
-            <div className={`${css.stageCaption} ${lensCss.stageCaption}`}>
+            <div className={`${css.stageCaption} ${lensCss.stageCaption}`} data-workbench-chrome="top">
               <span className={css.eyebrow}>OPTICAL BENCH</span>
               <span className={css.liveBadge}>
                 {snapshot.status === 'verified'
@@ -302,7 +295,7 @@ export function ConvexLensPage({
                     : '检查实验条件'}
               </span>
             </div>
-            {releaseError ? (
+            <div className={lensCss.viewport} data-workbench-viewport>{releaseError ? (
               <div className={css.threeStatus} role="alert">
                 <strong>{releaseError}</strong>
                 <button
@@ -331,13 +324,13 @@ export function ConvexLensPage({
               />
             ) : (
               <OptionalLensBench {...benchProps} />
-            )}
-            <div className={`${css.stageFoot} ${lensCss.stageFoot}`}>
+            )}</div>
+            <div className={`${css.stageFoot} ${lensCss.stageFoot}`} data-workbench-chrome="bottom">
               <span>拖动空白处旋转视角 · 右侧调节实验条件</span>
               <span>长度单位 cm</span>
             </div>
           </div>
-          <div className={`${css.resultStrip} ${lensCss.resultStrip}`} aria-live="polite">
+          <div className={lensCss.bottomChrome} data-workbench-chrome="bottom"><div className={`${css.resultStrip} ${lensCss.resultStrip}`} aria-live="polite">
             <div>
               <span>
                 像距 <i>v</i>
@@ -377,26 +370,11 @@ export function ConvexLensPage({
                 {outside ? '像位于当前视野之外，像距读数仍显示真实计算结果。' : TASKS[task]?.[1]}
               </p>
             </div>
-          </div>
+          </div></div>
         </section>
-        {controlsOpen ? <WorkbenchFloatPanel title={t('lab.inspectorPanel')} closeLabel={t('lab.closeInspector')} onClose={() => { setControlsOpen(false) }} placement="bottom-right" width={310} height={370} expanded desktopDefault={false}>
-          <aside ref={controls} className={`${css.controlCard} ${lensCss.controls}`} aria-label={t('lab.inspectorPanel')}>
-            <div className={css.sectionHeading}>
-              <div>
-                <span className={css.eyebrow}>CONTROLS</span>
-                <h2>调节装置</h2>
-              </div>
-              <button
-                type="button"
-                aria-label="检查器"
-                className={css.subtleButton}
-                onClick={() => {
-                  controls.current?.querySelector('input')?.focus()
-                }}
-              >
-                参数
-              </button>
-            </div>
+        {controlsOpen && panel !== 'agent' ? <WorkbenchFloatPanel role="complementary" title={t('lab.inspectorPanel')} closeLabel={t('lab.closeInspector')} onClose={() => { setControlsOpen(false) }} placement="bottom-right" width={310} height={370} expanded desktopDefault={false}
+          layout={panelLayout.panels.controls} storageKey="convex-lens:controls" onActivate={() => { setActivePanel('controls') }}>
+          <div className={`${css.controlCard} ${lensCss.controls}`}>
             <LensControls {...benchProps} />
             <div className={css.layers}>
               <label>
@@ -427,9 +405,10 @@ export function ConvexLensPage({
               <strong>1/u + 1/v = 1/f</strong>
               <p>理想薄透镜模型 · 忽略像差</p>
             </div>
-          </aside></WorkbenchFloatPanel> : null}
+          </div></WorkbenchFloatPanel> : null}
       </div>
-      {notebookOpen ? <WorkbenchFloatPanel title={t('lab.tab.data')} closeLabel={t('lab.collapse')} onClose={() => { setNotebookOpen(false) }} placement="top-right" width={380} height={480} expanded desktopDefault={false}><div className={lensCss.notebook}>
+      {notebookOpen ? <WorkbenchFloatPanel title={t('lab.tab.data')} closeLabel={t('lab.collapse')} onClose={() => { setNotebookOpen(false) }} placement="top-right" width={380} height={480} expanded desktopDefault={false}
+        layout={panelLayout.panels.notebook} storageKey="convex-lens:notebook" onActivate={() => { setActivePanel('notebook') }}><div className={lensCss.notebook}>
         <section className={`${css.presets} ${lensCss.presets}`} aria-label="典型成像条件">
           <div className={css.presetHeading}>
             <h2>从五种条件中发现规律</h2>
@@ -453,7 +432,7 @@ export function ConvexLensPage({
             ))}
           </div>
         </section>
-        <ExperimentNotebook session={session} />
+        <ExperimentNotebook session={session} embedded />
       </div></WorkbenchFloatPanel> : null}
 
       {contributing ? (
@@ -484,17 +463,15 @@ export function ConvexLensPage({
         />
       ) : null}
       {panel === 'agent' ? (
-        <WorkbenchFloatPanel title={t('lab.agent')} closeLabel={t('lab.collapse')} onClose={() => { setPanel(undefined) }} placement="bottom-right" width={350} height={430} expanded desktopDefault={false}><div className={lensCss.agent}>
-          <AgentDrawer
+        <WorkbenchFloatPanel role="complementary" title={t('lab.agent')} closeLabel={t('lab.collapse')} onClose={() => { setPanel(undefined) }} placement="bottom-right" width={350} height={430} expanded desktopDefault={false}
+          layout={panelLayout.panels.agent} storageKey="convex-lens:agent" onActivate={() => { setActivePanel('agent') }}>
+          <AgentDrawer embedded
             snapshot={snapshot}
             runtime={runtime}
             onSnapshot={commit}
             t={t}
-            onClose={() => {
-              setPanel(undefined)
-            }}
             {...(recordAttempt === undefined ? {} : { recordAttempt })}
-          /></div></WorkbenchFloatPanel>
+          /></WorkbenchFloatPanel>
       ) : null}
     </div>
   )

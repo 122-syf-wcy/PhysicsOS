@@ -6,7 +6,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 
 import css from './LabWorkspace.module.css'
-import { WorkbenchFloatPanel } from './WorkbenchFloatPanel.tsx'
+import { WorkbenchFloatPanel, type WorkbenchFloatPanelProps } from './WorkbenchFloatPanel.tsx'
 
 export interface ResponsiveInspectorController {
   readonly id: string
@@ -70,6 +70,9 @@ export function ResponsiveInspector({
   onCollapse,
   children,
   height = 300,
+  layout,
+  storageKey,
+  onActivate,
 }: {
   readonly controller: ResponsiveInspectorController
   readonly label: string
@@ -80,10 +83,13 @@ export function ResponsiveInspector({
   readonly onCollapse?: () => void
   readonly children: ReactNode
   readonly height?: number
+  readonly layout?: WorkbenchFloatPanelProps['layout']
+  readonly storageKey?: string
+  readonly onActivate?: () => void
 }) {
   const close = () => { controller.close(); onCollapse?.() }
   return <WorkbenchFloatPanel role="complementary" id={controller.id} title={label} closeLabel={closeLabel} collapseLabel={collapseLabel}
-    onClose={close} onCollapse={close} placement="bottom-right" width={310} height={height} expanded={controller.open}>
+    onClose={close} onCollapse={close} placement="bottom-right" width={310} height={height} expanded={controller.open} layout={layout} storageKey={storageKey} onActivate={onActivate}>
     {children}
   </WorkbenchFloatPanel>
 }

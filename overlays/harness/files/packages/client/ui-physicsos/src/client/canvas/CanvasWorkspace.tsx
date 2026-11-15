@@ -552,7 +552,14 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
         <Button variant="outline" disabled={!editable} onClick={addNote}>{t('canvas.addNote')}</Button>
       </div></div> : null}
     </div>
-      {agentOpen ? <WorkbenchFloatPanel title={t('canvas.agentPanel')} closeLabel={t('canvas.close')} onClose={() => { setAgentOpen(false); setCandidate(undefined) }} placement="bottom-right" width={340} height={420} expanded desktopDefault={false}><div className={stageCss.floatAgent}><CanvasAssistantPanel canvasId={canvasId} document={document} commands={canvasCommands} selectedNodeIds={view.selected} viewport={{ ...viewport, width: board.current?.clientWidth ?? 800, height: board.current?.clientHeight ?? 600 }} getViewport={() => ({ ...(flow.current?.getViewport() ?? viewport), width: board.current?.clientWidth || 800, height: board.current?.clientHeight || 600 })} t={t} onClose={() => { setAgentOpen(false); setCandidate(undefined) }} onCandidate={setCandidate} /></div></WorkbenchFloatPanel> : null}
+      {agentOpen ? <WorkbenchFloatPanel title={t('canvas.agentPanel')} closeLabel={t('canvas.close')}
+        onClose={() => { setAgentOpen(false); setCandidate(undefined) }} role="complementary"
+        placement="bottom-right" width={340} height={420} expanded desktopDefault={false}>
+        <CanvasAssistantPanel embedded canvasId={canvasId} document={document} commands={canvasCommands}
+          selectedNodeIds={view.selected} viewport={{ ...viewport, width: board.current?.clientWidth ?? 800, height: board.current?.clientHeight ?? 600 }}
+          getViewport={() => ({ ...(flow.current?.getViewport() ?? viewport), width: board.current?.clientWidth || 800, height: board.current?.clientHeight || 600 })}
+          t={t} onCandidate={setCandidate} />
+      </WorkbenchFloatPanel> : null}
     </div>
     <div className={`${css.dockShelf} ${stageCss.dockShelf}`}>
       <div className={`${css.toolDock} ${stageCss.toolDock}`} role="toolbar" aria-label={t('canvas.title')}>

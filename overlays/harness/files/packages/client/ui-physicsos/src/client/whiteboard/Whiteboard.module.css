@@ -233,3 +233,45 @@
 .workspace .sync { max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: right; }
 .tools .more > div { box-sizing: border-box; max-height: min(320px, var(--whiteboard-menu-height, 36dvh)); }
 .dockShelf, .tools { box-sizing: border-box; }
+
+/* The catalog shares the workspace paper; its title and search stay outside cards. */
+.catalog { padding: 32px clamp(20px, 5vw, 72px) 40px; gap: 0; background: var(--physics-canvas-bg); }
+.catalogContent { display: flex; flex-direction: column; flex: 1; width: 100%; max-width: 1120px; min-width: 0; margin: 0 auto; gap: 22px; }
+.catalog .catalogHeader { justify-content: space-between; align-items: center; padding: 0; gap: 16px; border: 0; border-radius: 0; background: transparent; }
+.catalogHeader > div { flex: 1; min-width: 0; }
+.catalog .catalogHeader h1 { margin: 0; color: var(--physics-ink-strong); font-size: 30px; line-height: 40px; font-weight: 500; }
+.catalog .catalogHeader p { margin: 4px 0 0; max-width: 54em; font-size: 14px; line-height: 24px; }
+.catalog .catalogActions { flex: none; flex-wrap: wrap; gap: 14px; margin: 0; }
+.catalogSearch { position: relative; display: flex; align-items: center; flex: 1; min-width: min(260px, 100%); }
+.catalogSearch > svg { position: absolute; left: 16px; color: var(--dsw-alias-label-secondary); pointer-events: none; }
+.catalog .catalogSearch input { box-sizing: border-box; width: 100%; max-width: none; min-height: 46px; padding: 10px 16px 10px 44px; border-radius: 14px; background: var(--physics-glass-fill); font-size: 13px; line-height: 24px; }
+.catalog .catalogBack { flex: none; gap: 6px; min-height: 40px; color: var(--dsw-alias-label-secondary); }
+.catalog .catalogNew { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px; padding: 10px 22px; border: 0; border-radius: 999px; corner-shape: round; color: var(--dsw-alias-label-primary-foreground); background: var(--physics-accent); font-size: 13px; font-weight: 500; }
+.catalog .catalogNew:hover:not(:disabled) { background: var(--physics-accent-strong); }
+.catalogBody { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.catalogEmpty { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; gap: 10px; min-height: 360px; padding: 20px 12px 32px; text-align: center; box-sizing: border-box; }
+.catalogEmpty h2 { margin: 0; color: var(--physics-ink-strong); font-size: 24px; line-height: 34px; font-weight: 500; }
+.catalogEmpty > p { max-width: 38em; margin: 0; color: var(--dsw-alias-label-secondary); font-size: 14px; line-height: 24px; }
+.catalogMascot { margin-bottom: 4px; }
+.catalogEmptyActions { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.catalogEmptyActions > button { min-height: 44px; }
+.catalogFeatures { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 18px; margin: 10px 0 0; padding: 7px 18px; list-style: none; border-radius: 999px; corner-shape: round; color: var(--dsw-alias-label-secondary); background: var(--dsw-alias-bg-module-platform); font-size: 12px; line-height: 20px; }
+.catalogNotice { margin: 0; padding: 12px 16px; border-radius: 12px; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-secondary); line-height: 22px; }
+.catalog .cards { grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr)); }
+.catalog .card strong { font-weight: 500; }
+.catalogHelp { display: grid; gap: 20px; margin: 0; padding-left: 22px; }
+.catalogHelp strong { color: var(--dsw-alias-label-primary); font-size: 14px; font-weight: 500; }
+.catalogHelp p { margin: 6px 0 0; color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 22px; }
+@media (max-width: 600px) {
+  .catalog { padding: 22px 18px 28px; }
+  .catalogContent { gap: 18px; }
+  .catalog .catalogHeader { align-items: flex-start; }
+  .catalog .catalogHeader h1 { font-size: 26px; line-height: 34px; }
+  .catalog .catalogHeader p { font-size: 13px; line-height: 22px; }
+  .catalog .catalogActions { gap: 8px; }
+  .catalogSearch { flex-basis: 100%; }
+  .catalog .catalogBack { margin-left: auto; min-height: 32px; }
+  .catalogEmpty { min-height: 340px; padding: 12px 0 24px; }
+  .catalogEmpty h2 { font-size: 22px; line-height: 30px; }
+  .catalogEmpty > p { font-size: 13px; line-height: 22px; }
+}
