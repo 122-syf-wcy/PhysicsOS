@@ -900,6 +900,22 @@
         "min": 0.1,
         "step": 153.12440958829754,
         "value": 7656.2204794148765
+      },
+      {
+        "id": "orbitRadius",
+        "label": "轨道半径",
+        "unit": "m",
+        "min": 1,
+        "step": 100000,
+        "value": 6800000
+      },
+      {
+        "id": "gravitationalParameter",
+        "label": "中心天体引力参数",
+        "unit": "m³/s²",
+        "min": 1,
+        "step": 1000000000000,
+        "value": 398600441800000
       }
     ],
     "choices": []
@@ -1089,6 +1105,10 @@
           {
             "value": "larger",
             "label": "v > u：放大的像"
+          },
+          {
+            "value": "custom",
+            "label": "自定义"
           }
         ]
       }
@@ -1131,7 +1151,7 @@
       {
         "id": "refraction-angle",
         "label": "入射角",
-        "value": "past",
+        "value": "custom",
         "options": [
           {
             "value": "under",
@@ -1144,6 +1164,10 @@
           {
             "value": "past",
             "label": "超过临界角：全反射"
+          },
+          {
+            "value": "custom",
+            "label": "自定义"
           }
         ]
       }
@@ -1457,7 +1481,7 @@
         "min": 0,
         "max": 0.8,
         "step": 0.05,
-        "value": 0.4
+        "value": 0.3999999999999999
       }
     ],
     "choices": []
@@ -1925,6 +1949,10 @@
           {
             "value": "room",
             "label": "室温（25 °C）"
+          },
+          {
+            "value": "custom",
+            "label": "自定义"
           }
         ]
       }
@@ -2247,14 +2275,6 @@
         "label": "电场方向",
         "value": "down",
         "options": [
-          {
-            "value": "right",
-            "label": "水平向右"
-          },
-          {
-            "value": "left",
-            "label": "水平向左"
-          },
           {
             "value": "up",
             "label": "竖直向上"
@@ -3553,8 +3573,16 @@
             "label": "降压（N₂ < N₁）"
           },
           {
+            "value": "same",
+            "label": "等匝数（N₂ = N₁）"
+          },
+          {
             "value": "step-up",
             "label": "升压（N₂ > N₁）"
+          },
+          {
+            "value": "custom",
+            "label": "自定义"
           }
         ]
       }
@@ -3745,7 +3773,57 @@
     "id": "photoelectric-effect",
     "label": "光电效应",
     "domain": "modern",
-    "parameters": [],
+    "parameters": [
+      {
+        "id": "workFunction",
+        "label": "阴极逸出功",
+        "unit": "J",
+        "min": 5e-324,
+        "step": 1e-20,
+        "value": 3.204353268e-19
+      },
+      {
+        "id": "photonWavelength",
+        "label": "入射光波长",
+        "unit": "m",
+        "min": 5e-324,
+        "step": 1e-9,
+        "value": 4.0000000000000003e-7
+      },
+      {
+        "id": "photonFrequency",
+        "label": "入射光频率",
+        "unit": "Hz",
+        "min": 5e-324,
+        "step": 1000000000000,
+        "value": 749481144999999.9
+      },
+      {
+        "id": "lightIntensity",
+        "label": "入射光强",
+        "unit": "W/m²",
+        "min": 5e-324,
+        "step": 0.1,
+        "value": 10
+      },
+      {
+        "id": "cathodeArea",
+        "label": "受光阴极面积",
+        "unit": "m²",
+        "min": 5e-324,
+        "step": 0.00001,
+        "value": 0.0001
+      },
+      {
+        "id": "quantumEfficiency",
+        "label": "量子效率",
+        "unit": "",
+        "min": 0,
+        "max": 1,
+        "step": 0.01,
+        "value": 1
+      }
+    ],
     "choices": []
   }
 ]
