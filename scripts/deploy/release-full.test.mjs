@@ -29,3 +29,9 @@ test('full seed path requires actual successful offline evidence for both worksp
   assert.throws(() => validateFullSeedAudit({ ...receipt, offlineEvidence: receipt.offlineEvidence.map(step => ({ ...step, cwd: '/app' })) }))
   assert.throws(() => validateFullSeedAudit({ ...receipt, offlineEvidence: receipt.offlineEvidence.map(step => ({ ...step, exitCode: 1 })) }))
 })
+
+test('verified overlay is opt-in and cannot bypass the audited seed requirement', async () => {
+  const { buildFullRelease } = await import('./release-full.mjs')
+  const run = () => { throw new Error('No Docker or source operation is allowed before this validation') }
+  await assert.rejects(buildFullRelease({ revision: 'a'.repeat(40), nodeImage: 'sha256:' + 'b'.repeat(64), runtimeTransport: 'verified-overlay' }, { run }), /audited seed/)
+})

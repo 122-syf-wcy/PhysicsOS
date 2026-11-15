@@ -6,6 +6,7 @@ No operation reads environment values, secrets, production data or switches apps
 """
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import pathlib
@@ -106,7 +107,7 @@ def normalize_manifest(value):
         if target in files and files[target] != checksum:
             raise ValueError('Conflicting legacy ownership aliases')
         files[target] = checksum
-    return {'schemaVersion': 2, 'ownership': 'physicsos-runtime/2', 'files': dict(sorted(files.items())), 'codeDigest': sha(canonical(files)), 'revision': value.get('revision', value.get('mainRevision')), 'sourceDigest': value.get('sourceDigest'), 'pluginTrust': value.get('pluginTrust', DEFAULT_TRUST), 'legacyFileCount': len(source), 'originSchema': value['schemaVersion']}
+    return {'schemaVersion': 2, 'ownership': 'physicsos-runtime/2', 'files': dict(sorted(files.items())), 'codeDigest': sha(canonical(files)), 'revision': value.get('revision', value.get('mainRevision')), 'sourceDigest': value.get('sourceDigest'), 'pluginTrust': value.get('pluginTrust', DEFAULT_TRUST), 'legacyFileCount': len(source), 'originSchema': value['schemaVersion'], **{key: value[key] for key in ['filesystem', 'filesystemDigest', 'runtimeConfigDigest'] if key in value}}
 
 
 def compute_delta(base, candidate, owned):
@@ -210,6 +211,8 @@ def verify_context(context, record):
 def validate_image_labels(metadata, record):
     labels = metadata.get('labels') or {}
     expected = {'org.opencontainers.image.revision': record['revision'], 'physicsos.source.digest': record['sourceDigest'], 'physicsos.code.digest': record['codeDigest']}
+    if record.get('filesystemDigest'):
+        expected.update({'physicsos.filesystem.digest': record['filesystemDigest'], 'physicsos.runtime-config.digest': record['runtimeConfigDigest']})
     if not IMAGE_ID.fullmatch(metadata.get('id', '')) or any(labels.get(name) != value for name, value in expected.items()):
         raise ValueError('Candidate image identity or source/code labels differ')
     return metadata['id']
@@ -531,6 +534,11 @@ def verify_image(image, expected=None):
     exact = metadata['id']
     if not IMAGE_ID.fullmatch(exact):
         raise ValueError('Invalid cold-verification image identity')
+    metadata_digest = (metadata.get('labels') or {}).get('physicsos.manifest.digest')
+    if metadata_digest:
+        proof_script = "const f=require('fs'),c=require('crypto');const a='/app/physicsos-runtime-manifest.json',b='/app/canvas-source-manifest.json';for(const p of[a,b])if(!f.lstatSync(p).isFile())throw Error('Manifest alias is not a regular file');const x=f.readFileSync(a),y=f.readFileSync(b);if(!x.equals(y))throw Error('Manifest aliases differ');console.log(JSON.stringify({sha256:c.createHash('sha256').update(x).digest('hex')}));"
+        if node_operation(exact, proof_script).get('sha256') != metadata_digest:
+            raise ValueError('Cold runtime manifest byte digest changed')
     manifest = read_base_manifest(exact)
     if manifest['originSchema'] == 2:
         validate_image_labels(metadata, expected or manifest)
@@ -544,7 +552,19 @@ def verify_image(image, expected=None):
     proof = node_operation(exact, SIGNATURE_JS, {'root': '/app', **trust})
     if manifest['pluginTrust'].get('publicKeySha256') and proof['publicKeySha256'] != manifest['pluginTrust']['publicKeySha256']:
         raise ValueError('Cold runtime signing trust root differs')
-    return {'verified': True, 'image': exact, 'revision': manifest['revision'], 'sourceDigest': manifest['sourceDigest'], 'codeDigest': manifest['codeDigest'], 'checkedFiles': checks['checked'], 'signedPluginEntries': proof['entries'], 'network': 'none', 'readOnly': True}
+    filesystem_digest = manifest.get('filesystemDigest')
+    labels = metadata.get('labels') or {}
+    if filesystem_digest or labels.get('physicsos.filesystem.digest'):
+        t = transport_module()
+        expected_fs = manifest.get('filesystem')
+        if not expected_fs or sha(canonical(expected_fs)) != filesystem_digest or labels.get('physicsos.filesystem.digest') != filesystem_digest:
+            raise ValueError('Complete cold filesystem proof missing or changed')
+        t.validate_tree(expected_fs['entries'])
+        if full_filesystem(exact, {'ignore': t.METADATA}) != expected_fs:
+            raise ValueError('Cold image files, modes, owners or symlinks differ from the audited full builder')
+        if sha(canonical(t.runtime_config(image_config(exact)))) != manifest.get('runtimeConfigDigest') or labels.get('physicsos.runtime-config.digest') != manifest.get('runtimeConfigDigest'):
+            raise ValueError('Cold runtime configuration proof changed')
+    return {'verified': True, 'image': exact, 'revision': manifest['revision'], 'sourceDigest': manifest['sourceDigest'], 'codeDigest': manifest['codeDigest'], 'checkedFiles': checks['checked'], 'signedPluginEntries': proof['entries'], 'network': 'none', 'readOnly': True, **{key: manifest[key] for key in ['filesystemDigest', 'runtimeConfigDigest'] if key in manifest}}
 
 
 def build_runtime(args):
@@ -634,8 +654,13 @@ def validate_full_record(source, marker, receipt, record, image):
             raise ValueError('Audited offline frozen seed evidence is incomplete')
         if [row.get('command') for row in evidence] != ['pnpm run build:lib', 'pnpm run build:web'] or any(row.get('exitCode') != 0 for row in evidence):
             raise ValueError('Seed must run both complete build stages successfully')
-        if record.get('seedReceiptOrigin') != 'audited-runtime-seed' or receipt.get('seedImage') != record.get('builderImage') or not IMAGE_ID.fullmatch(record.get('builderSnapshot', '')) or any(not HEX64.fullmatch(record.get(key, '')) for key in ['runtimeStageSha256', 'runtimeDockerfileSha256']):
+        if record.get('runtimeTransport') == 'verified-overlay':
+            if record.get('transportBaseImage') != receipt.get('seedImage') or not IMAGE_ID.fullmatch(record.get('runtimeConfigImage', '')) or any(not HEX64.fullmatch(record.get(key, '')) for key in ['filesystemDigest', 'runtimeConfigDigest', 'configOnlyDockerfileSha256']):
+                raise ValueError('Complete verified filesystem/config transport evidence is required')
+        elif not IMAGE_ID.fullmatch(record.get('builderSnapshot', '')):
             raise ValueError('Reviewed runtime stage and immutable seed snapshot evidence are required')
+        if record.get('seedReceiptOrigin') != 'audited-runtime-seed' or receipt.get('seedImage') != record.get('builderImage') or any(not HEX64.fullmatch(record.get(key, '')) for key in ['runtimeStageSha256', 'runtimeDockerfileSha256']):
+            raise ValueError('Reviewed full seed runtime evidence differs')
     if receipt.get('fullBuildVerified') is not True or not (target_build or seed_build):
         raise ValueError('A reviewed complete Docker builder target or audited full seed build is required')
     if any(receipt.get(key) is not True for key in ['completeDevelopmentDependencies', 'lockedDependenciesVerified', 'sourceProjectionVerified', 'nativeProbeVerified', 'sharedDeclarationBoundaryVerified']):
@@ -702,7 +727,11 @@ def export_full_runtime(args):
             raise ValueError('Expected one reviewed runtime stage')
         stage = dockerfile_source[stages[0].start():]
         derived = 'ARG NODE_IMAGE\nARG BUILDER_IMAGE\nFROM ${BUILDER_IMAGE} AS builder\n\n' + stage
-        if sha(stage) != record['runtimeStageSha256'] or sha(derived) != record['runtimeDockerfileSha256'] or image_metadata(record['builderSnapshot'])['id'] != record['builderSnapshot']:
+        if record.get('runtimeTransport') == 'verified-overlay':
+            layout = transport_module().config_only_dockerfile(dockerfile_source)
+            if sha(stage) != record['runtimeStageSha256'] or sha(layout['dockerfile']) != record['configOnlyDockerfileSha256']:
+                raise ValueError('Reviewed config-only runtime stage changed')
+        elif sha(stage) != record['runtimeStageSha256'] or sha(derived) != record['runtimeDockerfileSha256'] or image_metadata(record['builderSnapshot'])['id'] != record['builderSnapshot']:
             raise ValueError('Seed runtime stage or builder snapshot changed')
     actual_builder = json.loads(command(['docker', 'inspect', '--format', '{{json .Image}}', args.builder]))
     if actual_builder != record['builderImage'] or record.get('builder') != args.builder:
@@ -719,10 +748,47 @@ def export_full_runtime(args):
     builder_proof = node_operation(args.builder, SIGNATURE_JS, signature, builder=True)
     runtime_proof = node_operation(args.image, SIGNATURE_JS, signature)
     validate_signature_proofs(builder_proof, runtime_proof)
-    request = full_inventory_request()
-    built = node_operation(args.builder, INVENTORY_JS, request, builder=True)
-    runtime = node_operation(args.image, INVENTORY_JS, request)
+    if record.get('runtimeTransport') == 'verified-overlay':
+        # The legacy code map cannot represent links or dependencies. Derive
+        # its compatible regular-file subset from the stronger complete scan;
+        # all entries, including omitted links/modes, are attested below.
+        t = transport_module()
+        layout = t.config_only_dockerfile(dockerfile_source)
+        approved = full_filesystem(record['runtimeConfigImage'], {'owner': True})
+        normalized = t.desired_runtime_tree(full_filesystem(args.builder, {'paths': layout['copies']}, builder=True), approved)
+        actual_full = full_filesystem(args.image, {})
+        if normalized != actual_full:
+            raise ValueError('Complete raw filesystem differs before manifest export')
+        regular = {}
+        for name, item in normalized['entries'].items():
+            if item['type'] != 'file':
+                continue
+            try: safe_code_path(name)
+            except ValueError: continue
+            regular[name] = item
+        built = runtime = {'files': regular}
+    else:
+        request = full_inventory_request()
+        built = node_operation(args.builder, INVENTORY_JS, request, builder=True)
+        runtime = node_operation(args.image, INVENTORY_JS, request)
     manifest = full_manifest(source, record, built, runtime, runtime_proof)
+    if record.get('runtimeTransport') == 'verified-overlay':
+        t = transport_module()
+        layout = t.config_only_dockerfile(dockerfile_source)
+        config_image = record['runtimeConfigImage']
+        labels = image_metadata(config_image).get('labels') or {}
+        if labels.get('physicsos.role') != 'runtime-config-proof' or labels.get('physicsos.full-build.source-digest') != source['sourceDigest']:
+            raise ValueError('Config-only runtime proof ownership changed')
+        config_digest = t.require_same_config(image_config(args.image), image_config(config_image))
+        approved = full_filesystem(config_image, {'owner': True})
+        desired = normalized
+        actual = actual_full
+        if actual != desired or sha(canonical(desired)) != record['filesystemDigest'] or config_digest != record['runtimeConfigDigest']:
+            raise ValueError('Full raw runtime filesystem/config differs from the audited builder')
+        for name, item in desired['entries'].items():
+            if name in source['files'] and (item['type'] == 'file' and item['sha256'] != source['files'][name] or item['type'] == 'symlink' and sha(item['target']) != source['files'][name]):
+                raise ValueError('Complete filesystem source differs from the frozen commit')
+        manifest.update({'filesystem': desired, 'filesystemDigest': record['filesystemDigest'], 'runtimeConfigDigest': config_digest})
     output = pathlib.Path(args.output_dir)
     owner = {'format': 'physicsos-full-runtime-export/1', 'baseImage': args.image,
              'revision': source['revision'], 'sourceDigest': source['sourceDigest']}
@@ -742,8 +808,11 @@ def export_full_runtime(args):
                           'USER physicsos', 'LABEL org.opencontainers.image.revision=$REVISION',
                           'LABEL physicsos.source.digest=$SOURCE_DIGEST', 'LABEL physicsos.code.digest=$CODE_DIGEST',
                           'LABEL physicsos.role=verified-full-runtime', ''])
+    if manifest.get('filesystemDigest'):
+        dockerfile += 'ARG FILESYSTEM_DIGEST\nARG RUNTIME_CONFIG_DIGEST\nLABEL physicsos.filesystem.digest=$FILESYSTEM_DIGEST\nLABEL physicsos.runtime-config.digest=$RUNTIME_CONFIG_DIGEST\n'
+    dockerfile += 'ARG MANIFEST_DIGEST\nLABEL physicsos.manifest.digest=$MANIFEST_DIGEST\n'
     (context / 'Dockerfile').write_text(dockerfile)
-    result = {**owner, 'codeDigest': manifest['codeDigest'], 'checkedFiles': len(manifest['files']),
+    result = {**owner, **{key: manifest[key] for key in ['filesystemDigest', 'runtimeConfigDigest'] if key in manifest}, 'codeDigest': manifest['codeDigest'], 'checkedFiles': len(manifest['files']),
               'manifestSha256': sha((context / 'physicsos-runtime-manifest.json').read_bytes()),
               'dockerfileSha256': sha(dockerfile), 'context': str(context.resolve())}
     atomic_json(output / 'export.json', result)
@@ -782,14 +851,156 @@ def build_full_runtime(args):
         raise ValueError('Owned PhysicsOS image tag required')
     base_tag = 'physicsos:full-runtime-base-' + base['id'][7:31]
     command(['docker', 'tag', base['id'], base_tag])
-    command(['docker', 'build', '--network=none', '--pull=false', '--build-arg', 'BASE_IMAGE=' + base_tag,
-             '--build-arg', 'REVISION=' + record['revision'], '--build-arg', 'SOURCE_DIGEST=' + record['sourceDigest'],
-             '--build-arg', 'CODE_DIGEST=' + record['codeDigest'], '--tag', args.image_tag, str(context)], log=True)
+    build_args = ['docker', 'build', '--network=none', '--pull=false', '--build-arg', 'BASE_IMAGE=' + base_tag,
+                  '--build-arg', 'REVISION=' + record['revision'], '--build-arg', 'SOURCE_DIGEST=' + record['sourceDigest'],
+                  '--build-arg', 'CODE_DIGEST=' + record['codeDigest']]
+    build_args.extend(['--build-arg', 'MANIFEST_DIGEST=' + record['manifestSha256']])
+    if record.get('filesystemDigest'):
+        build_args.extend(['--build-arg', 'FILESYSTEM_DIGEST=' + record['filesystemDigest'], '--build-arg', 'RUNTIME_CONFIG_DIGEST=' + record['runtimeConfigDigest']])
+    command([*build_args, '--tag', args.image_tag, str(context)], log=True)
     exact = image_metadata(args.image_tag)['id']
     verified = verify_image(exact, record)
     result = {**verified, 'imageTag': args.image_tag, 'baseImage': base['id'], 'fullBuild': True,
               'sourceDigest': record['sourceDigest'], 'codeDigest': record['codeDigest']}
     atomic_json(output / 'build.json', result)
+    return result
+
+
+_TRANSPORT = None
+
+
+def transport_module():
+    global _TRANSPORT
+    if _TRANSPORT is None:
+        spec = importlib.util.spec_from_file_location('physicsos_runtime_transport', pathlib.Path(__file__).with_name('runtime_transport.py'))
+        _TRANSPORT = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(_TRANSPORT)
+    return _TRANSPORT
+
+
+def image_config(image):
+    return json.loads(command(['docker', 'image', 'inspect', '--format', '{{json .Config}}', image]))
+
+
+def full_filesystem(image_or_builder, request, builder=False):
+    # Read-only root scanning verifies restrictive file modes without changing
+    # them. COPY owner discovery uses the reviewed image's actual non-root USER.
+    script = transport_module().FS_JS
+    if builder:
+        args = ['docker', 'exec', '-i', '-u', '0', image_or_builder, 'node', '-e', script]
+    else:
+        args = ['docker', 'run', '--rm', '-i', '--network', 'none', '--read-only']
+        if not request.get('owner'):
+            args.extend(['--user', '0'])
+        args.extend(['--entrypoint', 'node', image_or_builder, '-e', script])
+    return json.loads(command(args, request))
+
+
+def transport_layout(source_manifest):
+    source = json.loads(pathlib.Path(source_manifest).read_text())
+    file = pathlib.Path(source_manifest).parent / 'source/Dockerfile'
+    contents = file.read_text()
+    if sha(contents) != source['files']['Dockerfile']:
+        raise ValueError('Transport Dockerfile changed from reviewed freeze')
+    return source, transport_module().config_only_dockerfile(contents)
+
+
+def build_transport_config(args):
+    source, layout = transport_layout(args.source_manifest)
+    if args.image_tag != 'physicsos:runtime-config-' + source['revision'][:16]:
+        raise ValueError('Owned frozen config image tag required')
+    if not IMAGE_ID.fullmatch(args.node_image) or image_metadata(args.node_image)['id'] != args.node_image:
+        raise ValueError('Immutable local Node base required')
+    output = pathlib.Path(args.output_dir)
+    if output.exists():
+        raise ValueError('Config-only output must be a new task-owned path')
+    output.mkdir(parents=True, mode=0o700)
+    (output / 'Dockerfile').write_text(layout['dockerfile'])
+    tag = 'physicsos:config-node-' + args.node_image[7:31]
+    command(['docker', 'tag', args.node_image, tag])
+    command(['docker', 'build', '--target', 'runtime', '--pull=false', '--build-arg', 'NODE_IMAGE=' + tag,
+             '--label', 'physicsos.role=runtime-config-proof', '--label', 'physicsos.full-build.source-digest=' + source['sourceDigest'],
+             '--tag', args.image_tag, str(output)], log=True)
+    exact = image_metadata(args.image_tag)['id']
+    t = transport_module()
+    scan = full_filesystem(exact, {'owner': True})
+    if scan['entries'] or image_config(exact).get('User') != 'physicsos':
+        raise ValueError('Config-only image does not define the closed empty non-root application')
+    result = {'image': exact, 'nodeImage': args.node_image, 'sourceDigest': source['sourceDigest'],
+              'dockerfileSha256': source['files']['Dockerfile'], 'runtimeStageSha256': sha(layout['stage']),
+              'configOnlyDockerfileSha256': sha(layout['dockerfile'])}
+    atomic_json(output / 'config-proof.json', result)
+    return result
+
+
+def build_verified_transport(args):
+    t = transport_module()
+    source, layout = transport_layout(args.source_manifest)
+    if args.image_tag != 'physicsos:full-input-' + source['revision'][:16]:
+        raise ValueError('Owned frozen transport image tag required')
+    check_builder(args.builder)
+    receipt = read_builder_json(args.builder, 'physicsos-development-builder.json')
+    marker = read_builder_json(args.builder, 'physicsos-source-manifest.json')
+    # This is a full-build transport; a seed receipt without the real full
+    # compilation evidence never authorizes a patch image.
+    if receipt.get('origin') != 'audited-runtime-seed' or receipt.get('buildTarget') != 'audited-seed-full-build' or receipt.get('fullBuildVerified') is not True or receipt.get('seedImage') != args.base_image:
+        raise ValueError('Completed audited full seed build is required for verified transport')
+    if marker.get('files') != source['files'] or marker.get('sourceDigest') != source['sourceDigest'] or receipt.get('sourceDigest') != source['sourceDigest']:
+        raise ValueError('Transport source freeze differs from audited builder')
+    evidence = receipt.get('fullBuildEvidence') or []
+    if [step.get('command') for step in evidence] != ['pnpm run build:lib', 'pnpm run build:web'] or any(step.get('exitCode') != 0 for step in evidence):
+        raise ValueError('Complete full seed compilation evidence missing')
+    actual_builder = json.loads(command(['docker', 'inspect', '--format', '{{json .Image}}', args.builder]))
+    if actual_builder != args.base_image or image_metadata(args.base_image)['id'] != args.base_image or image_metadata(args.config_image)['id'] != args.config_image:
+        raise ValueError('Immutable transport identities changed')
+    config = image_config(args.config_image)
+    config_digest = t.require_same_config(image_config(args.base_image), config)
+    node_operation(args.base_image, "const f=require('fs');if(f.existsSync('/run/physicsos-full-transport'))throw Error('Transport staging path already exists in base');console.log(JSON.stringify({verified:true}));")
+    proof_labels = image_metadata(args.config_image).get('labels') or {}
+    if proof_labels.get('physicsos.role') != 'runtime-config-proof' or proof_labels.get('physicsos.full-build.source-digest') != source['sourceDigest']:
+        raise ValueError('Config proof does not belong to this freeze')
+    approved = full_filesystem(args.config_image, {'owner': True})
+    desired = t.desired_runtime_tree(full_filesystem(args.builder, {'paths': layout['copies']}, builder=True), approved)
+    before = full_filesystem(args.base_image, {})
+    t.validate_tree(before['entries'])
+    if before['root'] != desired['root']:
+        raise ValueError('Transport application root differs from reviewed config')
+    changed = sorted(name for name, item in desired['entries'].items() if before['entries'].get(name) != item)
+    output = pathlib.Path(args.output_dir)
+    if output.exists():
+        raise ValueError('Transport output must be a new task-owned path')
+    estimate = sum(desired['entries'][name].get('bytes', 0) for name in changed) + len(canonical({'before': before, 'after': desired}).encode()) + 1024 * 1024
+    output.parent.mkdir(parents=True, exist_ok=True)
+    require_disk(output.parent, estimate)
+    output.mkdir(parents=True, mode=0o700)
+    context = output / 'context'; context.mkdir(mode=0o700)
+    stage = context / 'transport'; stage.mkdir(mode=0o700)
+    payload_bytes = t.write_payload(args.builder, changed, desired['entries'], stage / 'payload')
+    atomic_json(stage / 'plan.json', {'before': before, 'after': desired, 'changed': changed})
+    (stage / 'apply.cjs').write_text(t.APPLY_JS)
+    dockerfile = '\n'.join(['ARG BASE_IMAGE', 'FROM ${BASE_IMAGE}', 'USER root',
+                            'COPY transport/ /run/physicsos-full-transport/',
+                            'RUN node /run/physicsos-full-transport/apply.cjs && rm -rf /run/physicsos-full-transport',
+                            'USER physicsos', ''])
+    (context / 'Dockerfile').write_text(dockerfile)
+    base_tag = 'physicsos:verified-transport-base-' + args.base_image[7:31]
+    command(['docker', 'tag', args.base_image, base_tag])
+    command(['docker', 'build', '--network=none', '--pull=false', '--build-arg', 'BASE_IMAGE=' + base_tag,
+             '--label', 'physicsos.role=full-runtime-input', '--label', 'physicsos.full-build.revision=' + source['revision'],
+             '--label', 'physicsos.full-build.source-digest=' + source['sourceDigest'],
+             '--label', 'physicsos.full-build.dependency-fingerprint=' + source['dependencyFingerprint'],
+             '--tag', args.image_tag, str(context)], log=True)
+    exact = image_metadata(args.image_tag)['id']
+    t.require_same_config(image_config(exact), config)
+    after = full_filesystem(exact, {})
+    if after != desired:
+        raise ValueError('Cold raw transport image differs from the complete audited builder filesystem')
+    result = {'image': exact, 'transportBaseImage': args.base_image, 'runtimeConfigImage': args.config_image,
+              'runtimeConfigDigest': config_digest, 'filesystemDigest': sha(canonical(desired)),
+              'runtimeStageSha256': sha(layout['stage']), 'runtimeDockerfileSha256': sha(dockerfile),
+              'configOnlyDockerfileSha256': sha(layout['dockerfile']), 'payloadBytes': payload_bytes,
+              'changedEntries': len(changed), 'filesystemEntries': len(desired['entries']), 'payloadEstimateBytes': estimate}
+    atomic_json(output / 'transport-proof.json', result)
     return result
 
 def main():
@@ -809,6 +1020,12 @@ def main():
     full_build = commands.add_parser('full-build')
     full_build.add_argument('--output-dir', required=True)
     full_build.add_argument('--image-tag', required=True)
+    config_only = commands.add_parser('transport-config')
+    for name in ['source-manifest', 'node-image', 'image-tag', 'output-dir']:
+        config_only.add_argument('--' + name, required=True)
+    transport = commands.add_parser('verified-transport')
+    for name in ['builder', 'base-image', 'config-image', 'source-manifest', 'image-tag', 'output-dir']:
+        transport.add_argument('--' + name, required=True)
     verify = commands.add_parser('verify')
     verify.add_argument('--image', required=True)
     verify.add_argument('--record-file')
@@ -821,6 +1038,10 @@ def main():
         result = export_full_runtime(args)
     elif args.action == 'full-build':
         result = build_full_runtime(args)
+    elif args.action == 'transport-config':
+        result = build_transport_config(args)
+    elif args.action == 'verified-transport':
+        result = build_verified_transport(args)
     else:
         result = verify_image(args.image, json.loads(pathlib.Path(args.record_file).read_text()) if args.record_file else None)
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))

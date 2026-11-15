@@ -54,6 +54,9 @@ export async function buildFullRelease(options, dependencies = {}) {
   const cacheRoot = join(stateRoot, 'cache')
   const builder = options.builder ?? 'physicsos-full-builder-' + revision.slice(0, 12)
   if (!/^physicsos-[A-Za-z0-9_-]+$/.test(builder) || builder === 'physicsos-app-1') throw new Error('Dedicated full builder name required')
+  const runtimeTransport = options.runtimeTransport ?? 'copy'
+  if (!['copy', 'verified-overlay'].includes(runtimeTransport) || runtimeTransport === 'verified-overlay' && !options.seedReceipt)
+    throw new Error('Verified overlay transport requires an explicit audited seed receipt')
   const imageTag = options.imageTag ?? 'physicsos:full-release-' + revision.slice(0, 16)
   if (!/^physicsos[a-z0-9_.-]*:[A-Za-z0-9_.-]+$/.test(imageTag)) throw new Error('Owned PhysicsOS image tag required')
   const event = dependencies.progress ?? (value => process.stderr.write(JSON.stringify(value) + '\n'))
@@ -130,33 +133,46 @@ export async function buildFullRelease(options, dependencies = {}) {
     if ((await command('docker', ['image', 'inspect', '--format', '{{.Id}}', nodeTag])).toString('utf8').trim() !== identity.nodeImage)
       throw new Error('Pinned Node build reference changed')
     const originalDockerfile = await readFile(join(projection.root, 'Dockerfile'), 'utf8')
-    let builderSnapshot, runtimeStageSha256, runtimeDockerfileSha256
-    const runtimeArgs = ['build', '--target', 'runtime', '--pull=false', '--build-arg', 'NODE_IMAGE=' + nodeTag]
-    if (seedReceipt) {
-      // The commit provides files only. Final runtime configuration is taken
-      // verbatim from the reviewed Dockerfile, never from the test container.
-      builderSnapshot = (await command('docker', ['commit', builder])).toString('utf8').trim()
-      if (!/^sha256:[a-f0-9]{64}$/.test(builderSnapshot)) throw new Error('Immutable builder snapshot is required')
-      const snapshotTag = 'physicsos:full-builder-snapshot-' + revision.slice(0, 16)
-      await command('docker', ['tag', builderSnapshot, snapshotTag])
-      const derived = seedRuntimeDockerfile(originalDockerfile)
-      runtimeStageSha256 = createHash('sha256').update(derived.runtimeStage).digest('hex')
-      runtimeDockerfileSha256 = createHash('sha256').update(derived.dockerfile).digest('hex')
-      const file = join(outputDir, 'Dockerfile.seed-runtime')
-      await writeFile(file, derived.dockerfile, { mode: 0o600 })
-      runtimeArgs.push('--file', file, '--build-arg', 'BUILDER_IMAGE=' + snapshotTag)
+    let builderSnapshot, runtimeStageSha256, runtimeDockerfileSha256, transportProof, image
+    if (runtimeTransport === 'verified-overlay') {
+      const config = lastJson(await command('python3', [join(HERE, 'release-runtime.py'), 'transport-config',
+        '--source-manifest', projection.manifestPath, '--node-image', identity.nodeImage,
+        '--image-tag', 'physicsos:runtime-config-' + revision.slice(0, 16), '--output-dir', join(outputDir, 'config-only')]))
+      transportProof = lastJson(await command('python3', [join(HERE, 'release-runtime.py'), 'verified-transport',
+        '--builder', builder, '--base-image', seedReceipt.seedImage, '--config-image', config.image,
+        '--source-manifest', projection.manifestPath, '--image-tag', rawTag, '--output-dir', join(outputDir, 'transport')]))
+      image = transportProof.image
+      runtimeStageSha256 = transportProof.runtimeStageSha256
+      runtimeDockerfileSha256 = transportProof.runtimeDockerfileSha256
+    } else {
+      const runtimeArgs = ['build', '--target', 'runtime', '--pull=false', '--build-arg', 'NODE_IMAGE=' + nodeTag]
+      if (seedReceipt) {
+        // The commit provides files only. Final runtime configuration is taken
+        // verbatim from the reviewed Dockerfile, never from the test container.
+        builderSnapshot = (await command('docker', ['commit', builder])).toString('utf8').trim()
+        if (!/^sha256:[a-f0-9]{64}$/.test(builderSnapshot)) throw new Error('Immutable builder snapshot is required')
+        const snapshotTag = 'physicsos:full-builder-snapshot-' + revision.slice(0, 16)
+        await command('docker', ['tag', builderSnapshot, snapshotTag])
+        const derived = seedRuntimeDockerfile(originalDockerfile)
+        runtimeStageSha256 = createHash('sha256').update(derived.runtimeStage).digest('hex')
+        runtimeDockerfileSha256 = createHash('sha256').update(derived.dockerfile).digest('hex')
+        const file = join(outputDir, 'Dockerfile.seed-runtime')
+        await writeFile(file, derived.dockerfile, { mode: 0o600 })
+        runtimeArgs.push('--file', file, '--build-arg', 'BUILDER_IMAGE=' + snapshotTag)
+      }
+      runtimeArgs.push('--label', 'physicsos.role=full-runtime-input', '--label', 'physicsos.full-build.revision=' + revision,
+        '--label', 'physicsos.full-build.source-digest=' + source.sourceDigest,
+        '--label', 'physicsos.full-build.dependency-fingerprint=' + source.dependencyFingerprint,
+        '--tag', rawTag, projection.root)
+      await command('docker', runtimeArgs)
+      await verifySourceProjection(projection.root, source, { exact: true })
+      image = await dockerJson(['image', 'inspect', '--format', '{{json .Id}}', rawTag])
     }
-    runtimeArgs.push('--label', 'physicsos.role=full-runtime-input', '--label', 'physicsos.full-build.revision=' + revision,
-      '--label', 'physicsos.full-build.source-digest=' + source.sourceDigest,
-      '--label', 'physicsos.full-build.dependency-fingerprint=' + source.dependencyFingerprint,
-      '--tag', rawTag, projection.root)
-    await command('docker', runtimeArgs)
     await verifySourceProjection(projection.root, source, { exact: true })
-    const image = await dockerJson(['image', 'inspect', '--format', '{{json .Id}}', rawTag])
     const built = { schemaVersion: 1, format: 'physicsos-full-build/1', revision, sourceDigest: source.sourceDigest,
       dependencyFingerprint: source.dependencyFingerprint, nodeImage: identity.nodeImage, builder, builderImage: receipt.builderImage,
       runtimeImage: image, dockerfileSha256: createHash('sha256').update(originalDockerfile).digest('hex'),
-      ...(seedReceipt ? { builderSnapshot, runtimeStageSha256, runtimeDockerfileSha256, seedReceiptOrigin: seedReceipt.origin } : {}),
+      ...(seedReceipt ? { ...(transportProof ?? { builderSnapshot }), runtimeTransport, runtimeStageSha256, runtimeDockerfileSha256, seedReceiptOrigin: seedReceipt.origin } : {}),
       successfulStages: ['builder', 'runtime'], sourceProjectionVerified: true, estimatedBytes: identity.estimatedBytes }
     await record(join(outputDir, 'full-build-record.json'), built)
     timings.push({ phase, seconds: (Date.now() - step) / 1000 })
@@ -187,7 +203,7 @@ async function main() {
     for (let i = 0; i < args.length; i += 2) {
       const key = { '--revision': 'revision', '--node-image': 'nodeImage', '--project-dir': 'projectDir', '--state-root': 'stateRoot',
         '--output-dir': 'outputDir', '--builder': 'builder', '--image-tag': 'imageTag', '--estimated-bytes': 'estimatedBytes',
-        '--seed-receipt': 'seedReceipt', '--abi': 'abi', '--projection': 'projection' }[args[i]]
+        '--seed-receipt': 'seedReceipt', '--abi': 'abi', '--projection': 'projection', '--runtime-transport': 'runtimeTransport' }[args[i]]
       if (!key || args[i + 1] === undefined) throw new Error('Invalid full-release argument')
       options[key] = key === 'estimatedBytes' ? Number(args[i + 1]) : args[i + 1]
     }

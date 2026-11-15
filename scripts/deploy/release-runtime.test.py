@@ -351,6 +351,22 @@ class FullRuntimeProvenanceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'snapshot'):
             runtime.validate_full_record(source, marker, receipt, {**record, 'builderSnapshot': 'mutable:tag'}, image)
 
+    def test_verified_overlay_requires_full_filesystem_and_reviewed_config_proof_instead_of_old_manifest(self):
+        source, marker, receipt, record, image = self.full_fixture()
+        receipt.update({'origin': 'audited-runtime-seed', 'audited': True, 'buildTarget': 'audited-seed-full-build',
+                        'seedImage': record['builderImage'], 'offlineRootLockVerified': True, 'offlineHarnessLockVerified': True,
+                        'offlineEvidence': [{'cwd': cwd, 'command': 'pnpm install --offline --frozen-lockfile', 'exitCode': 0} for cwd in ['/app', '/app/vendor/deepseek-harness']],
+                        'fullBuildEvidence': [{'command': 'pnpm run ' + script, 'exitCode': 0} for script in ['build:lib', 'build:web']]})
+        record.update({'runtimeTransport': 'verified-overlay', 'seedReceiptOrigin': 'audited-runtime-seed',
+                       'transportBaseImage': receipt['seedImage'], 'runtimeConfigImage': 'sha256:' + 'f' * 64,
+                       'runtimeStageSha256': '1' * 64, 'runtimeDockerfileSha256': '2' * 64,
+                       'configOnlyDockerfileSha256': '3' * 64, 'filesystemDigest': '4' * 64, 'runtimeConfigDigest': '5' * 64})
+        runtime.validate_full_record(source, marker, receipt, record, image)
+        with self.assertRaisesRegex(ValueError, 'filesystem/config'):
+            runtime.validate_full_record(source, marker, receipt, {**record, 'filesystemDigest': ''}, image)
+        with self.assertRaisesRegex(ValueError, 'filesystem/config'):
+            runtime.validate_full_record(source, marker, receipt, {**record, 'transportBaseImage': 'sha256:' + '9' * 64}, image)
+
     def test_incremental_base_without_a_manifest_stays_rejected(self):
         for value in [{}, {'files': {}}, {'schemaVersion': 2}]:
             with self.assertRaises(ValueError):
