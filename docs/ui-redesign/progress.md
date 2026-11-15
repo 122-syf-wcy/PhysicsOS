@@ -1,5 +1,12 @@
 # UI redesign progress — 2026-11-14
 
+## Latest verified integration — 2026-11-15
+
+- UI source is frozen at fe5ad96a5556bd1f4bf2fef0538edec7a15b3777. Complete server Docker build:lib (134s) and build:web (58s) succeeded. Raw runtime sha256:8bf4b02749cccd2677621da09134878bdd964e27766cb401834fad7f306d0d02 passed full filesystem, runtime configuration and system filesystem transport proofs. Final provenance export then correctly rejected one stale signed tool entry inherited from main; this freeze refreshes only its digest/signature using the existing private key and unchanged public trust root.
+- Focused UI/float/account workspace/sidebar/layout/canvas tests passed after corrections. Client TypeScript passed. Four unchanged numerical suites passed 214 tests using a 60s server execution budget. Final profile roster regression passed 27 tests. Lint has 1,899 inherited baseline issues, zero newly introduced issues after comparison with main; full lint is not green.
+- New validation worker sha256:f8cfc0b47e6eeaf60f7b14a3978b8341c705e7a47402fd431aa0d365529b98b0 was built from frozen inputs. Actual Chrome sandbox smoke passed with uid1001, CapEff0, NoNewPrivs1, no --no-sandbox; real server tests 3/3 and seccomp regression 1/1 passed. Production worker remains unchanged.
+- Candidate network/database and 62-state real browser acceptance remain in progress. No production writes, switch or claim of 62/62 acceptance have been made. Later notes below are historical evidence and may contain superseded revisions or draft mascot choices.
+
 ## Active integration — 2026-11-15
 
 - User approved all five no-cat Guizhou clothing/silverwork variants and instructed immediate full UI implementation, matching the 62 reference layouts closely while allowing original icons and decorative assets. Publishing after acceptance remains authorized.

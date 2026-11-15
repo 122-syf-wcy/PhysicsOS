@@ -109,7 +109,10 @@ def validate_tree(tree):
 
 FS_CODE = r'''
 const f=require('fs'),p=require('path'),c=require('crypto');
-function fileHash(a){const h=c.createHash('sha256'),fd=f.openSync(a,'r'),buffer=Buffer.allocUnsafe(1024*1024);try{let n;while((n=f.readSync(fd,buffer,0,buffer.length,null))>0)h.update(buffer.subarray(0,n));}finally{f.closeSync(fd)}return h.digest('hex')}
+// All scans are synchronous. Reuse one bounded buffer instead of allocating
+// 1 MiB per tiny dependency file and repeatedly collecting the live proof.
+const HASH_BUFFER=Buffer.allocUnsafe(1024*1024);
+function fileHash(a){const h=c.createHash('sha256'),fd=f.openSync(a,'r'),buffer=HASH_BUFFER;try{let n;while((n=f.readSync(fd,buffer,0,buffer.length,null))>0)h.update(buffer.subarray(0,n));}finally{f.closeSync(fd)}return h.digest('hex')}
 function pathOf(root,n){if(typeof n!=='string'||!n||p.isAbsolute(n)||n.split('/').some(x=>!x||x==='.'||x==='..')||/[\\\0\r\n]/.test(n))throw Error('Unsafe transport path');const a=p.resolve(root,n);if(!a.startsWith(root+'/'))throw Error('Transport escaped root');return a}
 function children(a){return f.readdirSync(a,{encoding:'buffer'}).map(b=>{const n=b.toString('utf8');if(!Buffer.from(n).equals(b))throw Error('Non-UTF8 path is not transportable');return n})}
 function entry(a){const s=f.lstatSync(a),v={mode:s.mode&4095,uid:s.uid,gid:s.gid};if(s.isSymbolicLink()){const b=f.readlinkSync(a,{encoding:'buffer'}),target=b.toString('utf8');if(!Buffer.from(target).equals(b))throw Error('Non-UTF8 link is not transportable');return{...v,type:'symlink',target}};if(s.isDirectory())return{...v,type:'dir'};if(s.isFile())return{...v,type:'file',sha256:fileHash(a),bytes:s.size};throw Error('Special filesystem entry is not transportable')}

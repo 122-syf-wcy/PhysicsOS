@@ -83,6 +83,23 @@ class FullTransportContracts(unittest.TestCase):
         code = 'require(process.argv[1]).applyFullTransport(process.argv[2],process.argv[3]);'
         return subprocess.run(['node', '-e', code, str(script), str(before), str(stage)], text=True, capture_output=True)
 
+    def test_many_small_files_reuse_bounded_hash_memory_and_keep_exact_multichunk_hashes(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for index in range(128): (root / f'file-{index}').write_bytes(f'payload-{index}'.encode())
+            large = b'z' * (1024 * 1024 + 7)
+            (root / 'large').write_bytes(large)
+            prefix = 'let hashBuffers=0;const allocate=Buffer.allocUnsafe;Buffer.allocUnsafe=(size,...args)=>{if(size===1024*1024)hashBuffers++;return allocate(size,...args)};'
+            suffix = ';process.once("beforeExit",()=>console.log(JSON.stringify({hashBuffers})));'
+            result = subprocess.run(['node', '-e', prefix + t.FS_JS + suffix], input=json.dumps({'root': str(root)}), text=True, capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            proof, resources = map(json.loads, result.stdout.strip().splitlines())
+            self.assertEqual(resources['hashBuffers'], 1)
+            self.assertEqual(len(proof['entries']), 129)
+            self.assertEqual(proof['entries']['large']['sha256'], hashlib.sha256(large).hexdigest())
+            self.assertEqual(proof['entries']['file-0']['sha256'], hashlib.sha256(b'payload-0').hexdigest())
+
     def test_transport_applies_code_deletions_modes_and_links_without_flattening_module_identity(self):
         with tempfile.TemporaryDirectory() as tmp:
             before, after, stage, script = self.fixture(Path(tmp))
