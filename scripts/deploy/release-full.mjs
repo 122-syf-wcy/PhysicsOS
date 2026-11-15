@@ -109,6 +109,7 @@ export async function buildFullRelease(options, dependencies = {}) {
       for (const [cwd, script] of [['/app/vendor/deepseek-harness', 'build:lib'], ['/app', 'build:web']]) {
         options.signal?.throwIfAborted()
         const args = ['exec', '-u', '0', '-w', cwd, '-e', 'DSH_CLIENT_TITLE=PhysicsOS',
+          '-e', 'DSH_CLIENT_COMMIT_HASH=' + revision,
           '-e', 'pnpm_config_pm_on_fail=ignore',
           '-e', 'PATH=/app/vendor/deepseek-harness/node_modules/.bin:/app/node_modules/.bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
           builder, 'node', toolPath, 'run', script]
