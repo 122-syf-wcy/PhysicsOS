@@ -90,6 +90,29 @@ describe('safe reader', () => {
     await expect(createSafeReader({ ...loopbackAllowed, maxBytes: 1_000 }).read(base)).rejects.toMatchObject({ code: 'FETCH_TOO_LARGE' })
   })
 
+  it('tries every resolved address until one connects', async () => {
+    // A host normally publishes several addresses; the network may only reach
+    // some of them. Failing on the first - worse, on an unreachable IPv6 -
+    // made every real page unreadable once DNS answered v6 first.
+    const base = await launch((_req, res) => { res.writeHead(200, { 'content-type': 'text/plain' }); res.end('第二个地址可用。') })
+    // 192.0.2.1 is TEST-NET-1: routable-looking, never answers.
+    const reader = createSafeReader({
+      lookup: async () => ['192.0.2.1', '127.0.0.1'],
+      addressPolicy: (address: string) => address === '127.0.0.1' || address === '192.0.2.1',
+    })
+    expect((await reader.read(base)).text).toBe('第二个地址可用。')
+  })
+
+  it('refuses a host whose addresses are all private even when one answers', async () => {
+    let hit = false
+    const base = await launch((_req, res) => { hit = true; res.end('ok') })
+    // Defence in depth: a resolver that returns a private address must still
+    // be refused when no test policy opted in.
+    const reader = createSafeReader({ lookup: async () => ['127.0.0.1', '10.0.0.7'] })
+    await expect(reader.read(base)).rejects.toMatchObject({ code: 'FETCH_BLOCKED' })
+    expect(hit).toBe(false)
+  })
+
   it('follows a redirect after re-checking it', async () => {
     const base = await launch((req, res) => {
       if (req.url === '/start') { res.writeHead(302, { location: '/final' }); res.end() }

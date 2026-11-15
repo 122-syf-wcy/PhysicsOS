@@ -60,6 +60,22 @@ describe('research service', () => {
     }
   })
 
+  it('honours read:false by returning summaries without claiming full text', async () => {
+    const fetchMock = vi.fn(async () => new Response(
+      '<rss><channel><item><title>洛伦兹力</title><link>https://example.com/a</link><description>F=qvB</description></item></channel></rss>',
+    ))
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      const value = await createResearchService({}).present('洛伦兹力', undefined, { read: false })
+      // Only the search request is made: no page fetch is attempted.
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      expect(String(value.readCount)).toBe('0')
+      expect(String(value.guidance)).toContain('没有读取网页全文')
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('returns lossless JSON: an absent snippet or excerpt is omitted, not undefined', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(
       '<rss><channel><item><title>洛伦兹力</title><link>https://example.com/a</link><description>F=qvB</description></item></channel></rss>',

@@ -41,7 +41,7 @@ const isAbort = (error: unknown): boolean => error instanceof Error && (error.na
  * checked address, so a hostname cannot re-resolve to a private address
  * between validation and connect. TLS keeps the original hostname as SNI.
  */
-function requestOnce(url: URL, options: { readonly timeoutMs: number; readonly maxBytes: number; readonly lookup: AddressLookup; readonly userAgent: string; readonly addressPolicy?: (address: string) => boolean; readonly signal?: AbortSignal }): Promise<RawResponse> {
+function requestOnce(url: URL, address: string, options: { readonly timeoutMs: number; readonly maxBytes: number; readonly userAgent: string; readonly signal?: AbortSignal }): Promise<RawResponse> {
   return new Promise((resolve, reject) => {
     const client = url.protocol === 'https:' ? httpsRequest : httpRequest
     let settled = false
@@ -50,21 +50,12 @@ function requestOnce(url: URL, options: { readonly timeoutMs: number; readonly m
       settled = true
       reject(error)
     }
-    // Node may call a custom lookup with (hostname, callback) or
-    // (hostname, options, callback); both forms receive the same checked IP.
-    const lookup = (hostname: string, first: unknown, second?: unknown): void => {
+    // The socket is bound to this already-checked address; the resolver is
+    // never consulted again, so DNS cannot rotate between check and connect.
+    // TLS keeps the original hostname as SNI because `hostname` is a name.
+    const lookup = (_hostname: string, first: unknown, second?: unknown): void => {
       const callback = (typeof first === 'function' ? first : second) as (error: NodeJS.ErrnoException | null, address: string, family: number) => void
-      void options.lookup(hostname).then(addresses => {
-        const address = addresses[0]
-        if (address === undefined) { callback(Object.assign(new Error('no address'), { code: 'ENOTFOUND' }), '', 0); return }
-        // Defense in depth for injected resolvers: unless a test policy opted
-        // in, a resolver answer that is private is refused here too.
-        if (options.addressPolicy === undefined && isBlockedAddress(address)) {
-          callback(Object.assign(new Error('blocked address'), { code: 'ECONNREFUSED' }), '', 0)
-          return
-        }
-        callback(null, address, address.includes(':') ? 6 : 4)
-      }, error => callback(error instanceof Error ? error : new Error('dns'), '', 0))
+      callback(null, address, address.includes(':') ? 6 : 4)
     }
     const req = client({
       protocol: url.protocol,
@@ -73,8 +64,6 @@ function requestOnce(url: URL, options: { readonly timeoutMs: number; readonly m
       path: url.pathname + url.search,
       method: 'GET',
       headers: { accept: 'text/html,application/xhtml+xml,text/plain;q=0.9', 'accept-encoding': 'gzip, deflate, br', 'user-agent': options.userAgent },
-      // `servername` is set by https when `hostname` is a name; binding the
-      // socket still uses the checked IP through `lookup`.
       lookup: lookup as never,
       signal: options.signal,
       timeout: options.timeoutMs,
@@ -217,15 +206,33 @@ export function createSafeReader(options: SafeReaderOptions = {}): SafeReader {
     for (let hop = 0; ; hop++) {
       const remaining = deadline - Date.now()
       if (remaining <= 0) throw new ResearchError('FETCH_TIMEOUT', '网页读取超时。')
-      await lookup(url.hostname.replace(/^\[|\]$/g, ''))
-      const response = await requestOnce(url, {
-        timeoutMs: remaining,
-        maxBytes: bytesLimit,
-        lookup,
-        userAgent,
-        ...(options.addressPolicy === undefined ? {} : { addressPolicy: options.addressPolicy }),
-        ...(combined === undefined ? {} : { signal: combined }),
-      })
+      const addresses = await lookup(url.hostname.replace(/^\[|\]$/g, ''))
+      /* A host can publish several addresses (v4 and v6, several edges) and a
+         deployment's network may only reach some of them. Trying only the
+         first made every page fail as soon as DNS returned an unreachable v6
+         or a poisoned record first. Each address is checked before use and
+         the first that actually connects wins; all failing is a failure. */
+      let response: RawResponse | undefined
+      let lastError: unknown
+      for (const address of addresses) {
+        // Defense in depth for injected resolvers: unless a test policy opted
+        // in, a private answer is refused here even if the resolver did not.
+        if (options.addressPolicy === undefined && isBlockedAddress(address)) continue
+        try {
+          response = await requestOnce(url, address, {
+            timeoutMs: Math.max(1, deadline - Date.now()),
+            maxBytes: bytesLimit,
+            userAgent,
+            ...(combined === undefined ? {} : { signal: combined }),
+          })
+          break
+        } catch (error) { lastError = error }
+      }
+      if (response === undefined) {
+        throw lastError instanceof ResearchError
+          ? lastError
+          : new ResearchError('FETCH_UNAVAILABLE', '网页当前无法访问。')
+      }
       if ([301, 302, 303, 307, 308].includes(response.status)) {
         if (hop >= redirects) throw new ResearchError('FETCH_BLOCKED', '网页重定向次数过多。')
         const location = response.headers.location
