@@ -159,18 +159,21 @@ export async function validateCandidate(options: DriverOptions): Promise<DriverR
     timezoneId: 'Asia/Shanghai',
     acceptDownloads: false,
   })
+  const page = await context.newPage()
   // No cookies or storage are ever injected; block anything outside the
-  // candidate origin so the authored code cannot reach the app, metadata or
-  // the internet even through a hidden resource.
+  // candidate origin except this run's exact driving document. The exception
+  // cannot be used by a subframe, fetch, POST, or another loopback resource.
   const candidateOrigin = new URL(assets.entryUrl).origin
   await context.route('**/*', async route => {
-    const url = route.request().url()
+    const request = route.request()
+    const url = request.url()
     if (url.startsWith('http://') || url.startsWith('https://')) {
-      if (new URL(url).origin !== candidateOrigin) { await route.abort('blockedbyclient'); return }
+      const drivingDocument = url === assets.hostUrl && request.method() === 'GET'
+        && request.isNavigationRequest() && request.frame() === page.mainFrame()
+      if (!drivingDocument && new URL(url).origin !== candidateOrigin) { await route.abort('blockedbyclient'); return }
     }
     await route.continue()
   })
-  const page = await context.newPage()
   const diagnostics: string[] = []
   page.on('pageerror', error => diagnostics.push(`pageerror: ${error.message.slice(0, 300)}`))
   page.on('console', message => { if (message.type() === 'error') diagnostics.push(`console: ${message.text().slice(0, 300)}`) })

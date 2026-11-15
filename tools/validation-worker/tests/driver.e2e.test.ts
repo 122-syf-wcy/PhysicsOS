@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { chromium } from '@playwright/test'
-import { validateCandidate, validationHostPage, validationWrapper, evaluateObservation } from '../src/index.ts'
+import { validateCandidate, validationHostPage, validationWrapper, evaluateObservation, startValidationWorker } from '../src/index.ts'
 import type { Browser } from '@playwright/test'
 
 const run = process.env.PHYSICSOS_VALIDATION_E2E === '1' || process.env.PHYSICSOS_CHAT_CODE_SERVER_DOCKER === '1'
@@ -110,7 +110,7 @@ describeE2E('isolated browser acceptance (real protocol)', () => {
     const address = server.address()
     if (address === null || typeof address === 'string') throw new Error('no port')
     origin = `http://127.0.0.1:${address.port}`
-    browser = await chromium.launch({ headless: true, args: ['--disable-dev-shm-usage'] })
+    browser = await chromium.launch({ headless: true, chromiumSandbox: true, args: ['--disable-dev-shm-usage'] })
   }, 120_000)
 
   afterAll(async () => {
@@ -137,6 +137,60 @@ describeE2E('isolated browser acceptance (real protocol)', () => {
     expect(result.firstFrameAcknowledged).toBe(true)
     expect(verdict.checks.filter(check => !check.passed)).toEqual([])
     expect(verdict.passed).toBe(true)
+  }, 120_000)
+
+  it('accepts a cold HTTP validation whose generated host has its own loopback origin', async () => {
+    const worker = await startValidationWorker({ token, screenshots: false })
+    try {
+      const response = await fetch(`http://127.0.0.1:${worker.port}/validate`, {
+        method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          wrapperUrl: `${origin}/validation/${token}/wrapper.html`, entryUrl: `${origin}/validation/${token}/good/index.html`,
+          token, frames: snapshots, changedFrame: changed,
+          expected: { candidateSha256: 'a'.repeat(64), sceneSha256: 'e'.repeat(64), sceneRevision: 1 },
+        }),
+      })
+      expect(response.status).toBe(200)
+      const body = await response.json() as { passed: boolean; checks: { passed: boolean }[]; result: { firstFrameAcknowledged: boolean; frames: { opaquePixels: number }[] } }
+      expect(body.passed).toBe(true)
+      expect(body.checks.every(check => check.passed)).toBe(true)
+      expect(body.result.firstFrameAcknowledged).toBe(true)
+      expect(body.result.frames).toHaveLength(snapshots.length)
+      expect(body.result.frames.every(frame => frame.opaquePixels > 0)).toBe(true)
+    } finally { await worker.close() }
+  }, 120_000)
+
+  it('allows only the exact main host GET while blocking host fetches, subframes and other paths', async () => {
+    let hostUrl = ''
+    let mainDocumentRequests = 0
+    let otherRequests = 0
+    const host = createServer((req, res) => {
+      if (req.method === 'GET' && req.url === '/host.html') {
+        mainDocumentRequests++
+        const html = validationHostPage({ token, wrapperPath: `${origin}/validation/${token}/wrapper.html`, frames: snapshots, changedFrame: changed })
+        const probes = `<script>
+          fetch(${JSON.stringify(hostUrl)}).catch(() => {});
+          fetch(${JSON.stringify(hostUrl)}, { method: 'POST' }).catch(() => {});
+          fetch(${JSON.stringify(hostUrl.replace('/host.html', '/forbidden'))}).catch(() => {});
+          const probe = document.createElement('iframe'); probe.hidden = true;
+          probe.src = ${JSON.stringify(hostUrl)}; document.body.append(probe);
+        </script>`
+        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); res.end(html + probes)
+      } else { otherRequests++; res.writeHead(404); res.end() }
+    })
+    await new Promise<void>(resolve => { host.listen(0, '127.0.0.1', resolve) })
+    try {
+      const address = host.address()
+      if (address === null || typeof address === 'string') throw new Error('no host port')
+      hostUrl = `http://127.0.0.1:${address.port}/host.html`
+      const { result } = await validateCandidate({ browser,
+        assets: { hostUrl, wrapperUrl: `${origin}/validation/${token}/wrapper.html`, entryUrl: `${origin}/validation/${token}/good/index.html` },
+        frames: snapshots, changedFrame: changed })
+      expect(result.firstFrameAcknowledged).toBe(true)
+      expect(result.frames).toHaveLength(snapshots.length)
+      expect(mainDocumentRequests).toBe(1)
+      expect(otherRequests).toBe(0)
+    } finally { await new Promise<void>(resolve => { host.close(() => { resolve() }) }) }
   }, 120_000)
 
   it('rejects a static background that only pretends to be an experiment', async () => {
