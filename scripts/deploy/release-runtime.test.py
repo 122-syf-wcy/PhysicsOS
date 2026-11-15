@@ -1,6 +1,8 @@
+import copy
 import hashlib
 import importlib.util
 import json
+import os
 import pathlib
 import shutil
 import subprocess
@@ -267,6 +269,14 @@ import "node:fs"; require("path"); import "./chunk.js";
         self.assertEqual(report['sourceDigest'], base['sourceDigest'])
         self.assertEqual(report['requestedSourceDigest'], requested['sourceDigest'])
 
+    def test_real_inventory_records_absolute_and_root_escaping_requests_for_reuse_refusal(self):
+        result = inventory_fixture({'index.js': 'import "/var/lib/unreviewed.mjs"; import "file:/opt/foreign.mjs"; import "../../../outside.js";'})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        package = json.loads(result.stdout)['packages']['packages/request-fixture']
+        self.assertEqual(package['unsafeNodeRequests'], sorted(['/var/lib/unreviewed.mjs', 'file:/opt/foreign.mjs', '../../../outside.js']))
+        with self.assertRaisesRegex(ValueError, 'root-escaping'):
+            runtime.registry_additions({'packages/request-fixture': package}, {'packages/request-fixture': package}, {})
+
     def test_runtime_updater_preflights_all_owned_deletions_before_mutating_files(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)
@@ -340,6 +350,251 @@ import "node:fs"; require("path"); import "./chunk.js";
             self.assertNotEqual(invalid.returncode, 0)
 
 
+
+
+class RegistryReuseTests(unittest.TestCase):
+    prefix = runtime.HARNESS + '/packages/physicsos/fixture'
+    target = runtime.HARNESS + '/node_modules/.pnpm/fixture-native@1.0.0/node_modules/fixture-native'
+
+    def inventories(self):
+        old = {'name': 'fixture', 'mode': 'host', 'dependencies': {'zod': '4.4.3'},
+               'nodeRequests': ['zod'], 'clientRequests': [], 'resolvedBare': {'zod': {'name': 'zod', 'version': '4.4.3'}}}
+        new = {**copy.deepcopy(old), 'dependencies': {'zod': '4.4.3', 'fixture-native': '1.0.0'},
+               'nodeRequests': ['fixture-native', 'zod'], 'nodeRequestOrigins': {'fixture-native': [self.prefix + '/lib/index.js']},
+               'resolvedBare': {**old['resolvedBare'], 'fixture-native': {'name': 'fixture-native', 'version': '1.0.0'}}}
+        return {self.prefix: new}, {self.prefix: old}
+
+    def proof(self, artifact=None, before=None):
+        if artifact is None:
+            candidate, base = self.inventories()
+            row = runtime.registry_additions(candidate, base, {})[0]
+            entries = {self.target: {'type': 'dir', 'mode': 0o755},
+                       self.target + '/package.json': {'type': 'file', 'mode': 0o644, 'bytes': 10, 'sha256': sha('manifest')},
+                       self.target + '/index.cjs': {'type': 'file', 'mode': 0o644, 'bytes': 10, 'sha256': sha('entry')}}
+            row.update({'target': self.target, 'entries': {kind: {'path': self.target + '/index.cjs', 'sha256': sha('entry')} for kind in ['require', 'import']}})
+            artifact = {'abi': {'node': '24.7.0', 'modules': '137', 'platform': 'linux', 'arch': 'x64', 'libc': 'glibc', 'nodeSha256': sha('node binary'), 'sharedLibraries': []},
+                        'entries': entries, 'packages': {}, 'requests': [row]}
+        rows = [{**row, 'beforeLink': before or {'type': 'absent'}} for row in artifact['requests']]
+        value = {'format': 'physicsos-registry-reuse/1', 'schemaVersion': 1,
+                 'base': {'image': 'sha256:' + 'a' * 64, 'revision': 'b' * 40, 'sourceDigest': 'c' * 64, 'manifestSha256': '6' * 64, 'codeDigest': '7' * 64},
+                 'candidate': {'image': 'sha256:' + 'd' * 64, 'id': 'e' * 64, 'revision': 'f' * 40, 'sourceDigest': '1' * 64},
+                 **{key: '2' * 64 for key in ['nodeInventoryDigest', 'baselineSourceManifestDigest', 'planDigest', 'publicKeySha256']},
+                 'requests': rows, 'origins': [{**row, 'owner': row['from'] + '/lib/index.js'} for row in artifact['requests']],
+                 'artifacts': artifact, 'artifactDigest': runtime.sha(runtime.canonical(artifact))}
+        value['proofDigest'] = runtime.sha(runtime.canonical(value))
+        return value
+
+    def test_default_rejects_additions_and_safe_proof_links_only_existing_base_artifact(self):
+        candidate, base = self.inventories()
+        with self.assertRaisesRegex(ValueError, 'full runtime'):
+            runtime.workspace_updates(candidate, base, {})
+        proof = self.proof()
+        runtime.validate_registry_reuse_proof(proof, copy.deepcopy(proof))
+        update = runtime.workspace_updates(candidate, base, {}, proof)
+        self.assertEqual(update['links'], [{'link': self.prefix + '/node_modules/fixture-native', 'target': self.target,
+                                           'registry': True, 'before': {'type': 'absent'}}])
+        self.assertIn('fixture-native', update['checks'][0]['dependencies'])
+
+    def test_existing_spec_version_removal_client_external_and_root_escape_stay_rejected(self):
+        candidate, base = self.inventories()
+        for edit in [lambda m: m['dependencies'].update(zod='^4.4.3'),
+                     lambda m: m['resolvedBare']['zod'].update(version='5.0.0'),
+                     lambda m: m['nodeRequests'].remove('zod'),
+                     lambda m: m.update(clientRequests=['fixture-native']),
+                     lambda m: m.update(unsafeNodeRequests=['/var/lib/unreviewed.js']),
+                     lambda m: m['nodeRequestOrigins'].update({'fixture-native': ['../outside.js']})]:
+            changed = copy.deepcopy(candidate)
+            edit(changed[self.prefix])
+            with self.subTest(edit=edit), self.assertRaises(ValueError):
+                runtime.workspace_updates(changed, base, {}, self.proof())
+        for request in ['../../external', '/app/external', 'file:/opt/private', '@fixture/name/../../../secret']:
+            with self.subTest(request=request), self.assertRaises(ValueError):
+                runtime.bare_name(request)
+
+    def test_self_rehashed_proof_and_true_booleans_do_not_admit_changed_metadata(self):
+        proof = self.proof()
+        for edit in [lambda p: p['candidate'].update(sourceDigest='3' * 64),
+                     lambda p: p['base'].update(image='sha256:' + '4' * 64),
+                     lambda p: p['artifacts']['entries'][self.target + '/index.cjs'].update(sha256=sha('tampered')),
+                     lambda p: p.update(verified=True, trusted=True),
+                     lambda p: p.update(nodeInventoryDigest='5' * 64)]:
+            changed = copy.deepcopy(proof)
+            edit(changed)
+            changed['artifactDigest'] = runtime.sha(runtime.canonical(changed['artifacts']))
+            changed['proofDigest'] = runtime.sha(runtime.canonical({key: value for key, value in changed.items() if key != 'proofDigest'}))
+            with self.subTest(edit=edit), self.assertRaises(ValueError):
+                runtime.validate_registry_reuse_proof(changed, proof)
+
+    def test_registry_lock_accepts_add_only_baseline_reference_and_rejects_graph_or_existing_ref_changes(self):
+        candidate, base = self.inventories()
+        additions = runtime.registry_additions(candidate, base, {})
+        graph = {'packages': {'fixture-native@1.0.0': {'resolution': {'integrity': 'same'}}},
+                 'snapshots': {'fixture-native@1.0.0': {}}, 'settings': {'policy': 'same'}}
+        reference = {'specifier': '1.0.0', 'version': '1.0.0'}
+        before = {'graph': graph, 'importers': {'packages/attachment/fixture': {'dependencies': {'fixture-native': reference}},
+                                              'packages/physicsos/fixture': {'dependencies': {'zod': {'specifier': '4.4.3', 'version': '4.4.3'}}}}}
+        after = copy.deepcopy(before)
+        after['importers']['packages/physicsos/fixture']['dependencies']['fixture-native'] = reference
+        runtime.validate_registry_lock(after, before, additions, {})
+        for change in [lambda d: d['graph']['packages']['fixture-native@1.0.0']['resolution'].update(integrity='changed'),
+                       lambda d: d['graph'].update(settings={'policy': 'changed'}),
+                       lambda d: d['importers']['packages/physicsos/fixture']['dependencies']['zod'].update(version='5.0.0'),
+                       lambda d: d['importers']['packages/physicsos/fixture']['dependencies']['fixture-native'].update(version='2.0.0')]:
+            invalid = copy.deepcopy(after)
+            change(invalid)
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                runtime.validate_registry_lock(invalid, before, additions, {})
+        no_reference = copy.deepcopy(before)
+        no_reference['importers'].pop('packages/attachment/fixture')
+        with self.assertRaisesRegex(ValueError, 'Existing/new external lock importer changed without an audited Node addition'):
+            runtime.validate_registry_lock(after, no_reference, additions, {})
+
+    def test_registry_policies_pin_absent_root_metadata_to_exact_base_source_attestation(self):
+        lock = runtime.HARNESS + '/pnpm-lock.yaml'
+        workspace = runtime.HARNESS + '/pnpm-workspace.yaml'
+        old_files = {lock: sha('old lock'), workspace: sha('policy'), '.npmrc': sha('npm policy'), 'pnpm-lock.yaml': sha('root lock')}
+        files = {**old_files, lock: sha('new lock')}
+        baseline = {'revision': 'a' * 40, 'files': old_files, 'sourceDigest': runtime.sha(runtime.canonical(old_files))}
+        source = {'revision': 'b' * 40, 'files': files, 'sourceDigest': runtime.sha(runtime.canonical(files))}
+        base = {**baseline, 'files': {lock: old_files[lock], workspace: old_files[workspace]}}
+        before = {lock: old_files[lock], workspace: old_files[workspace], '.npmrc': None, 'pnpm-lock.yaml': None}
+        runtime.validate_registry_sources(source, baseline, base, before, files)
+        for args in [(source, {**baseline, 'revision': 'c' * 40}, base, before, files),
+                     (source, baseline, base, {**before, lock: sha('unattested lock')}, files),
+                     (source, baseline, base, before, {**files, '.npmrc': sha('private change')}),
+                     (source, baseline, base, {**before, workspace: None}, files)]:
+            with self.subTest(args=args[3]), self.assertRaises(ValueError):
+                runtime.validate_registry_sources(*args)
+        bad_source = copy.deepcopy(source)
+        bad_source['files']['.npmrc'] = sha('new trust policy')
+        bad_source['sourceDigest'] = runtime.sha(runtime.canonical(bad_source['files']))
+        with self.assertRaisesRegex(ValueError, 'policy/root lock'):
+            runtime.validate_registry_sources(bad_source, baseline, base, before, bad_source['files'])
+
+    def make_physical_fixture(self, root, linked):
+        package = root / self.prefix
+        (package / 'lib').mkdir(parents=True)
+        (package / 'lib/index.js').write_text('import value from "fixture-native"; export {value}')
+        (package / 'package.json').write_text(json.dumps({'name': 'fixture', 'dependencies': {'fixture-native': '1.0.0'}}))
+        native = root / self.target
+        native.mkdir(parents=True)
+        (native / 'package.json').write_text(json.dumps({'name': 'fixture-native', 'version': '1.0.0',
+                                                       'main': 'index.cjs', 'optionalDependencies': {'@fixture/native-linux': '1.0.0'}}))
+        (native / 'index.cjs').write_text('throw Error("Dependency code must not execute during metadata audit")')
+        addon_path = runtime.HARNESS + '/node_modules/.pnpm/@fixture+native-linux@1.0.0/node_modules/@fixture/native-linux'
+        addon = root / addon_path
+        addon.mkdir(parents=True)
+        (addon / 'package.json').write_text(json.dumps({'name': '@fixture/native-linux', 'version': '1.0.0', 'main': 'addon.node'}))
+        (addon / 'addon.node').write_bytes(b'not executable, only a hashed native fixture')
+        optional = native.parent / '@fixture/native-linux'
+        optional.parent.mkdir()
+        optional.symlink_to(pathlib.Path(os.path.relpath(addon, optional.parent)))
+        if linked:
+            link = package / 'node_modules/fixture-native'
+            link.parent.mkdir()
+            link.symlink_to(pathlib.Path(os.path.relpath(native, link.parent)))
+        rows = runtime.registry_additions(*self.inventories(), {})
+        rows[0]['target'] = self.target
+        return rows, addon
+
+    def observe(self, root, rows, phase):
+        code = runtime.REGISTRY_CODE + r'''let input='';process.stdin.on('data',b=>input+=b);process.stdin.on('end',()=>{const d=JSON.parse(input);console.log(JSON.stringify(observeRegistry(d.root,d.rows,d.phase)));});'''
+        return subprocess.run(['node', '-e', code], input=json.dumps({'root': str(root), 'rows': rows, 'phase': phase}), text=True, capture_output=True)
+
+    def apply(self, root, proof, deleted=None):
+        updater = root / 'updater.cjs'
+        updater.write_text(runtime.UPDATE_JS)
+        doc = {'links': [{'link': self.prefix + '/node_modules/fixture-native', 'target': self.target, 'registry': True, 'before': proof['requests'][0]['beforeLink']}],
+               'checks': [{'from': self.prefix, 'dependencies': ['fixture-native']}], 'deleted': deleted or [], 'registryReuse': proof}
+        code = 'let s="";process.stdin.on("data",b=>s+=b);process.stdin.on("end",()=>require(process.argv[1]).applyRuntimeUpdate(process.argv[2],JSON.parse(s)));'
+        return subprocess.run(['node', '-e', code, str(updater), str(root)], input=json.dumps(doc), text=True, capture_output=True)
+
+    def test_registry_link_without_a_physical_proof_cannot_be_smuggled_into_workspace_update(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            self.make_physical_fixture(root, linked=False)
+            updater = root / 'updater.cjs'
+            updater.write_text(runtime.UPDATE_JS)
+            doc = {'links': [{'link': self.prefix + '/node_modules/fixture-native', 'target': self.target}], 'checks': [], 'deleted': []}
+            code = 'let s="";process.stdin.on("data",b=>s+=b);process.stdin.on("end",()=>require(process.argv[1]).applyRuntimeUpdate(process.argv[2],JSON.parse(s)));'
+            result = subprocess.run(['node', '-e', code, str(updater), str(root)], input=json.dumps(doc), text=True, capture_output=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('unverified registry artifact', result.stderr)
+
+    def test_real_native_closure_safe_base_link_and_cold_verification_without_loading_dependencies(self):
+        with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b:
+            base, candidate = pathlib.Path(a), pathlib.Path(b)
+            rows, _ = self.make_physical_fixture(base, linked=False)
+            self.make_physical_fixture(candidate, linked=True)
+            observed = self.observe(candidate, rows, 'after')
+            self.assertEqual(observed.returncode, 0, observed.stderr)
+            physical = json.loads(observed.stdout)['artifacts']
+            before = self.observe(base, physical['requests'], 'before')
+            self.assertEqual(before.returncode, 0, before.stderr)
+            self.assertEqual(json.loads(before.stdout)['artifacts'], physical)
+            self.assertTrue(any(name.endswith('.node') for name in physical['entries']))
+            proof = self.proof(physical)
+            accepted = self.apply(base, proof)
+            self.assertEqual(accepted.returncode, 0, accepted.stderr)
+            link = base / self.prefix / 'node_modules/fixture-native'
+            self.assertEqual(link.resolve(), base / self.target)
+            cold = subprocess.run(['node', '-e', runtime.REGISTRY_VERIFY_JS], input=json.dumps({'root': str(base), 'proof': proof, 'phase': 'after'}), text=True, capture_output=True)
+            self.assertEqual(cold.returncode, 0, cold.stderr)
+            retry_observed = self.observe(base, physical['requests'], 'before')
+            self.assertEqual(retry_observed.returncode, 0, retry_observed.stderr)
+            linked_proof = self.proof(physical, before=json.loads(retry_observed.stdout)['links'][0]['state'])
+            retry = self.apply(base, linked_proof)
+            self.assertEqual(retry.returncode, 0, retry.stderr)
+            link.unlink()
+            missing = subprocess.run(['node', '-e', runtime.REGISTRY_VERIFY_JS], input=json.dumps({'root': str(base), 'proof': proof, 'phase': 'after'}), text=True, capture_output=True)
+            self.assertNotEqual(missing.returncode, 0)
+
+    def test_changed_native_missing_entry_abi_and_external_artifact_rejected_before_deletion_or_link(self):
+        for mutation in ['native', 'entry', 'abi', 'escape', 'version', 'missing-artifact', 'link-parent-escape']:
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as temporary:
+                root = pathlib.Path(temporary)
+                rows, addon = self.make_physical_fixture(root, linked=False)
+                result = self.observe(root, rows, 'before')
+                self.assertEqual(result.returncode, 0, result.stderr)
+                proof = self.proof(json.loads(result.stdout)['artifacts'])
+                if mutation == 'native':
+                    (addon / 'addon.node').write_bytes(b'changed native bytes')
+                elif mutation == 'entry':
+                    (root / self.target / 'index.cjs').unlink()
+                elif mutation == 'abi':
+                    proof['artifacts']['abi']['modules'] = '999'
+                    proof['artifactDigest'] = runtime.sha(runtime.canonical(proof['artifacts']))
+                elif mutation == 'version':
+                    manifest = root / self.target / 'package.json'
+                    doc = json.loads(manifest.read_text())
+                    doc['version'] = '2.0.0'
+                    manifest.write_text(json.dumps(doc))
+                elif mutation == 'missing-artifact':
+                    shutil.rmtree(root / self.target)
+                elif mutation == 'link-parent-escape':
+                    (root / self.prefix / 'node_modules').symlink_to('/tmp')
+                else:
+                    (root / self.target / 'external-asset').symlink_to('/tmp')
+                owned = root / self.prefix / 'lib/old.js'
+                owned.write_text('owned old file')
+                rejected = self.apply(root, proof, [{'path': str(owned.relative_to(root)), 'sha256': sha('owned old file')}])
+                self.assertNotEqual(rejected.returncode, 0)
+                self.assertEqual(owned.read_text(), 'owned old file')
+                self.assertFalse((root / self.prefix / 'node_modules/fixture-native').is_symlink())
+
+    def test_registry_manifest_digest_survives_normalization_and_must_match_export_frozen_identity(self):
+        proof = self.proof()
+        manifest = {'schemaVersion': 2, 'files': {'packages/a/src/index.ts': sha('source')},
+                    'baseImage': proof['base']['image'], 'revision': proof['candidate']['revision'], 'sourceDigest': proof['candidate']['sourceDigest'],
+                    'pluginTrust': {'publicKeySha256': proof['publicKeySha256']}, 'registryReuse': proof, 'registryReuseDigest': proof['proofDigest']}
+        normalized = runtime.normalize_manifest(manifest)
+        self.assertEqual(runtime.validate_manifest_registry(normalized, {'registryReuseDigest': proof['proofDigest']}), proof)
+        for key in ['revision', 'sourceDigest', 'baseImage', 'registryReuseDigest']:
+            bad = {**normalized, key: 'changed'}
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                runtime.validate_manifest_registry(bad)
+        with self.assertRaises(ValueError):
+            runtime.validate_manifest_registry(normalized, {'registryReuseDigest': 'f' * 64})
 
 
 class FullRuntimeProvenanceTests(unittest.TestCase):
