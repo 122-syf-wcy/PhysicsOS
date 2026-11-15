@@ -6,6 +6,8 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
+from types import SimpleNamespace
 
 spec = importlib.util.spec_from_file_location('release_runtime', pathlib.Path(__file__).with_name('release-runtime.py'))
 runtime = importlib.util.module_from_spec(spec)
@@ -40,6 +42,33 @@ def inventory_fixture(files, mode='host'):
 
 
 class RuntimeDeltaTests(unittest.TestCase):
+    def test_incremental_build_replaces_inherited_manifest_byte_label(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = pathlib.Path(temporary)
+            context = output / 'context'
+            context.mkdir()
+            base_id, final_id = 'sha256:' + 'b' * 64, 'sha256:' + 'f' * 64
+            current_digest, inherited_digest = 'c' * 64, 'a' * 64
+            record = {'baseImage': base_id, 'revision': 'd' * 40, 'sourceDigest': 'e' * 64,
+                      'codeDigest': 'f' * 64, 'bytesExported': 0, 'deletedFiles': [],
+                      'changedFiles': [], 'contextHashes': {'app/physicsos-runtime-manifest.json': current_digest}}
+            commands = []
+            def command(args, request=None, log=False):
+                commands.append(args)
+                return str(output) if args[:2] == ['docker', 'info'] else ''
+            with patch.object(runtime, 'load_export', return_value=(output, context, record, {'files': {}})), \
+                 patch.object(runtime, 'image_metadata', side_effect=[{'id': base_id, 'labels': {'physicsos.manifest.digest': inherited_digest}}, {'id': final_id}]), \
+                 patch.object(runtime, 'read_base_manifest', return_value={'files': {}}), \
+                 patch.object(runtime, 'require_disk'), patch.object(runtime, 'command', side_effect=command), \
+                 patch.object(runtime.subprocess, 'run', return_value=SimpleNamespace(returncode=1, stdout='')), \
+                 patch.object(runtime, 'validate_image_labels'), \
+                 patch.object(runtime, 'verify_image', return_value={'verified': True, 'image': final_id}):
+                runtime.build_runtime(SimpleNamespace(output_dir=str(output), image_tag='physicsos:fixture', reserve_bytes=0, base_tag=None))
+            build = next(args for args in commands if args[:2] == ['docker', 'build'])
+            labels = [build[i + 1] for i, arg in enumerate(build[:-1]) if arg == '--label']
+            self.assertIn('physicsos.manifest.digest=' + current_digest, labels)
+            self.assertNotIn('physicsos.manifest.digest=' + inherited_digest, labels)
+
     def test_repository_instruction_links_are_excluded_but_runtime_snapshots_stay_owned(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)

@@ -617,8 +617,11 @@ def build_runtime(args):
         if not IMAGE_ID.fullmatch(previous_id):
             raise ValueError('Existing candidate image identity is invalid')
         command(['docker', 'tag', previous_id, 'physicsos:retained-' + previous_id[7:]])
+    manifest_digest = record.get('contextHashes', {}).get('app/physicsos-runtime-manifest.json', '')
+    if not HEX64.fullmatch(manifest_digest):
+        raise ValueError('Verified runtime manifest byte digest is required')
     started = time.monotonic()
-    command(['docker', 'build', '--network=none', '--pull=false', '--progress=plain', '--build-arg', 'BASE_IMAGE=' + base_tag, '--build-arg', 'REVISION=' + record['revision'], '--build-arg', 'SOURCE_DIGEST=' + record['sourceDigest'], '--build-arg', 'CODE_DIGEST=' + record['codeDigest'], '--tag', args.image_tag, str(context)], log=True)
+    command(['docker', 'build', '--label', 'physicsos.manifest.digest=' + manifest_digest, '--network=none', '--pull=false', '--progress=plain', '--build-arg', 'BASE_IMAGE=' + base_tag, '--build-arg', 'REVISION=' + record['revision'], '--build-arg', 'SOURCE_DIGEST=' + record['sourceDigest'], '--build-arg', 'CODE_DIGEST=' + record['codeDigest'], '--tag', args.image_tag, str(context)], log=True)
     metadata = image_metadata(args.image_tag)
     validate_image_labels(metadata, record)
     proof = verify_image(metadata['id'], record)
