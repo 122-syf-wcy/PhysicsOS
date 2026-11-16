@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { runInNewContext } from 'node:vm';
 import { drawMechanics } from './src/mechanics.js';
 import { drawCircuits } from './src/circuits.js';
 import { drawFields } from './src/fields.js';
@@ -13,15 +14,25 @@ import { drawMatter } from './src/matter.js';
 
 assert.ok(process.env.PHYSICSOS_LAB_KIT_MODULE, 'Use the server-staged real Three.js 0.180.0 scene kit');
 assert.ok(process.env.PHYSICSOS_LAB_RUNTIME_MODULE, 'Use the server-compiled real platform runtimes');
-const { createSceneKit } = await import(pathToFileURL(process.env.PHYSICSOS_LAB_KIT_MODULE));
+const { createSceneKit, roleColor, palette } = await import(pathToFileURL(process.env.PHYSICSOS_LAB_KIT_MODULE));
 const { createExperiment, snapshotOf } = await import(pathToFileURL(process.env.PHYSICSOS_LAB_RUNTIME_MODULE));
 const registry = JSON.parse(await readFile(new URL('../../overlays/harness/files/packages/physicsos/experiment-host/src/experiment-registry.json', import.meta.url), 'utf8'));
 const drawers = { mechanics: drawMechanics, circuit: drawCircuits, electric: drawFields, magnetic: drawFields, composite: drawFields, induction: drawFields, optics: drawOptics, wave: drawWaves, acoustics: drawWaves, fluid: drawMatter, thermal: drawMatter, modern: drawMatter };
+// Exercise the production common overlays as well as apparatus. The browser
+// renderer boundary is unused here; geometry and retained identities are real.
+const rendererSource = (await readFile(new URL('./src/renderer.js', import.meta.url), 'utf8'))
+  .replace(/^import .*\n/gm, '').replace(/^export /gm, '').replace(/import\.meta\.url/g, JSON.stringify(import.meta.url));
+const common = runInNewContext(`${rendererSource}\ncommon`, {
+  drawMechanics, drawCircuits, drawFields, drawOptics, drawWaves, drawMatter, roleColor, palette,
+});
 
 function draw(kit, snapshot) {
   const before = JSON.stringify(snapshot), adapter = drawers[snapshot.domain];
   assert.ok(adapter, `No adapter for ${snapshot.domain}`);
-  kit.beginFrame(snapshot.view, snapshot.experimentId); adapter(snapshot, kit); kit.endFrame();
+  kit.beginFrame(snapshot.view, snapshot.experimentId);
+  kit.scope('apparatus', () => adapter(snapshot, kit));
+  kit.scope('common', () => common(snapshot, kit));
+  kit.endFrame();
   assert.equal(JSON.stringify(snapshot), before, `${snapshot.experimentId}: renderer mutated the engine snapshot`);
   const objects = kit.group.children.filter(object => object.visible);
   assert.ok(objects.length > 0, `${snapshot.experimentId}: adapter did not express any apparatus`);
@@ -71,7 +82,7 @@ for (const item of registry) test(`apparatus/engine regression ${item.id} (${ite
     assert.equal(kit.stats.bufferGrowths, stats.bufferGrowths, `${item.id}: identical frame grew a buffer`);
 
     // Same native entities in a different order cannot recolor/reassign parts.
-    const arrays = ['bodies', 'circuitComponents', 'circuitWires', 'circuitJunctions', 'pointChargeSources', 'opticalElements', 'opticalObjects', 'opticalScreens', 'waveSources', 'inductionPairBars', 'transformerCoils'];
+    const arrays = ['bodies', 'circuitComponents', 'circuitWires', 'circuitJunctions', 'pointChargeSources', 'opticalElements', 'opticalObjects', 'opticalScreens', 'waveSources', 'inductionPairBars', 'transformerCoils', 'trajectories'];
     const reordered = { ...initial, view: { ...initial.view } };
     for (const name of arrays) if (Array.isArray(reordered.view[name])) reordered.view[name] = reordered.view[name].slice().reverse();
     sameParts(first, draw(kit, reordered), item.id);

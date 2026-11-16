@@ -32,7 +32,7 @@ function common(snapshot, kit) {
     const observable = ['optics'].includes(snapshot.domain) ? 'rays' : snapshot.domain === 'wave' ? 'waveform' : 'trajectory'
     if (!kit.visible(observable)) continue
     if (snapshot.domain === 'modern' && !kit.visible(trajectory.id.includes('photon') ? 'photonEnergy' : 'photocurrent')) continue
-    scoped(`trajectory:${trajectory.id}`, () => overlay(kit.line(trajectory.points, comparisonColors.get(trajectory.id) ?? roleColor('trajectory'), { key: 'path', dashed: trajectory.kind === 'predicted', opacity: trajectory.kind === 'predicted' ? 0.5 : 0.85, tag: trajectory.id })))
+    scoped(JSON.stringify(['trajectory', trajectory.id, trajectory.kind ?? null]), () => overlay(kit.line(trajectory.points, comparisonColors.get(trajectory.id) ?? roleColor('trajectory'), { key: 'path', dashed: trajectory.kind === 'predicted', opacity: trajectory.kind === 'predicted' ? 0.5 : 0.85, tag: trajectory.id })))
   }
   for (const vector of view.vectors ?? []) if (kit.visible(vector.observable)) scoped(`vector:${vector.id}`, () => {
     overlay(kit.arrow(front(vector.from), front(vector.to), roleColor(vector.role), { key: 'arrow', tag: vector.id }))
@@ -416,6 +416,7 @@ function paint() {
     let entry = state.labelNodes.get(label.key)
     if (!entry) {
       entry = { node: document.createElement('span'), line: document.createElementNS('http://www.w3.org/2000/svg', 'line') }
+      entry.line.style.display = 'none'
       state.labelNodes.set(label.key, entry); state.labels.append(entry.node); state.leaders.append(entry.line)
     }
     const { node, line } = entry
