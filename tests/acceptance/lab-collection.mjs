@@ -258,6 +258,7 @@ try {
     await frame.locator('#front-view').click()
     assert.equal(await frame.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `${id}: mobile overflow`)
     await page.screenshot({ path: join(output, `${id}-mobile.png`) })
+    const retainedDisposal = retainedProbe ? await checkRetainedDisposal(frame) : undefined
     // Reconnect the exact archive in its authenticated embedded mode. A fresh
     // port is required: presentation is fixed by the initial trusted handshake.
     await page.goto(origin + '/preview')
@@ -300,7 +301,7 @@ try {
       await page.screenshot({ path: join(output, `${id}-embedded-${viewport.width}.png`) })
     }
     results.push({ id, domain: item.domain, sha256: item.sha256, ...evidence, embeddedLayouts, parameterChecked, parameterApplicable: parameters.length > 0, parameterCount: parameters.length, parameterNotApplicableReason: parameters.length ? null : 'The platform runtime exposes no editable parameters', parameterVisualChanged, playbackChecked, visibilityChanged, visibilityChecked, visibilityApplicable, visibilityDrawableLayers, visibilityKeys: keys, visibilityAssessmentVersion: 1, visibilityNotApplicableReason: visibilityApplicable ? null : 'No enabled nonempty drawable layer in the tested runtime snapshot', buoyancyDisplacementChecked, ...(programProbe ? { programCreations } : {}) })
-    if (retainedProbe) results[results.length - 1].retained = { ...retained, disposal: await checkRetainedDisposal(frame) }
+    if (retainedProbe) results[results.length - 1].retained = { ...retained, disposal: retainedDisposal }
     await writeFile(join(output, 'result.partial.json'), JSON.stringify({ count: results.length, expected: index.count, complete: false, indexSha256, instrumented: retainedProbe, errors, external, failures, results }, null, 2) + '\n')
     await page.close(); console.log(`PASS ${results.length}/${index.count} ${id}: WebGL + SDK + parameter/time + mobile`)
   }
