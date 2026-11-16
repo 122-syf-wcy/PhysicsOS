@@ -188,7 +188,7 @@ export function processQuestion(document: QuestionDocument): QuestionRuntimeResu
   const isMechanics =
     !isComposite &&
     !isWave &&
-    /匀速|匀加速|匀变速|平抛|斜抛|抛体|斜面|牛顿|加速度|位移|射程|运动.*时间|末速度/.test(text)
+    /匀速|匀加速|匀变速|平抛|斜抛|抛体|抛出|抛射|上抛|下抛|斜面|牛顿|加速度|位移|射程|运动.*时间|末速度|\b(?:projectile|thrown|launched|projected)\b/i.test(text)
 
   const parseResult = isModernPhysics
     ? DeterministicModernPhysicsQuestionParser.parse(document)

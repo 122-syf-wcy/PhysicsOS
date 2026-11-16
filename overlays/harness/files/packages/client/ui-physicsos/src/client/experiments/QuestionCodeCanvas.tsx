@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { PhysicsScene } from '@physicsos/physics-scene'
 import type { CodeVisualizationSource, CodeVisualizationState } from '@deepseek-ai/dsh-tool-physicsos/types'
 import { CommunityExperimentFrame, type CommunityFrameStatus } from './CommunityExperimentFrame.tsx'
 import type { ExperimentSession } from './experiment-session.ts'
-import { questionCodeApi, questionCodeRefMatches, questionCodeSceneIdentity, questionCodeSceneSha256, sameQuestionCodeRef, type QuestionCodeJobView, type QuestionCodeRegenerate } from './question-code-api.ts'
+import { questionCodeApi, questionCodeJobMatches, questionCodeValidationPassed, questionCodeRefMatches, questionCodeSceneIdentity, questionCodeSceneSha256, sameQuestionCodeRef, type QuestionCodeJobView, type QuestionCodeRegenerate } from './question-code-api.ts'
+import { IconTime, IconUnverified, IconVerified } from '../icons/physics-icons.tsx'
 import { useQuestionCodeOwner, type QuestionCodeOwnerStore } from './question-code-context.ts'
 import css from '../SceneChatCard.module.css'
 import workbenchCss from './QuestionCodeWorkbench.module.css'
@@ -24,15 +25,23 @@ export function QuestionCodeCanvas({
 }: Props) {
   const owner = useQuestionCodeOwner(questionCodeOwner)
   const [attempt, setAttempt] = useState(0)
-  const [loaded, setLoaded] = useState<{ entryUrl: string; source: CodeVisualizationSource; key: string }>()
+  const [loaded, setLoaded] = useState<{ entryUrl: string; source: CodeVisualizationSource; key: string; jobId?: string }>()
   const [error, setError] = useState('')
   const [regenerating, setRegenerating] = useState(false)
   const [frameStatus, setFrameStatus] = useState<CommunityFrameStatus>('loading')
   const [now, setNow] = useState(Date.now)
-  /* Durable progress for the live generation. Absent on deployments without
-     the jobs table, in which case the existing marker-only copy stays. */
+  /* A private preview handshake and an isolated-validation pass are separate. */
   const [job, setJob] = useState<QuestionCodeJobView>()
+  const [validating, setValidating] = useState(false)
+  const [validationError, setValidationError] = useState('')
+  const validationAbort = useRef<AbortController | undefined>(undefined)
+  const ref = visualization?.status === 'ready' ? visualization : undefined
+  const independent = ref?.rendererKind === 'independent'
+  const bound = visualization === undefined || questionCodeRefMatches(visualization, scene, owner)
+  const sceneIdentity = questionCodeSceneIdentity(scene)
+  const key = ref === undefined ? '' : `${owner}:${ref.artifactId}:${ref.sha256}:${ref.sceneSha256}:${ref.sceneId}:${ref.sceneRevision}:${ref.rendererKind ?? 'legacy'}:${attempt}:${sceneIdentity}`
   const generatingJobId = visualization?.status === 'generating' ? visualization.jobId : undefined
+  const trackingJobId = !bound ? undefined : generatingJobId ?? (loaded?.key === key ? loaded.jobId : undefined)
   const deadlineAt = visualization?.status === 'generating' ? visualization.deadlineAt : undefined
   useEffect(() => {
     setNow(Date.now())
@@ -41,28 +50,28 @@ export function QuestionCodeCanvas({
     return () => { clearTimeout(timer) }
   }, [visualization?.status, deadlineAt])
   useEffect(() => {
-    if (generatingJobId === undefined) { setJob(undefined); return }
+    setJob(undefined)
+    setValidationError('')
+    setValidating(false)
+    return () => { validationAbort.current?.abort() }
+  }, [trackingJobId, key, owner])
+  useEffect(() => {
+    if (trackingJobId === undefined || validating) return
     const abort = new AbortController()
     let timer: ReturnType<typeof setTimeout> | undefined
     const poll = (): void => {
-      void questionCodeApi.job(generatingJobId, abort.signal).then((next) => {
-        if (abort.signal.aborted || next === undefined) return
+      void questionCodeApi.job(trackingJobId, abort.signal).then((next) => {
+        if (abort.signal.aborted || next === undefined || next.jobId !== trackingJobId) return
         setJob(next)
         if (next.status === 'queued' || next.status === 'running' || next.status === 'candidate' || next.status === 'validating') {
-          timer = setTimeout(poll, 1500)
+          timer = setTimeout(poll, next.status === 'queued' && next.code !== undefined ? 10_000 : 1500)
         }
       }).catch(() => { if (!abort.signal.aborted) timer = setTimeout(poll, 4000) })
     }
-    // First look after a short delay: a generation that fails inside the same
-    // turn ends before this fires, so closed-turn semantics stay unchanged.
+    // Old preview records have no jobId and stay explicitly unverified.
     timer = setTimeout(poll, 800)
     return () => { abort.abort(); if (timer !== undefined) clearTimeout(timer) }
-  }, [generatingJobId])
-  const ref = visualization?.status === 'ready' ? visualization : undefined
-  const independent = ref?.rendererKind === 'independent'
-  const bound = visualization === undefined || questionCodeRefMatches(visualization, scene, owner)
-  const sceneIdentity = questionCodeSceneIdentity(scene)
-  const key = ref === undefined ? '' : `${owner}:${ref.artifactId}:${ref.sha256}:${ref.sceneSha256}:${ref.sceneId}:${ref.sceneRevision}:${ref.rendererKind ?? 'legacy'}:${attempt}:${sceneIdentity}`
+  }, [trackingJobId, key, owner, validating])
   useEffect(() => {
     setLoaded(undefined)
     setError('')
@@ -84,7 +93,8 @@ export function QuestionCodeCanvas({
       const url = new URL(preview.entryUrl, location.origin)
       if (url.origin !== location.origin || !url.pathname.startsWith('/physicsos/experiment-assets/embed/question/'))
         throw new Error('本题实验资源地址无效，请重新载入。')
-      setLoaded({ entryUrl: preview.entryUrl, source: source.source, key })
+      setLoaded({ entryUrl: preview.entryUrl, source: source.source, key,
+        ...(typeof preview.jobId === 'string' && preview.jobId.length > 0 && preview.jobId.length <= 256 ? { jobId: preview.jobId } : {}) })
       refresh = setTimeout(() => { setAttempt(value => value + 1) }, Math.max(100, preview.expiresAt - Date.now() - 1000))
     }).catch((failure: unknown) => {
       if (!abort.signal.aborted) setError(failure instanceof Error ? failure.message : '本题实验暂时无法载入，请重试。')
@@ -96,6 +106,38 @@ export function QuestionCodeCanvas({
       : visualization?.status === 'generating' && (deadlineAt === undefined || deadlineAt <= now) ? 'interrupted'
         : ref !== undefined && !independent ? 'upgrade-required' : visualization?.status ?? 'historical'
   const ready = bound && independent && loaded?.key === key && session !== undefined
+  const matchingJob = ref !== undefined && questionCodeJobMatches(job, ref, trackingJobId)
+  const isolated = ref !== undefined && questionCodeValidationPassed(job, ref, trackingJobId)
+  const isolationStatus = isolated ? 'passed'
+    : validating || (matchingJob && job?.status === 'validating') ? 'validating'
+      : trackingJobId !== undefined && job !== undefined && (!matchingJob || job.status === 'cancelled' || job.status === 'superseded') ? 'stale'
+        : matchingJob && (job?.status === 'failed' || job?.validation?.passed === false) ? 'failed'
+          : trackingJobId === undefined ? 'unknown' : 'pending'
+  const isolationLabel = isolationStatus === 'passed' ? '隔离验收通过'
+    : isolationStatus === 'validating' ? '私有候选 · 隔离验收中'
+      : isolationStatus === 'failed' ? '私有候选 · 隔离验收未通过'
+        : isolationStatus === 'stale' ? '私有候选 · 验收记录待重新核对'
+          : isolationStatus === 'unknown' ? '私有候选 · 尚无隔离验收记录' : '私有候选 · 待隔离验收'
+  const canRetryValidation = ready && matchingJob && job !== undefined &&
+    (job.status === 'queued' || job.status === 'candidate' || job.status === 'failed')
+  const retryValidation = (): void => {
+    if (!canRetryValidation || ref === undefined || trackingJobId === undefined ||
+      (validationAbort.current !== undefined && !validationAbort.current.signal.aborted)) return
+    const abort = new AbortController()
+    validationAbort.current = abort
+    setValidating(true)
+    setValidationError('')
+    void questionCodeApi.retryValidation(trackingJobId, abort.signal).then(next => {
+      if (abort.signal.aborted) return
+      if (!questionCodeJobMatches(next, ref, trackingJobId)) throw new Error('验收记录与当前画面不匹配，请重新核对。')
+      setJob(next)
+    }).catch((failure: unknown) => {
+      if (!abort.signal.aborted) setValidationError(failure instanceof Error ? failure.message : '暂时无法重试隔离校验。')
+    }).finally(() => {
+      if (validationAbort.current === abort) validationAbort.current = undefined
+      if (!abort.signal.aborted) setValidating(false)
+    })
+  }
   const title = error || (status === 'historical' ? '这段历史记录还没有本题代码实验'
     : status === 'generating' ? '正在生成本题实验'
       : status === 'interrupted' ? '本题实验生成已中断，可重新生成'
@@ -117,6 +159,17 @@ export function QuestionCodeCanvas({
       <strong>当前场景演示</strong>
       <span>展示已保存的条件与运动过程，尚未包含整道题的求解验证。</span>
     </div> : null}
+    {ref !== undefined && independent && bound ? <div
+      className={`${css.scopeNote} ${css.validationNote} ${presentation === 'workbench' ? workbenchCss.scopeNote : ''}`}
+      data-question-code-isolation={isolationStatus} data-workbench-chrome={presentation === 'workbench' ? 'top' : undefined}
+      role="status" aria-label="隔离验收状态">
+      <strong>{isolated ? <IconVerified size={14} /> : isolationStatus === 'validating' ? <IconTime size={14} /> : <IconUnverified size={14} />}{isolationLabel}</strong>
+      <span>{validationError || (isolated ? '当前代码版本已通过隔离检查。' : '可先预览，隔离结果尚未确认。')}</span>
+      {canRetryValidation ? <button type="button" className={`${css.restore} ${css.validationRetry}`} disabled={validating}
+        title="只重新运行隔离检查，不重新调用模型或生成代码。" onClick={retryValidation}>
+        {validating ? '正在隔离验收…' : '重试隔离校验'}
+      </button> : null}
+    </div> : null}
     {ready ? <div className={`${css.codeStage} ${presentation === 'workbench' ? workbenchCss.stage : ''}`}>
       <CommunityExperimentFrame key={key} entryUrl={loaded.entryUrl} session={session}
         experimentId={ref.experimentId} protocolVersion={3} title={loaded.source.title || ref.title} showStatus={false}
@@ -132,7 +185,7 @@ export function QuestionCodeCanvas({
       <span className={css.codeMark} aria-hidden="true">{'</>'}</span><strong>{title}</strong>
       <p>{status === 'failed' && visualization?.status === 'failed' ? visualization.message
         : status === 'generating' ? job?.status === 'validating'
-          ? '正在真实浏览器中检查画面、运动与改参效果，通过后才展示。'
+          ? '正在隔离浏览器中检查画面、运动与改参效果；验收结果会单独标记。'
           : job?.status === 'candidate' ? '实验代码已生成，等待隔离验收。'
             : job !== undefined && job.attempts.length > 1 ? '第一次未通过，正在按诊断修复；完成后会自动验收。'
               : '正在制作本题场景素材与实验画面，完成后即可探索条件变化。'

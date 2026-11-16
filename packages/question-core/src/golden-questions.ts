@@ -293,7 +293,7 @@ export const GOLDEN_QUESTIONS: readonly GoldenQuestionDefinition[] = [
   {
     id: 'mech-03-projectile-oblique',
     title: '斜抛运动',
-    text: '物体以初速度 20 m/s，抛射角 30° 抛出，g = 10 m/s²。求最大高度、飞行时间和射程。',
+    text: '物体从地面以初速度 20 m/s，抛射角 30° 抛出，g = 10 m/s²。求最大高度、飞行时间和射程。',
     expectedChargeSign: 'unknown',
     expectedFieldDirection: 'unknown',
     expectedValidation: 'VALID',

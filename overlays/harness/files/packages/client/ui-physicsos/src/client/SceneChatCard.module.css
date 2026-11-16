@@ -343,6 +343,10 @@
 .codeBench { min-width: 0; }
 .scopeNote { display: flex; flex-wrap: wrap; gap: 5px 12px; padding: 11px 15px; border-bottom: 1px solid var(--physics-glass-border-soft, #85a89b35); font-size: 12px; line-height: 1.6; color: var(--physics-ink-muted, #617064); }
 .scopeNote strong { color: var(--physics-ink, #283c32); font-weight: 600; }
+.validationNote { align-items: center; }
+.validationNote strong { display: inline-flex; align-items: center; gap: 6px; }
+.validationNote .validationRetry { margin-left: auto; min-height: 38px; }
+@media (max-width: 600px) { .validationNote .validationRetry { min-height: 44px; } }
 .codeCanvas {
   min-width: 0;
   overflow: hidden;

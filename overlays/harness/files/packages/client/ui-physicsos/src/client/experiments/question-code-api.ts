@@ -47,11 +47,22 @@ export interface QuestionCodeJobView {
   readonly status: 'queued' | 'running' | 'candidate' | 'validating' | 'ready' | 'failed' | 'cancelled' | 'superseded'
   readonly sceneId: string
   readonly sceneRevision: number
+  /** Absent in older deployments; absence is never an isolated-validation pass. */
+  readonly sceneSha256?: string
+  readonly resultSha256?: string
   readonly code?: string
   readonly message?: string
   readonly attempts: readonly { readonly index: number; readonly status: string }[]
   readonly validation?: { readonly passed: boolean; readonly checks: readonly { readonly name: string; readonly passed: boolean }[] }
   readonly updatedAt: string
+}
+export function questionCodeJobMatches(job: QuestionCodeJobView | undefined, ref: CodeExperimentRef, jobId: string | undefined): boolean {
+  return job !== undefined && job.jobId === jobId && job.sceneId === ref.sceneId
+    && job.sceneRevision === ref.sceneRevision && job.sceneSha256 === ref.sceneSha256
+}
+export function questionCodeValidationPassed(job: QuestionCodeJobView | undefined, ref: CodeExperimentRef, jobId: string | undefined): boolean {
+  return questionCodeJobMatches(job, ref, jobId) && job?.status === 'ready'
+    && job.validation?.passed === true && job.resultSha256 === ref.sha256
 }
 async function request<T>(ref: CodeExperimentRef, endpoint: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`/physicsos/question-code/artifacts/${encodeURIComponent(ref.artifactId)}/${endpoint}?sha256=${encodeURIComponent(ref.sha256)}`, {
@@ -63,7 +74,7 @@ async function request<T>(ref: CodeExperimentRef, endpoint: string, signal?: Abo
   return response.json() as Promise<T>
 }
 export const questionCodeApi = {
-  preview: (ref: CodeExperimentRef, signal?: AbortSignal): Promise<{ entryUrl: string; expiresAt: number }> => request(ref, 'preview', signal),
+  preview: (ref: CodeExperimentRef, signal?: AbortSignal): Promise<{ entryUrl: string; expiresAt: number; jobId?: string }> => request(ref, 'preview', signal),
   source: (ref: CodeExperimentRef, signal?: AbortSignal): Promise<{ source: CodeVisualizationSource; ref: CodeExperimentRef }> => request(ref, 'source', signal),
   /** Follow a durable job by the id already shown in the generating marker. */
   job: async (jobId: string, signal?: AbortSignal): Promise<QuestionCodeJobView | undefined> => {
@@ -74,6 +85,20 @@ export const questionCodeApi = {
     if (response.status === 404) return undefined
     if (!response.ok) throw new Error('暂时无法读取实验生成进度。')
     const body = await response.json() as { job?: QuestionCodeJobView }
+    return body.job
+  },
+  /** Retry only the existing frozen candidate's isolated checks, never generation. */
+  retryValidation: async (jobId: string, signal?: AbortSignal): Promise<QuestionCodeJobView> => {
+    const response = await fetch(`/physicsos/question-code/jobs/${encodeURIComponent(jobId)}/validate`, {
+      method: 'POST', credentials: 'same-origin', cache: 'no-store',
+      headers: { 'content-type': 'application/json' }, body: '{}',
+      ...(signal === undefined ? {} : { signal }),
+    })
+    if (!response.ok) throw new Error(response.status === 409
+      ? '这份候选已变更或正在验收，请稍后刷新验收状态。'
+      : '暂时无法重试隔离校验，原画面和参数已保留。')
+    const body = await response.json() as { job?: QuestionCodeJobView }
+    if (!body.job || body.job.jobId !== jobId) throw new Error('隔离验收记录不匹配，请重新读取状态。')
     return body.job
   },
 }
