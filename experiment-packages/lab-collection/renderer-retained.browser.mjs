@@ -39,7 +39,18 @@ async function inspect(frame) {
     kit.group.traverse(object => {
       if (object.userData.retainedKey) parts.push({ key: object.userData.retainedKey, object: object.uuid, geometry: object.geometry?.uuid, material: object.material?.uuid })
       for (const material of Array.isArray(object.material) ? object.material : object.material ? [object.material] : []) materials.push(material.uuid)
-      if (object.isLine && object.geometry.attributes.position) paths.push({ key: object.userData.retainedKey, drawCount: object.geometry.drawRange.count, liveCount: object.geometry.attributes.position.count, samples: object.geometry.userData.sampleCount })
+      if (object.isLine && object.geometry.attributes.position) {
+        const geometry = object.geometry, range = geometry.drawRange, samples = geometry.userData.sampleCount
+        const liveCount = geometry.index?.count ?? geometry.attributes.position.count
+        // Three's fixed two-vertex ArrowHelper shaft uses Infinity to mean the
+        // whole buffer. Retained sampled paths still require an exact finite range.
+        const fixedArrowShaft = object.parent instanceof kit.THREE.ArrowHelper && object.parent.line === object
+          && !object.userData.retainedKey && samples === undefined && !geometry.index
+          && geometry.attributes.position.count === 2 && range.start === 0 && range.count === Infinity
+        paths.push({ key: object.userData.retainedKey, drawStart: range.start,
+          rawDrawCount: Number.isFinite(range.count) ? range.count : String(range.count),
+          drawCount: fixedArrowShaft ? liveCount : range.count, liveCount, samples, fixedArrowShaft })
+      }
     })
     return { group: kit.group.uuid, stats: { ...kit.stats }, parts, materials, paths,
       labelNodes: [...document.querySelectorAll('#labels span')].map(node => ({ key: node.dataset.labelId, token: node.dataset.probeToken })),
@@ -80,8 +91,10 @@ export async function checkRetainedFrame({ page, frame, snapshot, send, ack, id 
   assert.equal(new Set(stable.materials).size, stable.materials.length, `${id}: parts share mutable materials`)
   assert.equal(stable.rendererCreates, 1)
   for (const path of stable.paths) {
+    assert.ok(Number.isInteger(path.drawStart) && path.drawStart >= 0, `${id}: invalid line draw start`)
+    assert.ok(Number.isInteger(path.drawCount) && path.drawCount >= 0, `${id}: unbounded retained line draw range`)
     if (path.samples !== undefined) assert.equal(path.drawCount, path.samples, `${id}: fake trailing line samples`)
-    assert.ok(path.drawCount <= path.liveCount, `${id}: line draw range exceeds live buffer`)
+    assert.ok(path.drawStart + path.drawCount <= path.liveCount, `${id}: line draw range exceeds live buffer`)
   }
   await frame.locator('#zoom-in').click()
   const controlled = await inspect(frame)
@@ -119,6 +132,7 @@ export async function checkRetainedFrame({ page, frame, snapshot, send, ack, id 
   const hiddenId = prefix + 'recover-zero-area'
   await send(hiddenId, snapshot)
   await frame.evaluate(() => window.labLossExtension.restoreContext())
+  await frame.waitForFunction(() => window.labRenderer && !window.labRenderer.getContext().isContextLost())
   await noAck(hiddenId)
   await frame.evaluate(value => { document.getElementById('canvas').style.display = value }, originalDisplay)
   await ack(hiddenId)

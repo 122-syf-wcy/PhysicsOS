@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+afterEach(() => { vi.useRealTimers() })
 import { requestCandidateValidation, validationWorkerFromEnv } from '../src/question-code-validation.ts'
 
 const config = { url: 'http://worker:8099', token: 't'.repeat(32) }
@@ -46,13 +47,59 @@ describe('candidate validation request', () => {
     expect(body.token).toBe('ticket-1')
   })
 
+  it('includes the frozen scene but no manufactured frames for the normal planner path', async () => {
+    const scene = { id: 'scene-1', revision: 7, metadata: { sourceQuestionId: 'frozen-question' } }
+    const fetchMock = vi.fn(respond({ passed: true, durationMs: 1, checks: [{ name: 'first-frame', passed: true }] }))
+    const { frames: _frames, changedFrame: _changed, ...normal } = input
+    await requestCandidateValidation(config, { ...normal, scene }, fetchMock as unknown as typeof fetch)
+    const body = JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body))
+    expect(body.scene).toEqual(scene)
+    expect(body).not.toHaveProperty('frames')
+    expect(body).not.toHaveProperty('changedFrame')
+    expect(body.expected).toEqual({ candidateSha256: input.candidateSha256, sceneSha256: input.sceneSha256, sceneRevision: 7 })
+  })
+
+  it('fails locally without scene or a complete pinned-frame contract', async () => {
+    const { frames: _frames, changedFrame: _changed, ...normal } = input
+    const fetchMock = vi.fn(respond({ passed: true, durationMs: 1, checks: [{ name: 'render', passed: true }] }))
+    for (const missing of [normal, { ...normal, frames: input.frames }, { ...normal, frames: input.frames.slice(0, 1), changedFrame: input.changedFrame }]) {
+      expect(await requestCandidateValidation(config, missing, fetchMock as unknown as typeof fetch))
+        .toMatchObject({ kind: 'infrastructure', code: 'WORKER_INPUT_MISSING' })
+    }
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it.each(['headers', 'body'] as const)('holds a hard worker deadline through slow %s and ignores late passed reports', async phase => {
+    vi.useFakeTimers()
+    let late!: (value: Response | unknown) => void
+    const pending = new Promise<Response | unknown>(resolve => { late = resolve })
+    const response = respond({ passed: true, durationMs: 1, checks: [{ name: 'render', passed: true }] })
+    const fetchMock = vi.fn(phase === 'headers' ? (() => pending) : async () => {
+      const received = await response('http://unused')
+      received.json = () => pending as Promise<unknown>
+      return received
+    }) as unknown as typeof fetch
+    const result = requestCandidateValidation({ ...config, timeoutMs: 20 }, input, fetchMock)
+    await vi.advanceTimersByTimeAsync(21)
+    expect(await result).toMatchObject({ kind: 'infrastructure', code: 'WORKER_TIMEOUT' })
+    late(phase === 'headers' ? await response('http://unused') : { passed: true, durationMs: 1, checks: [{ name: 'render', passed: true }] })
+    expect(await result).toMatchObject({ kind: 'infrastructure', code: 'WORKER_TIMEOUT' })
+  })
+
+  it('does not filter invalid checks out of a purported passed report', async () => {
+    expect(await requestCandidateValidation(config, input, respond({ passed: true, durationMs: 1, checks: [{ name: 'render', passed: true }, { name: 'motion', passed: 'yes' }] })))
+      .toMatchObject({ kind: 'infrastructure', code: 'WORKER_BAD_REPORT' })
+  })
+
   it('reports an unreachable worker as infrastructure, never as a judgement', async () => {
     const fetchMock = vi.fn(async () => { throw new TypeError('fetch failed') })
     const outcome = await requestCandidateValidation(config, input, fetchMock as unknown as typeof fetch)
     expect(outcome).toMatchObject({ kind: 'infrastructure', code: 'WORKER_UNREACHABLE' })
   })
 
-  it('reports a 500 or malformed body as infrastructure', async () => {
+  it('reports worker 400/500 or malformed bodies as infrastructure', async () => {
+    expect(await requestCandidateValidation(config, input, respond({ error: 'invalid request' }, 400)))
+      .toMatchObject({ kind: 'infrastructure', code: 'WORKER_400' })
     expect(await requestCandidateValidation(config, input, vi.fn(respond({ error: 'validation failed' }, 500)) as unknown as typeof fetch))
       .toMatchObject({ kind: 'infrastructure', code: 'WORKER_500' })
     expect(await requestCandidateValidation(config, input, vi.fn(respond({ hi: true })) as unknown as typeof fetch))

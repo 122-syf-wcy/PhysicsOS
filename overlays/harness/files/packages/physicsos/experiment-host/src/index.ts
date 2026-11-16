@@ -19,8 +19,8 @@ import {
   type QuestionCodeIdentity,
 } from './question-code-service.ts'
 import { questionCodeRoutes, QUESTION_CODE_PREFIX } from './question-code-routes.ts'
-import { QuestionCodeJobs } from './question-code-jobs.ts'
-import { requestCandidateValidation, validationWorkerFromEnv } from './question-code-validation.ts'
+import { QuestionCodeJobs, type ValidationSourceBinding } from './question-code-jobs.ts'
+import { currentCandidateSource, validateFrozenCandidate, retryFrozenCandidate, validationWorkerFromEnv, type FrozenCandidateValidationInput } from './question-code-validation.ts'
 import { validationWrapper as buildWrapper } from './validation-wrapper.ts'
 export {
   QuestionCodeArtifactService,
@@ -41,7 +41,6 @@ export { experimentDomain, openExperimentDomain } from './domain.ts'
 export { QuestionCodeJobs, QuestionCodeJobError } from './question-code-jobs.ts'
 export type { JobStatus, JobAttempt } from './question-code-jobs.ts'
 export type { QuestionCodeJob } from './question-code-domain.ts'
-const ticketJobId = (ticket: string): string => ticket.split('.')[0] ?? ''
 export const name = 'experiment-host'
 export const inject = ['webServer', 'storageDomain']
 export interface Config {
@@ -79,47 +78,10 @@ export async function apply(ctx: Context, config: Config = {}): Promise<() => Pr
       return identity && typeof identity.sessionOwnerKey === 'function' ? identity : undefined
     }
     const questionJobs = new QuestionCodeJobs(questionDomain)
-    /* Isolated acceptance. Absent configuration means candidates are never
-       auto-accepted; the chat keeps following the durable job instead. */
+    /* Isolated acceptance never follows iframe readiness. Missing configuration
+       leaves an owner-only candidate preview, not a job validation pass. */
     const validationWorker = validationWorkerFromEnv()
-    const validateCandidate = async (input: {
-      jobId: string; epoch: number; candidateSha256: string; sceneSha256: string; sceneRevision: number
-      frames?: readonly { frameId: string; snapshot: Record<string, unknown> }[]
-      changedFrame?: { frameId: string; snapshot: Record<string, unknown> }
-      ticket: string
-    }) => {
-      if (validationWorker === undefined) return undefined
-      const base = (process.env.PHYSICSOS_VALIDATION_PUBLIC_ORIGIN ?? 'http://app:3080').trim()
-      const outcome = await requestCandidateValidation(validationWorker, {
-        jobId: input.jobId, epoch: input.epoch,
-        candidateSha256: input.candidateSha256,
-        sceneSha256: input.sceneSha256,
-        sceneRevision: input.sceneRevision,
-        ...(input.frames === undefined ? {} : { frames: input.frames }),
-        ...(input.changedFrame === undefined ? {} : { changedFrame: input.changedFrame }),
-        ticket: input.ticket,
-        wrapperUrl: `${base}/physicsos/question-code/validation/${input.ticket}/${input.candidateSha256}/shell/wrapper.html`,
-        entryUrl: `${base}/physicsos/question-code/validation/${input.ticket}/${input.candidateSha256}/dist/index.html`,
-      })
-      /* Only the app writes job state, and only from a well-formed report. */
-      if (outcome.kind === 'infrastructure') {
-        await questionJobs.finish(input.jobId, input.epoch, { status: 'infrastructure-failed', code: outcome.code, message: outcome.message })
-        return outcome
-      }
-      await questionJobs.recordValidation(input.jobId, input.epoch, {
-        passed: outcome.kind === 'passed',
-        candidateSha256: input.candidateSha256,
-        checks: outcome.checks,
-        ...(outcome.screenshotRef === undefined ? {} : { screenshotRef: outcome.screenshotRef }),
-      })
-      if (outcome.kind === 'passed') {
-        await questionJobs.finish(input.jobId, input.epoch, { status: 'passed', resultRef: input.candidateSha256, resultSha256: input.candidateSha256 })
-      } else {
-        await questionJobs.finish(input.jobId, input.epoch, { status: 'rejected', code: 'ACCEPTANCE_REJECTED' })
-      }
-      return outcome
-    }
-    ctx.provide('questionCodeValidation', { configured: validationWorker !== undefined, validateCandidate })
+    const publicOrigin = (): string => (process.env.PHYSICSOS_VALIDATION_PUBLIC_ORIGIN ?? 'http://app:3080').trim()
     const questionCodes = new QuestionCodeArtifactService(questionDomain, {
       root:
         config.questionArtifactsRoot ??
@@ -135,6 +97,13 @@ export async function apply(ctx: Context, config: Config = {}): Promise<() => Pr
     yield () => questionDomain.close()
     yield () => questionCodes.close()
     await questionCodes.initialize()
+    const currentSource = (binding: ValidationSourceBinding) => currentCandidateSource(binding, {
+      lookup: ctx.get.bind(ctx) as (key: string) => unknown, identity: questionIdentity,
+    })
+    const validateCandidate = (input: FrozenCandidateValidationInput) => validateFrozenCandidate(validationWorker, input, {
+      jobs: questionJobs, artifacts: questionCodes, publicOrigin: publicOrigin(), currentSource,
+    })
+    ctx.provide('questionCodeValidation', { configured: validationWorker !== undefined, validateCandidate })
     ctx.provide(QUESTION_CODE_SERVICE, questionCodes)
     ctx.provide('questionCodeJobs', questionJobs)
     yield ctx.webServer.register({
@@ -144,28 +113,40 @@ export async function apply(ctx: Context, config: Config = {}): Promise<() => Pr
         service: questionCodes,
         identity: questionIdentity,
         jobs: questionJobs,
+        retryValidation: (jobId, actor) => retryFrozenCandidate(validationWorker, jobId, actor, {
+          jobs: questionJobs, artifacts: questionCodes, publicOrigin: publicOrigin(), currentSource,
+        }),
         validator: {
-          /* The ticket binds this job and this candidate digest; redemption is
-             one-time and checked here, so a replayed or expired ticket cannot
-             read a package. The artifact table stays the single source of the
-             frozen bytes. */
+          /* One active validation session may read its frozen dist resources.
+             Lease, source, expiry and account are checked before and after IO. */
           packageFor: async ({ ticket, digest, path }) => {
-            try { questionJobs.redeemTicket(ticket, ticketJobId(ticket), digest) } catch { return undefined }
-            return await questionCodes.validatorPackage(digest, path)
+            try {
+              const binding = questionJobs.validationTicket(ticket, digest)
+              const fence = await currentSource(binding)
+              fence()
+              const file = await questionCodes.validatorPackage(binding, path)
+              questionJobs.validationTicket(ticket, digest)
+              fence()
+              return file
+            } catch { return undefined }
           },
           /* Only the opaque wrapper is served here: it is platform-owned, has
              no account data, and points at the frozen entry. The driving host
              page belongs to the worker, which alone holds the engine frames. */
           shell: async ({ ticket, digest, kind }) => {
             if (kind !== 'wrapper') return undefined
-            try { questionJobs.redeemTicket(ticket, ticketJobId(ticket), digest) } catch { return undefined }
-            const raw = questionCodes.validatorEntry(digest)
-            if (raw === undefined) return undefined
-            // The wrapper must be same-origin with the package it frames, so it
-            // names the ticket route that serves that frozen candidate.
-            const base = process.env.PHYSICSOS_VALIDATION_PUBLIC_ORIGIN?.trim()
-            if (base === undefined || base === '') return undefined
-            return buildWrapper(new URL(`/physicsos/question-code/validation/${ticket}/${digest}/${raw}`, base)).bytes
+            try {
+              const binding = questionJobs.validationTicket(ticket, digest)
+              const fence = await currentSource(binding)
+              fence()
+              const raw = questionCodes.validatorEntry(binding)
+              if (raw === undefined) return undefined
+              // Wrapper and package share the app's origin; the driving host is worker-owned.
+              const bytes = buildWrapper(new URL(`/physicsos/question-code/validation/${ticket}/${digest}/${raw}`, publicOrigin())).bytes
+              questionJobs.validationTicket(ticket, digest)
+              fence()
+              return bytes
+            } catch { return undefined }
           },
         },
       }),

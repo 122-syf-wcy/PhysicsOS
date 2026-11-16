@@ -26,6 +26,7 @@ import { questionCodeContext, styleVersionOf, type QuestionCodeContext } from '.
 import type { DeveloperPromptService } from './prompt-service.ts'
 import { QuestionCodeAssets, type QuestionAssetDescriptor, type QuestionAssetFallback } from './question-code-assets.ts'
 import { CANVAS_TEXT_SHIM } from './question-code-canvas-text.ts'
+import { questionCodeJobMatchesArtifact, type ValidationSourceBinding } from './question-code-jobs.ts'
 export interface QuestionAssetRequest { ownerSessionId: string; generationId: string; scene: unknown; prompt: string; kind: 'environment' | 'material'; signal: AbortSignal }
 export type QuestionAssetScope = Pick<QuestionAssetRequest, 'ownerSessionId' | 'generationId' | 'scene'>
 export const QUESTION_CODE_SERVICE = 'questionCodeArtifacts'
@@ -808,6 +809,60 @@ export class QuestionCodeArtifactService implements QuestionCodeArtifacts {
     if (!row) throw missing()
     return this.checked(row)
   }
+  /** Bind validator reads to the job's exact private source, never a digest scan. */
+  private validationRecord(binding: ValidationSourceBinding): QuestionCodeRecord {
+    const row = this.record(binding.artifactId)
+    if (this.owner(binding.ownerSessionId) !== binding.ownerKey || row.ownerKey !== binding.ownerKey
+      || row.ownerSessionId !== binding.ownerSessionId) throw missing()
+    const job = this.domain.table('jobs').get(binding.jobId)
+    if (row.generationId !== binding.jobId || row.sceneId !== binding.sceneId
+      || row.sceneRevision !== binding.sceneRevision || row.sceneSha256 !== binding.sceneSha256
+      || row.requestSha256 !== binding.requestSha256 || row.sha256 !== binding.candidateSha256
+      || row.rendererKind !== 'independent' || job === undefined || !questionCodeJobMatchesArtifact(job, row)) {
+      throw new ExperimentError(409, 'CANDIDATE_MISMATCH', '验收候选与冻结源不一致。')
+    }
+    return row
+  }
+  /** Rechecked after worker IO and again at the durable validation write fence. */
+  assertValidationSource(binding: ValidationSourceBinding): void { this.validationRecord(binding) }
+
+  /** Canonical scene frozen alongside the renderer; current mutable scenes are never substituted. */
+  async validatorScene(binding: ValidationSourceBinding): Promise<Record<string, unknown>> {
+    const row = this.validationRecord(binding)
+    const file = row.files.find(entry => entry.name === 'question-scene.json')
+    if (file === undefined || file.sha256 !== row.sceneSha256) {
+      throw new ExperimentError(409, 'CANDIDATE_SCENE_MISSING', '验收候选缺少对应的冻结场景。')
+    }
+    const bytes = await verifiedFile(join(this.root, 'blobs', file.sha256), file)
+    let scene: PhysicsScene
+    try {
+      scene = JSON.parse(bytes.toString('utf8')) as PhysicsScene
+      if (scene === null || typeof scene !== 'object' || Array.isArray(scene)
+        || validateScene(scene).status === 'failed' || scene.id !== row.sceneId
+        || scene.revision !== row.sceneRevision || questionSceneSha256(scene) !== row.sceneSha256
+        || canonicalQuestionJson(scene) !== bytes.toString('utf8')) throw new Error('scene binding')
+    } catch {
+      throw new ExperimentError(409, 'CANDIDATE_SCENE_MISMATCH', '验收候选的冻结场景身份不一致。')
+    }
+    this.validationRecord(binding)
+    return scene as unknown as Record<string, unknown>
+  }
+  /** Find only the current candidate of an owner-scoped durable job. */
+  validationSource(jobId: string, actor: IdentityActor): ValidationSourceBinding {
+    this.requireReady()
+    const job = this.domain.table('jobs').get(jobId)
+    if (job === undefined || job.ownerKey !== actor.userKey || this.owner(job.ownerSessionId) !== actor.userKey) throw missing()
+    const row = [...this.domain.table('artifacts').entries()]
+      .map(([, value]) => value).find(value => questionCodeJobMatchesArtifact(job, value))
+    if (row === undefined) throw new ExperimentError(409, 'CANDIDATE_MISMATCH', '任务没有同源的冻结候选。')
+    const binding: ValidationSourceBinding = {
+      jobId, ownerKey: job.ownerKey, ownerSessionId: job.ownerSessionId, artifactId: row.id,
+      sceneId: job.sceneId, sceneRevision: job.sceneRevision, sceneSha256: job.sceneSha256,
+      candidateSha256: row.sha256, ...(job.requestSha256 === undefined ? {} : { requestSha256: job.requestSha256 }),
+    }
+    this.validationRecord(binding)
+    return Object.freeze(binding)
+  }
   describe(ownerSessionId: string, artifactId: string, expectedSha256: string): CodeExperimentRef {
     const row = this.record(artifactId)
     if (row.ownerSessionId !== ownerSessionId || this.owner(ownerSessionId) !== row.ownerKey)
@@ -1101,9 +1156,13 @@ document.addEventListener('physicsos-experiment-intent', event => {
     actor: IdentityActor,
     id: string,
     expectedSha256?: string,
-  ): { entryUrl: string; expiresAt: number } {
+  ): { entryUrl: string; expiresAt: number; jobId?: string } {
     const row = this.authorized(actor, id, expectedSha256),
       expiresAt = Date.now() + this.ttl
+    const job = row.generationId === undefined ? undefined : this.domain.table('jobs').get(row.generationId)
+    // This remains an owner-only preview, not evidence of isolated acceptance.
+    // Historical or unrelated jobs are never guessed from an artifact id.
+    const jobId = job !== undefined && questionCodeJobMatchesArtifact(job, row) ? job.id : undefined
     const body = Buffer.from(
       JSON.stringify({
         id: row.id,
@@ -1116,7 +1175,8 @@ document.addEventListener('physicsos-experiment-intent', event => {
       .update('physicsos-question-code-v1:' + body)
       .digest('base64url')
     const path = `${ASSET_PREFIX}/embed/question/${body}.${signature}/dist/index.html`
-    return { entryUrl: this.assetOrigin ? new URL(path, this.assetOrigin).href : path, expiresAt }
+    return { entryUrl: this.assetOrigin ? new URL(path, this.assetOrigin).href : path, expiresAt,
+      ...(jobId === undefined ? {} : { jobId }) }
   }
   async source(
     actor: IdentityActor,
@@ -1138,40 +1198,25 @@ document.addEventListener('physicsos-experiment-intent', event => {
       source: { title: row.title, summary: row.summary, rendererJs, stylesheet },
     }
   }
-  /**
-   * Serve one candidate package to the isolated validator, addressed by its
-   * ticket and digest instead of an account. The ticket is redeemed by the
-   * caller (jobs service) before this runs; this method only maps the frozen
-   * files an independent artifact already stores, plus the shell files the
-   * generator froze alongside them.
-   */
-  /** The frozen entry path for a candidate digest, if it exists. */
-  validatorEntry(candidateSha256: string): string | undefined {
-    for (const [, raw] of this.domain.table('artifacts').entries()) {
-      try {
-        const row = questionCodeRecordSchema.parse(raw)
-        if (row.sha256 === candidateSha256 && row.rendererKind === 'independent') return 'dist/index.html'
-      } catch { continue }
-    }
-    return undefined
+  /** The platform-owned wrapper points only at this session's frozen entry. */
+  validatorEntry(binding: ValidationSourceBinding): string | undefined {
+    const row = this.validationRecord(binding)
+    return row.files.some(file => file.name === 'dist/index.html') ? 'dist/index.html' : undefined
   }
 
+  /** Ticket-scoped runtime assets only; scene/source/provenance stay app-side. */
   async validatorPackage(
-    candidateSha256: string,
+    binding: ValidationSourceBinding,
     path: string,
   ): Promise<{ readonly bytes: Buffer; readonly contentType: string } | undefined> {
     this.requireReady()
-    if (!safeArchivePath(path)) return undefined
-    for (const [id, raw] of this.domain.table('artifacts').entries()) {
-      let row: QuestionCodeRecord
-      try { row = questionCodeRecordSchema.parse(raw) } catch { continue }
-      if (row.sha256 !== candidateSha256 || row.rendererKind !== 'independent') continue
-      const file = row.files.find(item => item.name === path)
-      if (file === undefined) return undefined
-      void id
-      return { bytes: await verifiedFile(join(this.root, 'blobs', file.sha256), file), contentType: file.contentType }
-    }
-    return undefined
+    if (!safeArchivePath(path) || !path.startsWith('dist/')) return undefined
+    const row = this.validationRecord(binding)
+    const file = row.files.find(item => item.name === path)
+    if (file === undefined) return undefined
+    const bytes = await verifiedFile(join(this.root, 'blobs', file.sha256), file)
+    this.validationRecord(binding)
+    return { bytes, contentType: file.contentType }
   }
 
   async asset(url: URL): Promise<Asset | undefined> {

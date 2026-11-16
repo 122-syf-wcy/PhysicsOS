@@ -71,6 +71,11 @@ export const questionCodeJobSchema = z
       version: z.literal(1),
       passed: z.boolean(),
       candidateSha256: digest,
+      /** New evidence is source/lease-bound; optional so original records stay readable. */
+      leaseEpoch: z.number().int().nonnegative().optional(),
+      sceneSha256: digest.optional(),
+      sceneRevision: z.number().int().nonnegative().optional(),
+      sourceRef: z.string().regex(/^qcode_[a-f0-9]{32}$/).optional(),
       checks: z.array(z.object({ name: z.string().max(80), passed: z.boolean(), detail: z.string().max(600).optional() }).strict()).max(20),
       screenshotRef: z.string().max(300).optional(),
       finishedAt: z.string(),
