@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { planScene, PlannerError } from '../src/planner.ts'
 import type { FrameSource, SnapshotLike } from '../src/frame-plan.ts'
-import { isUniversalSnapshot } from '../../../overlays/harness/files/packages/client/ui-physicsos/src/client/experiments/universal-contract.ts'
+import { isUniversalSnapshot } from '../../../vendor/deepseek-harness/packages/client/ui-physicsos/src/client/experiments/universal-contract.ts'
 
 const experimentId = 'projectile-oblique'
 const scene = (overrides: Record<string, unknown> = {}) => ({ id: 's1', revision: 1, domain: 'mechanics', ...overrides })

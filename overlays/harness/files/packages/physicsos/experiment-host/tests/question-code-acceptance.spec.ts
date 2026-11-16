@@ -5,7 +5,7 @@ const config = { url: 'http://worker:8099', token: 't'.repeat(32) }
 const base = {
   jobId: 'gen-9', epoch: 1, candidateSha256: 'a'.repeat(64),
   sceneSha256: 'b'.repeat(64), sceneRevision: 4,
-  scene: { id: 'frozen-scene', revision: 4 },
+  scene: { id: 'frozen-scene', revision: 4 }, experimentId: 'projectile-oblique',
   ticket: 'gen-9.nonce',
   base: 'http://app:3080',
   wrapperUrl: `http://app:3080/physicsos/question-code/validation/gen-9.nonce/${'a'.repeat(64)}/shell/wrapper.html`,
@@ -24,6 +24,7 @@ describe('generation → acceptance handoff', () => {
     expect(body.frames).toBeUndefined()
     expect(body.changedFrame).toBeUndefined()
     expect(body.scene).toEqual(base.scene)
+    expect(body.experimentId).toBe(base.experimentId)
     expect(body.wrapperUrl).toContain(base.ticket)
     expect(body.wrapperUrl).toContain(base.candidateSha256)
     expect(body.entryUrl).toContain(base.candidateSha256)
