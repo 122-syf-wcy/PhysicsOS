@@ -7,6 +7,7 @@ import { randomBytes } from 'node:crypto'
 import { isIP } from 'node:net'
 import { setTimeout as delay } from 'node:timers/promises'
 import { pathToFileURL } from 'node:url'
+import { isDeepStrictEqual } from 'node:util'
 import { acquireOperationLock } from './operation-lock.mjs'
 import { captureQuiescedStores, inspectBackupSource } from './backup-full.mjs'
 import { composeArgs, dockerCommand, jsonOf, queryPostgres, RESTORE_READINESS_SCRIPT, runCommand, sha256, terminationSignal, textOf, validateBackupKey } from './backup-lib.mjs'
@@ -14,7 +15,24 @@ import { composeArgs, dockerCommand, jsonOf, queryPostgres, RESTORE_READINESS_SC
 const imageId = /^sha256:[0-9a-f]{64}$/
 const digest = /^[0-9a-f]{64}$/
 const commit = /^[0-9a-f]{40}$/
+const containerId = /^[0-9a-f]{64}$/
+const WORKER_SERVICE = 'validation-worker'
+const WORKER_IMAGE_ENV = 'PHYSICSOS_VALIDATION_IMAGE'
 const aborted = signal => signal?.throwIfAborted()
+
+function validateValidationWorker(plan) {
+  if (!Object.hasOwn(plan, 'validationWorker')) return
+  const worker = plan.validationWorker
+  const fields = ['service', 'imageEnv', 'expectedOldImage', 'candidateImage', 'expectedOldContainerId', 'inputsSha256']
+  if (!worker || typeof worker !== 'object' || Array.isArray(worker) ||
+    Reflect.ownKeys(worker).length !== fields.length || fields.some(field => !Object.hasOwn(worker, field)) ||
+    worker.service !== WORKER_SERVICE || worker.imageEnv !== WORKER_IMAGE_ENV ||
+    ['expectedOldImage', 'candidateImage'].some(field => typeof worker[field] !== 'string' || !imageId.test(worker[field])) ||
+    worker.expectedOldImage === worker.candidateImage || typeof worker.expectedOldContainerId !== 'string' || !containerId.test(worker.expectedOldContainerId) ||
+    typeof worker.inputsSha256 !== 'string' || !digest.test(worker.inputsSha256) || plan.backup.mode !== 'paired')
+    throw new Error('Validation worker requires the fixed service/image env, exact immutable identities and paired recovery; unknown fields are not allowed')
+  plan.validationWorker = Object.freeze({ ...worker })
+}
 
 async function privateText(file) {
   const info = await lstat(file)
@@ -83,8 +101,8 @@ async function atomicRecord(file, value) {
   } finally { await rm(temporary, { force: true }) }
 }
 
-async function preallocate(file, content) {
-  const handle = await open(file, 'wx', 0o600)
+async function preallocate(file, content, mode = 0o600) {
+  const handle = await open(file, 'wx', mode)
   try { await handle.writeFile(content); await handle.sync() }
   finally { await handle.close() }
 }
@@ -99,6 +117,153 @@ function envWithImage(prior, image) {
   }).map(line => /^\s*(?:export\s+)?PHYSICSOS_APP_IMAGE=/.test(line) ? `PHYSICSOS_APP_IMAGE=${image}` : line)
   if (!replaced) lines.splice(lines.at(-1) === '' ? lines.length - 1 : lines.length, 0, `PHYSICSOS_APP_IMAGE=${image}`)
   return Buffer.from(lines.join('\n') + (lines.at(-1) === '' ? '' : '\n'))
+}
+
+// The opt-in plan changes exactly two existing assignments, not an arbitrary env map.
+function envWithWorkerImages(prior, appImage, workerImage, expectedWorker) {
+  const text = prior.toString('utf8'), counts = { PHYSICSOS_APP_IMAGE: 0, PHYSICSOS_VALIDATION_IMAGE: 0 }
+  if (!Buffer.from(text).equals(prior)) throw new Error('Release env must be UTF-8')
+  const content = text.replace(/^([ \t]*(?:export[ \t]+)?(PHYSICSOS_APP_IMAGE|PHYSICSOS_VALIDATION_IMAGE)[ \t]*=[ \t]*)([^\r\n]*)/gm, (_, prefix, name, value) => {
+    counts[name]++
+    if (name === WORKER_IMAGE_ENV && value.trim() !== expectedWorker) throw new Error('Production worker env identity changed')
+    const trailing = value.match(/[ \t]*$/)[0]
+    return prefix + (name === WORKER_IMAGE_ENV ? workerImage : appImage) + trailing
+  })
+  if (Object.values(counts).some(count => count !== 1)) throw new Error('Paired worker release requires exactly one app and worker image assignment')
+  return Buffer.from(content)
+}
+
+const workerName = source => source.config.services[WORKER_SERVICE].container_name ?? `${source.config.name}-${WORKER_SERVICE}-1`
+
+async function workerConfigHash(docker, compose, env) {
+  const parts = textOf(await docker([...compose, 'config', '--hash', WORKER_SERVICE], env ? { env } : {})).split(/\s+/)
+  if (parts.length !== 2 || parts[0] !== WORKER_SERVICE || !digest.test(parts[1])) throw new Error('Cannot bind the worker Compose configuration hash')
+  return parts[1]
+}
+
+async function workerContainers(docker, compose) {
+  const ids = textOf(await docker([...compose, 'ps', '--all', '--quiet', WORKER_SERVICE])).split(/\s+/).filter(Boolean)
+  if (new Set(ids).size !== ids.length || ids.some(id => !containerId.test(id))) throw new Error('Worker inventory requires unique full container IDs')
+  const containers = []
+  for (const id of ids) {
+    const container = jsonOf(await docker(['inspect', id]))[0]
+    if (container?.Id !== id) throw new Error('Worker container identity changed')
+    containers.push(container)
+  }
+  return containers
+}
+
+function guardWorkerContainer(plan, source, container, expectedImage, allowPartial = false) {
+  const labels = container.Config?.Labels ?? {}, name = workerName(source)
+  if (!containerId.test(container.Id ?? '') || container.Image !== expectedImage ||
+    (container.Name !== `/${name}` && !(allowPartial && container.Name === `/${container.Id.slice(0, 12)}_${name}`)) ||
+    labels['com.docker.compose.project'] !== source.config.name || labels['com.docker.compose.service'] !== WORKER_SERVICE ||
+    labels['com.docker.compose.container-number'] !== '1' || labels['com.docker.compose.oneoff'] !== 'False' ||
+    container.Config?.User !== 'pwuser' || container.HostConfig?.ReadonlyRootfs !== true || container.HostConfig.Privileged === true ||
+    !Array.isArray(container.Mounts) || container.Mounts.some(mount => !['bind', 'tmpfs'].includes(mount.Type) || (mount.Type === 'bind' && mount.RW !== false)))
+    throw new Error('Validation worker role, image, user, read-only configuration or mounts changed')
+  const hashes = source.validationWorker?.configHashes
+  if (hashes && !(expectedImage === plan.validationWorker.candidateImage ? [hashes.new] : [hashes.old, hashes.rollback]).includes(labels['com.docker.compose.config-hash']))
+    throw new Error('Validation worker Compose configuration hash changed')
+  if (expectedImage === plan.validationWorker.candidateImage &&
+    (labels['org.opencontainers.image.revision'] !== plan.revision || labels['io.physicsos.worker.inputs'] !== plan.validationWorker.inputsSha256))
+    throw new Error('Validation worker runtime labels differ from the frozen inputs')
+}
+
+// Only Docker-generated identity and image labels may differ after a recreate.
+// Keep Env (including tokens), ports, mounts, caps, seccomp and all HostConfig private.
+function workerSettings(source, container) {
+  const config = structuredClone(container.Config)
+  delete config.Image
+  delete config.Labels
+  if (source.config.services[WORKER_SERVICE].hostname === undefined) delete config.Hostname
+  const networks = Object.fromEntries(Object.entries(container.NetworkSettings?.Networks ?? {}).map(([name, value]) =>
+    [name, { id: value.NetworkID, ipam: value.IPAMConfig, links: value.Links, driver: value.DriverOpts,
+      aliases: (value.Aliases ?? []).filter(alias => ![container.Id, container.Id.slice(0, 12), container.Name.slice(1), workerName(source)].includes(alias)).sort() }]))
+  return { config, host: container.HostConfig, mounts: [...container.Mounts].sort((a, b) => a.Destination.localeCompare(b.Destination)), networks, ports: container.NetworkSettings?.Ports }
+}
+
+function guardWorkerSettings(source, container) {
+  if (!isDeepStrictEqual(workerSettings(source, source.validationWorker.container), workerSettings(source, container)))
+    throw new Error('Validation worker runtime configuration changed')
+}
+
+async function inspectOriginalWorker(plan, source, docker, requireHealthy = true) {
+  if (source.config.services?.[WORKER_SERVICE]?.image !== plan.validationWorker.expectedOldImage) throw new Error('Production worker Compose image changed')
+  const containers = await workerContainers(docker, composeArgs(plan.projectDir))
+  if (containers.length !== 1 || containers[0].Id !== plan.validationWorker.expectedOldContainerId) throw new Error('Production worker full container identity changed')
+  const container = containers[0]
+  guardWorkerContainer(plan, source, container, plan.validationWorker.expectedOldImage)
+  const compose = composeArgs(plan.projectDir), oldHash = container.Config.Labels['com.docker.compose.config-hash'], rollbackHash = await workerConfigHash(docker, compose)
+  if (oldHash !== rollbackHash) {
+    // A previously created tag spelling is not used for up/pull. Prove that only
+    // this bound image field explains its hash while the actual full ID is old.
+    const env = { ...process.env, PHYSICSOS_VALIDATION_IMAGE: container.Config.Image }
+    const previous = jsonOf(await docker([...compose, 'config', '--format', 'json'], { env })), expected = structuredClone(source.config)
+    delete previous.services[WORKER_SERVICE].image
+    delete expected.services[WORKER_SERVICE].image
+    if (typeof container.Config.Image !== 'string' || !isDeepStrictEqual(previous, expected) || oldHash !== await workerConfigHash(docker, compose, env))
+      throw new Error('Production worker differs from effective Compose configuration')
+  }
+  source.workerConfigHashes = { old: oldHash, rollback: rollbackHash }
+  if (requireHealthy && (!container.State?.Running || container.State.Health?.Status !== 'healthy')) throw new Error('Production worker is not healthy')
+  return container
+}
+
+async function inspectValidationWorker(plan, source, docker) {
+  const container = await inspectOriginalWorker(plan, source, docker)
+  const oldImage = jsonOf(await docker(['image', 'inspect', plan.validationWorker.expectedOldImage]))[0]
+  const candidate = jsonOf(await docker(['image', 'inspect', plan.validationWorker.candidateImage]))[0]
+  const labels = candidate?.Config?.Labels ?? {}, oldConfig = structuredClone(oldImage?.Config), newConfig = structuredClone(candidate?.Config)
+  if (!oldConfig || !newConfig) throw new Error('Worker image configuration is missing')
+  delete oldConfig.Labels
+  delete newConfig.Labels
+  const layers = oldImage.RootFS?.Layers, nextLayers = candidate.RootFS?.Layers
+  if (oldImage.Id !== plan.validationWorker.expectedOldImage || candidate.Id !== plan.validationWorker.candidateImage || oldConfig.User !== 'pwuser' ||
+    labels['org.opencontainers.image.revision'] !== plan.revision || labels['io.physicsos.worker.inputs'] !== plan.validationWorker.inputsSha256 ||
+    !isDeepStrictEqual(oldConfig, newConfig) || ['Os', 'Architecture', 'Variant'].some(field => oldImage[field] !== candidate[field]) ||
+    oldImage.RootFS?.Type !== 'layers' || candidate.RootFS?.Type !== 'layers' || !Array.isArray(layers) || !layers.length || !Array.isArray(nextLayers) ||
+    nextLayers.length !== layers.length + 1 || nextLayers.some(layer => typeof layer !== 'string' || !imageId.test(layer)) || layers.some((layer, index) => layer !== nextLayers[index]))
+    throw new Error('Worker candidate must inherit the old image configuration and layers plus one frozen-input layer')
+  const envPath = join(plan.projectDir, '.env'), info = await lstat(envPath), prior = await readFile(envPath)
+  const mode = info.mode & 0o7777
+  if (!info.isFile() || ![0o400, 0o600].includes(mode)) throw new Error('Worker release env must be a private regular file')
+  const env = { prior, mode, next: envWithWorkerImages(prior, plan.candidateImage, candidate.Id, oldImage.Id), rollback: envWithWorkerImages(prior, plan.expectedOldImage, oldImage.Id, oldImage.Id) }
+  const paths = new Set([join(plan.projectDir, 'compose.yml'), ...Object.values(source.config.secrets).map(secret => resolve(plan.projectDir, secret.file)),
+    ...container.Mounts.filter(mount => mount.Type === 'bind').map(mount => mount.Source)])
+  for (const option of source.config.services[WORKER_SERVICE].security_opt ?? []) {
+    if (option.startsWith('seccomp=') && option !== 'seccomp=unconfined') paths.add(resolve(plan.projectDir, option.slice('seccomp='.length)))
+  }
+  const files = []
+  for (const file of paths) {
+    const stat = await lstat(file)
+    if (!stat.isFile()) throw new Error('Worker release requires regular configuration/secret mount files')
+    files.push({ file, mode: stat.mode & 0o7777, uid: stat.uid, gid: stat.gid, sha256: await sha256(file) })
+  }
+  source.images[WORKER_SERVICE] = { id: oldImage.Id, digest: oldImage.RepoDigests?.[0] ?? null, labels: oldImage.Config.Labels ?? {} }
+  return { container, env, files, configHashes: source.workerConfigHashes }
+}
+
+async function guardWorkerFiles(plan, source, switched, envRestored = false) {
+  const worker = source.validationWorker, file = join(plan.projectDir, '.env'), info = await lstat(file), current = await readFile(file)
+  const allowed = envRestored ? [worker.env.rollback] : switched ? [worker.env.prior, worker.env.next] : [worker.env.prior]
+  if (!info.isFile() || (info.mode & 0o7777) !== worker.env.mode || !allowed.some(value => value.equals(current))) throw new Error('Release env changed outside the paired image assignments')
+  for (const expected of worker.files) {
+    const stat = await lstat(expected.file)
+    if (!stat.isFile() || (stat.mode & 0o7777) !== expected.mode || stat.uid !== expected.uid || stat.gid !== expected.gid || await sha256(expected.file) !== expected.sha256) throw new Error('Release configuration or secret input changed')
+  }
+}
+
+function guardWorkerConfiguration(plan, source, current) {
+  const expected = structuredClone(source.config), actual = structuredClone(current)
+  if (![plan.validationWorker.expectedOldImage, plan.validationWorker.candidateImage].includes(actual.services?.[WORKER_SERVICE]?.image) ||
+    ![source.config.services.app.image, plan.expectedOldImage, plan.candidateImage].includes(actual.services?.app?.image))
+    throw new Error('Recovery configuration contains an unbound image')
+  delete expected.services.app.image
+  delete actual.services.app.image
+  delete expected.services[WORKER_SERVICE].image
+  delete actual.services[WORKER_SERVICE].image
+  if (!isDeepStrictEqual(expected, actual)) throw new Error('Recovery configuration changed outside the paired image fields')
 }
 
 async function validateHook(hook) {
@@ -154,20 +319,42 @@ function guardCapturedSource(original, current) {
     ['app', 'postgres', 'redis'].some(service => current.containers[service].Id !== original.containers[service].Id || current.containers[service].Image !== original.containers[service].Image) ||
     current.volumes.app !== original.volumes.app || current.volumes.redis !== original.volumes.redis)
     throw new Error('Production configuration or container identity changed during stop')
+  if (original.validationWorker) {
+    if (current.validationWorker?.container.Id !== original.validationWorker.container.Id || current.validationWorker.container.Image !== original.validationWorker.container.Image)
+      throw new Error('Production worker identity changed during stop')
+    guardWorkerSettings(original, current.validationWorker.container)
+  }
 }
 
-async function guardRecoverySource(plan, source, docker, compose, switched) {
+async function guardRecoverySource(plan, source, docker, compose, switched, workerState) {
   if (!switched) {
-    guardCapturedSource(source, await inspectBackupSource(plan, { docker }))
+    const current = await inspectBackupSource(plan, { docker })
+    if (source.validationWorker) {
+      await guardWorkerFiles(plan, source, false)
+      current.validationWorker = { container: await inspectOriginalWorker(plan, current, docker, false) }
+    }
+    guardCapturedSource(source, current)
     return
   }
   // A failed recreate can legitimately leave zero or one candidate app container.
-  // All settings, volumes and dependency identities must still match the recovery point.
+  // Worker exceptions are limited to the explicitly bound plan and owned IDs.
   const current = jsonOf(await docker([...compose, 'config', '--format', 'json']))
-  const expectedConfig = structuredClone(source.config), currentConfig = structuredClone(current)
-  delete expectedConfig.services.app.image
-  delete currentConfig.services.app.image
-  if (JSON.stringify(expectedConfig) !== JSON.stringify(currentConfig)) throw new Error('Recovery configuration changed')
+  if (source.validationWorker) {
+    await guardWorkerFiles(plan, source, true, workerState.envRestored)
+    guardWorkerConfiguration(plan, source, current)
+    const workers = await workerContainers(docker, compose)
+    if (workers.length > 2 || (!workers.length && !workerState.attempted)) throw new Error('Recovery worker inventory changed')
+    for (const worker of workers) {
+      if (!workerState.owned.has(worker.Id) || ![plan.validationWorker.expectedOldImage, plan.validationWorker.candidateImage].includes(worker.Image)) throw new Error('Unknown recovery worker container')
+      guardWorkerContainer(plan, source, worker, worker.Image, true)
+      guardWorkerSettings(source, worker)
+    }
+  } else {
+    const expectedConfig = structuredClone(source.config), currentConfig = structuredClone(current)
+    delete expectedConfig.services.app.image
+    delete currentConfig.services.app.image
+    if (JSON.stringify(expectedConfig) !== JSON.stringify(currentConfig)) throw new Error('Recovery configuration changed')
+  }
   for (const service of ['postgres', 'redis']) {
     const item = jsonOf(await docker(['inspect', source.containers[service].Id]))[0]
     if (item.Id !== source.containers[service].Id || item.Image !== source.containers[service].Image) throw new Error('Recovery dependency changed')
@@ -225,6 +412,7 @@ export async function releaseSwitch(input, dependencies = {}) {
   const plan = { ...input, projectDir: resolve(input.projectDir ?? '/opt/physicsos'), backup: { ...suppliedBackup, mode: suppliedBackup.mode ?? (suppliedBackup.keyFile ? 'full' : 'paired') } }
   let phase = 'preflight', lock, recovery, nextEnv, rollbackEnv, reserve, source
   let stopAttempted = false, switched = false
+  const workerState = { attempted: false, owned: new Set(), envRestored: false }
   const attempted = []
   const docker = dependencies.docker ?? dockerCommand
   const invoke = dependencies.run ?? runCommand
@@ -237,7 +425,60 @@ export async function releaseSwitch(input, dependencies = {}) {
     // Finish a submitted mutation before handling cancellation; its snapshot then defines recovery.
     await run(args[0], args.slice(1))
   }
-  const waitForImage = async (expected, signal) => {
+  const releaseEnv = (appImage, workerImage) => ({ ...process.env, PHYSICSOS_APP_IMAGE: appImage, ...(source?.validationWorker ? { PHYSICSOS_VALIDATION_IMAGE: workerImage } : {}) })
+  const recreateWorker = async (expected, appImage) => {
+    const started = Date.now()
+    workerState.attempted = true
+    receipt.validationWorker.recreateAttempted = true
+    let failed = false
+    try {
+      await docker([...compose, 'up', '-d', '--no-build', '--no-deps', '--pull', 'never', '--force-recreate', WORKER_SERVICE], { env: releaseEnv(appImage, expected) })
+    } catch { failed = true /* Inspect a daemon-accepted partial recreate before recovery. */ }
+    const workers = await workerContainers(docker, compose), completed = Date.now()
+    for (const worker of workers) {
+      if (!workerState.owned.has(worker.Id)) {
+        const created = Date.parse(worker.Created)
+        if (worker.Image !== expected || !Number.isFinite(created) || created < started || created > completed) throw new Error('Worker recreate left an unowned container')
+        guardWorkerContainer(plan, source, worker, expected, true)
+        guardWorkerSettings(source, worker)
+        workerState.owned.add(worker.Id)
+        receipt.validationWorker.ownedContainerIds = [...workerState.owned]
+      } else {
+        if (![plan.validationWorker.expectedOldImage, plan.validationWorker.candidateImage].includes(worker.Image)) throw new Error('Owned worker image changed')
+        guardWorkerContainer(plan, source, worker, worker.Image, true)
+        guardWorkerSettings(source, worker)
+      }
+      if (worker.Image === plan.validationWorker.candidateImage) receipt.validationWorker.newContainerId = worker.Id
+    }
+    receipt.validationWorker.ownedContainerIds = [...workerState.owned]
+    await atomicRecord(join(recovery, 'paired-recovery.json'), { ...receipt, consistent: true })
+    if (failed) throw new Error('Validation worker recreate failed')
+  }
+  const verifiedWorker = async expected => {
+    const workers = await workerContainers(docker, compose)
+    if (workers.length !== 1 || !workerState.owned.has(workers[0].Id)) throw new Error('Expected exactly one owned validation worker')
+    const worker = workers[0]
+    guardWorkerContainer(plan, source, worker, expected)
+    guardWorkerSettings(source, worker)
+    if (!worker.State?.Running || worker.State.Health?.Status !== 'healthy') throw new Error('Validation worker is not healthy')
+    await guardWorkerFiles(plan, source, switched, workerState.envRestored)
+    const current = jsonOf(await docker([...compose, 'config', '--format', 'json']))
+    guardWorkerConfiguration(plan, source, current)
+    if (current.services[WORKER_SERVICE].image !== expected) throw new Error('Validation worker Compose image differs from the running image')
+    return worker.Id
+  }
+  const waitForWorker = async (expected, signal) => {
+    const deadline = Date.now() + (plan.timeoutMs ?? 150_000)
+    do {
+      aborted(signal)
+      try { return await verifiedWorker(expected) } catch {
+        if (Date.now() >= deadline) break
+        await delay(plan.intervalMs ?? 1000)
+      }
+    } while (Date.now() < deadline)
+    throw new Error('Exact validation worker did not become healthy')
+  }
+  const waitForImage = async (expected, signal, expectedWorker) => {
     const deadline = Date.now() + (plan.timeoutMs ?? 150_000)
     do {
       aborted(signal)
@@ -253,6 +494,7 @@ export async function releaseSwitch(input, dependencies = {}) {
         }
         await docker([...compose, 'exec', '-T', 'app', 'node', '-e', RESTORE_READINESS_SCRIPT, 'http://127.0.0.1:3080/readyz', '2000'], { timeoutMs: 5000 })
         await writerLease(source, docker, compose, 1, app)
+        if (source.validationWorker) await verifiedWorker(expectedWorker)
         return
       } catch {
         if (Date.now() >= deadline) break
@@ -270,7 +512,7 @@ export async function releaseSwitch(input, dependencies = {}) {
     const running = new Set(textOf(await docker([...compose, 'ps', '--status', 'running', '--services'])).split(/\s+/))
     if (running.has('app') || running.has('redis')) return false
     try {
-      await guardRecoverySource(plan, source, docker, compose, switched)
+      await guardRecoverySource(plan, source, docker, compose, switched, workerState)
       await guardDataWriters(source, docker)
       await writerLease(source, docker, compose, 0)
     } catch { return false }
@@ -280,21 +522,47 @@ export async function releaseSwitch(input, dependencies = {}) {
         await runHook(hook, 'rollback')
       } catch { return false }
     }
+    if (source.validationWorker) {
+      try {
+        await guardRecoverySource(plan, source, docker, compose, switched, workerState)
+        await guardDataWriters(source, docker)
+        await writerLease(source, docker, compose, 0)
+      } catch { return false }
+    }
     if (switched) {
-      try { await rename(rollbackEnv, join(plan.projectDir, '.env')) } catch { return false }
+      try { await rename(rollbackEnv, join(plan.projectDir, '.env')); workerState.envRestored = true } catch { return false }
+    }
+    if (source.validationWorker) {
+      if (workerState.attempted) {
+        try { await recreateWorker(plan.validationWorker.expectedOldImage, plan.expectedOldImage) } catch { /* Verify the daemon result, including a partial old-worker recreate. */ }
+      }
+      try {
+        receipt.validationWorker.restoredContainerId = await waitForWorker(plan.validationWorker.expectedOldImage)
+        receipt.validationWorker.restoredHealthy = true
+        await guardRecoverySource(plan, source, docker, compose, switched, workerState)
+        await guardDataWriters(source, docker)
+        await writerLease(source, docker, compose, 0)
+      } catch { return false }
     }
     try { await docker([...compose, 'start', 'redis']) } catch { /* Always attempt app recovery too. */ }
     try {
-      if (switched) await docker([...compose, 'up', '-d', '--no-build', '--no-deps', '--pull', 'never', '--force-recreate', 'app'], { env: { ...process.env, PHYSICSOS_APP_IMAGE: plan.expectedOldImage } })
+      if (switched) await docker([...compose, 'up', '-d', '--no-build', '--no-deps', '--pull', 'never', '--force-recreate', 'app'], { env: releaseEnv(plan.expectedOldImage, plan.validationWorker?.expectedOldImage) })
       else await docker([...compose, 'start', 'app'])
     } catch { /* Inspect the daemon result even when the CLI returned failure. */ }
     try {
-      await waitForImage(plan.expectedOldImage)
+      await waitForImage(plan.expectedOldImage, undefined, plan.validationWorker?.expectedOldImage)
       await verifyAuthenticatedRead(plan.acceptance, dependencies)
+      if (source.validationWorker) await verifiedWorker(plan.validationWorker.expectedOldImage)
       return true
-    } catch { return false }
+    } catch {
+      if (source.validationWorker) {
+        try { await docker([...compose, 'stop', '--timeout', '60', 'app', 'redis']) } catch { /* Failed recovery must not deliberately leave writers running. */ }
+      }
+      return false
+    }
   }
   try {
+    validateValidationWorker(plan)
     if (!imageId.test(plan.expectedOldImage) || !imageId.test(plan.candidateImage) || !commit.test(plan.revision) || !commit.test(plan.checkoutRevision ?? plan.revision) || !digest.test(plan.sourceDigest) || !digest.test(plan.codeDigest) || plan.rollbackCompatible !== true)
       throw new Error('Release requires immutable identities and explicit rollback compatibility')
     if (!['paired', 'full'].includes(plan.backup.mode) || (plan.backup.mode === 'full' && (!plan.backup.output || !plan.backup.keyFile)) || !plan.acceptance) throw new Error('Release requires paired recovery and authenticated acceptance')
@@ -313,6 +581,21 @@ export async function releaseSwitch(input, dependencies = {}) {
     source = await inspectBackupSource(plan, { docker })
     phase = 'preflight-identity'
     await guardIdentity(plan, source, docker, run)
+    if (plan.validationWorker) {
+      phase = 'preflight-validation-worker'
+      source.validationWorker = await inspectValidationWorker(plan, source, docker)
+      workerState.owned.add(source.validationWorker.container.Id)
+      receipt.validationWorker = { service: WORKER_SERVICE, imageEnv: WORKER_IMAGE_ENV, oldImage: plan.validationWorker.expectedOldImage,
+        newImage: plan.validationWorker.candidateImage, oldContainerId: source.validationWorker.container.Id,
+        revision: plan.revision, inputsSha256: plan.validationWorker.inputsSha256, ownedContainerIds: [...workerState.owned] }
+      // Preview only: production .env and the live worker remain untouched.
+      const projected = jsonOf(await docker([...compose, 'config', '--format', 'json'], { env: releaseEnv(plan.candidateImage, plan.validationWorker.candidateImage) }))
+      guardWorkerConfiguration(plan, source, projected)
+      if (projected.services.app.image !== plan.candidateImage || projected.services[WORKER_SERVICE].image !== plan.validationWorker.candidateImage)
+        throw new Error('Paired image env assignments do not bind the intended services')
+      source.validationWorker.configHashes.new = await workerConfigHash(docker, compose, releaseEnv(plan.candidateImage, plan.validationWorker.candidateImage))
+      receipt.validationWorker.configHashes = { ...source.validationWorker.configHashes }
+    }
     phase = 'preflight-writer-lease'
     await writerLease(source, docker, compose, 1)
     phase = 'preflight-disk-space'
@@ -323,17 +606,22 @@ export async function releaseSwitch(input, dependencies = {}) {
       await mkdir(dirname(recovery), { recursive: true, mode: 0o700 })
       await mkdir(recovery, { mode: 0o700 })
     })
+    if (source.validationWorker) await guardWorkerFiles(plan, source, false)
     const prior = await readFile(join(plan.projectDir, '.env'))
     await preallocate(join(recovery, '.env.before'), prior)
     await preallocate(join(recovery, 'compose.before.yml'), await readFile(join(plan.projectDir, 'compose.yml')))
     nextEnv = join(plan.projectDir, `.physicsos-release-next-${stamp}`)
     rollbackEnv = join(plan.projectDir, `.physicsos-release-rollback-${stamp}`)
-    await preallocate(nextEnv, envWithImage(prior, plan.candidateImage))
-    await preallocate(rollbackEnv, envWithImage(prior, plan.expectedOldImage))
+    await preallocate(nextEnv, source.validationWorker?.env.next ?? envWithImage(prior, plan.candidateImage), source.validationWorker?.env.mode)
+    await preallocate(rollbackEnv, source.validationWorker?.env.rollback ?? envWithImage(prior, plan.expectedOldImage), source.validationWorker?.env.mode)
     reserve = join(recovery, '.rollback-space')
     await preallocate(reserve, Buffer.alloc(8 * 1024 * 1024))
     receipt.rollbackTag = `physicsos:rollback-${stamp}`
     await docker(['tag', plan.expectedOldImage, receipt.rollbackTag])
+    if (source.validationWorker) {
+      receipt.validationWorker.rollbackTag = `physicsos-validation:rollback-${stamp}`
+      await docker(['tag', plan.validationWorker.expectedOldImage, receipt.validationWorker.rollbackTag])
+    }
     const hooks = (plan.hooks ?? []).map(hook => ({ ...hook, snapshot: join(recovery, hook.snapshotName ?? `${hook.id}-snapshot.json`) }))
     const names = new Set()
     phase = 'preflight-hooks'
@@ -347,16 +635,24 @@ export async function releaseSwitch(input, dependencies = {}) {
     await atomicRecord(join(recovery, 'release.json'), { ...receipt, phase, hooks: hooks.map(hook => ({ id: hook.id, sha256: hook.sha256 })), startedAt: new Date().toISOString() })
     aborted(plan.signal)
     // Recheck immutable guards immediately before the first stop; preflight can take time.
-    await guardIdentity(plan, await inspectBackupSource(plan, { docker }), docker, run)
+    const checkedSource = await inspectBackupSource(plan, { docker })
+    await guardIdentity(plan, checkedSource, docker, run)
+    if (source.validationWorker) {
+      await guardWorkerFiles(plan, source, false)
+      checkedSource.validationWorker = { container: await inspectOriginalWorker(plan, checkedSource, docker) }
+      guardCapturedSource(source, checkedSource)
+    }
     phase = 'capture'
     stopAttempted = true
     await docker([...compose, 'stop', '--timeout', '60', 'app', 'redis'])
     aborted(plan.signal)
     const stoppedSource = await inspectBackupSource(plan, { docker })
+    if (source.validationWorker) stoppedSource.validationWorker = { container: await inspectOriginalWorker(plan, stoppedSource, docker) }
     guardCapturedSource(source, stoppedSource)
     await guardDataWriters(stoppedSource, docker)
     await writerLease(source, docker, compose, 0)
     for (const hook of hooks) await runHook(hook, 'preflight')
+    if (source.validationWorker) await guardRecoverySource(plan, source, docker, compose, false, workerState)
     const backup = await (dependencies.capture ?? captureQuiescedStores)({ ...plan.backup, projectDir: plan.projectDir, source, signal: plan.signal }, { docker })
     aborted(plan.signal)
     receipt.backup = backup
@@ -370,16 +666,36 @@ export async function releaseSwitch(input, dependencies = {}) {
       aborted(plan.signal)
     }
     phase = 'cutover'
+    if (source.validationWorker) {
+      await guardRecoverySource(plan, source, docker, compose, false, workerState)
+      await guardDataWriters(source, docker)
+      await writerLease(source, docker, compose, 0)
+    }
     switched = true
     await rename(nextEnv, join(plan.projectDir, '.env'))
+    if (source.validationWorker) {
+      phase = 'validation-worker-cutover'
+      await guardRecoverySource(plan, source, docker, compose, true, workerState)
+      aborted(plan.signal)
+      await recreateWorker(plan.validationWorker.candidateImage, plan.candidateImage)
+      receipt.validationWorker.newContainerId = await waitForWorker(plan.validationWorker.candidateImage, plan.signal)
+      receipt.validationWorker.newHealthy = true
+      await atomicRecord(join(recovery, 'paired-recovery.json'), { ...receipt, consistent: true })
+      await guardRecoverySource(plan, source, docker, compose, true, workerState)
+      await guardDataWriters(source, docker)
+      await writerLease(source, docker, compose, 0)
+      phase = 'cutover'
+    }
     await docker([...compose, 'start', 'redis'])
     aborted(plan.signal)
-    await docker([...compose, 'up', '-d', '--no-build', '--no-deps', '--pull', 'never', '--force-recreate', 'app'], { env: { ...process.env, PHYSICSOS_APP_IMAGE: plan.candidateImage } })
-    await waitForImage(plan.candidateImage, plan.signal)
+    await docker([...compose, 'up', '-d', '--no-build', '--no-deps', '--pull', 'never', '--force-recreate', 'app'], { env: releaseEnv(plan.candidateImage, plan.validationWorker?.candidateImage) })
+    await waitForImage(plan.candidateImage, plan.signal, plan.validationWorker?.candidateImage)
     phase = 'acceptance'
     const checks = await verifyAuthenticatedRead({ ...plan.acceptance, signal: plan.signal }, dependencies)
+    if (source.validationWorker) await verifiedWorker(plan.validationWorker.candidateImage)
     await atomicRecord(join(recovery, 'success.json'), { ...receipt, checks, completedAt: new Date().toISOString() })
-    return { deployed: true, image: plan.candidateImage, revision: plan.revision, recovery, backup, checks }
+    return { deployed: true, image: plan.candidateImage, revision: plan.revision, recovery, backup, checks,
+      ...(source.validationWorker ? { validationWorker: { image: plan.validationWorker.candidateImage, containerId: receipt.validationWorker.newContainerId } } : {}) }
   } catch {
     let rollbackHealthy = false
     try { rollbackHealthy = await recover() } catch { rollbackHealthy = false }
