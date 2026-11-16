@@ -44,7 +44,10 @@ describe('candidate validation request', () => {
     await requestCandidateValidation(config, input, fetchMock as unknown as typeof fetch)
     const body = JSON.parse(String((fetchMock.mock.calls[0] as unknown[])[1] && ((fetchMock.mock.calls[0] as [string, RequestInit])[1].body)))
     expect(body.expected).toEqual({ candidateSha256: input.candidateSha256, sceneSha256: input.sceneSha256, sceneRevision: 7 })
-    expect(body.token).toBe('ticket-1')
+    expect(body.token).toMatch(/^[a-zA-Z0-9-]{16,80}$/)
+    expect(body.token).not.toBe(input.ticket)
+    expect(body.wrapperUrl).toBe(input.wrapperUrl)
+    expect(body.entryUrl).toBe(input.entryUrl)
   })
 
   it('includes the frozen scene but no manufactured frames for the normal planner path', async () => {

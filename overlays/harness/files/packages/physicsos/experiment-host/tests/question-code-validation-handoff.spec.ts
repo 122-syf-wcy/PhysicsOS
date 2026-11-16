@@ -102,6 +102,9 @@ describe('frozen candidate → isolated worker handoff', () => {
     expect(body).not.toHaveProperty('frames')
     expect(body).not.toHaveProperty('changedFrame')
     expect(body.entryUrl).toContain(`/${h.row.sha256}/dist/index.html`)
+    expect(body.entryUrl).toContain(`/${ticket.token}/`)
+    expect(body.token).toMatch(/^[a-zA-Z0-9-]{16,80}$/)
+    expect(body.token).not.toBe(ticket.token)
     expect(body.expected).toEqual({ candidateSha256: h.row.sha256, sceneSha256: h.row.sceneSha256, sceneRevision: 1 })
     expect(h.jobs.get(h.submitted.id, contributor.userKey)).toMatchObject({ status: 'ready', resultRef: h.row.id, resultSha256: h.row.sha256,
       validation: { version: 1, passed: true, sourceRef: h.row.id, leaseEpoch: h.started.epoch, sceneSha256: h.row.sceneSha256, sceneRevision: 1 } })

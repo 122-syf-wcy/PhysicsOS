@@ -17,6 +17,7 @@
  *   - a missing worker configuration leaves the candidate unaccepted. It is
  *     never treated as a pass.
  */
+import { randomUUID } from 'node:crypto'
 import { QuestionCodeJobError, type QuestionCodeJobs, type ValidationSourceBinding } from './question-code-jobs.ts'
 import { questionSceneSha256, type QuestionCodeArtifactService, type QuestionCodeIdentity } from './question-code-service.ts'
 import { ExperimentError, type IdentityActor } from './identity.ts'
@@ -275,7 +276,9 @@ export async function requestCandidateValidation(
       body: JSON.stringify({
         wrapperUrl: input.wrapperUrl,
         entryUrl: input.entryUrl,
-        token: input.ticket,
+        // Resource authority stays in the URLs. The V3 channel has its own
+        // bounded protocol alphabet and must not contain the job/ticket prefix.
+        token: randomUUID(),
         ...(input.scene === undefined ? {} : { scene: input.scene }),
         ...(input.frames === undefined ? {} : { frames: input.frames }),
         ...(input.changedFrame === undefined ? {} : { changedFrame: input.changedFrame }),
