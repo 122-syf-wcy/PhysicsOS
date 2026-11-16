@@ -185,10 +185,9 @@ describe('current content, checks and explicit subject approval', () => {
   })
 
   it('preserves historical finalized hash-bound exports without fabricating old check metadata', async () => {
-    const legacy = fixtureJob({ status: 'exported', approval: {
+    const { rowVersion: _rowVersion, ...legacy } = fixtureJob({ status: 'exported', approval: {
       versionHash: documentHash(fixtureDocument()), reviewer: 'historic teacher', at: '2025-01-01',
     } })
-    delete legacy.rowVersion
     const f = await workflowFixture(legacy); onTestFinished(f.close)
     expect(f.service.requireApprovedDocument(f.jobId).job.checkBinding).toBeUndefined()
     const parsed = paperDomain.tables.jobs.valueSchema.parse(legacy)

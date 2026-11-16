@@ -19,8 +19,8 @@ async function serverFixture() {
   // This fixture exercises only pipeline admission; uncalled ingest/export seams are omitted.
   const handler = paperRoutes({ service: f.service, exportDir: '/tmp/paper-synthetic',
     identity: () => ({ actorOf: () => ({ userKey: 'test-teacher', schoolId: 'test-school', role: 'TEACHER', username: 'teacher' }), record: async () => undefined }),
-    startOperation: (id, kind, input) => pipeline.start(id, kind, input),
-    retryOperation: (id, version) => pipeline.retry(id, version),
+    startOperation: (...input: Parameters<PaperPipeline['start']>) => pipeline.start(...input),
+    retryOperation: (...input: Parameters<PaperPipeline['retry']>) => pipeline.retry(...input),
   } as unknown as Parameters<typeof paperRoutes>[0])
   const server = createServer((req, res) => { void handler(req, res) })
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
