@@ -29,6 +29,7 @@ export async function buildRelease(options, dependencies = {}) {
   const stateRoot = resolve(options.stateRoot ?? join(projectDir, '.physicsos-release'))
   const revision = options.revision ?? (await run('git', ['-C', projectDir, 'rev-parse', 'HEAD'])).toString('utf8').trim()
   if (!SHA.test(revision)) throw new Error('A full committed revision is required')
+  if (options.registryReuse === true && !options.baselineSourceManifest) throw new Error('Registry artifact reuse requires the exact baseline source attestation')
   const cache = options.builder ? { builder: options.builder } : await json(join(stateRoot, 'builder.json'))
   const builder = cache.builder
   if (!/^physicsos-[A-Za-z0-9_-]+$/.test(builder ?? '')) throw new Error('A prepared PhysicsOS development builder is required')
@@ -78,7 +79,15 @@ export async function buildRelease(options, dependencies = {}) {
     const baseImage = production.Image
     if (!/^sha256:[a-f0-9]{64}$/.test(baseImage)) throw new Error('Cannot identify the production image')
     const runtimeDir = join(outputDir, 'runtime')
-    const exporter = lastJson(await run('python3', [join(HERE, 'release-runtime.py'), 'export', '--builder', builder, '--base-image', baseImage, '--revision', revision, '--source-manifest', source.manifestPath, '--plan-file', join(outputDir, 'build-plan.json'), '--output-dir', runtimeDir], { timeoutMs: 300_000 }))
+    const registryArgs = []
+    if (options.registryReuse === true) {
+      const proofFile = join(outputDir, 'registry-reuse-proof.json')
+      const baselineSource = resolve(options.baselineSourceManifest)
+      event({ phase: 'registry-audit', state: 'start' })
+      await run('python3', [join(HERE, 'release-runtime.py'), 'audit-registry', '--builder', builder, '--base-image', baseImage, '--revision', revision, '--source-manifest', source.manifestPath, '--baseline-source-manifest', baselineSource, '--plan-file', join(outputDir, 'build-plan.json'), '--proof-file', proofFile], { timeoutMs: 300_000 })
+      registryArgs.push('--registry-reuse-proof', proofFile, '--baseline-source-manifest', baselineSource)
+    }
+    const exporter = lastJson(await run('python3', [join(HERE, 'release-runtime.py'), 'export', '--builder', builder, '--base-image', baseImage, '--revision', revision, '--source-manifest', source.manifestPath, '--plan-file', join(outputDir, 'build-plan.json'), '--output-dir', runtimeDir, ...registryArgs], { timeoutMs: 300_000 }))
     timings.push({ phase, seconds: (Date.now() - step) / 1000, bytes: exporter.bytesExported, changedFiles: exporter.changedFiles?.length })
     if (exporter.noop) {
       const result = { noop: true, requestedRevision: revision, baseImage, sourceDigest: manifest.sourceDigest, runtimeRevision: exporter.runtimeRevision, outputDir, timings }
@@ -124,9 +133,9 @@ async function main() {
   if (action !== 'build') throw new Error('Use build or publish --plan-file')
   const options = {}
   for (let i = 0; i < args.length; i += 2) {
-    const key = { '--project-dir': 'projectDir', '--state-root': 'stateRoot', '--revision': 'revision', '--builder': 'builder', '--baseline-manifest': 'baselineManifest', '--output-dir': 'outputDir', '--image-tag': 'imageTag', '--discard-source': 'discardSource' }[args[i]]
+    const key = { '--project-dir': 'projectDir', '--state-root': 'stateRoot', '--revision': 'revision', '--builder': 'builder', '--baseline-manifest': 'baselineManifest', '--output-dir': 'outputDir', '--image-tag': 'imageTag', '--discard-source': 'discardSource', '--registry-reuse': 'registryReuse', '--baseline-source-manifest': 'baselineSourceManifest' }[args[i]]
     if (!key || args[i + 1] === undefined) throw new Error('Invalid release build argument')
-    options[key] = key === 'discardSource' ? args[i + 1] === 'true' : args[i + 1]
+    options[key] = key === 'discardSource' || key === 'registryReuse' ? args[i + 1] === 'true' : args[i + 1]
   }
   console.log(JSON.stringify(await buildRelease({ ...options, signal: cancellation.signal })))
   } finally { cancellation.dispose() }

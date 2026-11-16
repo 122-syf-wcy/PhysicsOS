@@ -55,3 +55,46 @@ test('tampered publication source is rejected before a switch', async t => {
   await assert.rejects(publishRelease({ projectDir: f.root, sourceManifestFile: f.sourceFile, sourceDigest: f.next.sourceDigest, revision: f.next.revision }, { switch: async () => { calls++; return { deployed: true } } }), /digest|manifest/i)
   assert.equal(calls, 0)
 })
+
+test('registry artifact reuse requires a baseline attestation before any build operation', async t => {
+  const f = await fixture(t)
+  let calls = 0
+  await assert.rejects(buildRelease({ projectDir: f.root, revision: f.next.revision, registryReuse: true }, {
+    run: async () => { calls++; throw new Error('No command should run') },
+  }), /exact baseline source attestation/)
+  assert.equal(calls, 0)
+})
+
+test('opt-in registry reuse audits the exact source and image before exporting', async t => {
+  const f = await fixture(t), output = join(f.root, 'build')
+  const baselineSource = join(f.root, 'baseline.json')
+  await writeFile(baselineSource, JSON.stringify(f.old))
+  const pythonCalls = []
+  const run = async (command, args) => {
+    if (command === 'docker' && args.includes('/app/physicsos-development-builder.json')) return Buffer.from(JSON.stringify({ dependencyFingerprint: f.next.dependencyFingerprint, completeDevelopmentDependencies: true, lockedDependenciesVerified: true }))
+    if (command === 'docker' && args.includes('/app/physicsos-source-manifest.json')) return Buffer.from(JSON.stringify(f.old))
+    if (command === 'docker' && args[0] === 'inspect') return Buffer.from(JSON.stringify([{ Image: 'sha256:' + 'c'.repeat(64) }]))
+    if (command === 'python3') {
+      pythonCalls.push(args)
+      if (args[1] === 'audit-registry') return Buffer.from('{}')
+      if (args[1] === 'export') return Buffer.from(JSON.stringify({ noop: true, runtimeRevision: f.old.revision }))
+    }
+    throw new Error('Unexpected fixture command')
+  }
+  const result = await buildRelease({ projectDir: f.root, revision: f.next.revision, builder: 'physicsos-development-test', outputDir: output, registryReuse: true, baselineSourceManifest: baselineSource }, {
+    run, progress: () => {},
+    project: async ({ outputDir }) => { await mkdir(join(outputDir, 'source'), { recursive: true }); await writeFile(join(outputDir, 'source-manifest.json'), JSON.stringify(f.next)); return { root: join(outputDir, 'source'), manifestPath: join(outputDir, 'source-manifest.json') } },
+    index: async () => [{ name: '@deepseek-ai/dsh-client-ui-physicsos', path: 'vendor/deepseek-harness/packages/client/ui-physicsos', mode: 'client', build: 'local', dependencies: [], hasTsconfig: true }],
+    sync: async () => ({ changed: [name], deleted: [], bytes: 3 }), build: async () => ({ completed: true }),
+  })
+  assert.equal(result.noop, true)
+  assert.deepEqual(pythonCalls.map(args => args[1]), ['audit-registry', 'export'])
+  for (const args of pythonCalls) {
+    assert.equal(args[args.indexOf('--base-image') + 1], 'sha256:' + 'c'.repeat(64))
+    assert.equal(args[args.indexOf('--revision') + 1], f.next.revision)
+    assert.equal(args[args.indexOf('--baseline-source-manifest') + 1], baselineSource)
+  }
+  assert.equal(pythonCalls[0][pythonCalls[0].indexOf('--proof-file') + 1], join(output, 'registry-reuse-proof.json'))
+  assert.equal(pythonCalls[1][pythonCalls[1].indexOf('--registry-reuse-proof') + 1], join(output, 'registry-reuse-proof.json'))
+  assert.deepEqual(JSON.parse(await readFile(join(f.state, 'published-source.json'), 'utf8')), f.old)
+})
