@@ -270,12 +270,24 @@ import "node:fs"; require("path"); import "./chunk.js";
         self.assertEqual(report['requestedSourceDigest'], requested['sourceDigest'])
 
     def test_real_inventory_records_absolute_and_root_escaping_requests_for_reuse_refusal(self):
-        result = inventory_fixture({'index.js': 'import "/var/lib/unreviewed.mjs"; import "file:/opt/foreign.mjs"; import "../../../outside.js";'})
+        # The real fixture importer is <root>/packages/request-fixture/lib/index.js.
+        # Three parents leave its package but stay in <root>; four escape <root>.
+        importer_dir = '/app/packages/request-fixture/lib'
+        self.assertEqual(os.path.normpath(os.path.join(importer_dir, '../../../in-root.js')), '/app/in-root.js')
+        self.assertEqual(os.path.normpath(os.path.join(importer_dir, '../../../../outside.js')), '/outside.js')
+        result = inventory_fixture({'index.js': 'import "/var/lib/unreviewed.mjs"; import "file:/opt/foreign.mjs"; import "../../../in-root.js"; import "../../../../outside.js";'})
         self.assertEqual(result.returncode, 0, result.stderr)
         package = json.loads(result.stdout)['packages']['packages/request-fixture']
-        self.assertEqual(package['unsafeNodeRequests'], sorted(['/var/lib/unreviewed.mjs', 'file:/opt/foreign.mjs', '../../../outside.js']))
+        self.assertEqual(package['unsafeNodeRequests'], sorted(['/var/lib/unreviewed.mjs', 'file:/opt/foreign.mjs', '../../../../outside.js']))
+        self.assertNotIn('../../../in-root.js', package['unsafeNodeRequests'])
         with self.assertRaisesRegex(ValueError, 'root-escaping'):
             runtime.registry_additions({'packages/request-fixture': package}, {'packages/request-fixture': package}, {})
+        inside = inventory_fixture({'index.js': 'import "../../../in-root.js"; import "./chunk.js";', 'chunk.js': 'require("fixture-in-package");'})
+        self.assertEqual(inside.returncode, 0, inside.stderr)
+        inside_package = json.loads(inside.stdout)['packages']['packages/request-fixture']
+        self.assertEqual(inside_package['unsafeNodeRequests'], [])
+        self.assertEqual(inside_package['nodeRequests'], ['fixture-in-package'])
+        self.assertEqual(inside_package['nodeRequestOrigins']['fixture-in-package'], ['packages/request-fixture/lib/chunk.js'])
 
     def test_runtime_updater_preflights_all_owned_deletions_before_mutating_files(self):
         with tempfile.TemporaryDirectory() as temporary:

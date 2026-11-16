@@ -403,7 +403,8 @@ function SolveSection({
     checks: verification,
     ...(revision === undefined ? {} : { revision }),
   })
-  const verified = result.level !== 'unverified'
+  const failed = solve.verification?.status === 'failed' || result.checks.some(check => check.status === 'failed')
+  const verified = !failed && (result.level === 'physics-verified' || result.level === 'strongly-verified')
   /* A golden question carries its self-check bank: answering in the card is
      the same practice loop Question Space ran, recorded identically. */
   const goldenId = solve.goldenQuestionId

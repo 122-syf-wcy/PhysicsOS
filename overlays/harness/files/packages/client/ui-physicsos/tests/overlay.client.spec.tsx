@@ -5,6 +5,7 @@ import { useState, useSyncExternalStore } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import { createIdMinter } from '@deepseek-ai/dsh-client-ui-dockkit'
 import type { PhysicsScenesProjection, PhysicsSceneSnapshot } from '@deepseek-ai/dsh-tool-physicsos/types'
 import { HomeActions } from '../src/client/HomeActions.tsx'
 import { HomeBelow, HomeHero, type HomeBelowProps, type HomeHeroProps } from '../src/client/HomeHero.tsx'
@@ -15,7 +16,7 @@ import { HomeBrand, HomeBrandMark } from '../src/client/HomeBrand.tsx'
 import { PhysicsOSMark } from '../src/client/PhysicsOSMark.tsx'
 import { PhysicsSurface, type PhysicsSurfaceProps } from '../src/client/LabWorkspace.tsx'
 import { SceneCardBody, SceneChatCard } from '../src/client/SceneChatCard.tsx'
-import { ChatPreview, type ChatPreviewProps } from '../src/client/ChatPreview.tsx'
+import { CHAT_PREVIEW_KIND, ChatPreview, type ChatPreviewProps } from '../src/client/ChatPreview.tsx'
 import { chatPreviewAccount, chatPreviewOwner, createChatPreviewStore } from '../src/client/chat-preview-store.ts'
 import type { PhysicsSceneCardData } from '../src/client/scene-chat-node.ts'
 import { RecentSpaces, type RecentSpacesProps } from '../src/client/RecentSpaces.tsx'
@@ -155,11 +156,24 @@ const renderConversationSolved = (data: PhysicsSceneCardData, openSceneInLab: (r
     ...(data.visualization === undefined ? {} : { visualization: data.visualization }),
   }
   const projection: PhysicsScenesProjection = { latest: data.sceneId, scenes: { [data.sceneId]: scene } }
+  const mint = createIdMinter()
+  const panelId = mint.next('pane'), tabId = mint.next('tab')
+  const lifetime = new AbortController()
+  const address = `sidebar://${CHAT_PREVIEW_KIND}`
+  const tabInfo: ReturnType<ChatPreviewProps['useTabInfo']> = {
+    sidebar: { expanded: true, fullscreen: false }, panel: { id: panelId },
+    tab: {
+      id: tabId, kind: CHAT_PREVIEW_KIND, contentId: address, title: t('chatPreview.title'), visible: true,
+      navigation: { address, params: undefined, revision: 1 }, signal: lifetime.signal,
+      actions: { bindCommands: () => () => {}, openResource: vi.fn(), openTab: vi.fn(), close: () => { lifetime.abort() } },
+    },
+  }
+  const useTabInfo: ChatPreviewProps['useTabInfo'] = () => tabInfo
   function useStore<S>(selector: (state: ReturnType<typeof preview.getSnapshot>) => S): S {
     return selector(useSyncExternalStore(preview.subscribe, preview.getSnapshot))
   }
   const props = {
-    sessionId, actions: preview.actions, useStore, useAuth: useStudentAuth,
+    sessionId, actions: preview.actions, useStore, useAuth: useStudentAuth, useTabInfo,
     usePreviewSession: (selector: (id: SessionId) => unknown) => selector(sessionId),
     useProjection: (_key: string, selector?: (value: PhysicsScenesProjection) => unknown) => selector === undefined ? projection : selector(projection),
     t, openSceneInLab,
@@ -719,19 +733,26 @@ describe('PhysicsOS overlay presentation', () => {
     expect(lab?.getAttribute('data-scene-revision')).toBe('0')
     expect(lab?.getAttribute('data-verification-status')).toBe('verified')
 
-    fireEvent.click(screen.getByRole('button', { name: '图层' }))
-    revealFullWorkbenchInspector()
-    const input = screen.getByLabelText(/磁感应强度/)
+    const header = screen.getByRole('heading', { level: 1 }).closest('header')
+    if (header === null) throw new Error('Missing workspace header')
+    const inspectorToggle = within(header).getByRole('button', { name: '检查器' })
+    if (inspectorToggle.getAttribute('aria-expanded') !== 'true') fireEvent.click(inspectorToggle)
+    const inspector = screen.getByRole('complementary', { name: /检查器|快捷参数/ })
+    const more = within(inspector).queryByRole('button', { name: '更多参数' })
+    if (more !== null) fireEvent.click(more)
+    const input = within(inspector).getByRole('textbox', { name: '磁感应强度' })
     if (!(input instanceof HTMLInputElement)) throw new Error('B editor is not an input.')
     fireEvent.change(input, { target: { value: '1' } })
+    expect(lab?.getAttribute('data-scene-revision')).toBe('0')
     fireEvent.blur(input)
 
     expect(lab?.getAttribute('data-scene-revision')).toBe('1')
     expect(lab?.getAttribute('data-verification-status')).toBe('verified')
-    // Narrow workbenches give the inspector and tree one visible control surface.
-    // Reopen the real tree before reading its updated magnetic-field row.
-    fireEvent.click(screen.getByRole('button', { name: '图层' }))
-    expect(screen.getByRole('button', { name: /1.00 T/ })).toBeTruthy()
+    /* Wide benches may keep the tree open; select it rather than blindly toggling it shut. */
+    const sceneToggle = within(header).getByRole('button', { name: '图层' })
+    if (sceneToggle.getAttribute('aria-expanded') !== 'true') fireEvent.click(sceneToggle)
+    const scene = screen.getByRole('region', { name: '场景与对象' })
+    expect(within(scene).getByRole('button', { name: /匀强磁场 B.*1\.00 T/ })).toBeTruthy()
   })
 
   it('renders the verified question attachment and opens its real conversation preview', async () => {

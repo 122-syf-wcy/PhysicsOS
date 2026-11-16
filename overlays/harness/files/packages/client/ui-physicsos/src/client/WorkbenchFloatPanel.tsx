@@ -110,6 +110,14 @@ export function WorkbenchFloatPanel({ id, title, closeLabel, collapseLabel, onCl
   const restoredKey = useRef<string>()
   const [rect, setRect] = useState<FloatRect>()
   const [wide, setWide] = useState(false)
+  const publishedRect = useRef<FloatRect>()
+  const publishedWide = useRef(false)
+  // No-op measurements must not dispatch: React may render before bailing out of a same-value update.
+  const publishRect = useCallback((next: FloatRect) => {
+    if (sameRect(publishedRect.current, next)) return
+    publishedRect.current = next
+    setRect(next)
+  }, [])
   // Keep React's portal target stable when fullscreen changes its DOM parent.
   const [portal] = useState(() => {
     const container = document.createElement('div')
@@ -165,7 +173,11 @@ export function WorkbenchFloatPanel({ id, title, closeLabel, collapseLabel, onCl
       const available = bx !== undefined && by !== undefined && bw !== undefined && bh !== undefined
         ? { x: bx, y: by, width: bw, height: bh } : measureWorkbench(owner)
       bounds.current = available
-      setWide(available.width >= 1000)
+      const nextWide = available.width >= 1000
+      if (publishedWide.current !== nextWide) {
+        publishedWide.current = nextWide
+        setWide(nextWide)
+      }
       const parent = document.fullscreenElement ?? owner.closest('[role="dialog"][aria-modal="true"]') ?? document.body
       if (portal.parentElement !== parent) {
         const focused = portal.ownerDocument.activeElement
@@ -178,12 +190,11 @@ export function WorkbenchFloatPanel({ id, title, closeLabel, collapseLabel, onCl
         ? { x: ax, y: ay, width: aw, height: ah }
         : { x: placement === 'top-left' ? available.x : available.x + available.width - width,
           y: placement === 'bottom-right' ? available.y + available.height - height : available.y, width, height }
-      const next = fitWorkbenchFloat(manual.current ?? automatic, available)
-      setRect(previous => sameRect(previous, next) ? previous : next)
+      publishRect(fitWorkbenchFloat(manual.current ?? automatic, available))
     }
     measure()
     return observeWorkbench(owner, measure)
-  }, [width, height, placement, identity, storageKey, portal, bx, by, bw, bh, ax, ay, aw, ah])
+  }, [width, height, placement, identity, storageKey, portal, publishRect, bx, by, bw, bh, ax, ay, aw, ah])
 
   const visible = rect !== undefined && rect.width > 0 && rect.height > 0
     && (layout?.visible ?? (expanded || (desktopDefault && wide)))
@@ -210,7 +221,7 @@ export function WorkbenchFloatPanel({ id, title, closeLabel, collapseLabel, onCl
     raisePanel()
     const fitted = fitWorkbenchFloat(next, bounds.current)
     manual.current = fitted
-    setRect(fitted)
+    publishRect(fitted)
     if (storageKey !== undefined) {
       try { sessionStorage.setItem(`physicsos:float:${storageKey}`, JSON.stringify(fitted)) }
       catch { /* Geometry remains usable for this mount when storage is unavailable. */ }

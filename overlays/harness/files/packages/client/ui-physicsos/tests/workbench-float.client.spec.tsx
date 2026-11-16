@@ -225,19 +225,26 @@ describe('workbench floating controls', () => {
     field.focus()
     fireEvent.change(field, { target: { value: '2.' } })
     let fullscreen: Element | null = null
-    vi.spyOn(document, 'fullscreenElement', 'get').mockImplementation(() => fullscreen)
-    fullscreen = owner
-    fireEvent(document, new Event('fullscreenchange'))
-    expect(screen.getByRole('textbox', { name: 'Fullscreen draft' })).toBe(field)
-    expect(owner.contains(field)).toBe(true)
-    expect(field.value).toBe('2.')
-    expect(document.activeElement).toBe(field)
-    fullscreen = null
-    fireEvent(document, new Event('fullscreenchange'))
-    expect(screen.getByRole('textbox', { name: 'Fullscreen draft' })).toBe(field)
-    expect(owner.contains(field)).toBe(false)
-    expect(field.value).toBe('2.')
-    expect(document.activeElement).toBe(field)
+    const original = Object.getOwnPropertyDescriptor(document, 'fullscreenElement')
+    // jsdom does not implement fullscreen; model its read-only browser property for this fixture only.
+    Object.defineProperty(document, 'fullscreenElement', { configurable: true, get: () => fullscreen })
+    try {
+      fullscreen = owner
+      fireEvent(document, new Event('fullscreenchange'))
+      expect(screen.getByRole('textbox', { name: 'Fullscreen draft' })).toBe(field)
+      expect(owner.contains(field)).toBe(true)
+      expect(field.value).toBe('2.')
+      expect(document.activeElement).toBe(field)
+      fullscreen = null
+      fireEvent(document, new Event('fullscreenchange'))
+      expect(screen.getByRole('textbox', { name: 'Fullscreen draft' })).toBe(field)
+      expect(owner.contains(field)).toBe(false)
+      expect(field.value).toBe('2.')
+      expect(document.activeElement).toBe(field)
+    } finally {
+      if (original === undefined) Reflect.deleteProperty(document, 'fullscreenElement')
+      else Object.defineProperty(document, 'fullscreenElement', original)
+    }
   })
 
   it('keeps the close control and a scrollable content track in a very short safe rectangle', () => {
@@ -271,9 +278,33 @@ describe('workbench floating controls', () => {
     </Profiler>)
     const baseline = rendered.mock.calls.length
     const field = screen.getByRole('textbox', { name: 'Stable geometry' })
+    const panel = document.querySelector<HTMLElement>('[data-dockkit-float]')!
+    const left = Number.parseFloat(panel.style.left)
     fireEvent.scroll(field)
+    expect(rendered).toHaveBeenCalledTimes(baseline)
     fireEvent.scroll(window)
     expect(rendered).toHaveBeenCalledTimes(baseline)
+    // Real viewport changes must still publish a new rectangle; no-op protection cannot suppress all measurements.
+    vi.stubGlobal('innerWidth', 1200)
+    fireEvent(window, new Event('resize'))
+    expect(Number.parseFloat(panel.style.left)).toBe(left - 160)
+    expect(rendered.mock.calls.length).toBeGreaterThan(baseline)
+    expect(screen.getByRole('textbox', { name: 'Stable geometry' })).toBe(field)
+    const resizedBaseline = rendered.mock.calls.length
+    fireEvent.scroll(field)
+    expect(rendered).toHaveBeenCalledTimes(resizedBaseline)
+    fireEvent.scroll(window)
+    expect(rendered).toHaveBeenCalledTimes(resizedBaseline)
+    // Deliberate geometry must update the same comparison snapshot as automatic measurements.
+    const grip = panel.querySelector<HTMLElement>('[data-dockkit-float-grip]')!
+    pointer(grip, 'pointerdown', 100, 100)
+    pointer(window, 'pointerup', 60, 130)
+    expect(Number.parseFloat(panel.style.left)).toBe(left - 200)
+    const movedBaseline = rendered.mock.calls.length
+    fireEvent.scroll(field)
+    expect(rendered).toHaveBeenCalledTimes(movedBaseline)
+    fireEvent.scroll(window)
+    expect(rendered).toHaveBeenCalledTimes(movedBaseline)
   })
 
   it('retains the focused editor when widening and does not reclaim focus from another control', () => {

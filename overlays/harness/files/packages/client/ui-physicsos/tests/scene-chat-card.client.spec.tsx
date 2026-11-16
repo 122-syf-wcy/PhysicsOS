@@ -166,7 +166,7 @@ describe('physics scene chat card', () => {
     } } }
     const view = render(<SceneCardBody data={failed} presentation="attachment" openSceneInLab={vi.fn()} openScenePreview={vi.fn()} t={t} />)
     expect(view.container.querySelector<HTMLDetailsElement>('[data-solve-section]')?.open).toBe(true)
-    expect(view.container.querySelector('[data-solve-section] [data-level]')).toBeNull()
+    expect(view.container.querySelector('[data-solve-section] > summary [data-level]')).toBeNull()
   })
 
   it('materializes one inline card at the snapshot event position', () => {
