@@ -34,7 +34,7 @@ scripts/deploy/server-node.sh scripts/deploy/release.mjs publish --plan-file .ph
 每批核对整个源文件集合的摘要，失败、超时、输入改变或覆盖不足均拒绝最终通过。报告保留原直接聚合命令的失败，不把原命令的堆耗尽写成成功。新工具仍只在服务器既有完整开发依赖中运行，不安装或降低依赖信任策略。
 
 ```bash
-node scripts/deploy/typecheck-aggregate.mjs \
+node --expose-gc scripts/deploy/typecheck-aggregate.mjs \
   --root /app/vendor/deepseek-harness --config tsconfig.host.json \
   --output-dir /tmp/physicsos-host-aggregate-evidence --batch-size 96 --heap-mib 2048
 ```

@@ -116,6 +116,7 @@ export async function checkAggregate({ root, configFile, outputDir, batchSize = 
   await writeFile(join(outputDir, 'inputs.json'), JSON.stringify({ configFile, typescriptVersion: ts.version, ...inputs }, null, 2) + '\n', { mode: 0o600, flag: 'wx' })
   // Do not keep the parent AST/type caches alive alongside the checking process.
   parsed = undefined; program = undefined
+  globalThis.gc?.()
   const expectedFingerprint = Object.fromEntries(Object.entries(inputs).filter(([name]) => name !== 'sourceFiles'))
   const diagnostics = [], checked = new Set(), results = []
   const script = fileURLToPath(import.meta.url)
