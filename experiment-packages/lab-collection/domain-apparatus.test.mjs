@@ -180,6 +180,10 @@ test('diffraction uses semantic slit width and absolute sampled y, never formatt
   const bands = active(kit, object => object.name.startsWith('diffraction-band-'));
   assert.equal(bands.length, 2);
   close(bands[0].position.y, 2.5); close(bands[1].position.y, 3.5);
+  for (const band of bands) {
+    close(band.position.x, rig.screenAt.x);
+    assert.equal(band.renderOrder, 1, 'paint after the diffuser without moving the optical plane');
+  }
   assert.ok(bands[0].material.color.r > 0, 'tiny nonzero intensity is not clamped to zero');
   const first = retained(kit);
   render(kit, { ...frame, inspector: [{ derived: [{ id: 'slit_width', value: '0', unit: 'm' }] }], view: { ...frame.view, trajectories: [{ id: 'wave-diffraction-intensity', points: [{ x: 0, y: -1 }, { x: 1, y: 1 }] }] } }, drawWaves);

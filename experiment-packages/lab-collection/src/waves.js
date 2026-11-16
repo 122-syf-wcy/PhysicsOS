@@ -130,8 +130,12 @@ function diffraction(snapshot, kit) {
         // Only an explicit visual gamma maps the REAL intensity to brightness.
         // The numerical curve/readout stays upstream; no inverse pixel inference.
         const color = new kit.THREE.Color('#abd5a6').multiplyScalar(Math.sqrt(intensity));
-        const band = kit.box({ x: rig.screenAt.x - u * 0.012, y: (ay + by) / 2, z: rig.screenAt.z ?? 0 }, u * 0.001, Math.abs(by - ay), screen.halfWidth * 1.92, color, { materialType: 'basic', key: `intensity-band:${a.id}->${b.id}`, tag: `diffraction-band-${b.id}`, rounded: false, depthWrite: false, castShadow: false, receiveShadow: false });
-        if (band) band.userData.apparatus = { factory: 'diffraction-intensity-band', origin: offset(rig.screenAt), anchors: { sampleFrom: { id: a.id, y: ay, intensity: ai }, sampleTo: { id: b.id, y: by, intensity: bi } }, gamma: 0.5, unit: 'scene' };
+        const band = kit.box({ x: rig.screenAt.x, y: (ay + by) / 2, z: rig.screenAt.z ?? 0 }, u * 0.001, Math.abs(by - ay), screen.halfWidth * 1.92, color, { materialType: 'basic', key: `intensity-band:${a.id}->${b.id}`, tag: `diffraction-band-${b.id}`, rounded: false, depthWrite: false, castShadow: false, receiveShadow: false });
+        if (band) {
+          // Paint after the non-depth-writing diffuser, not on a shifted optical plane.
+          band.renderOrder = 1;
+          band.userData.apparatus = { factory: 'diffraction-intensity-band', origin: offset(rig.screenAt), anchors: { sampleFrom: { id: a.id, y: ay, intensity: ai }, sampleTo: { id: b.id, y: by, intensity: bi } }, gamma: 0.5, unit: 'scene' };
+        }
       }
     }
     if (kit.visible('waveform')) {
