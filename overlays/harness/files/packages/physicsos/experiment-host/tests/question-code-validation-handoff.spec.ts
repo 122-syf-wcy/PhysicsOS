@@ -206,13 +206,13 @@ describe('frozen candidate → isolated worker handoff', () => {
 
   it('times out, revokes reads, and never turns a late response into passed', async () => {
     const h = await setup(), ticket = h.ticket()
-    vi.useFakeTimers()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     let late!: (response: Response) => void
-    const fetchImpl = vi.fn(() => new Promise<Response>(resolve => { late = resolve })) as unknown as typeof fetch
+    let started!: () => void
+    const entered = new Promise<void>(resolve => { started = resolve })
+    const fetchImpl = vi.fn(() => new Promise<Response>(resolve => { late = resolve; started() })) as unknown as typeof fetch
     const pending = validateFrozenCandidate({ ...config, timeoutMs: 10 }, h.input(ticket.token), h.deps(fetchImpl))
-    for (let index = 0; index < 100 && (fetchImpl as unknown as ReturnType<typeof vi.fn>).mock.calls.length === 0; index++) {
-      await new Promise<void>(resolve => { setImmediate(resolve) })
-    }
+    await entered
     expect(fetchImpl).toHaveBeenCalledOnce()
     await vi.advanceTimersByTimeAsync(11)
     expect(await pending).toMatchObject({ kind: 'infrastructure', code: 'WORKER_TIMEOUT' })
@@ -289,7 +289,8 @@ describe('owner-only validate-only retry route', () => {
     expect((await post(base, 'admin')).status).toBe(404)
     expect((await post(base, 'contributor', {}, { origin: 'http://attacker.example' })).status).toBe(403)
     expect((await post(base, 'contributor', {}, { 'sec-fetch-site': 'same-site' })).status).toBe(403)
-    for (const body of [{ scene: h.scene }, { entryUrl: 'http://attacker' }, { code: renderer }, { ownerSessionId: 'parent-session' }, null, []]) {
+    expect((await post(base, 'contributor', { scene: h.scene })).status).toBe(413)
+    for (const body of [{ scene: { id: 'injected-scene' } }, { entryUrl: 'http://attacker' }, { code: renderer }, { ownerSessionId: 'parent-session' }, null, []]) {
       expect((await post(base, 'contributor', body)).status).toBe(400)
     }
     expect((await post(base, 'contributor', {}, { 'content-type': 'text/plain' })).status).toBe(415)
