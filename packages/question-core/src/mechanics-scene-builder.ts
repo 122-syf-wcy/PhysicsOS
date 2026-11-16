@@ -7,6 +7,7 @@ import {
 } from '@physicsos/physics-scene'
 import type { PhysicsScene } from '@physicsos/physics-scene'
 import type { PhysicsSemanticIR } from './semantic-ir.ts'
+import { projectileLaunchAngle } from './projectile-launch.ts'
 
 export interface MechanicsSceneBuildResult {
   scene: PhysicsScene
@@ -46,14 +47,15 @@ export function buildMechanicsSceneFromIR(
   const questionId = options.questionId
 
   const mass = getKnown(ir, 'mass') ?? 1
-  const velocity = getKnown(ir, 'initial_velocity') ?? getKnown(ir, 'velocity') ?? 0
+  const statedVelocity = getKnown(ir, 'initial_velocity') ?? getKnown(ir, 'velocity')
+  const velocity = statedVelocity ?? 0
   const acceleration = getKnown(ir, 'acceleration')
   const height = getKnown(ir, 'height')
   const gravity = getKnown(ir, 'gravity') ?? 9.8
   const inclineAngle = ir.inclineAngle ?? 30
   const frictionCoefficient = ir.frictionCoefficient ?? 0
   const horizontalSpeed = getKnown(ir, 'horizontal_speed')
-  const launchAngle = ir.launchAngle ?? 0
+  const launchAngle = projectileLaunchAngle(ir)
   /* A stated run duration ("运动 5 s") is the scene's end time; the engine
      reads it off the request and solves to that instant instead of its own
      default window. */
@@ -82,16 +84,29 @@ export function buildMechanicsSceneFromIR(
     input.position = vec3(0, 0, 0)
     if (endTime !== undefined) input.endTime = endTime
   } else if (model === 'projectile_motion') {
-    /* vx defaults to v0·cosθ — only an explicitly stated 水平分速度 overrides.
-       Launch height defaults to the ground (0): a text that says "从 h 高处"
-       parses height explicitly, otherwise the throw leaves the ground. */
-    const vx = horizontalSpeed ?? velocity * Math.cos((launchAngle * Math.PI) / 180)
-    const vy = velocity * Math.sin((launchAngle * Math.PI) / 180)
-    input.position = vec3(0, height ?? 0, 0)
+    if (statedVelocity === undefined || !Number.isFinite(statedVelocity) || statedVelocity < 0)
+      throw new Error('Projectile motion requires a stated initial speed')
+    if (height === undefined || !Number.isFinite(height) || height < 0)
+      throw new Error('Projectile motion requires a stated launch height above the landing plane')
+    // Cardinal directions stay exact: vertical throws must not acquire a
+    // horizontal component from a missing angle or cos(90°) roundoff.
+    let vx = 0
+    let vy = 0
+    if (velocity !== 0) {
+      if (launchAngle === undefined)
+        throw new Error('Projectile motion requires a consistent launch direction or angle')
+      vx = launchAngle === 90 || launchAngle === 270 ? 0 : horizontalSpeed ??
+        (launchAngle === 0 ? velocity : launchAngle === 180 ? -velocity : velocity * Math.cos((launchAngle * Math.PI) / 180))
+      vy = launchAngle === 0 || launchAngle === 180 ? 0 : launchAngle === 90 ? velocity : launchAngle === 270 ? -velocity : velocity * Math.sin((launchAngle * Math.PI) / 180)
+    }
+    if (horizontalSpeed !== undefined && (!Number.isFinite(horizontalSpeed) ||
+      ((velocity === 0 || launchAngle === 90 || launchAngle === 270) && horizontalSpeed !== 0)))
+      throw new Error('The stated horizontal velocity conflicts with the launch')
+    input.position = vec3(0, height, 0)
     input.velocity = vec3(vx, vy, 0)
     input.gravity = vec3(0, -gravity, 0)
     input.groundY = 0
-    input.launchAngle = launchAngle
+    if (launchAngle !== undefined) input.launchAngle = launchAngle
   } else if (model === 'newton_second_law') {
     const force = getKnown(ir, 'applied_force') ?? 0
     input.mass = mass

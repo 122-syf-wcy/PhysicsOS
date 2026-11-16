@@ -292,6 +292,24 @@ describe('PhysicsToolRuntime: solve question', () => {
     expect(radius?.value).toBeCloseTo((1.67e-27 * 3e6) / (1.6e-19 * 0.4), 6)
   })
 
+  it('registers the stated vertical launch correctly before any repair command', () => {
+    const runtime = new PhysicsToolRuntime()
+    const result = runtime.solveQuestion('物体从地面以 v0 = 20 m/s 竖直向上抛出，忽略空气阻力，重力加速度 g = 9.8 m/s²。求上升的最大高度和返回地面的总时间。水平射程为 0。')
+    expect(result.status).toBe('solved')
+    if (result.scene === undefined) throw new Error('A valid launch must create its own scene')
+    const scene = runtime.sceneSnapshot(result.scene.sceneId)
+    expect(scene.revision).toBe(0)
+    expect(scene.bodies?.[0]?.velocity?.vector).toEqual({ x: 0, y: 20, z: 0 })
+    expect(result.answers.find(answer => answer.key === 'flight_time')?.value).toBe('4.08')
+    expect(result.answers.find(answer => answer.key === 'max_height')?.value).toBe('20.41')
+    const observed = runtime.observe(result.scene.sceneId, 0.5)
+    const body = observed.objects.find(object => object.position !== undefined)
+    expect(body?.position?.x).toBe(0)
+    expect(body?.position?.y).toBeCloseTo(8.775, 9)
+    expect(body?.velocity?.y).toBeCloseTo(15.1, 9)
+    roundTrips(result)
+  })
+
   it('rejects empty text', () => {
     const runtime = new PhysicsToolRuntime()
     expect(() => runtime.solveQuestion('   ')).toThrowError(ToolRuntimeError)

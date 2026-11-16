@@ -8,8 +8,10 @@ import type {
   SemanticAssumption,
   QuestionParseIssue,
   MechanicsModelId,
+  PlanarDirection,
 } from './semantic-ir.ts'
 import { parseQuantity, canonicalValue, isKnownUnit } from '@physicsos/physics-units'
+import { projectileLaunchAngle } from './projectile-launch.ts'
 
 function parseScientificNumber(text: string): { value: number; raw: string } | null {
   const patterns = [/([+-]?\d+\.?\d*)\s*[×x*]\s*10\^?(-?\d+)/g, /([+-]?\d+\.?\d*)e(-?\d+)/gi]
@@ -34,8 +36,11 @@ function extractValueWithUnit(
   defaultUnit: string,
 ): { siValue: number; originalValue: number; originalUnit: string } | null {
   for (const pattern of patterns) {
-    const m = pattern.exec(text)
-    if (m && m[1]) {
+    const matcher = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : pattern.flags + 'g')
+    for (const m of text.matchAll(matcher)) {
+      if (m[1] === undefined) continue
+      // A gravity unit such as m/s² is not a speed with an ignorable suffix.
+      if (defaultUnit === 'm/s' && /^\s*(?:[\^²³]|\/\s*s|[a-z]+\/)/i.test(text.slice(m.index + m[0].length))) continue
       const parsed = parseScientificNumber(m[1])
       if (!parsed) continue
       const unitStr = (m[2] || defaultUnit).trim()
@@ -54,7 +59,7 @@ function extractValueWithUnit(
 
 function detectModel(text: string): MechanicsModelId {
   if (/斜面|incline/.test(text)) return 'inclined_plane'
-  if (/平抛|斜抛|抛体|projectile|抛出|水平抛/.test(text)) return 'projectile_motion'
+  if (/平抛|斜抛|抛体|projectile|抛出|抛射|上抛|下抛|水平抛|\b(?:thrown|launched|projected)\b/i.test(text)) return 'projectile_motion'
   if (/牛顿|newton|合力|net.?force/.test(text)) return 'newton_second_law'
   if (/匀速|uniform.*linear|匀速直线/.test(text)) return 'uniform_linear_motion'
   if (/匀加速|匀变速|accelerated|加速度.*=.*\d|加速度为/.test(text))
@@ -79,12 +84,25 @@ function detectTargets(text: string): SemanticTarget[] {
   return targets
 }
 
+function projectileDirection(text: string): PlanarDirection | undefined {
+  const compact = text.replace(/\s+/g, '')
+  const directions = new Set<Exclude<PlanarDirection, 'unknown'>>()
+  if (/(?:竖直|垂直)(?:方向)?(?:向)?上(?:方)?(?:地)?(?:抛|发射|射出|投出)|向上(?:竖直|垂直)(?:抛|发射|射出)/.test(compact) || /(?:thrown|launched|projected)\s+(?:vertically\s+)?upwards?\b/i.test(text)) directions.add('up')
+  if (/(?:竖直|垂直)(?:方向)?(?:向)?下(?:方)?(?:地)?(?:抛|发射|射出|投出)|向下(?:竖直|垂直)(?:抛|发射|射出)/.test(compact) || /(?:thrown|launched|projected)\s+(?:vertically\s+)?downwards?\b/i.test(text)) directions.add('down')
+  if (/(?:水平(?:方向)?向左|向左(?:水平)?)(?:地)?(?:抛|发射|射出|投出)/.test(compact)) directions.add('left')
+  if (/(?:水平(?:方向)?向右|向右(?:水平)?)(?:地)?(?:抛|发射|射出|投出)/.test(compact)) directions.add('right')
+  // A range, horizontal component or requested axis is not a launch direction.
+  const horizontal = /平抛|水平(?:地)?(?:抛出|抛射|发射|射出)|沿水平方向[^，。；;！？!?]{0,32}(?:抛出|抛射|发射|射出)/.test(compact) || /(?:thrown|launched|projected)\s+horizontally\b/i.test(text)
+  if (horizontal && !directions.has('left') && !directions.has('right')) directions.add('right')
+  return directions.size > 1 ? 'unknown' : directions.values().next().value
+}
+
 const MECH_PATTERNS = {
   velocity: [
-    /(\d+\.?\d*)\s*(m\/s|km\/s|km\/h)/i,
-    /初速度(?:为|是|=)?\s*(\d+\.?\d*)\s*(m\/s|km\/s|km\/h)?/i,
-    /[^加]速度(?:为|是|=)?\s*(\d+\.?\d*)\s*(m\/s|km\/s|km\/h)?/i,
-    /v0?\s*=?\s*(\d+\.?\d*)\s*(m\/s|km\/s|km\/h)?/i,
+    /([+-]?\d+\.?\d*)\s*(m\/s|km\/s|km\/h)/i,
+    /初速度(?:为|是|=)?\s*([+-]?\d+\.?\d*)\s*(m\/s|km\/s|km\/h)?/i,
+    /[^加]速度(?:为|是|=)?\s*([+-]?\d+\.?\d*)\s*(m\/s|km\/s|km\/h)?/i,
+    /v0?\s*=?\s*([+-]?\d+\.?\d*)\s*(m\/s|km\/s|km\/h)?/i,
   ],
   acceleration: [
     /加速度(?:为|是|=)?\s*(\d+\.?\d*)\s*(m\/s\^2)?/i,
@@ -119,8 +137,11 @@ const MECH_PATTERNS = {
   ],
   friction: [/摩擦系数\s*=?\s*(\d+\.?\d*)/, /μ\s*=?\s*(\d+\.?\d*)/],
   gravity: [/g\s*=?\s*(\d+\.?\d*)\s*(m\/s\^2)?/i, /重力加速度\s*=?\s*(\d+\.?\d*)\s*(m\/s\^2)?/i],
-  horizontalSpeed: [/水平速度\s*=?\s*(\d+\.?\d*)\s*(m\/s|km\/s)?/i],
-  launchAngle: [/抛射角\s*=?\s*(\d+\.?\d*)\s*°?/, /与.*水平.*成\s*(\d+\.?\d*)\s*°?/],
+  horizontalSpeed: [/水平(?:分)?速度(?:为|是|=)?\s*([+-]?\d+\.?\d*)\s*(m\/s|km\/s)?/i],
+  launchAngle: [
+    /(?:抛射角|发射角|仰角|launch\s+angle)\s*(?:为|是|=|:|：)?\s*([+-]?\d+(?:\.\d+)?)\s*(?:°|度|degrees?)/gi,
+    /(?:与|和)\s*水平(?:面|方向)?\s*(?:成|呈|(?:的)?夹角(?:为|是|=)?)\s*([+-]?\d+(?:\.\d+)?)\s*(?:°|度)/g,
+  ],
 } as const
 
 function makeKnown(
@@ -161,6 +182,8 @@ export const DeterministicMechanicsQuestionParser: QuestionParserProvider = {
     const heightResult = extractValueWithUnit(text, MECH_PATTERNS.height, 'm')
     if (heightResult)
       knowns.push(makeKnown('height', '高度', 'h', heightResult.siValue, 'm', 'length'))
+    else if (model === 'projectile_motion' && (/(?:从|由)地面(?:上)?[，,、]?(?=以(?![上下])|将|把|开始|竖直|垂直|水平|沿|向|做|抛|发射|射出)/.test(text.replace(/\s+/g, '')) || /(?:from|at)\s+(?:the\s+)?ground(?:\s+level)?\b/i.test(text)))
+      knowns.push(makeKnown('height', '初始高度', 'h0', 0, 'm', 'length'))
 
     const massResult = extractValueWithUnit(text, MECH_PATTERNS.mass, 'kg')
     if (massResult) knowns.push(makeKnown('mass', '质量', 'm', massResult.siValue, 'kg', 'mass'))
@@ -182,12 +205,19 @@ export const DeterministicMechanicsQuestionParser: QuestionParserProvider = {
       )
 
     const angleMatch = text.match(/(\d+\.?\d*)\s*°/)
-    let inclineAngle: number | undefined
+    const inclineAngle = model === 'inclined_plane' && angleMatch?.[1] !== undefined ? parseFloat(angleMatch[1]) : undefined
     let launchAngle: number | undefined
-    if (angleMatch && angleMatch[1]) {
-      const angle = parseFloat(angleMatch[1])
-      if (model === 'inclined_plane') inclineAngle = angle
-      else if (model === 'projectile_motion') launchAngle = angle
+    let initialVelocityDirection: PlanarDirection | undefined
+    if (model === 'projectile_motion') {
+      initialVelocityDirection = projectileDirection(text)
+      const angles = new Set(MECH_PATTERNS.launchAngle.flatMap(pattern => [...text.matchAll(pattern)].map(match => Number(match[1]))))
+      if (angles.size === 1) launchAngle = angles.values().next().value
+      if (angles.size > 1 || initialVelocityDirection === 'unknown' ||
+        (launchAngle !== undefined && initialVelocityDirection !== undefined && projectileLaunchAngle({ launchAngle, initialVelocityDirection }) === undefined)) {
+        issues.push({ code: 'CONFLICTING_LAUNCH_DIRECTION', message: '发射方向或抛角存在冲突，请核对原题。', severity: 'error' })
+        initialVelocityDirection = 'unknown'
+        launchAngle = undefined
+      }
     }
 
     const frictionMatch = text.match(/(?:摩擦系数|μ)\s*=?\s*(\d+\.?\d*)/)
@@ -249,6 +279,7 @@ export const DeterministicMechanicsQuestionParser: QuestionParserProvider = {
       velocityDirection: 'unknown',
       ...(inclineAngle !== undefined ? { inclineAngle } : {}),
       ...(launchAngle !== undefined ? { launchAngle } : {}),
+      ...(initialVelocityDirection !== undefined ? { initialVelocityDirection } : {}),
       ...(frictionCoefficient !== undefined ? { frictionCoefficient } : {}),
     }
 

@@ -4,6 +4,7 @@ import type {
   QuestionParseIssue,
   QuestionAmbiguity,
 } from './semantic-ir.ts'
+import { projectileLaunchAngle } from './projectile-launch.ts'
 
 export function validateSemanticIR(ir: PhysicsSemanticIR): SemanticValidationResult {
   /* A recognised-but-unsolvable question shape (see UnsupportedModelId) is not a
@@ -703,9 +704,30 @@ function validateMechanicsIR(ir: PhysicsSemanticIR): SemanticValidationResult {
     })
   }
 
+  if (ir.model === 'projectile_motion') {
+    const speed = ir.knowns.find(known => known.key === 'initial_velocity' || known.key === 'velocity')
+    const height = ir.knowns.find(known => known.key === 'height')
+    const horizontal = ir.knowns.find(known => known.key === 'horizontal_speed')
+    const angle = projectileLaunchAngle(ir)
+    if (speed === undefined || !Number.isFinite(speed.value) || speed.value < 0)
+      issues.push({ code: 'MISSING_INITIAL_VELOCITY', message: '需要明确且有效的初速度大小，不能将缺失值当作零。', severity: 'error' })
+    if (height === undefined)
+      ambiguities.push({ field: 'height', message: '需要明确抛出点相对落地平面的高度；从地面抛出时可明确为 0 m。', options: [] })
+    else if (!Number.isFinite(height.value) || height.value < 0)
+      issues.push({ code: 'INVALID_INITIAL_HEIGHT', message: '初始高度必须是相对落地平面的非负有限值。', severity: 'error' })
+    if (ir.launchAngle !== undefined && !Number.isFinite(ir.launchAngle))
+      issues.push({ code: 'INVALID_LAUNCH_ANGLE', message: '抛射角必须为有限值。', severity: 'error' })
+    if (speed?.value !== 0 && angle === undefined)
+      ambiguities.push({ field: 'initialVelocityDirection', message: '需要确定且一致的初速度方向或相对水平面的抛角，不能默认水平抛出。', options: ['up', 'down', 'right', 'left'] })
+    if (horizontal !== undefined && (!Number.isFinite(horizontal.value) ||
+      ((speed?.value === 0 || angle === 90 || angle === 270) && horizontal.value !== 0)))
+      issues.push({ code: 'CONFLICTING_LAUNCH_DIRECTION', message: '给定水平速度与发射方向不一致。', severity: 'error' })
+  }
+
   if (issues.length > 0) {
     return { status: 'INVALID_SEMANTICS', issues, ambiguities }
   }
+  if (ambiguities.length > 0) return { status: 'AMBIGUOUS', issues, ambiguities }
 
   return { status: 'VALID', issues, ambiguities }
 }
