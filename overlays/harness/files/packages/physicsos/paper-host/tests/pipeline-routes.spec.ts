@@ -16,11 +16,12 @@ async function serverFixture() {
     check: async (id, fence, job) => { await f.service.recordCheckResults(id, [], fixtureSolves(job.document!), fence) },
     repair: async () => { throw new Error('unused') }, replace: async () => { throw new Error('unused') },
   })
+  // This fixture exercises only pipeline admission; uncalled ingest/export seams are omitted.
   const handler = paperRoutes({ service: f.service, exportDir: '/tmp/paper-synthetic',
     identity: () => ({ actorOf: () => ({ userKey: 'test-teacher', schoolId: 'test-school', role: 'TEACHER', username: 'teacher' }), record: async () => undefined }),
     startOperation: (id, kind, input) => pipeline.start(id, kind, input),
     retryOperation: (id, version) => pipeline.retry(id, version),
-  } as Parameters<typeof paperRoutes>[0])
+  } as unknown as Parameters<typeof paperRoutes>[0])
   const server = createServer((req, res) => { void handler(req, res) })
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
   onTestFinished(async () => { held.resolve(); await pipeline.close(); await new Promise<void>(resolve => server.close(() => resolve())) })

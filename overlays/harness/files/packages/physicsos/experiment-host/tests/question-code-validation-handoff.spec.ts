@@ -58,7 +58,7 @@ async function setup() {
   await domain.table('artifacts').put(row.id, row)
   const candidate = artifacts.describe('parent-session', row.id, row.sha256)
   const submitted = await jobs.submit({ id: row.generationId!, ownerSessionId: row.ownerSessionId, ownerKey: row.ownerKey,
-    sceneId: row.sceneId, sceneRevision: row.sceneRevision, sceneSha256: row.sceneSha256, requestSha256: row.requestSha256 })
+    sceneId: row.sceneId, sceneRevision: row.sceneRevision, sceneSha256: row.sceneSha256, requestSha256: source.requestSha256 })
   const started = await jobs.startAttempt(submitted)
   await jobs.recordCandidate(submitted.id, started.epoch, { candidateSha256: row.sha256 })
   let current = { scene, ref: candidate }
@@ -321,7 +321,9 @@ describe('owner-only validate-only retry route', () => {
 
   it('does not create a candidate for a merely queued job', async () => {
     const h = await setup(), fetchMock = vi.fn(respond())
-    await h.jobs.submit({ ...h.submitted, id: 'empty-job' })
+    await h.jobs.submit({ id: 'empty-job', ownerSessionId: h.submitted.ownerSessionId, ownerKey: h.submitted.ownerKey,
+      sceneId: h.submitted.sceneId, sceneRevision: h.submitted.sceneRevision, sceneSha256: h.submitted.sceneSha256,
+      ...(h.submitted.requestSha256 === undefined ? {} : { requestSha256: h.submitted.requestSha256 }) })
     const base = await routeOrigin(h, fetchMock as unknown as typeof fetch)
     const response = await fetch(`${base}/physicsos/question-code/jobs/empty-job/validate`, { method: 'POST',
       headers: { 'x-test-account': 'contributor', 'content-type': 'application/json', origin: base }, body: '{}' })
