@@ -26,7 +26,7 @@ const common = runInNewContext(`${rendererSource}\ncommon`, {
   drawMechanics, drawCircuits, drawFields, drawOptics, drawWaves, drawMatter, roleColor, palette,
 });
 
-function draw(kit, snapshot) {
+function draw(kit, snapshot, { requireApparatus = true } = {}) {
   const before = JSON.stringify(snapshot), adapter = drawers[snapshot.domain];
   assert.ok(adapter, `No adapter for ${snapshot.domain}`);
   kit.beginFrame(snapshot.view, snapshot.experimentId);
@@ -35,8 +35,10 @@ function draw(kit, snapshot) {
   kit.endFrame();
   assert.equal(JSON.stringify(snapshot), before, `${snapshot.experimentId}: renderer mutated the engine snapshot`);
   const objects = kit.group.children.filter(object => object.visible);
-  assert.ok(objects.length > 0, `${snapshot.experimentId}: adapter did not express any apparatus`);
-  assert.ok(objects.some(object => object.isMesh), `${snapshot.experimentId}: apparatus is not 3D`);
+  if (requireApparatus) {
+    assert.ok(objects.length > 0, `${snapshot.experimentId}: adapter did not express any apparatus`);
+    assert.ok(objects.some(object => object.isMesh), `${snapshot.experimentId}: apparatus is not 3D`);
+  }
   const keys = objects.map(object => object.userData.retainedKey);
   assert.ok(keys.every(key => typeof key === 'string'), `${snapshot.experimentId}: a part bypasses retained identity`);
   assert.equal(new Set(keys).size, keys.length, `${snapshot.experimentId}: entity/subpart identity collision`);
@@ -90,7 +92,9 @@ for (const item of registry) test(`apparatus/engine regression ${item.id} (${ite
     const visibility = Object.keys(initial.view.visible ?? {}).filter(key => initial.view.visible[key]);
     if (visibility.length) {
       for (const key of visibility) runtime.setObservable(key, false);
-      draw(kit, snapshotOf(runtime, item.id));
+      // A fully hidden instrument is valid; initial and restored frames still
+      // require real meshes, and every emitted hidden-frame part stays checked.
+      draw(kit, snapshotOf(runtime, item.id), { requireApparatus: false });
       for (const key of visibility) runtime.setObservable(key, true);
       sameParts(first, draw(kit, snapshotOf(runtime, item.id)), item.id);
     }

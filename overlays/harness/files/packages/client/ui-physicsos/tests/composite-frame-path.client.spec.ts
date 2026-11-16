@@ -9,6 +9,7 @@ import {
 
 import { compositeSceneVisualAt } from '../src/client/physics/composite-visual-bridge.ts'
 import { createCompositeWorkspaceRuntime } from '../src/client/physics/composite-workspace-runtime.ts'
+import { createExperimentSceneRef, findExperimentTemplate } from '../src/client/physics/experiment-templates.ts'
 import type { ScenePoint } from '../src/client/physics/scene-visual-model.ts'
 import type { WorkspaceSnapshot } from '../src/client/physics/workspace-runtime.ts'
 
@@ -59,6 +60,33 @@ describe('composite playback reuses private simulation geometry', () => {
     expect(after.view.particles[0]?.at).not.toEqual(before.view.particles[0]?.at)
     expect(pointsOf(after)).toEqual(pointsOf(before))
     expect(sampleReads, 'playback rereads frame-invariant stored sample objects').toBe(0)
+  })
+
+  it.each(['velocity-selector', 'mass-spectrometer', 'multi-region-field'])('%s preserves its exact playhead and physics when layers are toggled', id => {
+    const template = findExperimentTemplate(id)
+    if (template === undefined) throw new Error(`Missing actual composite template ${id}`)
+    const runtime = createCompositeWorkspaceRuntime(createExperimentSceneRef(template, id).scene)
+    const before = runtime.setRunning(true)
+    expect(before.clock.time).toBeGreaterThan(0)
+    expect(before.clock.running).toBe(true)
+    const keys = ['velocity', 'electricForce', 'magneticForce', 'netForce', 'trajectory', 'electricField', 'magneticField'] as const
+    for (const key of keys) {
+      const enabled = before.view.visible[key]
+      if (enabled === undefined) continue
+      const hidden = runtime.setObservable(key, !enabled)
+      expect(hidden.clock.time, `${key} must not reset a microsecond playhead`).toBe(before.clock.time)
+      expect(hidden.clock.running, `${key} must not pause playback`).toBe(true)
+      const restored = runtime.setObservable(key, enabled)
+      expect(restored.clock).toEqual(before.clock)
+      expect(restored.view).toEqual(before.view)
+    }
+    expect(runtime.getSnapshot().sceneRevision).toBeGreaterThan(before.sceneRevision)
+    const speed = before.inspector.flatMap(section => section.parameters ?? []).find(parameter => parameter.id === 'v0')
+    if (speed === undefined) throw new Error('The composite scene must expose its initial speed')
+    const edited = runtime.editParameter('v0', speed.value * 1.1)
+    expect(edited.status).not.toBe('failed')
+    expect(edited.clock.time).toBe(0)
+    expect(edited.clock.running).toBe(false)
   })
 
   it('rebuilds trajectory geometry after a parameter edit', () => {

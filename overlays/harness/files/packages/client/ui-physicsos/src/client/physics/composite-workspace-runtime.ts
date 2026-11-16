@@ -54,6 +54,7 @@ import { memoizeOnIdentityWith } from './frame-memo.ts'
 import {
   branchBadgeOf,
   forkExperimentalScene,
+  isFactCommand,
   requiresExperimentalFork,
 } from './experimental-branch.ts'
 import { emptyVisualModel } from './scene-visual-model.ts'
@@ -356,9 +357,11 @@ export class CompositeWorkspaceRuntime implements WorkspaceRuntime {
       return
     }
     this.sceneRuntime = prospective
-    /* A parameter change makes the previous playhead physically meaningless. */
-    this.currentTime = 0
-    this.running = false
+    /* Only physical edits invalidate the playhead; layer visibility is display state. */
+    if (isFactCommand(type)) {
+      this.currentTime = 0
+      this.running = false
+    }
     this.recompute()
   }
 
