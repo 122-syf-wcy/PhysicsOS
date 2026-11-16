@@ -23,12 +23,16 @@ const sceneRevision = 7
 
 /** Hand-picked positions exercise transport/probes, never claim physical accuracy. */
 const createFixtureRuntime = (_scene: Record<string, unknown>): FrameSource => {
-  let time = 0, speed = 20, revision = sceneRevision
+  let time = 0, speed = 20
+  const revision = sceneRevision
   const snapshot = () => ({
     sceneRevision: revision, status: 'ready', domain: 'mechanics', title: 'SDK 协议夹具（非物理精度测试）', ariaLabel: '协议与绘制夹具',
     clock: { time, total: 2.4, running: false, rate: 1 },
     inspector: [{ id: 'motion', parameters: [{ id: 'speed', label: '夹具参数', value: speed, unit: 'm/s', min: 5, max: 40, step: 5 }] }],
-    view: { bodies: [{ at: { x: 1 + time * 2 + (speed - 20) / 5, y: time === 1.2 ? 5 : 1 } }], visible: {} },
+    view: {
+      bodies: [{ at: { x: 1 + time * 2 + (speed - 20) / 5, y: time === 1.2 ? 5 : 1 } }], visible: {},
+      ground: { from: speed === 20 ? -1 : -2, to: speed === 20 ? 9 : 10, y: 0 },
+    },
     table: { columns: [], rows: [] }, charts: [], verification: [],
     events: [{ kind: 'apex', time: 1.2 }, { kind: 'impact', time: 2.4 }], trajectoryTimes: [0, 1.2, 2.4],
     // These runtime-only fields MUST NOT be copied wholesale onto the V3 wire.
@@ -39,7 +43,7 @@ const createFixtureRuntime = (_scene: Record<string, unknown>): FrameSource => {
     seek(next) { time = next; return snapshot() },
     editParameter(id, value) {
       if (id !== 'speed') throw new Error('unknown fixture parameter')
-      speed = value; time = 0; revision++
+      speed = value; time = 0
       return snapshot()
     },
   }
@@ -47,11 +51,75 @@ const createFixtureRuntime = (_scene: Record<string, unknown>): FrameSource => {
 const plan = planScene(scene, createFixtureRuntime, experimentId)
 const snapshots = plan.frames
 const changed = plan.changedFrame!
-const modes = ['good', 'wrong-x', 'wrong-y', 'static', 'stamp-only', 'unpainted', 'overpainted', 'same-color-cover', 'oversized', 'transparent', 'hidden', 'filtered', 'wrong-transform', 'pixel-space', 'wrong-changed'] as const
+const groundModes = ['ground-good', 'ground-wrong-x', 'ground-wrong-y', 'ground-reversed-ground', 'ground-reversed-y', 'ground-wrong-scale', 'ground-static-trajectory', 'ground-unpainted', 'ground-covered', 'ground-wrong-changed'] as const
+const modes = ['good', 'wrong-x', 'wrong-y', 'static', 'stamp-only', 'unpainted', 'overpainted', 'same-color-cover', 'oversized', 'transparent', 'hidden', 'filtered', 'wrong-transform', 'pixel-space', 'wrong-changed', ...groundModes, 'ground-tainted', 'ground-cors-denied', 'ground-external-asset'] as const
 type Mode = typeof modes[number]
 
+/** Manual equal-unit projection + translate/arc(0,0), with a keypoint over the centre. */
+const groundRuntime = (mode: Mode): string => `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden}#canvas{position:fixed;inset:0}canvas{display:block;width:100%;height:100%}</style></head><body><div id="canvas"></div><script type="module">
+import { connectExperiment } from './protocol.js'
+const mode = ${JSON.stringify(mode)}
+const canvas = document.createElement('canvas')
+canvas.width = 320; canvas.height = 240
+ document.getElementById('canvas').append(canvas)
+const ctx = canvas.getContext('2d')
+let backgroundImage
+if (['ground-tainted', 'ground-cors-denied', 'ground-external-asset'].includes(mode)) {
+  // The URL has the document's URL origin, but this iframe's security origin
+  // is opaque. Deliberately match new Image() WITHOUT a crossOrigin setting.
+  backgroundImage = new Image()
+  backgroundImage.id = 'taint-background'; backgroundImage.hidden = true
+  document.body.append(backgroundImage)
+  await new Promise(resolve => {
+    backgroundImage.onload = resolve; backgroundImage.onerror = resolve
+    backgroundImage.src = mode === 'ground-external-asset' ? 'https://external.invalid/background.png?capability=private-image-fixture'
+      : mode === 'ground-cors-denied' ? './denied.png?capability=private-image-fixture' : './background.png'
+  })
+}
+connectExperiment(snapshot => {
+  const ground = snapshot.view.ground, body = snapshot.view.bodies[0].at
+  const speed = snapshot.inspector[0].parameters[0].value
+  const scale = speed === 20 ? 20 : 18
+  const point = p => ({ x: 60 + p.x * scale, y: 180 - p.y * scale })
+  ctx.setTransform(1.1, 0, 0, 1.1, 0, 0)
+  const background = 'rgb(' + Math.round(15 + snapshot.clock.time * 12 + speed) + ',30,40)'
+  ctx.fillStyle = background; ctx.fillRect(0, 0, 320, 240)
+  // Realistic native onerror fallback: the renderer can still ACK and draw.
+  // The driver must separately reject the actual required asset failure.
+  if (backgroundImage?.naturalWidth > 0) ctx.drawImage(backgroundImage, 0, 0, 320, 240)
+  let a = point({ x: ground.from, y: ground.y }), b = point({ x: ground.to, y: ground.y })
+  if (mode === 'ground-reversed-ground') [a, b] = [b, a]
+  ctx.strokeStyle = '#8d7354'; ctx.lineWidth = 2.5
+  ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y)
+  if (mode !== 'ground-unpainted') ctx.stroke()
+  if (mode === 'ground-covered') { ctx.fillStyle = background; ctx.fillRect(0, a.y - 4, 320, 8) }
+  const balls = mode === 'ground-static-trajectory' ? [{ x: 1, y: 1 }, { x: 3.4, y: 5 }, { x: 5.8, y: 1 }] : [body]
+  for (const position of balls) {
+    const p = point(position)
+    if (mode === 'ground-wrong-x' || (mode === 'ground-wrong-changed' && speed !== 20)) p.x += 12
+    if (mode === 'ground-wrong-y') p.y -= 12
+    if (mode === 'ground-reversed-y') p.y = 180 + position.y * scale
+    if (mode === 'ground-wrong-scale') { p.x = 60 + position.x * scale * 1.2; p.y = 180 - position.y * scale * 1.2 }
+    ctx.save(); ctx.translate(p.x, p.y)
+    const gradient = ctx.createRadialGradient(-5, -6, 2, 0, 0, 15)
+    gradient.addColorStop(0, '#f3b866'); gradient.addColorStop(1, '#a4631f')
+    ctx.fillStyle = gradient
+    ctx.beginPath(); ctx.arc(0, 0, 15, 0, Math.PI * 2); ctx.fill()
+    ctx.strokeStyle = '#784816'; ctx.lineWidth = 1.6; ctx.stroke(); ctx.restore()
+    // This is real authored decoration, not probe painting. It erases the old
+    // central 5×5 evidence, leaving the ball's non-central interior visible.
+    ctx.fillStyle = '#fffdf8'; ctx.strokeStyle = '#3f7a9e'
+    ctx.beginPath(); ctx.arc(p.x, p.y, 4.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke()
+  }
+  if (mode !== 'ground-good' && mode !== 'ground-tainted') {
+    canvas.setAttribute('data-body-x', String(body.x)); canvas.setAttribute('data-body-y', String(body.y))
+    window.__physicsosDrawStats = { geometry: [body, ground] }
+  }
+})
+</script></body></html>`
+
 /** Only the renderer is a fixture. Connection/validation comes from the unmodified SDK. */
-const authoredRuntime = (mode: Mode): string => `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden}#canvas{position:fixed;inset:0}canvas{display:block;width:100%;height:100%}</style></head><body><div id="canvas"></div><script type="module">
+const authoredRuntime = (mode: Mode): string => mode.startsWith('ground-') ? groundRuntime(mode) : `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden}#canvas{position:fixed;inset:0}canvas{display:block;width:100%;height:100%}</style></head><body><div id="canvas"></div><script type="module">
 import { connectExperiment } from './protocol.js'
 const mode = ${JSON.stringify(mode)}
 const view = document.createElement('canvas')
@@ -114,6 +182,7 @@ describeE2E('isolated browser acceptance (standard V3 SDK)', () => {
   let dir: string
   const token = 't'.repeat(32)
   const sdkRequests = new Set<string>()
+  const imageRequests: { path: string; corsOrigin: string | undefined; hasCookie: boolean; hasAuthorization: boolean }[] = []
   const runtimeScenes: Record<string, unknown>[] = []
   const assetsFor = (mode: Mode) => ({
     hostUrl: `${origin}/validation/${token}/${mode}/host.html`,
@@ -144,6 +213,15 @@ describeE2E('isolated browser acceptance (standard V3 SDK)', () => {
         return
       }
       if (file === 'index.html') { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); res.end(authoredRuntime(mode as Mode)); return }
+      if ((mode === 'ground-tainted' && file === 'background.png') || (mode === 'ground-cors-denied' && file === 'denied.png')) {
+        imageRequests.push({ path: url.pathname, corsOrigin: typeof req.headers.origin === 'string' ? req.headers.origin : undefined, hasCookie: req.headers.cookie !== undefined, hasAuthorization: req.headers.authorization !== undefined })
+        // Identical PNG bytes: an explicit anonymous CORS grant is required.
+        // Raw no-cors Image loading still taints despite this response header.
+        res.writeHead(200, { 'content-type': 'image/png', 'cache-control': 'no-store',
+          ...(file === 'background.png' ? { 'access-control-allow-origin': '*' } : {}) })
+        res.end(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64'))
+        return
+      }
       const source = file === undefined ? undefined : sdk.get(file)
       if (source !== undefined) {
         sdkRequests.add(file!)
@@ -197,7 +275,7 @@ describeE2E('isolated browser acceptance (standard V3 SDK)', () => {
     expect(body.result.frames).toHaveLength(3)
     expect(body.result.frames.map(frame => frame.time)).toEqual([0, 1.2, 2.4])
     expect(body.result.frames.map(frame => frame.revision)).toEqual([7, 7, 7])
-    expect(body.result.changedFrame?.revision).toBe(8)
+    expect(body.result.changedFrame?.revision).toBe(7)
     expect(body.result.frames.every(frame => frame.stamped === undefined && frame.opaquePixels > 0 && frame.drawnBodies?.length === 1)).toBe(true)
     expect(body.result.changedFrame?.drawnBodies).toHaveLength(1)
     expect(body.checks.filter(check => !check.passed)).toEqual([])
@@ -262,6 +340,117 @@ describeE2E('isolated browser acceptance (standard V3 SDK)', () => {
 
   it('requires correct native geometry after the parameter change too', async () => {
     const { result } = await validateCandidate({ browser, assets: assetsFor('wrong-changed'), frames: snapshots, changedFrame: changed })
+    const verdict = evaluateObservation({ ...result, ...identity })
+    expect(verdict.checks.find(check => check.name === 'geometry-follows-engine')?.passed).toBe(true)
+    expect(verdict.checks.find(check => check.name === 'parameter-change')?.passed).toBe(false)
+    expect(verdict.passed).toBe(false)
+  }, 120_000)
+
+  it('reproduces native Canvas taint from a same-URL-origin PNG without crossOrigin in the real opaque iframe', async () => {
+    const assets = assetsFor('ground-tainted')
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } })
+    try {
+      const page = await context.newPage()
+      await page.goto(assets.hostUrl, { waitUntil: 'domcontentloaded' })
+      const acknowledged = await page.evaluate(async frame => {
+        const host = (window as unknown as { __validation: { connect(): Promise<boolean>; send(id: string, snapshot: unknown): Promise<boolean> } }).__validation
+        await host.connect()
+        return await host.send(frame.frameId, frame.snapshot)
+      }, snapshots[0]!)
+      expect(acknowledged).toBe(true)
+      const inner = page.frames().find(frame => frame.url().startsWith(assets.entryUrl))
+      expect(inner?.parentFrame()?.parentFrame()).toBe(page.mainFrame())
+      const readback = await inner!.evaluate(() => {
+        const image = document.querySelector<HTMLImageElement>('#taint-background')!
+        const canvas = document.querySelector('canvas')!
+        let errorName = ''
+        try { canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height) }
+        catch (error) { errorName = error instanceof Error ? error.name : 'unknown' }
+        return { errorName, securityOrigin: window.origin, imageOrigin: new URL(image.src).origin,
+          documentUrlOrigin: new URL(location.href).origin, crossOrigin: image.crossOrigin, loaded: image.complete && image.naturalWidth === 1 }
+      })
+      expect(readback).toMatchObject({ errorName: 'SecurityError', securityOrigin: 'null', crossOrigin: null, loaded: true })
+      expect(readback.imageOrigin).toBe(readback.documentUrlOrigin)
+      // Playwright can capture the actual visible surface without disabling
+      // security. This alone is NOT accepted as shape/material/fill evidence.
+      const png = await inner!.locator('canvas').screenshot({ type: 'png' })
+      expect(png.subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+    } finally { await context.close() }
+  }, 120_000)
+
+  it('uses anonymous CORS to prove real native paint with the SAME renderer and PNG bytes, not a screenshot substitute', async () => {
+    const assets = assetsFor('ground-tainted')
+    const pngUrl = new URL('./background.png', assets.entryUrl).href
+    const sourceBefore = await (await fetch(assets.entryUrl)).text()
+    const bytesBefore = Buffer.from(await (await fetch(pngUrl)).arrayBuffer())
+    expect(sourceBefore).not.toMatch(/\.crossOrigin\s*=/)
+    const before = imageRequests.length
+    const { result } = await validateCandidate({ browser, assets, frames: snapshots, changedFrame: changed })
+    const requests = imageRequests.slice(before)
+    expect(requests).toEqual([{ path: new URL(pngUrl).pathname, corsOrigin: 'null', hasCookie: false, hasAuthorization: false }])
+    expect(await (await fetch(assets.entryUrl)).text()).toBe(sourceBefore)
+    expect(Buffer.from(await (await fetch(pngUrl)).arrayBuffer())).toEqual(bytesBefore)
+    expect(result.firstFrameAcknowledged).toBe(true)
+    expect(result.runtimeError).toBeUndefined()
+    expect(result.frames).toHaveLength(snapshots.length)
+    for (const frame of [...result.frames, result.changedFrame!]) {
+      expect(frame.taintedSurfaces).toBeUndefined()
+      expect(frame.opaquePixels).toBeGreaterThan(0)
+      expect(frame.drawnGrounds?.[0]).toMatchObject({ source: 'canvas-2d-line-stroke', strokeIndex: 0 })
+      expect(frame.drawnBodies?.[0]).toMatchObject({ source: 'canvas-2d-arc-fill', drawIndex: 0, paintedPixels: 0 })
+      expect(frame.drawnBodies?.[0]?.paintedPatches).toBeGreaterThanOrEqual(2)
+    }
+    expect(evaluateObservation({ ...result, ...identity }).passed).toBe(true)
+  }, 120_000)
+
+  it.each(['ground-cors-denied', 'ground-external-asset'] as const)('rejects %s even when native onerror fallback ACKs and paints the correct engine geometry', async mode => {
+    const before = imageRequests.length
+    const { result } = await validateCandidate({ browser, assets: assetsFor(mode), frames: snapshots, changedFrame: changed })
+    const verdict = evaluateObservation({ ...result, ...identity })
+    expect(result.firstFrameAcknowledged).toBe(true)
+    expect(verdict.checks.find(check => check.name === 'geometry-follows-engine')?.passed).toBe(true)
+    expect(result.runtimeError).toMatch(/CORS_ERROR|IMAGE_REQUEST_FAILED|CONSOLE_ERROR/)
+    expect(verdict.checks.find(check => check.name === 'runtime-error')?.passed).toBe(false)
+    expect(verdict.passed).toBe(false)
+    if (mode === 'ground-cors-denied') expect(imageRequests.slice(before)).toEqual([
+      { path: `/validation/${token}/${mode}/denied.png`, corsOrigin: 'null', hasCookie: false, hasAuthorization: false },
+    ])
+    else expect(imageRequests.slice(before)).toEqual([])
+    const diagnostics = JSON.stringify({ runtimeError: result.runtimeError, checks: verdict.checks })
+    for (const sensitive of [token, origin, '/validation/', '/question/', 'capability=', 'private-image-fixture', 'external.invalid']) {
+      expect(diagnostics).not.toContain(sensitive)
+    }
+  }, 120_000)
+
+  it('accepts independently ground-anchored translate/arc painting despite a keypoint covering its centre', async () => {
+    const assets = assetsFor('ground-good')
+    const response = await post({ wrapperUrl: assets.wrapperUrl, entryUrl: assets.entryUrl })
+    expect(response.status).toBe(200)
+    const body = await response.json() as ValidationResponse
+    expect(body.result.frames.every(frame => frame.drawnGrounds?.[0]?.strokeIndex === 0)).toBe(true)
+    for (const frame of [...body.result.frames, body.result.changedFrame!]) {
+      expect(frame.drawnBodies?.[0]).toMatchObject({ drawIndex: 0, x: 0, y: 0, paintedPixels: 0 })
+      expect(frame.drawnBodies?.[0]?.paintedPatches).toBeGreaterThanOrEqual(2)
+    }
+    // The parameter change legitimately changes both the ground span and camera.
+    expect(body.result.changedFrame?.engineGround).not.toEqual(body.result.frames[0]?.engineGround)
+    expect(body.result.changedFrame?.revision).toBe(sceneRevision)
+    expect(body.checks.filter(check => !check.passed)).toEqual([])
+    expect(body.passed).toBe(true)
+  }, 120_000)
+
+  it.each(groundModes.filter(mode => mode !== 'ground-good' && mode !== 'ground-wrong-changed'))('rejects %s using an independent ground anchor, never a body-fitted camera', async mode => {
+    const { result } = await validateCandidate({ browser, assets: assetsFor(mode), frames: snapshots, changedFrame: changed })
+    const verdict = evaluateObservation({ ...result, ...identity })
+    expect(result.firstFrameAcknowledged).toBe(true)
+    expect(verdict.passed).toBe(false)
+    expect(verdict.checks.find(check => check.name === 'geometry-follows-engine')?.passed).toBe(false)
+    if (mode === 'ground-unpainted' || mode === 'ground-covered') expect(result.frames.every(frame => frame.drawnGrounds?.length === 0)).toBe(true)
+    if (mode === 'ground-static-trajectory') expect(verdict.checks.find(check => check.name === 'motion-sampled')?.passed).toBe(false)
+  }, 120_000)
+
+  it('rejects a misprojected changed ball even when changed ground is legitimately recalibrated', async () => {
+    const { result } = await validateCandidate({ browser, assets: assetsFor('ground-wrong-changed'), frames: snapshots, changedFrame: changed })
     const verdict = evaluateObservation({ ...result, ...identity })
     expect(verdict.checks.find(check => check.name === 'geometry-follows-engine')?.passed).toBe(true)
     expect(verdict.checks.find(check => check.name === 'parameter-change')?.passed).toBe(false)

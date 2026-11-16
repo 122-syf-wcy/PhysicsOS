@@ -4,7 +4,7 @@
  * The browser driver collects observations; this module decides. Missing or
  * unattributable evidence fails closed, including a frame with only stamps.
  */
-import type { BrowserFrame, DrawnBody } from './types.ts'
+import type { BrowserFrame, DrawnBody, DrawnGround } from './types.ts'
 
 export type CheckName =
   | 'first-frame'
@@ -52,44 +52,97 @@ const finite = (value: unknown): value is number => typeof value === 'number' &&
 const validBody = (frame: SampledFrame): boolean => finite(frame.engineBody?.x) && finite(frame.engineBody?.y)
 const close = (left: number, right: number): boolean => Math.abs(left - right) <= 1e-6
 
-/** A complete native centre, projected by the recorded CTM, with real pixel support. */
-const positionMatches = (frame: SampledFrame, draw: DrawnBody): boolean => {
-  const body = frame.engineBody
-  if (body === undefined || !validBody(frame) || draw.source !== 'canvas-2d-arc-fill'
+/** Native centre must be internally consistent and have surviving actual fill. */
+const nativeBody = (draw: DrawnBody): boolean => {
+  if (draw.source !== 'canvas-2d-arc-fill'
     || !finite(draw.x) || !finite(draw.y) || !finite(draw.pixelX) || !finite(draw.pixelY)
     || !Number.isSafeInteger(draw.surface) || draw.surface < 0
     || !Number.isSafeInteger(draw.drawIndex) || draw.drawIndex < 0
-    || !Number.isInteger(draw.paintedPixels) || draw.paintedPixels < 16 || draw.paintedPixels > 25
+    || !Number.isInteger(draw.paintedPixels) || draw.paintedPixels < 0 || draw.paintedPixels > 25
+    || (draw.paintedPatches !== undefined && (!Number.isInteger(draw.paintedPatches) || draw.paintedPatches < 0 || draw.paintedPatches > 8))
+    || (draw.paintedPixels < 16 && (draw.paintedPatches ?? 0) < 2)
     || !Array.isArray(draw.transform) || draw.transform.length !== 6 || !draw.transform.every(finite)) return false
   const [a, b, c, d, e, f] = draw.transform
   const determinant = a * d - b * c
   return finite(determinant) && Math.abs(determinant) > 1e-12
-    && close(draw.x, body.x) && close(draw.y, body.y)
     && close(draw.pixelX, a * draw.x + c * draw.y + e)
     && close(draw.pixelY, b * draw.x + d * draw.y + f)
 }
 
+const positionMatches = (frame: SampledFrame, draw: DrawnBody): boolean => validBody(frame) && nativeBody(draw)
+  && close(draw.x, frame.engineBody!.x) && close(draw.y, frame.engineBody!.y)
+
+/** Calibrate ONLY from the independently painted ground's known world span. */
+function groundProjection(frame: SampledFrame, line: DrawnGround): { x: number; y: number } | undefined {
+  const ground = frame.engineGround
+  if (ground === undefined || !finite(ground.from) || !finite(ground.to) || ground.to <= ground.from || !finite(ground.y)
+    || !validBody(frame) || line.source !== 'canvas-2d-line-stroke'
+    || !Number.isSafeInteger(line.surface) || line.surface < 0 || !Number.isSafeInteger(line.strokeIndex) || line.strokeIndex < 0
+    || !Number.isInteger(line.paintedPatches) || line.paintedPatches < 2 || line.paintedPatches > 4
+    || !Array.isArray(line.transform) || line.transform.length !== 6 || !line.transform.every(finite)
+    || ![line.from?.x, line.from?.y, line.to?.x, line.to?.y, line.pixelFrom?.x, line.pixelFrom?.y, line.pixelTo?.x, line.pixelTo?.y].every(finite)) return undefined
+  const [a, b, c, d, e, f] = line.transform
+  if (Math.abs(a * d - b * c) <= 1e-12
+    || !close(line.pixelFrom.x, a * line.from.x + c * line.from.y + e)
+    || !close(line.pixelFrom.y, b * line.from.x + d * line.from.y + f)
+    || !close(line.pixelTo.x, a * line.to.x + c * line.to.y + e)
+    || !close(line.pixelTo.y, b * line.to.x + d * line.to.y + f)
+    || !close(line.pixelFrom.y, line.pixelTo.y)) return undefined
+  const scale = (line.pixelTo.x - line.pixelFrom.x) / (ground.to - ground.from)
+  if (!finite(scale) || scale <= 0) return undefined
+  // The accepted camera is positive, equal-unit x/y with world y upwards.
+  // No term here comes from fitting the observed body or its renderer stamp.
+  const x = line.pixelFrom.x + (frame.engineBody!.x - ground.from) * scale
+  const y = line.pixelFrom.y - (frame.engineBody!.y - ground.y) * scale
+  return finite(x) && finite(y) ? { x, y } : undefined
+}
+
+function groundBodyTrack(frames: readonly SampledFrame[], changedFrame?: SampledFrame): readonly DrawnBody[] | undefined {
+  const first = frames[0], ground = first?.engineGround
+  if (first === undefined || ground === undefined || !frames.every(frame => frame.engineGround !== undefined
+    && close(frame.engineGround.from, ground.from) && close(frame.engineGround.to, ground.to) && close(frame.engineGround.y, ground.y))) return undefined
+  for (const anchor of first.drawnGrounds ?? []) {
+    const projected = groundProjection(first, anchor)
+    if (projected === undefined) continue
+    for (const candidate of first.drawnBodies ?? []) {
+      if (!nativeBody(candidate) || candidate.surface !== anchor.surface || !close(candidate.pixelX, projected.x) || !close(candidate.pixelY, projected.y)) continue
+      const track: DrawnBody[] = []
+      const allFrames = changedFrame === undefined ? frames : [...frames, changedFrame]
+      for (const frame of allFrames) {
+        const line = frame.drawnGrounds?.find(item => item.surface === anchor.surface && item.strokeIndex === anchor.strokeIndex && groundProjection(frame, item) !== undefined)
+        const expected = line === undefined ? undefined : groundProjection(frame, line)
+        const draw = expected === undefined ? undefined : frame.drawnBodies?.find(item => item.surface === candidate.surface && item.drawIndex === candidate.drawIndex
+          && nativeBody(item) && close(item.pixelX, expected.x) && close(item.pixelY, expected.y))
+        if (draw === undefined) break
+        track.push(draw)
+      }
+      if (track.length === allFrames.length) return track
+    }
+  }
+  return undefined
+}
+
 /**
- * Match the SAME painted primitive through EVERY frame, under a stable CTM.
- * Picking a different static trajectory dot per frame or fitting a projection
- * to the expected answers is not evidence. Unknown renderer projections stay
- * blocked until a separately justified mapping/probe exists.
+ * Preserve the world-coordinate proof under a stable CTM, or use an independent
+ * ground anchor for the SAME primitive through EVERY ordinary/changed frame.
+ * Static trajectory dots and body-fitted projections are never evidence.
  */
-function bodyTrack(frames: readonly SampledFrame[]): readonly DrawnBody[] | undefined {
+function bodyTrack(frames: readonly SampledFrame[], changedFrame?: SampledFrame): readonly DrawnBody[] | undefined {
   const first = frames[0]
-  if (first === undefined || !frames.every(validBody)) return undefined
+  const allFrames = changedFrame === undefined ? frames : [...frames, changedFrame]
+  if (first === undefined || !allFrames.every(validBody)) return undefined
   for (const candidate of first.drawnBodies ?? []) {
     if (!positionMatches(first, candidate)) continue
     const track: DrawnBody[] = []
-    for (const frame of frames) {
+    for (const frame of allFrames) {
       const draw = frame.drawnBodies?.find(item => item.surface === candidate.surface && item.drawIndex === candidate.drawIndex
         && positionMatches(frame, item) && item.transform.every((value, index) => close(value, candidate.transform[index]!)))
       if (draw === undefined) break
       track.push(draw)
     }
-    if (track.length === frames.length) return track
+    if (track.length === allFrames.length) return track
   }
-  return undefined
+  return groundBodyTrack(frames, changedFrame)
 }
 
 /** All checks are mandatory; absent evidence is never filtered out as a pass. */
@@ -114,7 +167,9 @@ export function evaluateObservation(observation: Observation): { passed: boolean
   const painted = observation.frames.filter(frame => frame.opaquePixels > 0 && (frame.distinctColors > 3 || frame.geometryCount > 0))
   const subjectDrawn = observation.nativeSurface && painted.length === observation.frames.length && observation.frames.length > 0
   checks.push({ name: 'subject-drawn', passed: subjectDrawn,
-    detail: subjectDrawn ? undefined : observation.nativeSurface ? '未观察到非空的实验主体绘制。' : '页面上没有可见的 canvas/svg 绘制表面。' })
+    detail: subjectDrawn ? undefined : observation.frames.some(frame => (frame.taintedSurfaces ?? 0) > 0)
+      ? 'Canvas 绘制跨源图片后不可读；尚无经验证的截图绘制证据，验收阻断。'
+      : observation.nativeSurface ? '未观察到非空的实验主体绘制。' : '页面上没有可见的 canvas/svg 绘制表面。' })
 
   const track = bodyTrack(observation.frames)
   checks.push({
@@ -122,7 +177,7 @@ export function evaluateObservation(observation: Observation): { passed: boolean
     passed: track !== undefined,
     detail: track !== undefined ? undefined
       : !observation.frames.every(validBody) ? '引擎帧缺少完整、有限的 x/y，无法核对几何。'
-        : '缺少逐帧一致的真实世界坐标绘制证据，或位置/投影不一致；stamp、SVG 或未知像素投影不能放行，产品验收仍阻断。',
+        : '缺少逐帧一致的真实绘制证据，或位置/投影不一致；须有世界坐标或独立地面锚点，stamp、SVG 或未知像素投影不能放行，产品验收仍阻断。',
   })
 
   const times = observation.frames.map(frame => frame.time)
@@ -136,7 +191,7 @@ export function evaluateObservation(observation: Observation): { passed: boolean
   })
 
   const changedGeometry = observation.changedFrame !== undefined
-    && bodyTrack([...observation.frames, observation.changedFrame]) !== undefined
+    && bodyTrack(observation.frames, observation.changedFrame) !== undefined
   const changed = observation.parameterChanged === true && changedGeometry
     && observation.changedPaintHash !== undefined
     && observation.originalPaintHash !== undefined

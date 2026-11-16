@@ -4,14 +4,29 @@ export interface DrawnBody {
   /** Probe-owned surface identity and fill ordinal, stable across sampled frames. */
   readonly surface: number
   readonly drawIndex: number
-  /** Arguments of the actual world-coordinate arc, before its native Canvas CTM. */
+  /** Arguments of the actual arc, before its native Canvas CTM. */
   readonly x: number
   readonly y: number
   readonly transform: readonly [number, number, number, number, number, number]
   readonly pixelX: number
   readonly pixelY: number
-  /** Pixels visibly changed by this fill and still present when sampled (5×5 patch). */
+  /** Surviving changed pixels in the central 5×5 patch; an overlay can erase it. */
   readonly paintedPixels: number
+  /** Surviving, changed non-central 3×3 interior witnesses (at least two suffice). */
+  readonly paintedPatches?: number
+}
+
+/** Independent native horizontal-line evidence; never fitted to a body position. */
+export interface DrawnGround {
+  readonly source: 'canvas-2d-line-stroke'
+  readonly surface: number
+  readonly strokeIndex: number
+  readonly from: { readonly x: number; readonly y: number }
+  readonly to: { readonly x: number; readonly y: number }
+  readonly transform: readonly [number, number, number, number, number, number]
+  readonly pixelFrom: { readonly x: number; readonly y: number }
+  readonly pixelTo: { readonly x: number; readonly y: number }
+  readonly paintedPatches: number
 }
 
 /** Result shape produced inside the validation page and returned by the driver. */
@@ -20,6 +35,10 @@ export interface BrowserFrame {
   /** Revision of the V3 engine frame actually sent, not the scene metadata. */
   readonly revision?: number
   readonly engineBody?: { readonly x: number; readonly y: number }
+  readonly engineGround?: { readonly from: number; readonly to: number; readonly y: number }
+  readonly drawnGrounds?: readonly DrawnGround[]
+  /** Actual SecurityError from native pixel readback; never a renderer report. */
+  readonly taintedSurfaces?: number
   /** Legacy diagnostic only. Self-reported attributes are never acceptance evidence. */
   readonly stamped?: { readonly bodyX?: number; readonly bodyY?: number; readonly clockTime?: number }
   readonly drawnBodies?: readonly DrawnBody[]

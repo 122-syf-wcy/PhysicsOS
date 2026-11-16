@@ -8,8 +8,9 @@
  */
 import { createHash, randomUUID } from 'node:crypto'
 import type { Browser, BrowserContext, Frame, Page } from '@playwright/test'
-import type { BrowserFrame, BrowserResult, DrawnBody } from './types.ts'
+import type { BrowserFrame, BrowserResult, DrawnBody, DrawnGround } from './types.ts'
 import { canvasDrawProbeScript } from './draw-probe.ts'
+import { anonymousImagePolicyScript } from './image-policy.ts'
 
 export interface CandidateAssets {
   /** Absolute same-origin URL of the host page, or an inline document. */
@@ -41,8 +42,10 @@ interface FramePaint {
   readonly paintHash: string
   readonly opaquePixels: number
   readonly distinctColors: number
+  readonly taintedSurfaces: number
   readonly geometryCount: number
   readonly drawnBodies: readonly DrawnBody[]
+  readonly drawnGrounds: readonly DrawnGround[]
   readonly nativeSurface: boolean
   readonly scrollWidth: number
 }
@@ -51,7 +54,7 @@ interface FramePaint {
 async function observeFrame(frame: Frame, probeKey: string): Promise<FramePaint> {
   return await frame.evaluate(key => {
     const probe = (window as unknown as Record<string, { read(): Omit<FramePaint, 'scrollWidth'> } | undefined>)[key]
-    const paint = probe?.read() ?? { paintHash: '', opaquePixels: 0, distinctColors: 0, geometryCount: 0, drawnBodies: [], nativeSurface: false }
+    const paint = probe?.read() ?? { paintHash: '', opaquePixels: 0, distinctColors: 0, taintedSurfaces: 0, geometryCount: 0, drawnBodies: [], drawnGrounds: [], nativeSurface: false }
     return { ...paint, scrollWidth: document.documentElement.scrollWidth }
   }, probeKey)
 }
@@ -66,11 +69,15 @@ async function resetProbe(frame: Frame, probeKey: string): Promise<void> {
 const sampleFrame = (snapshot: Record<string, unknown>, paint: FramePaint): BrowserFrame => {
   const time = (snapshot.clock as { time?: unknown } | undefined)?.time
   const engineBody = bodyOf(snapshot)
+  const engineGround = groundOf(snapshot)
   return {
     time: typeof time === 'number' && Number.isFinite(time) ? time : Number.NaN,
     ...(typeof snapshot.revision === 'number' && Number.isSafeInteger(snapshot.revision) && snapshot.revision >= 0 ? { revision: snapshot.revision } : {}),
     ...(engineBody === undefined ? {} : { engineBody }),
+    ...(engineGround === undefined ? {} : { engineGround }),
     drawnBodies: paint.drawnBodies,
+    drawnGrounds: paint.drawnGrounds,
+    ...(paint.taintedSurfaces > 0 ? { taintedSurfaces: paint.taintedSurfaces } : {}),
     paintHash: sha256(paint.paintHash),
     geometryCount: paint.geometryCount,
     opaquePixels: paint.opaquePixels,
@@ -122,13 +129,15 @@ export async function validateCandidate(options: DriverOptions): Promise<DriverR
     timezoneId: 'Asia/Shanghai',
     acceptDownloads: false,
   })
+  const candidateOrigin = new URL(assets.entryUrl).origin
   const probeKey = `__validationDraw_${randomUUID().replaceAll('-', '')}`
-  await context.addInitScript({ content: canvasDrawProbeScript(probeKey) })
+  // One init script fixes ordering: standard anonymous asset CORS first, then
+  // native paint observations. Renderer bytes and browser security are intact.
+  await context.addInitScript({ content: `${anonymousImagePolicyScript(candidateOrigin)}\n${canvasDrawProbeScript(probeKey)}` })
   const page = await context.newPage()
   // No cookies or storage are ever injected; block anything outside the
   // candidate origin except this run's exact driving document. The exception
   // cannot be used by a subframe, fetch, POST, or another loopback resource.
-  const candidateOrigin = new URL(assets.entryUrl).origin
   await context.route('**/*', async route => {
     const request = route.request()
     const url = request.url()
@@ -139,15 +148,21 @@ export async function validateCandidate(options: DriverOptions): Promise<DriverR
     }
     await route.continue()
   })
+  // Only fixed categories/native net codes leave the browser. Console text,
+  // exception messages and request paths can carry signed asset capabilities.
   const diagnostics: string[] = []
-  page.on('pageerror', error => diagnostics.push(`pageerror: ${error.message.slice(0, 300)}`))
-  page.on('console', message => { if (message.type() === 'error') diagnostics.push(`console: ${message.text().slice(0, 300)}`) })
+  page.on('pageerror', () => diagnostics.push('PAGE_ERROR'))
+  page.on('console', message => {
+    if (message.type() === 'error') diagnostics.push(/cors|cross.origin|access-control/i.test(message.text()) ? 'CORS_ERROR' : 'CONSOLE_ERROR')
+  })
   page.on('requestfailed', request => {
     const failure = request.failure()?.errorText ?? ''
-    // Aborted same-origin navigation from the wrapper is expected (the
-    // wrapper replaced its own document); other failures are diagnostics.
-    if (failure === 'net::ERR_ABORTED') return
-    diagnostics.push(`requestfailed: ${failure} ${new URL(request.url()).pathname}`)
+    // Only the wrapper's expected aborted child navigation is ignored, not
+    // aborted images/fetches or requests to another origin.
+    if (failure === 'net::ERR_ABORTED' && request.isNavigationRequest()
+      && request.frame() !== page.mainFrame() && new URL(request.url()).origin === candidateOrigin) return
+    const category = request.resourceType() === 'image' ? 'IMAGE_REQUEST_FAILED' : 'RESOURCE_REQUEST_FAILED'
+    diagnostics.push(/^(?:net::)?ERR_[A-Z_]+$/.test(failure) ? `${category} (${failure})` : category)
   })
   try {
     if (assets.hostHtml !== undefined) {
@@ -212,7 +227,11 @@ export async function validateCandidate(options: DriverOptions): Promise<DriverR
       screenshotPath = options.screenshotPath
     }
     const protocolError = await page.evaluate(() => (window as unknown as { __validation: { result(): { error?: string } } }).__validation.result().error)
-    const runtimeError = diagnostics.find(line => line.startsWith('pageerror:'))?.replace(/^pageerror:\s*/, '') ?? protocolError
+    const safeProtocolError = protocolError === undefined ? undefined
+      : ['SNAPSHOT_INVALID', 'RENDER_FAILED', 'FIRST_FRAME_TIMEOUT', 'PAGE_ERROR', 'PAGE_UNHANDLED_REJECTION'].includes(protocolError) ? protocolError : 'EXPERIMENT_ERROR'
+    // An onerror fallback may ACK and draw correctly even though a required
+    // image failed. Those real request/CORS errors must still refuse acceptance.
+    const runtimeError = diagnostics.find(code => code === 'PAGE_ERROR') ?? safeProtocolError ?? diagnostics[0]
     const result: BrowserResult = {
       ready: firstFrameAcknowledged,
       firstFrameAcknowledged,
@@ -226,6 +245,12 @@ export async function validateCandidate(options: DriverOptions): Promise<DriverR
       ...(mobile === undefined ? {} : { mobile }),
     }
     return { result, entryUrl: assets.entryUrl, ...(screenshotPath === undefined ? {} : { screenshotPath }) }
+  } catch (error) {
+    // Playwright errors can include full navigation URLs with tickets. The
+    // server may log this exception, so retain only safe, fixed driver codes.
+    const code = error instanceof Error && ['AUTHORED_FRAME_MISSING', 'AUTHORED_FRAME_SHALLOW', 'CONNECT_TIMEOUT'].includes(error.message)
+      ? error.message : 'VALIDATION_DRIVER_FAILED'
+    throw new Error(code)
   } finally {
     await context.close()
   }
@@ -236,4 +261,13 @@ const bodyOf = (snapshot: Record<string, unknown>): { x: number; y: number } | u
   const at = view?.bodies?.[0]?.at
   return typeof at?.x === 'number' && Number.isFinite(at.x) && typeof at.y === 'number' && Number.isFinite(at.y)
     ? { x: at.x, y: at.y } : undefined
+}
+
+/** Ground facts are copied from the trusted engine wire, never into the probe. */
+const groundOf = (snapshot: Record<string, unknown>): BrowserFrame['engineGround'] => {
+  const ground = (snapshot.view as { ground?: { from?: unknown; to?: unknown; y?: unknown } } | undefined)?.ground
+  return typeof ground?.from === 'number' && Number.isFinite(ground.from)
+    && typeof ground.to === 'number' && Number.isFinite(ground.to) && ground.to > ground.from
+    && typeof ground.y === 'number' && Number.isFinite(ground.y)
+    ? { from: ground.from, to: ground.to, y: ground.y } : undefined
 }

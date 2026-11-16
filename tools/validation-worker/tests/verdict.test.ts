@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { evaluateObservation, type Observation, type SampledFrame } from '../src/index.ts'
-import type { DrawnBody } from '../src/types.ts'
+import type { DrawnBody, DrawnGround } from '../src/types.ts'
 
 const SHA = 'a'.repeat(64)
 /** Synthetic probe records for verdict rules only; real pixels are exercised in driver.e2e. */
@@ -40,6 +40,22 @@ const base = (overrides: Partial<Observation> = {}): Observation => ({
   ...overrides,
 })
 
+const ground = { from: -2, to: 10, y: 0 }
+const groundLine = (facts = ground, scale = 20, origin = 60): DrawnGround => {
+  const from = { x: origin + facts.from * scale, y: 200 }, to = { x: origin + facts.to * scale, y: 200 }
+  return { source: 'canvas-2d-line-stroke', surface: 0, strokeIndex: 0, from, to, transform: [1, 0, 0, 1, 0, 0], pixelFrom: from, pixelTo: to, paintedPatches: 4 }
+}
+const grounded = (sample: SampledFrame, facts = ground, scale = 20, origin = 60): SampledFrame => {
+  const pixelX = origin + sample.engineBody!.x * scale, pixelY = 200 - (sample.engineBody!.y - facts.y) * scale
+  return { ...sample, engineGround: facts, drawnGrounds: [groundLine(facts, scale, origin)], drawnBodies: [draw(0, 0, {
+    transform: [1, 0, 0, 1, pixelX, pixelY], pixelX, pixelY, paintedPixels: 0, paintedPatches: 2,
+  })] }
+}
+const groundBase = (): Observation => base({
+  frames: [grounded(frame()), grounded(moving())],
+  changedFrame: grounded(base().changedFrame!, { from: -3, to: 11, y: 0 }, 18, 65),
+})
+
 const failing = (observation: Observation): string[] => evaluateObservation(observation).checks.filter(check => !check.passed).map(check => check.name)
 
 describe('experiment acceptance verdict', () => {
@@ -48,6 +64,62 @@ describe('experiment acceptance verdict', () => {
     expect(verdict.passed).toBe(true)
     expect(verdict.checks).toHaveLength(8)
     expect(base().frames.every(item => item.stamped === undefined)).toBe(true)
+  })
+
+  it('accepts translate/arc(0,0) from an independent ground anchor, with only non-central body witnesses', () => {
+    expect(evaluateObservation(groundBase()).passed).toBe(true)
+    expect(groundBase().changedFrame?.engineGround).not.toEqual(ground)
+  })
+
+  it.each(['x', 'y'] as const)('does not fit the ground camera to a wrong observed body %s', axis => {
+    const observation = groundBase(), sample = observation.frames[1]!, actual = sample.drawnBodies![0]!
+    const transform = [...actual.transform] as [number, number, number, number, number, number]
+    transform[axis === 'x' ? 4 : 5] += 10
+    const wrong = { ...actual, transform, [axis === 'x' ? 'pixelX' : 'pixelY']: actual[axis === 'x' ? 'pixelX' : 'pixelY'] + 10 }
+    expect(failing({ ...observation, frames: [observation.frames[0]!, { ...sample, drawnBodies: [wrong] }] })).toContain('geometry-follows-engine')
+  })
+
+  it('rejects reflected or non-uniform body projection against independently fixed ground scale', () => {
+    const observation = groundBase(), sample = observation.frames[1]!
+    for (const scale of [-20, 25]) {
+      const wrong = grounded(sample, ground, scale)
+      expect(failing({ ...observation, frames: [observation.frames[0]!, { ...wrong, drawnGrounds: sample.drawnGrounds }] })).toContain('geometry-follows-engine')
+    }
+  })
+
+  it('requires positive endpoint order, real stroke pixels and internally valid native endpoints', () => {
+    const observation = groundBase(), sample = observation.frames[0]!, line = sample.drawnGrounds![0]!
+    const invalidLines: DrawnGround[] = [
+      { ...line, from: line.to, to: line.from, pixelFrom: line.pixelTo, pixelTo: line.pixelFrom },
+      { ...line, paintedPatches: 1 }, { ...line, pixelFrom: { ...line.pixelFrom, y: 201 } },
+      { ...line, strokeIndex: 1 }, { ...line, surface: 1 },
+    ]
+    for (const invalid of invalidLines) {
+      expect(failing({ ...observation, frames: [{ ...sample, drawnGrounds: [invalid] }, observation.frames[1]!] })).toContain('geometry-follows-engine')
+    }
+    expect(failing({ ...observation, frames: [{ ...sample, drawnGrounds: undefined }, observation.frames[1]!] })).toContain('geometry-follows-engine')
+  })
+
+  it('keeps ground facts stable for ordinary frames, but recalibrates from the changed frame own facts', () => {
+    const observation = groundBase(), sample = observation.frames[1]!
+    expect(failing({ ...observation, frames: [observation.frames[0]!, grounded(sample, { from: -3, to: 11, y: 0 })] })).toContain('geometry-follows-engine')
+    for (const facts of [{ from: Number.NaN, to: 10, y: 0 }, { from: 0, to: 0, y: 0 }, { ...ground, y: Number.POSITIVE_INFINITY }]) {
+      expect(failing({ ...observation, frames: [observation.frames[0]!, { ...sample, engineGround: facts }] })).toContain('geometry-follows-engine')
+    }
+    expect(evaluateObservation(observation).passed).toBe(true)
+    expect(failing({ ...observation, changedFrame: { ...observation.changedFrame!, drawnGrounds: undefined } })).toContain('parameter-change')
+    expect(failing({ ...observation, changedFrame: grounded(observation.changedFrame!, ground, -20) })).toContain('parameter-change')
+  })
+
+  it('cannot identify different static trajectory dots as one ground-anchored moving ball', () => {
+    const observation = groundBase()
+    const dots = observation.frames.flatMap((sample, index) => sample.drawnBodies!.map(item => ({ ...item, drawIndex: index })))
+    expect(failing({ ...observation, frames: observation.frames.map(sample => ({ ...sample, drawnBodies: dots })) })).toContain('geometry-follows-engine')
+  })
+
+  it('requires at least two surviving interior patches when the central body pixels are covered', () => {
+    const observation = groundBase(), sample = observation.frames[0]!
+    expect(failing({ ...observation, frames: [{ ...sample, drawnBodies: [{ ...sample.drawnBodies![0]!, paintedPatches: 1 }] }, observation.frames[1]!] })).toContain('geometry-follows-engine')
   })
 
   it('fails a candidate that never acknowledges its first frame', () => {
