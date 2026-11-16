@@ -1,6 +1,5 @@
 /**
- * Playwright driver for one candidate. This module is the only place that
- * launches a browser; the verdict is decided in `verdict.ts`.
+ * Playwright driver for one candidate. The verdict is decided in `verdict.ts`.
  *
  * Isolation contract (enforced by the deployment, asserted here where
  * possible): no user profile, no cookies, no storage state, browser sandbox
@@ -9,7 +8,8 @@
  */
 import { createHash, randomUUID } from 'node:crypto'
 import type { Browser, BrowserContext, Frame, Page } from '@playwright/test'
-import type { BrowserResult } from './types.ts'
+import type { BrowserFrame, BrowserResult, DrawnBody } from './types.ts'
+import { canvasDrawProbeScript } from './draw-probe.ts'
 
 export interface CandidateAssets {
   /** Absolute same-origin URL of the host page, or an inline document. */
@@ -27,7 +27,7 @@ export interface DriverOptions {
   readonly assets: CandidateAssets
   /** Engine snapshots at t0/apex/impact (already produced by the app from the persisted scene). */
   readonly frames: readonly { readonly frameId: string; readonly snapshot: Record<string, unknown> }[]
-  /** One snapshot after a parameter change; same scene revision, new input. */
+  /** One authoritative snapshot after a parameter change. */
   readonly changedFrame: { readonly frameId: string; readonly snapshot: Record<string, unknown> }
   readonly mobile?: { readonly width: number; readonly height: number }
   /** Optional path to write a screenshot of the final mobile stage. */
@@ -37,80 +37,47 @@ export interface DriverOptions {
 
 const sha256 = (value: string): string => createHash('sha256').update(value).digest('hex')
 
-/**
- * Observe the innermost opaque frame. `frame.evaluate` works because
- * Playwright attaches to frames regardless of their sandbox; the authored
- * document is never allowed to talk back to us except through the protocol.
- */
-async function observeFrame(frame: Frame): Promise<{
-  paintHash: string
-  opaquePixels: number
-  distinctColors: number
-  geometryCount: number
-  stamped: { bodyX?: number; bodyY?: number; clockTime?: number }
-  nativeSurface: boolean
-  scrollWidth: number
-}> {
-  return await frame.evaluate(() => {
-    const view = document.getElementById('canvas') ?? document.body
-    let paintHash = ''
-    let opaquePixels = 0
-    let distinctColors = 0
-    let geometryCount = 0
-    const stamped: { bodyX?: number; bodyY?: number; clockTime?: number } = {}
-    for (const element of Array.from(view.querySelectorAll('canvas'))) {
-      const canvas = element as HTMLCanvasElement
-      if (canvas.width > 0 && canvas.height > 0) {
-        try {
-          const context = canvas.getContext('2d')
-          if (context !== null) {
-            const image = context.getImageData(0, 0, canvas.width, canvas.height)
-            let hash = 2166136261
-            const colors = new Set<string>()
-            let opaque = 0
-            for (let y = 0; y < image.height; y += Math.max(1, Math.floor(image.height / 64))) {
-              for (let x = 0; x < image.width; x += Math.max(1, Math.floor(image.width / 96))) {
-                const offset = (y * image.width + x) * 4
-                for (let channel = 0; channel < 4; channel++) {
-                  hash ^= image.data[offset + channel] ?? 0
-                  hash = Math.imul(hash, 16777619) >>> 0
-                }
-                if ((image.data[offset + 3] ?? 0) > 0) opaque++
-                colors.add(`${image.data[offset]},${image.data[offset + 1]},${image.data[offset + 2]},${image.data[offset + 3]}`)
-              }
-            }
-            paintHash += hash.toString(16).padStart(8, '0')
-            opaquePixels += opaque
-            distinctColors += colors.size
-          }
-        } catch { /* tainted/unreadable canvas: contributes no evidence */ }
-      }
-      const bodyX = canvas.getAttribute('data-body-x')
-      const bodyY = canvas.getAttribute('data-body-y')
-      const clock = canvas.getAttribute('data-clock-time')
-      if (stamped.bodyX === undefined && bodyX !== null && Number.isFinite(Number(bodyX))) stamped.bodyX = Number(bodyX)
-      if (stamped.bodyY === undefined && bodyY !== null && Number.isFinite(Number(bodyY))) stamped.bodyY = Number(bodyY)
-      if (stamped.clockTime === undefined && clock !== null && Number.isFinite(Number(clock))) stamped.clockTime = Number(clock)
-    }
-    for (const svg of Array.from(view.querySelectorAll('svg'))) {
-      paintHash += String(svg.outerHTML.length)
-      geometryCount += svg.querySelectorAll('path,circle,ellipse,line,polyline,polygon,rect').length
-    }
-    const stats = (window as unknown as { __physicsosDrawStats?: { geometry?: unknown[] } }).__physicsosDrawStats
-    if (Array.isArray(stats?.geometry)) geometryCount += stats.geometry.length
-    return {
-      paintHash,
-      opaquePixels,
-      distinctColors,
-      geometryCount,
-      stamped,
-      nativeSurface: view.querySelector('canvas, svg') !== null,
-      scrollWidth: document.documentElement.scrollWidth,
-    }
-  })
+interface FramePaint {
+  readonly paintHash: string
+  readonly opaquePixels: number
+  readonly distinctColors: number
+  readonly geometryCount: number
+  readonly drawnBodies: readonly DrawnBody[]
+  readonly nativeSurface: boolean
+  readonly scrollWidth: number
 }
 
-/** Wait until the innermost authored frame reports a painted surface. */
+/** Read native pixels and private probe records inside the actual opaque frame. */
+async function observeFrame(frame: Frame, probeKey: string): Promise<FramePaint> {
+  return await frame.evaluate(key => {
+    const probe = (window as unknown as Record<string, { read(): Omit<FramePaint, 'scrollWidth'> } | undefined>)[key]
+    const paint = probe?.read() ?? { paintHash: '', opaquePixels: 0, distinctColors: 0, geometryCount: 0, drawnBodies: [], nativeSurface: false }
+    return { ...paint, scrollWidth: document.documentElement.scrollWidth }
+  }, probeKey)
+}
+
+/** Reset observations only, before a snapshot. This never writes to the canvas. */
+async function resetProbe(frame: Frame, probeKey: string): Promise<void> {
+  await frame.evaluate(key => {
+    (window as unknown as Record<string, { reset(): void } | undefined>)[key]?.reset()
+  }, probeKey)
+}
+
+const sampleFrame = (snapshot: Record<string, unknown>, paint: FramePaint): BrowserFrame => {
+  const time = (snapshot.clock as { time?: unknown } | undefined)?.time
+  const engineBody = bodyOf(snapshot)
+  return {
+    time: typeof time === 'number' && Number.isFinite(time) ? time : Number.NaN,
+    ...(typeof snapshot.revision === 'number' && Number.isSafeInteger(snapshot.revision) && snapshot.revision >= 0 ? { revision: snapshot.revision } : {}),
+    ...(engineBody === undefined ? {} : { engineBody }),
+    drawnBodies: paint.drawnBodies,
+    paintHash: sha256(paint.paintHash),
+    geometryCount: paint.geometryCount,
+    opaquePixels: paint.opaquePixels,
+    distinctColors: paint.distinctColors,
+  }
+}
+
 /**
  * The authored document is the deepest frame: host → wrapper → candidate.
  * Depth is counted, not assumed, so a change in the wrapper does not silently
@@ -146,11 +113,7 @@ export interface DriverResult {
   readonly screenshotPath?: string
 }
 
-/**
- * Drive one candidate through the protocol and sample the real painted frame
- * at each requested snapshot, then after a parameter change and at mobile
- * size. Returns raw observations; the caller renders the verdict.
- */
+/** Drive the real protocol; only the authored renderer ever writes pixels. */
 export async function validateCandidate(options: DriverOptions): Promise<DriverResult> {
   const { browser, assets, frames, changedFrame } = options
   const context: BrowserContext = await browser.newContext({
@@ -159,6 +122,8 @@ export async function validateCandidate(options: DriverOptions): Promise<DriverR
     timezoneId: 'Asia/Shanghai',
     acceptDownloads: false,
   })
+  const probeKey = `__validationDraw_${randomUUID().replaceAll('-', '')}`
+  await context.addInitScript({ content: canvasDrawProbeScript(probeKey) })
   const page = await context.newPage()
   // No cookies or storage are ever injected; block anything outside the
   // candidate origin except this run's exact driving document. The exception
@@ -185,50 +150,47 @@ export async function validateCandidate(options: DriverOptions): Promise<DriverR
     diagnostics.push(`requestfailed: ${failure} ${new URL(request.url()).pathname}`)
   })
   try {
-    if (options.assets.hostHtml !== undefined) {
-      // The host page is same-origin with the candidate only if we serve it
-      // from the app; inline content gets an opaque origin, so the wrapper
-      // still validates `hostOrigin` normally. Use a data URL only on a
-      // throwaway page, never with credentials.
-      await page.goto(`data:text/html;charset=utf-8,${encodeURIComponent(options.assets.hostHtml)}`, { waitUntil: 'domcontentloaded', timeout: options.timeoutMs ?? 60_000 })
+    if (assets.hostHtml !== undefined) {
+      // An inline document still has no credentials or reusable browser state.
+      await page.goto(`data:text/html;charset=utf-8,${encodeURIComponent(assets.hostHtml)}`, { waitUntil: 'domcontentloaded', timeout: options.timeoutMs ?? 60_000 })
     } else {
-      await page.goto(options.assets.hostUrl, { waitUntil: 'domcontentloaded', timeout: options.timeoutMs ?? 60_000 })
+      await page.goto(assets.hostUrl, { waitUntil: 'domcontentloaded', timeout: options.timeoutMs ?? 60_000 })
     }
     await page.waitForFunction(() => (window as unknown as { __validation?: unknown }).__validation !== undefined, undefined, { timeout: 15_000 })
     await page.evaluate(() => (window as unknown as { __validation: { connect(): Promise<boolean> } }).__validation.connect())
-    const sampled: BrowserResult['frames'][number][] = []
-    let firstFrameAcknowledged = true
+    const sampled: BrowserFrame[] = []
+    let firstFrameAcknowledged = frames.length > 0
+    let nativeSurface = true
     for (const frame of frames) {
+      const inner = await authoredFrame(page)
+      await resetProbe(inner, probeKey)
       const acknowledged = await page.evaluate(async ({ frameId, snapshot }) => {
         return await (window as unknown as { __validation: { send(id: string, snapshot: unknown): Promise<boolean> } }).__validation.send(frameId, snapshot)
       }, frame)
       if (!acknowledged) { firstFrameAcknowledged = false; break }
-      const inner = await authoredFrame(page)
       await inner.waitForTimeout(120)
-      const paint = await observeFrame(inner)
-      sampled.push({
-        time: Number((frame.snapshot as { clock?: { time?: number } }).clock?.time ?? 0),
-        ...(bodyOf(frame.snapshot) === undefined ? {} : { engineBody: bodyOf(frame.snapshot) }),
-        ...(paint.stamped.bodyY === undefined ? {} : { stamped: paint.stamped }),
-        paintHash: sha256(paint.paintHash),
-        geometryCount: paint.geometryCount,
-        opaquePixels: paint.opaquePixels,
-        distinctColors: paint.distinctColors,
-      })
+      const paint = await observeFrame(inner, probeKey)
+      nativeSurface &&= paint.nativeSurface
+      sampled.push(sampleFrame(frame.snapshot, paint))
     }
-    // Parameter change: same revision, different inspector input.
+    // The changed frame needs actual geometry too, not just a different hash.
     let changedPaintHash: string | undefined
     let originalPaintHash: string | undefined
     let parameterChanged: boolean | undefined
+    let changedSample: BrowserFrame | undefined
     if (firstFrameAcknowledged && sampled.length > 0) {
+      const inner = await authoredFrame(page)
+      await resetProbe(inner, probeKey)
       const acknowledged = await page.evaluate(async ({ frameId, snapshot }) => {
         return await (window as unknown as { __validation: { send(id: string, snapshot: unknown): Promise<boolean> } }).__validation.send(frameId, snapshot)
       }, changedFrame)
       if (acknowledged) {
-        const inner = await authoredFrame(page)
         await inner.waitForTimeout(120)
+        const paint = await observeFrame(inner, probeKey)
+        nativeSurface &&= paint.nativeSurface
+        changedSample = sampleFrame(changedFrame.snapshot, paint)
         originalPaintHash = sampled[0]?.paintHash
-        changedPaintHash = sha256((await observeFrame(inner)).paintHash)
+        changedPaintHash = changedSample.paintHash
         parameterChanged = true
       }
     }
@@ -241,7 +203,7 @@ export async function validateCandidate(options: DriverOptions): Promise<DriverR
         await (window as unknown as { __validation: { resize(w: number, h: number): Promise<boolean> } }).__validation.resize(width, height)
       }, size)
       const inner = await authoredFrame(page)
-      const paint = await observeFrame(inner)
+      const paint = await observeFrame(inner, probeKey)
       mobile = { viewportWidth: size.width, scrollWidth: paint.scrollWidth, overflow: paint.scrollWidth > size.width + 1 }
     }
     let screenshotPath: string | undefined
@@ -249,13 +211,15 @@ export async function validateCandidate(options: DriverOptions): Promise<DriverR
       await page.screenshot({ path: options.screenshotPath, fullPage: false })
       screenshotPath = options.screenshotPath
     }
-    const runtimeError = diagnostics.find(line => line.startsWith('pageerror:'))?.replace(/^pageerror:\s*/, '')
+    const protocolError = await page.evaluate(() => (window as unknown as { __validation: { result(): { error?: string } } }).__validation.result().error)
+    const runtimeError = diagnostics.find(line => line.startsWith('pageerror:'))?.replace(/^pageerror:\s*/, '') ?? protocolError
     const result: BrowserResult = {
       ready: firstFrameAcknowledged,
       firstFrameAcknowledged,
       ...(runtimeError === undefined ? {} : { runtimeError }),
-      nativeSurface: sampled.length > 0,
+      nativeSurface: sampled.length > 0 && nativeSurface,
       frames: sampled,
+      ...(changedSample === undefined ? {} : { changedFrame: changedSample }),
       ...(parameterChanged === undefined ? {} : { parameterChanged }),
       ...(changedPaintHash === undefined ? {} : { changedPaintHash }),
       ...(originalPaintHash === undefined ? {} : { originalPaintHash }),
@@ -270,5 +234,6 @@ export async function validateCandidate(options: DriverOptions): Promise<DriverR
 const bodyOf = (snapshot: Record<string, unknown>): { x: number; y: number } | undefined => {
   const view = snapshot.view as { bodies?: { at?: { x?: unknown; y?: unknown } }[] } | undefined
   const at = view?.bodies?.[0]?.at
-  return typeof at?.x === 'number' && typeof at.y === 'number' ? { x: at.x, y: at.y } : undefined
+  return typeof at?.x === 'number' && Number.isFinite(at.x) && typeof at.y === 'number' && Number.isFinite(at.y)
+    ? { x: at.x, y: at.y } : undefined
 }
