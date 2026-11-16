@@ -3,7 +3,8 @@ import process from 'node:process'
 import console from 'node:console'
 import { lstat, mkdir, open, readFile, rename, rm, statfs } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
+import { request as httpRequest } from 'node:http'
 import { isIP } from 'node:net'
 import { setTimeout as delay } from 'node:timers/promises'
 import { pathToFileURL } from 'node:url'
@@ -18,7 +19,71 @@ const commit = /^[0-9a-f]{40}$/
 const containerId = /^[0-9a-f]{64}$/
 const WORKER_SERVICE = 'validation-worker'
 const WORKER_IMAGE_ENV = 'PHYSICSOS_VALIDATION_IMAGE'
+const WORKER_OPERATION_LABEL = 'io.physicsos.release.operation'
+const WORKER_CREATE_LABEL = 'io.physicsos.release.create'
+const WORKER_OWNERSHIP_FORMAT = 'physicsos-validation-worker/1'
+const DOCKER_SOCKET = '/var/run/docker.sock'
 const aborted = signal => signal?.throwIfAborted()
+
+function jsonDigest(value) {
+  const ordered = item => Array.isArray(item) ? item.map(ordered) : item && typeof item === 'object'
+    ? Object.fromEntries(Object.entries(item).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0).map(([key, entry]) => [key, ordered(entry)])) : item
+  return createHash('sha256').update(JSON.stringify(ordered(value))).digest('hex')
+}
+
+function engineJson(method, path, body, status = 200, timeoutMs = 30_000) {
+  // Never pass Config/Env through argv, a shell, a file or diagnostics.
+  const payload = body === undefined ? undefined : Buffer.from(JSON.stringify(body))
+  return new Promise((resolveResult, reject) => {
+    const fail = uncertain => { const error = new Error('Docker Unix-socket operation failed'); error.createUncertain = uncertain; reject(error) }
+    const request = httpRequest({ socketPath: DOCKER_SOCKET, method, path,
+      headers: payload ? { 'content-type': 'application/json', 'content-length': payload.length } : {} }, response => {
+      const chunks = []
+      let size = 0
+      response.on('data', chunk => {
+        size += chunk.length
+        if (size > 256 * 1024) request.destroy(new Error('Docker metadata exceeded limit'))
+        else chunks.push(chunk)
+      })
+      response.on('error', () => fail(true))
+      response.on('end', () => {
+        if (response.statusCode !== status) return fail(![400, 404, 409].includes(response.statusCode))
+        try { resolveResult(JSON.parse(Buffer.concat(chunks).toString('utf8'))) } catch { fail(true) }
+      })
+    })
+    request.setTimeout(timeoutMs, () => request.destroy(new Error('Docker socket timed out')))
+    request.on('error', () => fail(true))
+    request.end(payload)
+  })
+}
+
+async function workerEngineVersion(docker) {
+  if (!(await lstat(DOCKER_SOCKET)).isSocket()) throw new Error('A local Docker Unix socket is required')
+  const version = await engineJson('GET', '/version'), info = await engineJson('GET', '/info')
+  if (!/^1\.[0-9]+$/.test(version.ApiVersion ?? '') || typeof info.ID !== 'string' || !info.ID ||
+    jsonOf(await docker(['info', '--format', '{{json .ID}}'])) !== info.ID)
+    throw new Error('Worker create socket and Docker CLI must address the same daemon')
+  return version.ApiVersion
+}
+
+export async function createValidationWorker({ name, body, apiVersion, timeoutMs }) {
+  if (!/^1\.[0-9]+$/.test(apiVersion ?? '') || !/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(name)) throw new Error('Invalid fixed worker create request')
+  return engineJson('POST', `/v${apiVersion}/containers/create?name=${encodeURIComponent(name)}`, body, 201, timeoutMs)
+}
+
+const workerOwnershipPath = plan => join(plan.projectDir, '.physicsos-release', 'validation-worker.json')
+
+async function readWorkerOwnership(plan) {
+  const file = workerOwnershipPath(plan)
+  try { await lstat(file) } catch (error) { if (error.code === 'ENOENT') return null; throw error }
+  const record = JSON.parse(await privateText(file))
+  const fields = ['format', 'containerId', 'image', 'operationNonce', 'createNonce', 'configHash', 'labelsSha256', 'requestSha256']
+  if (!record || typeof record !== 'object' || Array.isArray(record) || Object.keys(record).length !== fields.length || fields.some(field => !Object.hasOwn(record, field)) ||
+    record.format !== WORKER_OWNERSHIP_FORMAT || !containerId.test(record.containerId ?? '') || !imageId.test(record.image ?? '') ||
+    ['operationNonce', 'createNonce', 'configHash', 'labelsSha256', 'requestSha256'].some(field => !digest.test(record[field] ?? '')))
+    throw new Error('Invalid private worker ownership record')
+  return record
+}
 
 function validateValidationWorker(plan) {
   if (!Object.hasOwn(plan, 'validationWorker')) return
@@ -141,9 +206,14 @@ async function workerConfigHash(docker, compose, env) {
   return parts[1]
 }
 
-async function workerContainers(docker, compose) {
-  const ids = textOf(await docker([...compose, 'ps', '--all', '--quiet', WORKER_SERVICE])).split(/\s+/).filter(Boolean)
-  if (new Set(ids).size !== ids.length || ids.some(id => !containerId.test(id))) throw new Error('Worker inventory requires unique full container IDs')
+async function workerContainers(docker, compose, source) {
+  const name = workerName(source)
+  if (!/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(name)) throw new Error('Invalid fixed worker name')
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const scoped = textOf(await docker(['ps', '--all', '--no-trunc', '--quiet', '--filter', `label=com.docker.compose.project=${source.config.name}`, '--filter', `label=com.docker.compose.service=${WORKER_SERVICE}`]))
+  const named = textOf(await docker(['ps', '--all', '--no-trunc', '--quiet', '--filter', `name=^/${escaped}$`]))
+  const ids = [...new Set(`${scoped}\n${named}`.split(/\s+/).filter(Boolean))]
+  if (ids.some(id => !containerId.test(id))) throw new Error('Worker inventory requires full container IDs')
   const containers = []
   for (const id of ids) {
     const container = jsonOf(await docker(['inspect', id]))[0]
@@ -153,15 +223,15 @@ async function workerContainers(docker, compose) {
   return containers
 }
 
-function guardWorkerContainer(plan, source, container, expectedImage, allowPartial = false) {
+function guardWorkerContainer(plan, source, container, expectedImage) {
   const labels = container.Config?.Labels ?? {}, name = workerName(source)
-  if (!containerId.test(container.Id ?? '') || container.Image !== expectedImage ||
-    (container.Name !== `/${name}` && !(allowPartial && container.Name === `/${container.Id.slice(0, 12)}_${name}`)) ||
+  if (!containerId.test(container.Id ?? '') || container.Image !== expectedImage || container.Name !== `/${name}` ||
     labels['com.docker.compose.project'] !== source.config.name || labels['com.docker.compose.service'] !== WORKER_SERVICE ||
     labels['com.docker.compose.container-number'] !== '1' || labels['com.docker.compose.oneoff'] !== 'False' ||
-    container.Config?.User !== 'pwuser' || container.HostConfig?.ReadonlyRootfs !== true || container.HostConfig.Privileged === true ||
+    container.Config?.User !== 'pwuser' || container.HostConfig?.ReadonlyRootfs !== true || container.HostConfig.Privileged === true || container.HostConfig.AutoRemove === true ||
     !Array.isArray(container.Mounts) || container.Mounts.some(mount => !['bind', 'tmpfs'].includes(mount.Type) || (mount.Type === 'bind' && mount.RW !== false)))
     throw new Error('Validation worker role, image, user, read-only configuration or mounts changed')
+  if (Object.hasOwn(labels, 'com.docker.compose.image') && labels['com.docker.compose.image'] !== expectedImage) throw new Error('Worker image label differs from the exact image')
   const hashes = source.validationWorker?.configHashes
   if (hashes && !(expectedImage === plan.validationWorker.candidateImage ? [hashes.new] : [hashes.old, hashes.rollback]).includes(labels['com.docker.compose.config-hash']))
     throw new Error('Validation worker Compose configuration hash changed')
@@ -170,30 +240,112 @@ function guardWorkerContainer(plan, source, container, expectedImage, allowParti
     throw new Error('Validation worker runtime labels differ from the frozen inputs')
 }
 
-// Only Docker-generated identity and image labels may differ after a recreate.
-// Keep Env (including tokens), ports, mounts, caps, seccomp and all HostConfig private.
+function automaticWorkerHostname(source, container) {
+  return source.config.services[WORKER_SERVICE].hostname === undefined && container.Config.Hostname === container.Id.slice(0, 12)
+}
+
+function guardWorkerMacSupport(config) {
+  const service = config.services?.[WORKER_SERVICE]
+  if (service && (Object.hasOwn(service, 'mac_address') || Object.values(service.networks ?? {}).some(network =>
+    network && typeof network === 'object' && Object.hasOwn(network, 'mac_address'))))
+    throw new Error('Fixed worker MAC configuration is not supported')
+}
+
+function workerNetworking(source, container) {
+  guardWorkerMacSupport(source.config)
+  const endpoints = {}
+  for (const [name, value] of Object.entries(container.NetworkSettings?.Networks ?? {})) {
+    if (typeof value.NetworkID !== 'string' || !value.NetworkID) throw new Error('Original worker network identity is missing')
+    const declared = source.config.services[WORKER_SERVICE].networks?.[name] ?? {}
+    const aliases = (value.Aliases ?? []).filter(alias => ![container.Id, container.Id.slice(0, 12)].includes(alias) || declared.aliases?.includes(alias))
+    const endpoint = { NetworkID: value.NetworkID, IPAMConfig: value.IPAMConfig ?? null, Links: value.Links ?? null, Aliases: aliases, DriverOpts: value.DriverOpts ?? null }
+    if (Object.hasOwn(value, 'GwPriority')) endpoint.GwPriority = value.GwPriority
+    endpoints[name] = endpoint
+  }
+  if (!Object.keys(endpoints).length) throw new Error('Worker requires its existing network configuration')
+  return { EndpointsConfig: endpoints }
+}
+
+function workerRequestFromContainer(source, container) {
+  const config = structuredClone(container.Config)
+  if (automaticWorkerHostname(source, container)) config.Hostname = ''
+  return { ...config, HostConfig: structuredClone(container.HostConfig), NetworkingConfig: workerNetworking(source, container) }
+}
+
+// Runtime allocation fields are checked only after start. Labels are never
+// broadly discarded: the exact original/requested map includes both nonces.
 function workerSettings(source, container) {
   const config = structuredClone(container.Config)
-  delete config.Image
-  delete config.Labels
-  if (source.config.services[WORKER_SERVICE].hostname === undefined) delete config.Hostname
+  if (source.validationWorker?.autoHostname ?? automaticWorkerHostname(source, container)) delete config.Hostname
   const networks = Object.fromEntries(Object.entries(container.NetworkSettings?.Networks ?? {}).map(([name, value]) =>
-    [name, { id: value.NetworkID, ipam: value.IPAMConfig, links: value.Links, driver: value.DriverOpts,
-      aliases: (value.Aliases ?? []).filter(alias => ![container.Id, container.Id.slice(0, 12), container.Name.slice(1), workerName(source)].includes(alias)).sort() }]))
+    [name, { id: value.NetworkID, ipam: value.IPAMConfig ?? null, links: value.Links ?? null, driver: value.DriverOpts ?? null, gatewayPriority: value.GwPriority ?? 0,
+      aliases: (value.Aliases ?? []).filter(alias => ![container.Id, container.Id.slice(0, 12)].includes(alias) || source.config.services[WORKER_SERVICE].networks?.[name]?.aliases?.includes(alias)).sort() }]))
   return { config, host: container.HostConfig, mounts: [...container.Mounts].sort((a, b) => a.Destination.localeCompare(b.Destination)), networks, ports: container.NetworkSettings?.Ports }
 }
 
-function guardWorkerSettings(source, container) {
-  if (!isDeepStrictEqual(workerSettings(source, source.validationWorker.container), workerSettings(source, container)))
-    throw new Error('Validation worker runtime configuration changed')
+function guardWorkerSettings(source, container, creation) {
+  const expected = workerSettings(source, source.validationWorker.container), actual = workerSettings(source, container)
+  if (!creation && !container.State?.Running) creation = { body: source.validationWorker.template }
+  if (creation) {
+    const { HostConfig, NetworkingConfig, ...config } = creation.body
+    expected.config = structuredClone(config)
+    if (source.validationWorker.autoHostname) {
+      delete expected.config.Hostname
+      if (container.Config.Hostname !== container.Id.slice(0, 12)) throw new Error('Worker automatic hostname changed')
+    }
+    expected.host = HostConfig
+    if (!container.State?.Running) {
+      if (!isDeepStrictEqual(expected.config, actual.config) || !isDeepStrictEqual(expected.host, actual.host)) throw new Error('Created worker configuration changed')
+      // Created containers may have no ports, mounts or allocated NetworkID yet.
+      // HostConfig is exact; any materialized mount/endpoint must be requested.
+      for (const mount of actual.mounts) if (!expected.mounts.some(original => isDeepStrictEqual(original, mount))) throw new Error('Created worker has an unrequested mount')
+      for (const [name, endpoint] of Object.entries(container.NetworkSettings?.Networks ?? {})) {
+        const requested = NetworkingConfig.EndpointsConfig[name]
+        if (!requested || endpoint.NetworkID && endpoint.NetworkID !== requested.NetworkID) throw new Error('Created worker has an unrequested network')
+        for (const field of ['IPAMConfig', 'Links', 'Aliases', 'DriverOpts', 'GwPriority', 'MacAddress']) {
+          const declared = source.config.services[WORKER_SERVICE].networks?.[name] ?? {}
+          const value = field === 'Aliases' && Array.isArray(endpoint[field])
+            ? endpoint[field].filter(alias => ![container.Id, container.Id.slice(0, 12)].includes(alias) || declared.aliases?.includes(alias)) : endpoint[field]
+          if (Object.hasOwn(requested, field) && value !== undefined && !isDeepStrictEqual(value, requested[field])) throw new Error('Created worker endpoint configuration changed')
+        }
+      }
+      return
+    }
+  }
+  if (!isDeepStrictEqual(expected, actual)) throw new Error('Validation worker runtime configuration changed')
+}
+
+function guardOwnedWorker(plan, source, container, workerState) {
+  const proof = workerState.owned.get(container.Id)
+  if (!proof) throw new Error('Unknown worker container')
+  guardWorkerContainer(plan, source, container, proof.image)
+  if (!proof.original) {
+    const labels = container.Config.Labels
+    if (!proof.submitted || labels[WORKER_OPERATION_LABEL] !== workerState.operationNonce || labels[WORKER_CREATE_LABEL] !== proof.nonce)
+      throw new Error('Worker create nonce does not match the recorded full ID')
+  }
+  guardWorkerSettings(source, container, proof.original ? undefined : proof)
+}
+
+async function guardOriginalWorkerOwnership(plan, source, container) {
+  guardWorkerMacSupport(source.config)
+  const labels = container.Config.Labels, record = await readWorkerOwnership(plan)
+  const operation = labels[WORKER_OPERATION_LABEL], nonce = labels[WORKER_CREATE_LABEL]
+  if (operation === undefined && nonce === undefined && !record) return
+  if (!record || !digest.test(operation ?? '') || !digest.test(nonce ?? '') || record.containerId !== container.Id || record.image !== container.Image ||
+    record.operationNonce !== operation || record.createNonce !== nonce || record.configHash !== labels['com.docker.compose.config-hash'] ||
+    record.labelsSha256 !== jsonDigest(labels) || record.requestSha256 !== jsonDigest(workerRequestFromContainer(source, container)))
+    throw new Error('Original worker nonce, labels or creation configuration changed')
 }
 
 async function inspectOriginalWorker(plan, source, docker, requireHealthy = true) {
+  guardWorkerMacSupport(source.config)
   if (source.config.services?.[WORKER_SERVICE]?.image !== plan.validationWorker.expectedOldImage) throw new Error('Production worker Compose image changed')
-  const containers = await workerContainers(docker, composeArgs(plan.projectDir))
+  const containers = await workerContainers(docker, composeArgs(plan.projectDir), source)
   if (containers.length !== 1 || containers[0].Id !== plan.validationWorker.expectedOldContainerId) throw new Error('Production worker full container identity changed')
   const container = containers[0]
   guardWorkerContainer(plan, source, container, plan.validationWorker.expectedOldImage)
+  await guardOriginalWorkerOwnership(plan, source, container)
   const compose = composeArgs(plan.projectDir), oldHash = container.Config.Labels['com.docker.compose.config-hash'], rollbackHash = await workerConfigHash(docker, compose)
   if (oldHash !== rollbackHash) {
     // A previously created tag spelling is not used for up/pull. Prove that only
@@ -216,6 +368,10 @@ async function inspectValidationWorker(plan, source, docker) {
   const candidate = jsonOf(await docker(['image', 'inspect', plan.validationWorker.candidateImage]))[0]
   const labels = candidate?.Config?.Labels ?? {}, oldConfig = structuredClone(oldImage?.Config), newConfig = structuredClone(candidate?.Config)
   if (!oldConfig || !newConfig) throw new Error('Worker image configuration is missing')
+  const oldLabels = structuredClone(oldConfig.Labels ?? {}), newLabels = structuredClone(newConfig.Labels ?? {})
+  for (const field of ['org.opencontainers.image.revision', 'io.physicsos.worker.inputs']) { delete oldLabels[field]; delete newLabels[field] }
+  if (!isDeepStrictEqual(oldLabels, newLabels) || [WORKER_OPERATION_LABEL, WORKER_CREATE_LABEL].some(field => Object.hasOwn(labels, field)))
+    throw new Error('Worker image contains unreviewed or runtime-only label changes')
   delete oldConfig.Labels
   delete newConfig.Labels
   const layers = oldImage.RootFS?.Layers, nextLayers = candidate.RootFS?.Layers
@@ -241,7 +397,8 @@ async function inspectValidationWorker(plan, source, docker) {
     files.push({ file, mode: stat.mode & 0o7777, uid: stat.uid, gid: stat.gid, sha256: await sha256(file) })
   }
   source.images[WORKER_SERVICE] = { id: oldImage.Id, digest: oldImage.RepoDigests?.[0] ?? null, labels: oldImage.Config.Labels ?? {} }
-  return { container, env, files, configHashes: source.workerConfigHashes }
+  return { container, env, files, configHashes: source.workerConfigHashes, autoHostname: automaticWorkerHostname(source, container),
+    networking: workerNetworking(source, container), template: workerRequestFromContainer(source, container) }
 }
 
 async function guardWorkerFiles(plan, source, switched, envRestored = false) {
@@ -255,6 +412,8 @@ async function guardWorkerFiles(plan, source, switched, envRestored = false) {
 }
 
 function guardWorkerConfiguration(plan, source, current) {
+  guardWorkerMacSupport(source.config)
+  guardWorkerMacSupport(current)
   const expected = structuredClone(source.config), actual = structuredClone(current)
   if (![plan.validationWorker.expectedOldImage, plan.validationWorker.candidateImage].includes(actual.services?.[WORKER_SERVICE]?.image) ||
     ![source.config.services.app.image, plan.expectedOldImage, plan.candidateImage].includes(actual.services?.app?.image))
@@ -342,13 +501,10 @@ async function guardRecoverySource(plan, source, docker, compose, switched, work
   if (source.validationWorker) {
     await guardWorkerFiles(plan, source, true, workerState.envRestored)
     guardWorkerConfiguration(plan, source, current)
-    const workers = await workerContainers(docker, compose)
-    if (workers.length > 2 || (!workers.length && !workerState.attempted)) throw new Error('Recovery worker inventory changed')
-    for (const worker of workers) {
-      if (!workerState.owned.has(worker.Id) || ![plan.validationWorker.expectedOldImage, plan.validationWorker.candidateImage].includes(worker.Image)) throw new Error('Unknown recovery worker container')
-      guardWorkerContainer(plan, source, worker, worker.Image, true)
-      guardWorkerSettings(source, worker)
-    }
+    if (workerState.creates.some(create => create.submitted && !create.containerId && !create.resolvedEmpty)) throw new Error('Recovery has an unresolved worker create')
+    const workers = await workerContainers(docker, compose, source)
+    if (workers.length > 2 || (!workers.length && !workerState.removalAttempted)) throw new Error('Recovery worker inventory changed')
+    for (const worker of workers) guardOwnedWorker(plan, source, worker, workerState)
   } else {
     const expectedConfig = structuredClone(source.config), currentConfig = structuredClone(current)
     delete expectedConfig.services.app.image
@@ -412,7 +568,8 @@ export async function releaseSwitch(input, dependencies = {}) {
   const plan = { ...input, projectDir: resolve(input.projectDir ?? '/opt/physicsos'), backup: { ...suppliedBackup, mode: suppliedBackup.mode ?? (suppliedBackup.keyFile ? 'full' : 'paired') } }
   let phase = 'preflight', lock, recovery, nextEnv, rollbackEnv, reserve, source
   let stopAttempted = false, switched = false
-  const workerState = { attempted: false, owned: new Set(), envRestored: false }
+  const workerState = { attempted: false, removalAttempted: false, owned: new Map(), creates: [], operationNonce: randomBytes(32).toString('hex'), envRestored: false }
+  const createWorker = dependencies.createWorker ?? createValidationWorker
   const attempted = []
   const docker = dependencies.docker ?? dockerCommand
   const invoke = dependencies.run ?? runCommand
@@ -426,41 +583,111 @@ export async function releaseSwitch(input, dependencies = {}) {
     await run(args[0], args.slice(1))
   }
   const releaseEnv = (appImage, workerImage) => ({ ...process.env, PHYSICSOS_APP_IMAGE: appImage, ...(source?.validationWorker ? { PHYSICSOS_VALIDATION_IMAGE: workerImage } : {}) })
-  const recreateWorker = async (expected, appImage) => {
-    const started = Date.now()
+  const saveWorkerJournal = async () => {
+    receipt.validationWorker.ownedContainerIds = [...workerState.owned.keys()]
+    receipt.validationWorker.removalAttempted = workerState.removalAttempted
+    receipt.validationWorker.creates = workerState.creates.map(create => ({ nonce: create.nonce, image: create.image, configHash: create.configHash,
+      requestSha256: create.requestSha256, submitted: create.submitted, containerId: create.containerId ?? null, uncertain: create.uncertain, resolvedEmpty: create.resolvedEmpty ?? false }))
+    await atomicRecord(join(recovery, 'paired-recovery.json'), { ...receipt, consistent: true })
+  }
+  const recordWorkerId = async (creation, id) => {
+    if (!containerId.test(id ?? '') || creation.containerId && creation.containerId !== id || workerState.owned.has(id) && workerState.owned.get(id) !== creation)
+      throw new Error('Worker create returned an unexpected full container ID')
+    creation.containerId = id
+    workerState.owned.set(id, creation)
+    if (creation.image === plan.validationWorker.candidateImage) receipt.validationWorker.newContainerId = id
+    // Persist daemon CID / submitted nonce proof before even inspecting or starting.
+    await saveWorkerJournal()
+    await atomicRecord(workerOwnershipPath(plan), { format: WORKER_OWNERSHIP_FORMAT, containerId: id, image: creation.image,
+      operationNonce: workerState.operationNonce, createNonce: creation.nonce, configHash: creation.configHash,
+      labelsSha256: jsonDigest(creation.body.Labels), requestSha256: creation.requestSha256 })
+  }
+  const reconcileWorkerCreates = async () => {
+    for (const creation of workerState.creates.filter(create => create.submitted && !create.containerId && !create.resolvedEmpty)) {
+      const deadline = Date.now() + (creation.uncertain ? plan.timeoutMs ?? 150_000 : 0)
+      do {
+        const ids = textOf(await docker(['ps', '--all', '--no-trunc', '--quiet', '--filter', `label=${WORKER_OPERATION_LABEL}=${workerState.operationNonce}`,
+          '--filter', `label=${WORKER_CREATE_LABEL}=${creation.nonce}`])).split(/\s+/).filter(Boolean)
+        if (ids.length > 1 || ids.some(id => !containerId.test(id))) throw new Error('Submitted worker create has ambiguous nonce attribution')
+        if (ids.length) {
+          await recordWorkerId(creation, ids[0])
+          const worker = jsonOf(await docker(['inspect', ids[0]]))[0]
+          guardOwnedWorker(plan, source, worker, workerState)
+          creation.uncertain = false
+          await saveWorkerJournal()
+          break
+        }
+        if (Date.now() >= deadline) {
+          if (creation.uncertain) throw new Error('Submitted worker create is unresolved; operator inspection is required')
+          creation.resolvedEmpty = true
+          await saveWorkerJournal()
+          break
+        }
+        await delay(plan.intervalMs ?? 1000)
+      } while (!creation.containerId)
+    }
+  }
+  const recreateWorker = async expected => {
+    await reconcileWorkerCreates()
+    const workers = await workerContainers(docker, compose, source)
+    if (workers.length > 2 || !workers.length && !workerState.removalAttempted) throw new Error('Worker replacement inventory changed')
+    for (const worker of workers) guardOwnedWorker(plan, source, worker, workerState)
     workerState.attempted = true
     receipt.validationWorker.recreateAttempted = true
-    let failed = false
-    try {
-      await docker([...compose, 'up', '-d', '--no-build', '--no-deps', '--pull', 'never', '--force-recreate', WORKER_SERVICE], { env: releaseEnv(appImage, expected) })
-    } catch { failed = true /* Inspect a daemon-accepted partial recreate before recovery. */ }
-    const workers = await workerContainers(docker, compose), completed = Date.now()
     for (const worker of workers) {
-      if (!workerState.owned.has(worker.Id)) {
-        const created = Date.parse(worker.Created)
-        if (worker.Image !== expected || !Number.isFinite(created) || created < started || created > completed) throw new Error('Worker recreate left an unowned container')
-        guardWorkerContainer(plan, source, worker, expected, true)
-        guardWorkerSettings(source, worker)
-        workerState.owned.add(worker.Id)
-        receipt.validationWorker.ownedContainerIds = [...workerState.owned]
-      } else {
-        if (![plan.validationWorker.expectedOldImage, plan.validationWorker.candidateImage].includes(worker.Image)) throw new Error('Owned worker image changed')
-        guardWorkerContainer(plan, source, worker, worker.Image, true)
-        guardWorkerSettings(source, worker)
-      }
-      if (worker.Image === plan.validationWorker.candidateImage) receipt.validationWorker.newContainerId = worker.Id
+      try { await docker(['stop', '--time', '60', worker.Id]) } catch { /* Inspect a daemon-accepted stop by the recorded CID. */ }
+      const stopped = jsonOf(await docker(['inspect', worker.Id]))[0]
+      guardOwnedWorker(plan, source, stopped, workerState)
+      if (stopped.State?.Running) throw new Error('Owned worker did not stop')
+      workerState.removalAttempted = true
+      await saveWorkerJournal()
+      try { await docker(['rm', worker.Id]) } catch { /* Settle the exact removal before submitting any create. */ }
+      const remaining = await workerContainers(docker, compose, source)
+      if (remaining.some(item => item.Id === worker.Id)) throw new Error('Owned worker removal did not settle')
+      for (const item of remaining) guardOwnedWorker(plan, source, item, workerState)
     }
-    receipt.validationWorker.ownedContainerIds = [...workerState.owned]
-    await atomicRecord(join(recovery, 'paired-recovery.json'), { ...receipt, consistent: true })
-    if (failed) throw new Error('Validation worker recreate failed')
+    if ((await workerContainers(docker, compose, source)).length) throw new Error('Worker name/service is not empty after owned removal')
+    await guardWorkerFiles(plan, source, switched, workerState.envRestored)
+    const nonce = randomBytes(32).toString('hex'), body = structuredClone(source.validationWorker.template)
+    body.Image = expected
+    body.Labels['com.docker.compose.image'] = expected
+    body.Labels['com.docker.compose.config-hash'] = expected === plan.validationWorker.candidateImage ? source.validationWorker.configHashes.new : source.validationWorker.configHashes.rollback
+    if (expected === plan.validationWorker.candidateImage) {
+      body.Labels['org.opencontainers.image.revision'] = plan.revision
+      body.Labels['io.physicsos.worker.inputs'] = plan.validationWorker.inputsSha256
+    }
+    body.Labels[WORKER_OPERATION_LABEL] = workerState.operationNonce
+    body.Labels[WORKER_CREATE_LABEL] = nonce
+    const creation = { nonce, image: expected, body, configHash: body.Labels['com.docker.compose.config-hash'], requestSha256: jsonDigest(body), submitted: true, uncertain: false }
+    workerState.creates.push(creation)
+    await saveWorkerJournal()
+    let response
+    try { response = await createWorker({ name: workerName(source), body, apiVersion: source.validationWorker.apiVersion, timeoutMs: plan.timeoutMs ?? 150_000 }) }
+    catch (error) {
+      creation.uncertain = error?.createUncertain !== false
+      await saveWorkerJournal()
+      await reconcileWorkerCreates()
+      throw new Error('Worker Engine create failed; its submitted nonce is recorded')
+    }
+    if (!containerId.test(response?.Id ?? '')) {
+      creation.uncertain = true
+      await saveWorkerJournal()
+      await reconcileWorkerCreates()
+      throw new Error('Worker Engine create did not return a full daemon ID')
+    }
+    await recordWorkerId(creation, response.Id)
+    const created = jsonOf(await docker(['inspect', response.Id]))[0]
+    guardOwnedWorker(plan, source, created, workerState)
+    if (response.Warnings != null && (!Array.isArray(response.Warnings) || response.Warnings.length)) throw new Error('Worker Engine create reported configuration warnings')
+    await docker(['start', response.Id])
   }
   const verifiedWorker = async expected => {
-    const workers = await workerContainers(docker, compose)
-    if (workers.length !== 1 || !workerState.owned.has(workers[0].Id)) throw new Error('Expected exactly one owned validation worker')
+    const workers = await workerContainers(docker, compose, source)
+    if (workers.length !== 1 || !workerState.owned.has(workers[0].Id) || workers[0].Image !== expected) throw new Error('Expected exactly one owned validation worker')
     const worker = workers[0]
-    guardWorkerContainer(plan, source, worker, expected)
-    guardWorkerSettings(source, worker)
+    guardOwnedWorker(plan, source, worker, workerState)
     if (!worker.State?.Running || worker.State.Health?.Status !== 'healthy') throw new Error('Validation worker is not healthy')
+    await guardOriginalWorkerOwnership(plan, source, worker)
     await guardWorkerFiles(plan, source, switched, workerState.envRestored)
     const current = jsonOf(await docker([...compose, 'config', '--format', 'json']))
     guardWorkerConfiguration(plan, source, current)
@@ -512,6 +739,7 @@ export async function releaseSwitch(input, dependencies = {}) {
     const running = new Set(textOf(await docker([...compose, 'ps', '--status', 'running', '--services'])).split(/\s+/))
     if (running.has('app') || running.has('redis')) return false
     try {
+      if (source.validationWorker) await reconcileWorkerCreates()
       await guardRecoverySource(plan, source, docker, compose, switched, workerState)
       await guardDataWriters(source, docker)
       await writerLease(source, docker, compose, 0)
@@ -584,10 +812,15 @@ export async function releaseSwitch(input, dependencies = {}) {
     if (plan.validationWorker) {
       phase = 'preflight-validation-worker'
       source.validationWorker = await inspectValidationWorker(plan, source, docker)
-      workerState.owned.add(source.validationWorker.container.Id)
+      source.validationWorker.apiVersion = dependencies.createWorker ? undefined : await workerEngineVersion(docker)
+      const ownershipDir = dirname(workerOwnershipPath(plan))
+      await mkdir(ownershipDir, { recursive: true, mode: 0o700 })
+      const directory = await lstat(ownershipDir)
+      if (!directory.isDirectory() || (directory.mode & 0o077)) throw new Error('Worker ownership directory must be private')
+      workerState.owned.set(source.validationWorker.container.Id, { original: true, image: plan.validationWorker.expectedOldImage })
       receipt.validationWorker = { service: WORKER_SERVICE, imageEnv: WORKER_IMAGE_ENV, oldImage: plan.validationWorker.expectedOldImage,
         newImage: plan.validationWorker.candidateImage, oldContainerId: source.validationWorker.container.Id,
-        revision: plan.revision, inputsSha256: plan.validationWorker.inputsSha256, ownedContainerIds: [...workerState.owned] }
+        revision: plan.revision, inputsSha256: plan.validationWorker.inputsSha256, operationNonce: workerState.operationNonce, ownedContainerIds: [...workerState.owned.keys()] }
       // Preview only: production .env and the live worker remain untouched.
       const projected = jsonOf(await docker([...compose, 'config', '--format', 'json'], { env: releaseEnv(plan.candidateImage, plan.validationWorker.candidateImage) }))
       guardWorkerConfiguration(plan, source, projected)
