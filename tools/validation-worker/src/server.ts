@@ -53,7 +53,7 @@ export interface ValidationRequest {
 }
 
 /** Injected planner; undefined when this build has no domain viewport runtime. */
-export type FramePlanner = (scene: Record<string, unknown>) => {
+export type FramePlanner = (scene: Record<string, unknown>, experimentId: string) => {
   readonly frames: readonly { readonly frameId: string; readonly snapshot: Record<string, unknown> }[]
   readonly changedFrame?: { readonly frameId: string; readonly snapshot: Record<string, unknown> }
   readonly notes: readonly string[]
@@ -89,7 +89,8 @@ const isRequest = (value: unknown): value is ValidationRequest => {
   const text = (key: string): boolean => typeof body[key] === 'string' && (body[key] as string).length > 0
   const framesOk = Array.isArray(body.frames) && body.frames.length >= 2 && body.frames.length <= 8
     && typeof body.changedFrame === 'object' && body.changedFrame !== null
-  const sceneOk = typeof body.scene === 'object' && body.scene !== null
+  const sceneOk = typeof body.scene === 'object' && body.scene !== null && !Array.isArray(body.scene)
+    && typeof body.experimentId === 'string' && /^[a-z0-9][a-z0-9-]{0,79}$/.test(body.experimentId)
   return text('wrapperUrl') && text('entryUrl') && text('token')
     && (framesOk || sceneOk)
     && typeof body.expected === 'object' && body.expected !== null
@@ -112,9 +113,12 @@ export async function evaluateCandidate(
   let frames = request.frames
   let changedFrame = request.changedFrame
   if (frames === undefined || changedFrame === undefined) {
-    if (request.scene === undefined) throw Object.assign(new Error('scene required to plan frames'), { status: 400 })
+    if (request.scene === undefined || typeof request.experimentId !== 'string'
+      || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(request.experimentId)) {
+      throw Object.assign(new Error('scene and template identity required to plan frames'), { status: 400 })
+    }
     if (planner === undefined) throw Object.assign(new Error('frame planner unavailable'), { status: 503 })
-    const plan = planner(request.scene)
+    const plan = planner(request.scene, request.experimentId)
     if (plan.changedFrame === undefined) throw Object.assign(new Error('no editable parameter to verify'), { status: 422 })
     frames = plan.frames
     changedFrame = plan.changedFrame
@@ -233,7 +237,7 @@ export async function startValidationWorker(options: WorkerOptions): Promise<{ s
            the whole scene and answers for the engine it selects. */
         const createRuntime = await options.runtimeFor(body.scene as Record<string, unknown>)
         const { planScene: plan } = await import('./planner.ts')
-        planner = scene => plan(scene, createRuntime)
+        planner = (scene, experimentId) => plan(scene, createRuntime, experimentId)
       }
       send(200, await evaluateCandidate(browser, body, screenshotDir, planner))
     } catch (error) {

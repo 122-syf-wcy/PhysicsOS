@@ -97,6 +97,8 @@ export interface CandidateValidationInput {
   /** Digest and revision of the scene the candidate was frozen for. */
   readonly sceneSha256: string
   readonly sceneRevision: number
+  /** Template identity read from the same frozen artifact, required for scene planning. */
+  readonly experimentId?: string
   /** App-authorized canonical scene from the candidate's frozen source. */
   readonly scene?: Record<string, unknown>
   /** Pinned engine frames; omit to let the worker plan them from the scene. */
@@ -140,7 +142,7 @@ export async function validateFrozenCandidate(
   input: FrozenCandidateValidationInput,
   deps: {
     readonly jobs: QuestionCodeJobs
-    readonly artifacts: Pick<QuestionCodeArtifactService, 'validatorScene' | 'assertValidationSource'>
+    readonly artifacts: Pick<QuestionCodeArtifactService, 'validatorScene' | 'assertValidationSource' | 'describe'>
     readonly publicOrigin: string
     /** Server-owned current own-session source check; never forwarded to the worker. */
     readonly sourceFence?: (binding: ValidationSourceBinding) => void
@@ -168,12 +170,13 @@ export async function validateFrozenCandidate(
     currentFence = await deps.currentSource?.(binding)
     assertCurrent()
     const scene = await deps.artifacts.validatorScene(binding)
+    const { experimentId } = deps.artifacts.describe(binding.ownerSessionId, binding.artifactId, binding.candidateSha256)
     assertCurrent()
     const base = deps.publicOrigin.replace(/\/$/, '')
     const prefix = `${base}/physicsos/question-code/validation/${binding.token}/${binding.candidateSha256}`
     const outcome = await requestCandidateValidation(config, {
       jobId: binding.jobId, epoch: binding.epoch, candidateSha256: binding.candidateSha256,
-      sceneSha256: binding.sceneSha256, sceneRevision: binding.sceneRevision, scene,
+      sceneSha256: binding.sceneSha256, sceneRevision: binding.sceneRevision, experimentId, scene,
       ticket: binding.token, wrapperUrl: `${prefix}/shell/wrapper.html`, entryUrl: `${prefix}/dist/index.html`,
     }, deps.fetchImpl)
     workerOutcome = outcome
@@ -220,7 +223,7 @@ export async function retryFrozenCandidate(
   actor: IdentityActor,
   deps: {
     readonly jobs: QuestionCodeJobs
-    readonly artifacts: Pick<QuestionCodeArtifactService, 'validationSource' | 'validatorScene' | 'assertValidationSource'>
+    readonly artifacts: Pick<QuestionCodeArtifactService, 'validationSource' | 'validatorScene' | 'assertValidationSource' | 'describe'>
     readonly publicOrigin: string
     readonly currentSource: (binding: ValidationSourceBinding) => Promise<() => void>
     readonly fetchImpl?: typeof fetch
@@ -259,8 +262,10 @@ export async function requestCandidateValidation(
 ): Promise<CandidateValidationOutcome> {
   const pinnedFrames = Array.isArray(input.frames) && input.frames.length >= 2 && input.frames.length <= 8
     && isRecord(input.changedFrame)
-  if (!isRecord(input.scene) && !pinnedFrames) {
-    return { kind: 'infrastructure', code: 'WORKER_INPUT_MISSING', message: 'frozen scene or complete engine frames required' }
+  const plannedScene = isRecord(input.scene) && typeof input.experimentId === 'string'
+    && /^[a-z0-9][a-z0-9-]{0,79}$/.test(input.experimentId)
+  if (!plannedScene && !pinnedFrames) {
+    return { kind: 'infrastructure', code: 'WORKER_INPUT_MISSING', message: 'frozen scene with template identity or complete engine frames required' }
   }
   const controller = new AbortController()
   const timer = setTimeout(() => { controller.abort() }, config.timeoutMs ?? 60_000)
@@ -279,6 +284,7 @@ export async function requestCandidateValidation(
         // Resource authority stays in the URLs. The V3 channel has its own
         // bounded protocol alphabet and must not contain the job/ticket prefix.
         token: randomUUID(),
+        ...(input.experimentId === undefined ? {} : { experimentId: input.experimentId }),
         ...(input.scene === undefined ? {} : { scene: input.scene }),
         ...(input.frames === undefined ? {} : { frames: input.frames }),
         ...(input.changedFrame === undefined ? {} : { changedFrame: input.changedFrame }),

@@ -31,20 +31,45 @@ export const DOMAIN_RUNTIME_MODULES: Readonly<Record<string, { readonly module: 
 }
 
 export class PlannerError extends Error {
-  constructor(readonly code: 'UNKNOWN_DOMAIN' | 'RUNTIME_UNAVAILABLE' | 'NO_FRAMES' | 'NO_PARAMETER', message: string) {
+  constructor(readonly code: 'UNKNOWN_DOMAIN' | 'RUNTIME_UNAVAILABLE' | 'NO_FRAMES' | 'NO_PARAMETER' | 'INVALID_SNAPSHOT', message: string) {
     super(message)
     this.name = 'PlannerError'
   }
 }
 
+/** Same fact allowlist as the Lab's universalContributionSnapshot, without client imports. */
+function contributionSnapshot(frame: SnapshotLike, experimentId: string): Record<string, unknown> {
+  if (typeof experimentId !== 'string' || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(experimentId)
+    || frame.status === 'failed' || typeof frame.sceneRevision !== 'number'
+    || !Number.isSafeInteger(frame.sceneRevision) || frame.sceneRevision < 0) {
+    throw new PlannerError('INVALID_SNAPSHOT', '运行时没有提供有效的实验帧身份。')
+  }
+  return wireSnapshot({
+    experimentId,
+    revision: frame.sceneRevision,
+    source: 'platform-engine',
+    domain: frame.domain,
+    title: frame.title,
+    view: frame.view,
+    inspector: frame.inspector,
+    clock: frame.clock,
+    table: frame.table,
+    charts: frame.charts,
+    verification: frame.verification,
+    events: frame.events,
+    trajectoryTimes: frame.trajectoryTimes,
+    ariaLabel: frame.ariaLabel,
+  })
+}
+
 /**
  * Resolve the plan for one scene through an already-resolved runtime factory.
- * This is the function the HTTP layer calls; it keeps the async loading out
- * of the request handler's hot path.
+ * The template identity comes from the app's bound artifact, not scene metadata.
  */
 export function planScene(
   scene: Record<string, unknown>,
   createRuntime: ((scene: Record<string, unknown>) => FrameSource | null) | null,
+  experimentId: string,
 ): { frames: readonly { frameId: string; snapshot: Record<string, unknown> }[]; changedFrame?: { frameId: string; snapshot: Record<string, unknown> }; notes: readonly string[] } {
   if (createRuntime === null) throw new PlannerError('RUNTIME_UNAVAILABLE', '该领域没有可用的视口运行时。')
   let runtime: FrameSource | null
@@ -55,9 +80,9 @@ export function planScene(
   const plan: FramePlan = planFrames(runtime)
   if (plan.frames.length === 0) throw new PlannerError('NO_FRAMES', '没有构造出任何引擎帧。')
   return {
-    frames: plan.frames.map(frame => ({ frameId: frame.frameId, snapshot: wireSnapshot(frame.snapshot) as unknown as Record<string, unknown> })),
+    frames: plan.frames.map(frame => ({ frameId: frame.frameId, snapshot: contributionSnapshot(frame.snapshot, experimentId) })),
     ...(plan.changedFrame === undefined ? {} : {
-      changedFrame: { frameId: plan.changedFrame.frameId, snapshot: wireSnapshot(plan.changedFrame.snapshot) as unknown as Record<string, unknown> },
+      changedFrame: { frameId: plan.changedFrame.frameId, snapshot: contributionSnapshot(plan.changedFrame.snapshot, experimentId) },
     }),
     notes: plan.notes,
   }

@@ -95,10 +95,12 @@ describe('frozen candidate → isolated worker handoff', () => {
   it('sends only its canonical frozen scene, ignores injected scene/frames/URLs and binds passed to the correct source', async () => {
     const h = await setup(), ticket = h.ticket()
     const fetchMock = vi.fn(respond())
-    const injected = { ...h.input(ticket.token), scene: { id: 'attacker' }, frames: [{ frameId: 'fake', snapshot: {} }], entryUrl: 'http://attacker' }
+    const injected = { ...h.input(ticket.token), experimentId: 'attacker-template', scene: { id: 'attacker' }, frames: [{ frameId: 'fake', snapshot: {} }], entryUrl: 'http://attacker' }
     expect(await validateFrozenCandidate(config, injected, h.deps(fetchMock as unknown as typeof fetch))).toMatchObject({ kind: 'passed' })
     const body = JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body))
     expect(body.scene).toEqual(JSON.parse(canonicalQuestionJson(h.scene)))
+    expect(body.experimentId).toBe(h.row.experimentId)
+    expect(body.experimentId).not.toBe(injected.experimentId)
     expect(body).not.toHaveProperty('frames')
     expect(body).not.toHaveProperty('changedFrame')
     expect(body.entryUrl).toContain(`/${h.row.sha256}/dist/index.html`)

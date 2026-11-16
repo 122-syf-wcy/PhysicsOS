@@ -54,9 +54,10 @@ describe('candidate validation request', () => {
     const scene = { id: 'scene-1', revision: 7, metadata: { sourceQuestionId: 'frozen-question' } }
     const fetchMock = vi.fn(respond({ passed: true, durationMs: 1, checks: [{ name: 'first-frame', passed: true }] }))
     const { frames: _frames, changedFrame: _changed, ...normal } = input
-    await requestCandidateValidation(config, { ...normal, scene }, fetchMock as unknown as typeof fetch)
+    await requestCandidateValidation(config, { ...normal, scene, experimentId: 'projectile-oblique' }, fetchMock as unknown as typeof fetch)
     const body = JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body))
     expect(body.scene).toEqual(scene)
+    expect(body.experimentId).toBe('projectile-oblique')
     expect(body).not.toHaveProperty('frames')
     expect(body).not.toHaveProperty('changedFrame')
     expect(body.expected).toEqual({ candidateSha256: input.candidateSha256, sceneSha256: input.sceneSha256, sceneRevision: 7 })
@@ -65,7 +66,8 @@ describe('candidate validation request', () => {
   it('fails locally without scene or a complete pinned-frame contract', async () => {
     const { frames: _frames, changedFrame: _changed, ...normal } = input
     const fetchMock = vi.fn(respond({ passed: true, durationMs: 1, checks: [{ name: 'render', passed: true }] }))
-    for (const missing of [normal, { ...normal, frames: input.frames }, { ...normal, frames: input.frames.slice(0, 1), changedFrame: input.changedFrame }]) {
+    for (const missing of [normal, { ...normal, scene: { id: 'frozen' } }, { ...normal, scene: { id: 'frozen' }, experimentId: 'invalid.id' },
+      { ...normal, frames: input.frames }, { ...normal, frames: input.frames.slice(0, 1), changedFrame: input.changedFrame }]) {
       expect(await requestCandidateValidation(config, missing, fetchMock as unknown as typeof fetch))
         .toMatchObject({ kind: 'infrastructure', code: 'WORKER_INPUT_MISSING' })
     }
