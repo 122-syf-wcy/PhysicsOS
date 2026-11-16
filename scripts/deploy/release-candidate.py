@@ -62,6 +62,7 @@ def load(file):
         data = Path(value['databaseDataRoot'])
         if not data.is_absolute() or data.is_symlink() or data == root or root not in data.parents:
             raise ValueError('Isolated database path must be a private child of candidate root')
+    search_configuration(value)
     return value
 
 
@@ -151,7 +152,280 @@ def require_task_container(config, container, role):
         raise RuntimeError('Isolated network endpoint belongs to another task or role')
 
 
-def ensure_isolated_network(config, production, create=False):
+SEARCH_SOURCE = 'physicsos-searxng-1'
+SEARCH_DESTINATION = '/etc/searxng/settings.yml'
+SEARCH_URL = 'http://searxng:8080/search'
+SEARCH_TMPFS = {'/etc/searxng': 'rw,noexec,nosuid,nodev,size=16777216',
+                '/var/cache/searxng': 'rw,noexec,nosuid,nodev,size=67108864'}
+SEARCH_HEALTH = 'python3 -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen(\'http://127.0.0.1:8080/healthz\',timeout=4).status==200 else 1)"'
+
+
+# New tmpfs directories must not make the root entrypoint chown a read-only
+# production settings bind (or require restoring any dropped capabilities).
+SEARCH_ENVIRONMENT = {'SEARXNG_BASE_URL': 'http://searxng:8080/', 'FORCE_OWNERSHIP': 'false'}
+
+
+def search_configuration(config):
+    """Opt-in only; no arbitrary image tags, mounts, environment or routes."""
+    if 'searchCompanion' not in config:
+        return None
+    search = config['searchCompanion']
+    fields = {'sourceContainerId', 'image', 'settingsFile', 'settingsSha256'}
+    if not isinstance(search, dict) or set(search) != fields:
+        raise ValueError('Search companion configuration has unknown or missing fields')
+    if (config.get('requireIsolatedNetwork') is not True or not config.get('network')
+            or config.get('databaseOwner') != config['task']):
+        raise ValueError('Search companion requires an explicitly isolated task database/network')
+    for field, pattern in [('sourceContainerId', r'[a-f0-9]{64}'), ('image', r'sha256:[a-f0-9]{64}'), ('settingsSha256', r'[a-f0-9]{64}')]:
+        if not isinstance(search[field], str) or not re.fullmatch(pattern, search[field]):
+            raise ValueError('Search companion requires full container/image IDs and SHA-256')
+    raw = search['settingsFile']
+    if (not isinstance(raw, str) or not raw or any(char in raw for char in [',', '\x00', '\n', '\r'])
+            or not Path(raw).is_absolute() or str(Path(raw)) != raw or '..' in Path(raw).parts):
+        raise ValueError('Search settings require a canonical absolute file path')
+    name = 'physicsos-validation-' + config['task'] + '-searxng'
+    if config['databaseContainer'] in {name, 'physicsos-validation-' + config['task'], SEARCH_SOURCE}:
+        raise ValueError('Search companion/database names must be distinct')
+    return {**search, 'task': config['task'], 'container': name, 'sourceContainer': SEARCH_SOURCE,
+            'network': config['network'], 'databaseContainer': config['databaseContainer'], 'alias': 'searxng', 'url': SEARCH_URL}
+
+
+def search_file_sha256(path):
+    # Digest only: never decode, copy, log or return settings/secret contents.
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    with os.fdopen(fd, 'rb') as file:
+        before = os.fstat(file.fileno())
+        if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1:
+            raise RuntimeError('Search settings must be a non-hardlinked regular file')
+        digest = hashlib.sha256()
+        for chunk in iter(lambda: file.read(65536), b''): digest.update(chunk)
+        after = os.fstat(file.fileno())
+        if (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns) != (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns):
+            raise RuntimeError('Search settings changed while hashing')
+        return digest.hexdigest()
+
+
+def search_secret_path(config, instance):
+    if not isinstance(instance, str) or not re.fullmatch(r'[a-f0-9]{32}', instance):
+        raise RuntimeError('Search secret requires a valid instance identity')
+    return Path(config['root']) / ('search-companion-' + instance + '.env')
+
+
+def create_search_secret(config, instance, protected):
+    path = search_secret_path(config, instance)
+    owned_path(Path(config['root']), path, protected)
+    # Independent random material, never derived from the public instance ID.
+    content = b'SEARXNG_SECRET=' + os.urandom(32).hex().encode('ascii') + b'\n'
+    identity = None
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, 'wb') as file:
+            info = os.fstat(file.fileno()); identity = (info.st_dev, info.st_ino)
+            file.write(content); file.flush(); os.fsync(file.fileno())
+        return {'secretFile': str(path), 'secretSha256': hashlib.sha256(content).hexdigest()}
+    except BaseException:
+        # An exclusive-create collision or a replaced file belongs to someone
+        # else. Only remove this invocation's inode, even after a partial write.
+        if identity is not None:
+            try: info = path.lstat()
+            except FileNotFoundError: pass
+            else:
+                if (info.st_dev, info.st_ino) == identity and stat.S_ISREG(info.st_mode) and info.st_nlink == 1:
+                    path.unlink()
+        raise
+
+
+def validate_search_secret(config, receipt, production=()):
+    path = search_secret_path(config, receipt['instance'])
+    if receipt.get('secretFile') != str(path):
+        raise RuntimeError('Search secret file/instance binding differs')
+    owned_path(Path(config['root']), path, [mount for service in production for mount in service.get('Mounts', [])])
+    if not path.is_file(): raise RuntimeError('Search private env-file is missing')
+    info = path.stat()
+    if (info.st_uid != os.getuid() or info.st_nlink != 1 or stat.S_IMODE(info.st_mode) not in {0o400, 0o600}
+            or info.st_size != len(b'SEARXNG_SECRET=') + 65 or search_file_sha256(path) != receipt.get('secretSha256')):
+        raise RuntimeError('Search private env-file ownership/permissions/SHA-256 differs')
+
+
+def remove_created_search_secret(config, instance, secret, production):
+    try: validate_search_secret(config, {**secret, 'instance': instance}, production)
+    except (OSError, RuntimeError): return False
+    search_secret_path(config, instance).unlink()
+    return True
+
+
+def verify_search_mounted_digest(container_id, expected):
+    # A bind can retain an old inode after its host pathname is replaced. Check
+    # the actual mounted file too; stdout is a digest, never configuration text.
+    if not re.fullmatch(r'[a-f0-9]{64}', container_id):
+        raise RuntimeError('Search digest inspection requires a full container ID')
+    command = 'import hashlib\nh=hashlib.sha256()\nwith open("/etc/searxng/settings.yml","rb") as f:\n for b in iter(lambda:f.read(65536),b""): h.update(b)\nprint(h.hexdigest())'
+    result = subprocess.run(['docker', 'exec', container_id, 'python3', '-B', '-c', command], check=True,
+                            capture_output=True, text=True, timeout=15)
+    if result.stdout.strip() != expected:
+        raise RuntimeError('Search mounted settings SHA-256 differs')
+
+
+def inspect_search_source(config, production):
+    expected = search_configuration(config)
+    source, image = metadata('container', SEARCH_SOURCE), metadata('image', expected['image'])
+    labels = (source or {}).get('Config', {}).get('Labels') or {}
+    if (not source or source.get('Id') != expected['sourceContainerId'] or source.get('Name') != '/' + SEARCH_SOURCE
+            or source.get('Image') != expected['image'] or not image or image.get('Id') != expected['image']
+            or labels.get('com.docker.compose.project') != 'physicsos' or labels.get('com.docker.compose.service') != 'searxng'
+            or source.get('State', {}).get('Running') is not True or source.get('State', {}).get('Health', {}).get('Status') != 'healthy'):
+        raise RuntimeError('Expected production search container/image identity or health differs')
+    if set(image.get('Config', {}).get('Volumes') or {}) - set(SEARCH_TMPFS):
+        raise RuntimeError('Search image declares an unsupported persistent volume')
+    settings = [mount for mount in source.get('Mounts', []) if mount.get('Destination') == SEARCH_DESTINATION]
+    if (len(settings) != 1 or settings[0].get('Type') != 'bind' or settings[0].get('RW') is not False
+            or settings[0].get('Source') != expected['settingsFile']):
+        raise RuntimeError('Production search settings must be the expected read-only file bind')
+    protected = [mount for service in production for mount in service.get('Mounts', [])]
+    protected.extend(mount for mount in source.get('Mounts', []) if mount is not settings[0])
+    path = Path(expected['settingsFile'])
+    owned_path(Path('/'), path, protected)
+    if not path.is_file() or search_file_sha256(path) != expected['settingsSha256']:
+        raise RuntimeError('Search settings file/SHA-256 differs')
+    verify_search_mounted_digest(source['Id'], expected['settingsSha256'])
+    return source, image
+
+
+def validate_search_receipt(config, receipt):
+    expected = search_configuration(config)
+    extra = {'containerId', 'networkId', 'databaseContainerId', 'databaseImage', 'instance', 'secretFile', 'secretSha256'}
+    if (not isinstance(receipt, dict) or set(receipt) != set(expected) | extra
+            or any(receipt.get(key) != value for key, value in expected.items())):
+        raise RuntimeError('Search companion receipt/configuration binding differs')
+    for key in ['containerId', 'networkId', 'databaseContainerId']:
+        if not isinstance(receipt[key], str) or not re.fullmatch(r'[a-f0-9]{64}', receipt[key]):
+            raise RuntimeError('Search companion receipt requires full resource IDs')
+    if (not isinstance(receipt['databaseImage'], str) or not re.fullmatch(r'sha256:[a-f0-9]{64}', receipt['databaseImage'])
+            or not isinstance(receipt['instance'], str) or not re.fullmatch(r'[a-f0-9]{32}', receipt['instance'])
+            or not isinstance(receipt['secretSha256'], str) or not re.fullmatch(r'[a-f0-9]{64}', receipt['secretSha256'])
+            or receipt['secretFile'] != str(search_secret_path(config, receipt['instance']))
+            or len({receipt['containerId'], receipt['databaseContainerId'], receipt['sourceContainerId']}) != 3):
+        raise RuntimeError('Search companion receipt identity differs')
+    return receipt
+
+
+def read_search_receipt(config, production, required=False):
+    # Kept outside app-mounted state/home, so a candidate cannot replace it.
+    path = Path(config['root']) / 'search-companion.json'
+    owned_path(Path(config['root']), path, [mount for service in production for mount in service.get('Mounts', [])])
+    if not path.exists():
+        if required: raise RuntimeError('Search companion receipt is missing; prepare search first')
+        return None
+    info = path.stat()
+    if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) & 0o077:
+        raise RuntimeError('Search companion receipt is not a private owned file')
+    receipt = validate_search_receipt(config, json.loads(path.read_text()))
+    validate_search_secret(config, receipt, production)
+    return receipt
+
+
+def validate_search_peer(config, container, network, search=False):
+    identity = container.get('Id', '')
+    if (not re.fullmatch(r'[a-f0-9]{64}', identity) or not re.fullmatch(r'sha256:[a-f0-9]{64}', container.get('Image', ''))
+            or set(container_networks(container)) != {config['network']}
+            or container_networks(container)[config['network']].get('NetworkID') != network['Id']):
+        raise RuntimeError('Search network peer identity or single-network binding differs')
+    endpoint = container_networks(container)[config['network']]
+    aliases = (endpoint.get('Aliases') or []) + (endpoint.get('DNSNames') or [])
+    host = container.get('HostConfig', {})
+    if (endpoint.get('IPAMConfig') or endpoint.get('Links')
+            or any(host.get(key) for key in ['ExtraHosts', 'Links', 'Dns', 'DnsOptions', 'DnsSearch'])
+            or host.get('NetworkMode') not in {config['network'], network['Id']}):
+        raise RuntimeError('Search network peer has a static address or alternate DNS/network route')
+    if search:
+        if ('searxng' not in (endpoint.get('Aliases') or [])
+                or set(aliases) - {'searxng', container['Name'].lstrip('/'), identity, identity[:12]}
+                or not endpoint.get('IPAddress')
+                or (network.get('Containers') or {}).get(identity, {}).get('IPv4Address', '').split('/')[0] != endpoint['IPAddress']):
+            raise RuntimeError('Search alias/address binding differs')
+    elif any(alias.lower().rstrip('.') == 'searxng' for alias in aliases):
+        raise RuntimeError('Another candidate endpoint claims the search alias')
+
+
+def validate_search_container(config, receipt, container, image, network=None):
+    validate_search_receipt(config, receipt)
+    require_task_container(config, container, 'validation-search')
+    labels = container.get('Config', {}).get('Labels') or {}
+    settings, host = container.get('Config', {}), container.get('HostConfig', {})
+    if (container.get('Id') != receipt['containerId'] or container.get('Name') != '/' + receipt['container']
+            or container.get('Image') != receipt['image'] or settings.get('Image') != receipt['image']
+            or image.get('Id') != receipt['image'] or labels.get('io.physicsos.search.instance') != receipt['instance']
+            or labels.get('io.physicsos.search.settings-sha256') != receipt['settingsSha256']
+            or labels.get('io.physicsos.search.secret-sha256') != receipt['secretSha256']):
+        raise RuntimeError('Search companion full ID/image/name/label binding differs')
+    original = image.get('Config', {})
+    expected_env = dict(entry.split('=', 1) for entry in original.get('Env', []) if '=' in entry)
+    expected_env.pop('SEARXNG_SECRET', None)
+    expected_env.update(SEARCH_ENVIRONMENT)
+    entries = settings.get('Env') or []
+    environment = dict(entry.split('=', 1) for entry in entries if '=' in entry)
+    secret = environment.pop('SEARXNG_SECRET', None)
+    # Compare only a digest of the exact generated env-file line. No secret
+    # value reaches argv, labels, receipts, diagnostics or returned manifests.
+    if (len(entries) != len(environment) + 1 or environment != expected_env
+            or not isinstance(secret, str) or not re.fullmatch(r'[a-f0-9]{64}', secret)
+            or hashlib.sha256(('SEARXNG_SECRET=' + secret + '\n').encode('ascii')).hexdigest() != receipt['secretSha256']
+            or any((settings.get(key) or []) != (original.get(key) or []) for key in ['Cmd', 'Entrypoint'])
+            or any((settings.get(key) or '') != (original.get(key) or '') for key in ['User', 'WorkingDir'])):
+        raise RuntimeError('Search companion command/environment differs from the pinned image')
+    mounts = container.get('Mounts', [])
+    binds = [mount for mount in mounts if mount.get('Type') != 'tmpfs']
+    if (len(binds) != 1 or binds[0].get('Type') != 'bind' or binds[0].get('Source') != receipt['settingsFile']
+            or binds[0].get('Destination') != SEARCH_DESTINATION or binds[0].get('RW') is not False
+            or any(mount.get('Destination') not in SEARCH_TMPFS or mount.get('Source') or mount.get('Name') for mount in mounts if mount.get('Type') == 'tmpfs')
+            or host.get('Tmpfs') != SEARCH_TMPFS or host.get('Binds') or host.get('VolumesFrom')):
+        raise RuntimeError('Search companion may mount only read-only settings and private tmpfs')
+    if (host.get('NetworkMode') not in {config['network'], receipt['networkId']} or host.get('Privileged')
+            or any(host.get(key) for key in ['PortBindings', 'PublishAllPorts', 'CapAdd', 'Devices', 'DeviceRequests', 'ExtraHosts', 'Links', 'Dns', 'DnsOptions', 'DnsSearch', 'PidMode', 'UTSMode'])
+            or host.get('IpcMode', '') not in {'', 'private'} or host.get('CapDrop') != ['ALL']
+            or host.get('SecurityOpt') not in [['no-new-privileges:true'], ['no-new-privileges']]
+            or host.get('LogConfig', {}).get('Type') != 'none' or host.get('RestartPolicy', {}).get('Name') != 'no'
+            or any(container.get('NetworkSettings', {}).get('Ports', {}).values())
+            or settings.get('Healthcheck', {}).get('Test') != ['CMD-SHELL', SEARCH_HEALTH]):
+        raise RuntimeError('Search companion ports/security/healthcheck differ')
+    if network is not None:
+        validate_search_peer(config, container, network, search=True)
+        if container.get('State', {}).get('Running') is not True or container.get('State', {}).get('Health', {}).get('Status') != 'healthy':
+            raise RuntimeError('Search companion is not healthy')
+        verify_search_mounted_digest(container['Id'], receipt['settingsSha256'])
+
+
+def validate_search_members(config, network, pg, current, receipt):
+    expected = {pg['Id']: config['databaseContainer']}
+    if pg.get('Name') != '/' + config['databaseContainer']:
+        raise RuntimeError('Search network database name differs')
+    if current is not None:
+        if current.get('Name') != '/physicsos-validation-' + config['task']:
+            raise RuntimeError('Search network candidate name differs')
+        require_task_container(config, current, 'validation')
+        expected[current['Id']] = current['Name'].lstrip('/')
+    if receipt is not None:
+        validate_search_receipt(config, receipt)
+        if receipt['networkId'] != network['Id'] or receipt['databaseContainerId'] != pg['Id'] or receipt['databaseImage'] != pg.get('Image'):
+            raise RuntimeError('Search companion network/database receipt changed')
+        expected[receipt['containerId']] = receipt['container']
+    actual = {identity: endpoint.get('Name') for identity, endpoint in (network.get('Containers') or {}).items()}
+    if actual != expected:
+        raise RuntimeError('Search network members must be exactly the controlled candidate/database/search set')
+
+
+def ensure_isolated_network(config, production, create=False, search_receipt=None):
+    search = search_configuration(config)
+    if search is not None:
+        source, search_image = inspect_search_source(config, production)
+        production = [*production, source]
+        if search_receipt is None:
+            search_receipt = read_search_receipt(config, production)
+        else:
+            validate_search_receipt(config, search_receipt)
+            validate_search_secret(config, search_receipt, production)
+    elif search_receipt is not None:
+        raise RuntimeError('Search companion is not explicitly enabled')
     name = config['network']
     protected_names = {name for source in production for name in container_networks(source)}
     protected_ids = {value.get('NetworkID') for source in production for value in container_networks(source).values()}
@@ -165,7 +439,13 @@ def ensure_isolated_network(config, production, create=False):
     labels = (network or {}).get('Labels') or {}
     if not network or network.get('Driver') != 'bridge' or network.get('Scope', 'local') != 'local' or network.get('Id') in protected_ids or labels.get('io.physicsos.task') != config['task'] or labels.get('io.physicsos.role') != 'validation-network':
         raise RuntimeError('Isolated validation network ownership/driver differs')
+    if search is not None and (network.get('Name') != name or not re.fullmatch(r'[a-f0-9]{64}', network.get('Id', ''))):
+        raise RuntimeError('Search network requires its exact name and full ID')
     allowed = {config['databaseContainer']: 'validation-database', 'physicsos-validation-' + config['task']: 'validation'}
+    if search_receipt is not None:
+        if search_receipt['networkId'] != network['Id']:
+            raise RuntimeError('Search companion network receipt changed')
+        allowed[search_receipt['container']] = 'validation-search'
     protected_containers = {source.get('Id') for source in production}
     for endpoint_id, endpoint in (network.get('Containers') or {}).items():
         if endpoint_id in protected_containers or endpoint.get('Name') not in allowed:
@@ -174,6 +454,14 @@ def ensure_isolated_network(config, production, create=False):
         if not source or source.get('Id') != endpoint_id or source.get('Name', '').lstrip('/') != endpoint['Name']:
             raise RuntimeError('Isolated network endpoint identity changed')
         require_task_container(config, source, allowed[endpoint['Name']])
+        if search is not None:
+            if allowed[endpoint['Name']] == 'validation-search':
+                validate_search_container(config, search_receipt, source, search_image, network)
+            else:
+                validate_search_peer(config, source, network)
+                if search_receipt is not None and endpoint['Name'] == config['databaseContainer']:
+                    if endpoint_id != search_receipt['databaseContainerId'] or source.get('Image') != search_receipt['databaseImage']:
+                        raise RuntimeError('Search network database full ID/image changed')
     return network
 
 
@@ -208,13 +496,24 @@ def check_isolated_resources(config, details=None, current=None, create=False, c
     production = production_services()
     if len(production) != 3:
         raise RuntimeError('Production protection metadata is incomplete')
-    network = ensure_isolated_network(config, production, create=create)
+    search_receipt = (read_search_receipt(config, production, required=True)
+                      if search_configuration(config) is not None else None)
+    # Search is prepared separately on an existing network/DB. A missing or
+    # stale receipt must not trigger network creation or database attachment.
+    network = ensure_isolated_network(config, production, create=create and search_receipt is None)
     if details and (details.get('network') != config['network'] or details.get('networkId') != network['Id'] or details.get('isolatedNetwork') is not True):
         raise RuntimeError('Candidate isolated network receipt changed')
     pg = metadata('container', config['databaseContainer'])
     if not pg:
         raise RuntimeError('Task-owned isolated database is unavailable')
-    pg = validate_isolated_database(config, pg, production, network, connect=connect)
+    pg = validate_isolated_database(config, pg, production, network, connect=connect and search_receipt is None)
+    search_current = current
+    if search_receipt is not None:
+        if search_current is None:
+            search_current = metadata('container', 'physicsos-validation-' + config['task'])
+        validate_search_members(config, network, pg, search_current, search_receipt)
+        if details and 'searchCompanion' in details and details['searchCompanion'] != search_receipt:
+            raise RuntimeError('Candidate search companion receipt changed')
     if current:
         require_task_container(config, current, 'validation')
         if set(container_networks(current)) != {config['network']} or container_networks(current)[config['network']].get('NetworkID') != network['Id']:
@@ -227,6 +526,9 @@ def check_isolated_resources(config, details=None, current=None, create=False, c
         environment = dict(entry.split('=', 1) for entry in current.get('Config', {}).get('Env', []) if '=' in entry)
         if environment.get('DEEPSEEK_BASE_URL') != f"http://127.0.0.1:{config['modelPoolPort']}/v1" or environment.get('DATABASE_URL_FILE') != '/run/secrets/database_url':
             raise RuntimeError('Candidate private database/model route identity changed')
+        if search_receipt is not None and (environment.get('PHYSICSOS_RESEARCH_SEARXNG_URL') != SEARCH_URL
+                                           or environment.get('PHYSICSOS_RESEARCH_SEARXNG_KEY_FILE')):
+            raise RuntimeError('Candidate search URL/credential route differs from its private companion')
         app = next((source for source in production if source.get('Name') == '/physicsos-app-1'), production[0])
         live_env = dict(entry.split('=', 1) for entry in app.get('Config', {}).get('Env', []) if '=' in entry)
         old_port = int(live_env.get('PHYSICSOS_MODEL_POOL_PORT', '3972'))
@@ -238,7 +540,10 @@ def check_isolated_resources(config, details=None, current=None, create=False, c
                     or 'PHYSICSOS_VALIDATION_TOKEN' in environment or len(token_mounts) != 1
                     or token_mounts[0].get('Source') != settings['mount']['Source'] or token_mounts[0].get('RW') is not False):
                 raise RuntimeError('Candidate private worker environment/token mount binding changed')
-    return ensure_isolated_network(config, production), pg
+    network = ensure_isolated_network(config, production)
+    if search_receipt is not None:
+        validate_search_members(config, network, pg, search_current, search_receipt)
+    return network, pg
 
 
 def reject_production_model_routes(config, values, production, network, old_pool_port):
@@ -267,6 +572,126 @@ def prepare_network(config):
             raise RuntimeError('Production protection metadata is incomplete')
         network = ensure_isolated_network(config, production, create=True)
         return {'network': config['network'], 'networkId': network['Id'], 'task': config['task'], 'databaseStarted': False, 'candidateStarted': False}
+
+def search_create_args(config, instance, secret):
+    expected = search_configuration(config)
+    if expected is None or not isinstance(instance, str) or not re.fullmatch(r'[a-f0-9]{32}', instance):
+        raise ValueError('Search creation requires explicit configuration and a new instance ID')
+    if (not isinstance(secret, dict) or set(secret) != {'secretFile', 'secretSha256'}
+            or secret['secretFile'] != str(search_secret_path(config, instance))
+            or not isinstance(secret['secretSha256'], str) or not re.fullmatch(r'[a-f0-9]{64}', secret['secretSha256'])):
+        raise ValueError('Search creation requires an instance-bound private env-file digest')
+    args = ['docker', 'create', '--name', expected['container'], '--pull', 'never', '--log-driver', 'none', '--restart', 'no',
+            '--network', expected['network'], '--network-alias', 'searxng', '--memory', '512m', '--cpus', '1',
+            '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges:true']
+    for key, value in {'io.physicsos.task': config['task'], 'io.physicsos.role': 'validation-search',
+                       'io.physicsos.search.instance': instance, 'io.physicsos.search.settings-sha256': expected['settingsSha256'],
+                       'io.physicsos.search.secret-sha256': secret['secretSha256']}.items():
+        args.extend(['--label', key + '=' + value])
+    for destination, options in SEARCH_TMPFS.items(): args.extend(['--tmpfs', destination + ':' + options])
+    for key, value in SEARCH_ENVIRONMENT.items(): args.extend(['--env', key + '=' + value])
+    args.extend(['--mount', 'type=bind,src=' + expected['settingsFile'] + ',dst=' + SEARCH_DESTINATION + ',readonly',
+                 '--env-file', secret['secretFile'], '--health-cmd', SEARCH_HEALTH,
+                 '--health-interval', '5s', '--health-timeout', '5s', '--health-retries', '6', '--health-start-period', '10s', expected['image']])
+    return args
+
+
+def remove_created_search(config, instance, container_id=None):
+    expected = search_configuration(config)
+    container = metadata('container', container_id or expected['container'])
+    labels = (container or {}).get('Config', {}).get('Labels') or {}
+    if (not container or not re.fullmatch(r'[a-f0-9]{64}', container.get('Id', ''))
+            or container_id is not None and container.get('Id') != container_id
+            or container.get('Name') != '/' + expected['container'] or container.get('Image') != expected['image']
+            or labels.get('io.physicsos.task') != config['task'] or labels.get('io.physicsos.role') != 'validation-search'
+            or labels.get('io.physicsos.search.instance') != instance):
+        return False
+    # Never rm by name, never remove volumes/networks or candidate data.
+    subprocess.run(['docker', 'rm', '-f', container['Id']], check=True, stdout=subprocess.DEVNULL,
+                   stderr=subprocess.DEVNULL, start_new_session=True, timeout=30)
+    return True
+
+
+def wait_search_healthy(receipt, cancelled):
+    deadline = time.monotonic() + 90
+    while True:
+        container = metadata('container', receipt['containerId'])
+        if (cancelled[0] or not container or container.get('Id') != receipt['containerId']
+                or container.get('State', {}).get('Running') is not True):
+            raise RuntimeError('Search companion did not acknowledge startup')
+        health = container.get('State', {}).get('Health', {}).get('Status')
+        if health == 'healthy': return
+        if health != 'starting' or time.monotonic() >= deadline:
+            raise RuntimeError('Search companion failed its healthcheck')
+        time.sleep(1)
+
+
+def prepare_search(config):
+    """Create/reuse only search on an existing owned network/database/root.
+
+    The separate receipt survives app refreshes. An unreceipted service is never
+    adopted. Failure cleanup is limited to this invocation's nonce and full ID.
+    """
+    expected = search_configuration(config)
+    if expected is None: raise ValueError('Search preparation requires searchCompanion')
+    root = Path(config['root'])
+    with lifecycle(root), settle_mutations() as cancelled:
+        production = production_services()
+        if len(production) != 3: raise RuntimeError('Production protection metadata is incomplete')
+        source, image = inspect_search_source(config, production)
+        protected = [mount for service in [*production, source] for mount in service.get('Mounts', [])]
+        for path in [root / 'owner', root / 'search-companion.json']: owned_path(root, path, protected)
+        if not (root / 'owner').is_file() or (root / 'owner').read_text().strip() != config['task']:
+            raise RuntimeError('Search preparation requires an existing task-owned candidate root')
+        receipt = read_search_receipt(config, [*production, source])
+        network = ensure_isolated_network(config, production)
+        pg = metadata('container', config['databaseContainer'])
+        if not pg: raise RuntimeError('Task-owned isolated database is unavailable')
+        pg = validate_isolated_database(config, pg, production, network)
+        current = metadata('container', 'physicsos-validation-' + config['task'])
+        validate_search_members(config, network, pg, current, receipt)
+        if receipt is not None:
+            return {'searchCompanion': receipt, 'created': False, 'receiptFile': str(root / 'search-companion.json')}
+        if metadata('container', expected['container']):
+            raise RuntimeError('Refusing to adopt an unreceipted search companion')
+        instance, created_id, secret = os.urandom(16).hex(), None, None
+        receipt = {**expected, 'networkId': network['Id'], 'databaseContainerId': pg['Id'], 'databaseImage': pg['Image'], 'instance': instance}
+        try:
+            if cancelled[0]: raise RuntimeError('Search preparation cancelled')
+            secret = create_search_secret(config, instance, protected)
+            receipt.update(secret)
+            if cancelled[0]: raise RuntimeError('Search preparation cancelled')
+            result = subprocess.run(search_create_args(config, instance, secret), check=True, capture_output=True,
+                                    text=True, start_new_session=True, timeout=60)
+            if not re.fullmatch(r'[a-f0-9]{64}', result.stdout.strip()):
+                raise RuntimeError('Search creation did not return a full container ID')
+            created_id = result.stdout.strip(); receipt['containerId'] = created_id
+            actual = metadata('container', created_id)
+            if not actual: raise RuntimeError('Created search companion is unavailable')
+            validate_search_container(config, receipt, actual, image)
+            if cancelled[0]: raise RuntimeError('Search preparation cancelled')
+            subprocess.run(['docker', 'start', created_id], check=True, stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL, start_new_session=True, timeout=30)
+            wait_search_healthy(receipt, cancelled)
+            network = ensure_isolated_network(config, production, search_receipt=receipt)
+            validate_search_members(config, network, pg, current, receipt)
+            if cancelled[0]: raise RuntimeError('Search preparation cancelled')
+            private_json(root / 'search-companion.json', receipt)
+            if cancelled[0]: raise RuntimeError('Search preparation cancelled')
+            return {'searchCompanion': receipt, 'created': True, 'receiptFile': str(root / 'search-companion.json')}
+        except BaseException as error:
+            removed = remove_created_search(config, instance, created_id)
+            if removed and (root / 'search-companion.json').exists():
+                if read_search_receipt(config, [*production, source]) == receipt:
+                    (root / 'search-companion.json').unlink()
+            if secret is not None:
+                remove_created_search_secret(config, instance, secret, [*production, source])
+            if isinstance(error, subprocess.SubprocessError):
+                # Never propagate captured Docker output or a command with
+                # environment arguments through helper callers' diagnostics.
+                raise RuntimeError('Search companion Docker operation failed') from None
+            raise
+
 
 VALIDATION_WORKER_TOKEN_DESTINATION = '/run/secrets/ui_validation_token'
 
@@ -448,6 +873,8 @@ def prepare(config, image_name):
     environment = {name: redirect_pool(value, old_pool_port, config['modelPoolPort']) for name, value in environment.items()}
     environment['REDIS_URL_FILE'] = ''
     environment.update({'DSH_HOME': '/var/lib/physicsos', 'DSH_TELEMETRY_DISABLED': '1', 'PHYSICSOS_STORAGE_BACKEND': 'postgres', 'PHYSICSOS_STORAGE_SCHEMA': config['schema'], 'DATABASE_URL_FILE': '/run/secrets/database_url', 'DEEPSEEK_BASE_URL': f"http://127.0.0.1:{config['modelPoolPort']}/v1", 'PHYSICSOS_ADMIN_PASSWORD_FILE': '/run/secrets/admin_password', 'PHYSICSOS_ADMIN_USERNAME': config['username'], 'PHYSICSOS_SHARED_STATE_BACKEND': 'memory', 'PHYSICSOS_MODEL_POOL_PORT': str(config['modelPoolPort']), 'PHYSICOS_TRUSTED_HOSTS': f'physicsos-validation.invalid:{port}', 'PHYSICOS_TRUSTED_PROXIES': '', 'PHYSICSOS_SESSIONS_ROOT': '/var/lib/physicsos/sessions', 'PHYSICSOS_REGISTRATION_MODE': 'open', 'PHYSICSOS_SMTP_USER_FILE': '', 'PHYSICSOS_SMTP_PASSWORD_FILE': ''})
+    if search_configuration(config) is not None:
+        environment.update({'PHYSICSOS_RESEARCH_SEARXNG_URL': SEARCH_URL, 'PHYSICSOS_RESEARCH_SEARXNG_KEY_FILE': ''})
     if isolated:
         reject_production_model_routes(config, [*environment.values(), *(p.read_text() for p in profile.glob('*.yml'))], production_services(), isolated, old_pool_port)
     mounts = [{'Source': str(paths['home']), 'Destination': '/var/lib/physicsos', 'ReadOnly': False}, {'Source': str(paths['tools']), 'Destination': '/run/physicsos-validation-tools', 'ReadOnly': True}]
@@ -464,6 +891,8 @@ def prepare(config, image_name):
     details = {'task': config['task'], 'container': name, 'image': image['Id'], 'productionImage': app['Image'], 'port': port, 'schema': config['schema'], 'home': str(paths['home']), 'root': str(root), 'username': config['username'], 'productionDataWritable': False, 'nativePreload': False}
     if isolated:
         details.update({'network': network, 'networkId': isolated['Id'], 'isolatedNetwork': True})
+    if search_configuration(config) is not None:
+        details['searchCompanion'] = read_search_receipt(config, production_services(), required=True)
     spec = {'metadata': details, 'command': rewritten, 'environment': environment, 'mounts': mounts, 'network': network}
     private_json(root / 'metadata.json', details); private_json(paths['state'] / 'launch-spec.json', spec)
     return paths, spec, private_values
@@ -554,10 +983,13 @@ def check(config):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('action', choices=['network', 'start', 'stop', 'check'])
+    parser.add_argument('action', choices=['network', 'search', 'start', 'stop', 'check'])
     parser.add_argument('--config', required=True); parser.add_argument('--image')
     args = parser.parse_args(); config = load(args.config)
-    if args.action == 'network': result = prepare_network(config)
+    if args.action == 'search':
+        if args.image: raise ValueError('Search image must be pinned by full ID in searchCompanion')
+        result = prepare_search(config)
+    elif args.action == 'network': result = prepare_network(config)
     elif args.action == 'stop': result = stop(config)
     elif args.action == 'check': result = check(config)
     else:
