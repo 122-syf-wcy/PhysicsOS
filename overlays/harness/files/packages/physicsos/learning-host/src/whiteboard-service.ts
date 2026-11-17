@@ -255,8 +255,9 @@ export class WhiteboardService {
       const current = this.writable(account, boardId)
       this.checkFence(current, body)
       for (const source of document.sourceImages) { const owned = account.images[source.id]; if (!owned || owned.boardId !== boardId || JSON.stringify(owned.source) !== JSON.stringify(source)) throw new LearningError(400, 'WHITEBOARD_IMAGE_INVALID', '原图引用不属于当前画板。') }
-      const priorDocument = (await this.record(account, current)).document
-      const retainedGenerations = priorDocument.appliedGenerationIds
+      let priorDocument: WhiteboardDocument | undefined
+      const readPriorDocument = async (): Promise<WhiteboardDocument> => priorDocument ??= (await this.record(account, current)).document
+      const retainedGenerations = document.appliedGenerationIds.length ? (await readPriorDocument()).appliedGenerationIds : []
       for (const generationId of document.appliedGenerationIds) {
         const job = account.jobs[generationId]
         if (!job || job.boardId !== boardId || job.status !== 'ready' || (!retainedGenerations.includes(generationId) && !this.jobEligible(account, job))) throw new LearningError(409, 'WHITEBOARD_JOB_INVALID', '图元生成记录无效或属于旧生命周期；未应用到当前画板。')
@@ -269,7 +270,7 @@ export class WhiteboardService {
         const operationId = `whiteboard-edit:${hash([boardId, body.editingSessionId])}`
         const recorded = Object.values(account.receipts).some(receipt => receipt.activitySuccess?.operationId === operationId)
         const content = (value: WhiteboardDocument) => [value.title, value.scene.elements, value.sourceImages, value.appliedGenerationIds]
-        if (!recorded && JSON.stringify(content(priorDocument)) !== JSON.stringify(content(document))) activitySuccess = {
+        if (!recorded && JSON.stringify(content(await readPriorDocument())) !== JSON.stringify(content(document))) activitySuccess = {
           version: 1, source: 'whiteboard-edit', operationId, occurredAt: head.updatedAt, owner: ownerOf(actor) }
       }
       this.remember(account, body.operationId, { kind: 'save', boardId, hash: hash(body), head,
@@ -476,7 +477,9 @@ await this.options.recordUsage({ id: `whiteboard:${job.id}:${job.attempt}`, sour
         await this.settleUsage(owner, jobId)
         await update(async (account, current) => {
           if (!active(current) || !this.jobEligible(account, current)) return
+          controller.signal.throwIfAborted()
           current.output = await this.jsonBlob(account, current.boardId, output)
+          controller.signal.throwIfAborted()
           if (active(current)) current.status = 'validating'
           current.updatedAt = this.now().toISOString()
         })

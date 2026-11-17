@@ -27,7 +27,8 @@ export interface CoursewareServiceOptions { readonly config: CoursewareConfig; r
 
 /** One service/domain owner. All commits serialize before the storage-domain's durable write chain.
  * Body blobs never enter the catalog. Reservation + pointer + receipt each commit complete values.
- * School/global/account quotas include pending allocations and tombstones, not just visible lists. */
+ * School/global/account quotas include pending allocations and tombstones, not just visible lists.
+ * Public Promise APIs are async so preflight failures reject instead of throwing before return. */
 export class CoursewareService {
   readonly config: CoursewareConfig
   readonly maxRequestBytes: number
@@ -155,7 +156,7 @@ export class CoursewareService {
     return { capability: COURSEWARE_CAPABILITY, schemaVersion: 1, enabled: this.config.enabled, writesEnabled: this.config.writesEnabled,
       canImport: this.config.writesEnabled && teacher(actor), canTeach: this.config.writesEnabled && teacher(actor), limits: { maxFileBytes: this.config.limits.maxFileBytes, maxAnnotationBytes: this.config.limits.maxAnnotationBytes, maxVersionsPerDeck: this.config.limits.maxVersionsPerDeck } }
   }
-  list(actor: IdentityActor, query: { readonly search?: string; readonly lifecycle?: string; readonly scope?: string; readonly cursor?: string; readonly limit?: number } = {}) {
+  async list(actor: IdentityActor, query: { readonly search?: string; readonly lifecycle?: string; readonly scope?: string; readonly cursor?: string; readonly limit?: number } = {}) {
     return this.queue(state => {
       const search = query.search?.trim().toLocaleLowerCase() ?? ''
       if (search.length > 200 || query.lifecycle && !['active', 'archived', 'deleted'].includes(query.lifecycle) || query.scope && !['mine', 'school', 'all'].includes(query.scope) || query.cursor && !coursewareId.safeParse(query.cursor).success) fail(400, 'BAD_QUERY', '课件筛选无效。')
@@ -165,8 +166,8 @@ export class CoursewareService {
       return { items: remaining.slice(0, limit).map(deck => this.summary(deck, actor)), ...(remaining.length > limit ? { nextCursor: remaining[limit - 1]!.id } : {}) }
     })
   }
-  read(actor: IdentityActor, deckId: string): Promise<CoursewareRecord> { return this.queue(state => { const deck = this.deck(state, deckId); this.readable(deck, actor, true); return this.record(deck, actor) }) }
-  import(actor: IdentityActor, input: unknown, deckId?: string, signal?: AbortSignal): Promise<CoursewareRecord> {
+  async read(actor: IdentityActor, deckId: string): Promise<CoursewareRecord> { return this.queue(state => { const deck = this.deck(state, deckId); this.readable(deck, actor, true); return this.record(deck, actor) }) }
+  async import(actor: IdentityActor, input: unknown, deckId?: string, signal?: AbortSignal): Promise<CoursewareRecord> {
     this.requireWrites(actor)
     const body = this.parse(importSchema, input)
     if (body.htmlBase64.length > Math.ceil(this.config.limits.maxFileBytes / 3) * 4 || body.htmlBase64.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(body.htmlBase64)) fail(413, 'FILE_LIMIT', '课件编码无效或超过 16 MiB。')
@@ -200,7 +201,7 @@ export class CoursewareService {
       return this.record(deck, actor)
     })
   }
-  activate(actor: IdentityActor, deckId: string, input: unknown): Promise<CoursewareRecord> {
+  async activate(actor: IdentityActor, deckId: string, input: unknown): Promise<CoursewareRecord> {
     const body = this.parse(activateSchema, input); const hash = coursewareHash(JSON.stringify(body))
     return this.queue(async state => {
       const deck = this.deck(state, deckId); this.managed(deck, actor); this.writableDeck(deck, actor)
@@ -212,7 +213,7 @@ export class CoursewareService {
       return this.record(deck, actor)
     })
   }
-  manage(actor: IdentityActor, deckId: string, input: unknown): Promise<CoursewareRecord> {
+  async manage(actor: IdentityActor, deckId: string, input: unknown): Promise<CoursewareRecord> {
     const body = this.parse(manageSchema, input); const hash = coursewareHash(JSON.stringify(body))
     return this.queue(async state => {
       const deck = this.deck(state, deckId); this.managed(deck, actor)
@@ -242,7 +243,7 @@ export class CoursewareService {
   }
   private lessonSummary(lesson: CoursewareStoredLesson): CoursewareLessonSummary { return { id: lesson.id, deckId: lesson.deckId, versionId: lesson.versionId, revision: lesson.revision, createdAt: lesson.createdAt, updatedAt: lesson.updatedAt, blankPages: [...lesson.blankPages] } }
   private publicLesson(lesson: CoursewareStoredLesson): CoursewareLesson { return { ...this.lessonSummary(lesson), pageIds: Object.keys(lesson.pages) } }
-  listLessons(actor: IdentityActor, deckId: string, versionId: string): Promise<readonly CoursewareLessonSummary[]> {
+  async listLessons(actor: IdentityActor, deckId: string, versionId: string): Promise<readonly CoursewareLessonSummary[]> {
     return this.queue(state => { const deck = this.deck(state, deckId); this.version(deck, actor, versionId); return Object.values(state.lessons).filter(lesson => lesson.deckId === deckId && lesson.versionId === versionId && owns(lesson.owner, actor)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.id.localeCompare(b.id)).map(lesson => this.lessonSummary(lesson)) })
   }
   async startLesson(actor: IdentityActor, deckId: string, input: unknown): Promise<CoursewareLesson> {
@@ -263,7 +264,7 @@ export class CoursewareService {
     void this.deliverActivity().catch(() => this.options.onActivityPending?.())
     return result
   }
-  readLesson(actor: IdentityActor, deckId: string, lessonId: string): Promise<CoursewareLesson> { return this.queue(state => this.publicLesson(this.lesson(state, actor, deckId, lessonId).lesson)) }
+  async readLesson(actor: IdentityActor, deckId: string, lessonId: string): Promise<CoursewareLesson> { return this.queue(state => this.publicLesson(this.lesson(state, actor, deckId, lessonId).lesson)) }
   private validSlide(version: CoursewareVersion, lesson: CoursewareStoredLesson, slideId: string): void { if (!version.slideIds.includes(slideId) && !lesson.blankPages.includes(slideId)) fail(404, 'SLIDE_NOT_FOUND', '该页不属于当前课件版本及授课实例。') }
   private async page(deck: CoursewareStoredDeck, lesson: CoursewareStoredLesson, slideId: string): Promise<CoursewareAnnotationHead> {
     const stored = lesson.pages[slideId]
@@ -273,10 +274,10 @@ export class CoursewareService {
     try { scene = parseCanvasAnnotations(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes))) } catch { return fail(503, 'ANNOTATION_INTEGRITY', '课件批注完整性校验失败。') }
     return { revision: stored.revision, updatedAt: stored.updatedAt, scene }
   }
-  readAnnotation(actor: IdentityActor, deckId: string, lessonId: string, slideId: string): Promise<CoursewareAnnotationHead> {
+  async readAnnotation(actor: IdentityActor, deckId: string, lessonId: string, slideId: string): Promise<CoursewareAnnotationHead> {
     return this.queue(state => { const { deck, lesson, version } = this.lesson(state, actor, deckId, lessonId); this.validSlide(version, lesson, slideId); return this.page(deck, lesson, slideId) })
   }
-  saveAnnotation(actor: IdentityActor, deckId: string, lessonId: string, slideId: string, input: unknown, signal?: AbortSignal): Promise<CoursewareAnnotationSave> {
+  async saveAnnotation(actor: IdentityActor, deckId: string, lessonId: string, slideId: string, input: unknown, signal?: AbortSignal): Promise<CoursewareAnnotationSave> {
     const body = this.parse(annotationSchema, input)
     let scene: CanvasAnnotationScene
     try { scene = parseCanvasAnnotations(body.scene) } catch { return Promise.reject(new CoursewareError(400, 'INVALID_ANNOTATION', '批注包含无效图元、采样或压力数据；未截断保存。')) }
@@ -295,7 +296,7 @@ export class CoursewareService {
       return { page: { revision, updatedAt: at, scene }, appliedRevision: revision, operationId: body.operationId }
     })
   }
-  addBlankPage(actor: IdentityActor, deckId: string, lessonId: string, input: unknown): Promise<CoursewareLesson> {
+  async addBlankPage(actor: IdentityActor, deckId: string, lessonId: string, input: unknown): Promise<CoursewareLesson> {
     const body = this.parse(blankSchema, input); const hash = coursewareHash(JSON.stringify({ ...body, lessonId }))
     return this.queue(async state => {
       const { deck, lesson } = this.lesson(state, actor, deckId, lessonId); this.writableDeck(deck, actor)
@@ -308,7 +309,7 @@ export class CoursewareService {
       return this.publicLesson(lesson)
     })
   }
-  issueTicket(actor: IdentityActor, deckId: string, versionId: string): Promise<CoursewareTicket> {
+  async issueTicket(actor: IdentityActor, deckId: string, versionId: string): Promise<CoursewareTicket> {
     return this.queue(state => {
       const deck = this.deck(state, deckId); const version = this.version(deck, actor, versionId)
       const now = this.now().getTime()
@@ -319,7 +320,7 @@ export class CoursewareService {
       return { wrapperUrl: `/physicsos/courseware/embed/${id}`, nonce, expiresAt: new Date(expires).toISOString(), presentation: { mode: version.mode, adapterVersion: version.adapterVersion, slideIds: version.slideIds, width: version.width, height: version.height } }
     })
   }
-  ticket(id: string): Promise<{ readonly deck: CoursewareStoredDeck; readonly version: CoursewareVersion; readonly nonce: string }> {
+  async ticket(id: string): Promise<{ readonly deck: CoursewareStoredDeck; readonly version: CoursewareVersion; readonly nonce: string }> {
     return this.queue(state => {
       const ticket = this.tickets.get(id)
       if (!ticket || ticket.expires <= this.now().getTime()) { this.tickets.delete(id); return fail(401, 'TICKET_EXPIRED', '课件播放票据已过期，请从课件库重新打开。') }
@@ -333,7 +334,7 @@ export class CoursewareService {
     await this.ticket(id) // publication/deletion/sharing can revoke a capability while disk I/O awaits
     return { bytes, csp: ticket.version.csp }
   }
-  source(actor: IdentityActor, deckId: string, versionId: string, signal?: AbortSignal): Promise<Uint8Array> {
+  async source(actor: IdentityActor, deckId: string, versionId: string, signal?: AbortSignal): Promise<Uint8Array> {
     return this.queue(async state => { const deck = this.deck(state, deckId); if (!owns(deck.owner, actor)) fail(404, 'NOT_FOUND', '只能导出本人课件原始字节。'); const version = this.version(deck, actor, versionId); return this.blobs.read(this.scope(deck), version.source, this.config.limits.maxFileBytes, signal) })
   }
   replaySource(): ActivityReplaySource {

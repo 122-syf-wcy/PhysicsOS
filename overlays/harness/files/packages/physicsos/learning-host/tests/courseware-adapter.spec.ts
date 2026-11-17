@@ -56,6 +56,14 @@ const provenance: Provenance = JSON.parse(readFileSync(new URL('provenance.json'
 function sha256(bytes: Uint8Array | string): string {
   return createHash('sha256').update(bytes).digest('hex')
 }
+// Compare every byte natively, without deep-enumerating multi-megabyte typed arrays.
+// Respect each view's bounds rather than comparing its entire backing buffer.
+function expectSameBytes(actual: Uint8Array, expected: Uint8Array): void {
+  expect(actual.byteLength).toBe(expected.byteLength)
+  const actualView = Buffer.from(actual.buffer, actual.byteOffset, actual.byteLength)
+  const expectedView = Buffer.from(expected.buffer, expected.byteOffset, expected.byteLength)
+  expect(actualView.equals(expectedView)).toBe(true)
+}
 function capture(text: string, pattern: RegExp): string {
   const value = text.match(pattern)?.[1]
   if (value === undefined) throw new Error(`Static fixture section missing: ${pattern.source}`)
@@ -108,23 +116,30 @@ describe('known sound courseware exact-byte adapter', () => {
     const input = new Uint8Array(original)
     const snapshot = input.slice()
     const result = adapted(input)
-    expect(input).toEqual(snapshot)
+    expectSameBytes(input, snapshot)
     expect(result.bytes.buffer).not.toBe(input.buffer)
-    expect(Buffer.from(result.bytes)).toEqual(adaptedFile)
+    expectSameBytes(result.bytes, adaptedFile)
     expect(result.originalSha256).toBe(ORIGINAL_SHA256)
     expect(result.adapterVersion).toBe(COURSEWARE_ADAPTER_VERSION)
     expect({ width: result.width, height: result.height }).toEqual({ width: 1920, height: 1080 })
     result.bytes[0] = 0
-    expect(adapted(input).bytes[0]).toBe(original[0])
-    expect(input).toEqual(snapshot)
-    expect(readFileSync(new URL(provenance.original.file, examples))).toEqual(original)
+    const fresh = adapted(input)
+    expect(fresh.bytes[0]).toBe(original[0])
+    expect(fresh.bytes.buffer).not.toBe(result.bytes.buffer)
+    expectSameBytes(fresh.bytes, adaptedFile)
+    expectSameBytes(input, snapshot)
+    expectSameBytes(readFileSync(new URL(provenance.original.file, examples)), original)
   })
 
   it('hashes only the supplied Uint8Array view, not its surrounding buffer', () => {
     const surrounding = new Uint8Array(original.byteLength + 16).fill(123)
     surrounding.set(original, 8)
-    const result = adapted(surrounding.subarray(8, 8 + original.byteLength))
-    expect(Buffer.from(result.bytes)).toEqual(adaptedFile)
+    const snapshot = surrounding.slice()
+    const view = surrounding.subarray(8, 8 + original.byteLength)
+    const result = adapted(view)
+    expectSameBytes(result.bytes, adaptedFile)
+    expect(result.bytes.buffer).not.toBe(view.buffer)
+    expectSameBytes(surrounding, snapshot)
     expect([...surrounding.subarray(0, 8)]).toEqual(Array(8).fill(123))
     expect([...surrounding.subarray(-8)]).toEqual(Array(8).fill(123))
   })
@@ -145,7 +160,7 @@ describe('known sound courseware exact-byte adapter', () => {
     for (const bytes of candidates) {
       const snapshot = Uint8Array.from(bytes)
       expect(adaptKnownSoundCourseware(bytes)).toBeUndefined()
-      expect(Uint8Array.from(bytes)).toEqual(snapshot)
+      expectSameBytes(bytes, snapshot)
     }
   })
 

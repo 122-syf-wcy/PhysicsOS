@@ -31,6 +31,7 @@ const deferred = <T>() => { let resolve!: (value: T) => void; const promise = ne
 async function fixture(enabled = false, modelPatch: Partial<WhiteboardModel> = {}) {
   const root = await mkdtemp(join(tmpdir(), 'workbench-lifecycle-'))
   let ctx!: Context; let backend!: JsonStorageBackend; let canvas!: CanvasService; let board!: WhiteboardService
+  let canvasStore!: Awaited<ReturnType<typeof openCanvasDomain>>
   const deliveries: ActivitySuccessCapsule[] = []; const usage: { readonly id: string; readonly usage?: unknown }[] = []
   let rejectSink = false; let time = Date.parse(at)
   const model: WhiteboardModel = { provider: 'fixture', model: 'fixture-vision', prepareImage: async () => ({ width: 800, height: 400, attachment: { id: 'original' } }),
@@ -42,7 +43,8 @@ async function fixture(enabled = false, modelPatch: Partial<WhiteboardModel> = {
     backend = new JsonStorageBackend(join(root, 'domain')); ctx.storage.backend.register('json', backend)
     ctx.provide('storageDomain', new DomainFacility(ctx, { backend: 'json' }))
     const config = resolveCanvasConfig({ canvasDshHome: root, teachingToolsMode: enabled ? 'enabled' : 'bridge' })
-    canvas = new CanvasService(await openCanvasDomain(ctx), new CanvasBlobStore(config.root), config, { now: () => new Date(time), activitySink: sink })
+    canvasStore = await openCanvasDomain(ctx)
+    canvas = new CanvasService(canvasStore, new CanvasBlobStore(config.root), config, { now: () => new Date(time), activitySink: sink })
     board = new WhiteboardService(await openWhiteboardDomain(ctx), new CanvasBlobStore(config.root), { lifecycleWritesEnabled: enabled, model, now: () => new Date(time), activitySink: sink,
       recordUsage: async receipt => { usage.push(receipt) } })
     await canvas.initialize(); await board.initialize()
@@ -51,7 +53,7 @@ async function fixture(enabled = false, modelPatch: Partial<WhiteboardModel> = {
   const shutdown = async () => { await Promise.all([canvas.dispose(), board.dispose()]); await ctx.storageDomain.get(canvasDomain.name)?.close(); await board.domain.close(); await ctx.fiber.dispose(); await backend.close() }
   onTestFinished(async () => { vi.restoreAllMocks(); await shutdown(); await rm(root, { recursive: true, force: true }) })
   await open()
-  return { root, deliveries, usage, get canvas() { return canvas }, get board() { return board }, get ctx() { return ctx },
+  return { root, deliveries, usage, get canvas() { return canvas }, get canvasDomain() { return canvasStore }, get board() { return board }, get ctx() { return ctx },
     rejectSink: (value: boolean) => { rejectSink = value }, advance: (milliseconds: number) => { time += milliseconds },
     restart: async (nextEnabled = enabled) => { await shutdown(); enabled = nextEnabled; await open() } }
 }
@@ -97,8 +99,8 @@ describe('Canvas lifecycle bridge and durable races', () => {
     const current = await f.canvas.commit(owner, 'canvas', { ...canvasFence(active.head, 'after-unarchive'), manifestDigest: digest })
     expect(current.head.generation).toBe(5)
     f.advance(3 * 86400000); await f.canvas.collect(owner, 'canvas')
-    expect((await f.canvas.downloadObject(owner, 'canvas', sceneDigest)).bytes).toEqual(canonicalBytes(scene))
-    expect((await f.canvas.downloadObject(owner, 'canvas', digest)).bytes).toEqual(canonicalBytes(manifest))
+    expect(Buffer.from((await f.canvas.downloadObject(owner, 'canvas', sceneDigest)).bytes).equals(Buffer.from(canonicalBytes(scene)))).toBe(true)
+    expect(Buffer.from((await f.canvas.downloadObject(owner, 'canvas', digest)).bytes).equals(Buffer.from(canonicalBytes(manifest)))).toBe(true)
     const changes = await f.canvas.changes(owner)
     expect(changes.changes.at(-1)?.head).toEqual(current.head)
     const receipts = f.ctx.storageDomain.get(canvasDomain.name)!.table('receipts')
@@ -108,7 +110,7 @@ describe('Canvas lifecycle bridge and durable races', () => {
   it('repairs an archive capsule after a lost receipt and disabled-feature restart without another generation', async () => {
     const f = await fixture(true)
     const created = await f.canvas.create(owner, { id: 'lost', title: 'Lost ACK', mutationId: 'create' })
-    const domain = await openCanvasDomain(f.ctx); const receipts = domain.table('receipts')
+    const domain = f.canvasDomain; const receipts = domain.table('receipts')
     const originalPut = receipts.put.bind(receipts)
     const spy = vi.spyOn(receipts, 'put').mockImplementationOnce(async () => { throw new Error('Lost receipt after head commit') })
     const request = canvasFence(created.head, 'archive-once')
@@ -119,7 +121,7 @@ describe('Canvas lifecycle bridge and durable races', () => {
     const replayed = await f.canvas.archive(owner, 'lost', request)
     expect(replayed).toMatchObject({ replayed: true, head: { version: 2, generation: 2, archivedAt: at } })
     expect((await f.canvas.open(owner, 'lost')).head).toEqual(replayed.head)
-    const reopened = await openCanvasDomain(f.ctx)
+    const reopened = f.canvasDomain
     expect(reopened.table('reservations').get(canvasRecordKey(owner.schoolId, owner.userKey, 'lost', request.mutationId))).toBeUndefined()
     expect(reopened.table('receipts').get(canvasRecordKey(owner.schoolId, owner.userKey, 'lost', request.mutationId))?.head.archivedAt).toBe(at)
   })

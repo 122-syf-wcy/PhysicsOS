@@ -1,6 +1,8 @@
+import { ok } from 'node:assert/strict'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { isDeepStrictEqual } from 'node:util'
 import { Context } from '@deepseek-ai/cordis'
 import Storage from '@deepseek-ai/dsh-storage'
 import { JsonStorageBackend } from '@deepseek-ai/dsh-storage-json'
@@ -66,7 +68,10 @@ describe('owned saved-canvas assistant jobs', () => {
     expect(observed?.context.canvas.annotations.primitives.map(p => p.id)).toEqual(['nearby'])
     expect(observed?.context.canvas.annotations.primitives[0]?.samples).toBeUndefined()
     expect(observed?.context.canvas.annotations.primitives[0]?.points?.length).toBeLessThanOrEqual(256)
-    expect((await f.canvas.open(a, 'lesson')).manifest.metadata?.physicsosAnnotations).toEqual(annotations)
+    ok(
+      isDeepStrictEqual((await f.canvas.open(a, 'lesson')).manifest.metadata?.physicsosAnnotations, annotations),
+      'Every saved raw ink point and pressure sample must remain unchanged.',
+    )
   })
   // Removing owner/head admission would disclose a foreign or obsolete proposal.
   it('singleflights durable proposals and records the actual numeric usage once without editing physics', async () => {

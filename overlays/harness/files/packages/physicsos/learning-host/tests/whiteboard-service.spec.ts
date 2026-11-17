@@ -5,7 +5,7 @@ import { Context } from '@deepseek-ai/cordis'
 import Storage from '@deepseek-ai/dsh-storage'
 import { JsonStorageBackend } from '@deepseek-ai/dsh-storage-json'
 import { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
-import { describe, expect, it, onTestFinished } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { diffScene, insertDiagram, type WhiteboardDocument } from '@physicsos/physics-whiteboard'
 import type { UsageModelReceiptInput } from '../src/usage-types.ts'
 import { CanvasBlobStore, canvasHash } from '../src/canvas-blob-store.ts'
@@ -90,14 +90,18 @@ describe('real durable whiteboard storage and jobs', () => {
   })
 
   it('recovers an interrupted draw as an explicit error and records missing usage once without duplicating the model call', async () => {
+    let calls = 0
     let started!: () => void; const entered = new Promise<void>(resolve => { started = resolve })
-    const f = await fixture({ draw: async (_request, signal) => { started(); await new Promise<void>(resolve => signal.addEventListener('abort', () => resolve(), { once: true })); return { error: 'MODEL_ABORTED' } } })
+    const f = await fixture({ draw: async (_request, signal) => { calls++; started(); await new Promise<void>(resolve => signal.addEventListener('abort', () => resolve(), { once: true })); return { error: 'MODEL_ABORTED' } } })
     const { record, source } = await withImage(f)
     const job = await f.service.generate(a, record.document.id, { imageId: source.id, expectedRevision: record.revision, expectedGeneration: record.generation, operationId: 'restart-model' })
     await entered; await f.restart()
     expect((await f.service.readGeneration(a, record.document.id, job.id)).status).toBe('error')
-    expect(f.receipts).toHaveLength(1)
-    await f.restart(); expect(f.receipts).toHaveLength(1)
+    const stored = [...f.service.domain.table('accounts').entries()][0]![1].jobs[job.id]
+    expect(stored).toMatchObject({ status: 'error', attempt: 1, usageRecorded: true })
+    expect(stored).not.toHaveProperty('output')
+    expect(f.receipts).toHaveLength(1); expect(calls).toBe(1)
+    await f.restart(); expect(f.receipts).toHaveLength(1); expect(calls).toBe(1)
   })
 
   it('advertises a ready unapplied artifact to a fresh device until its insertion is saved', async () => {
@@ -130,6 +134,8 @@ describe('real durable whiteboard storage and jobs', () => {
     const completeBytes = Buffer.byteLength(JSON.stringify(document))
     expect(completeBytes).toBeGreaterThan(8 * 1024 * 1024)
     remote = await f.service.save(a, document.id, { document, expectedRevision: 1, expectedGeneration: 1, operationId: 'large-initial' })
+    const previousDocumentReads = vi.spyOn(f.service.blobs, 'read')
+    onTestFinished(() => { previousDocumentReads.mockRestore() })
     const allocated = () => [...f.service.domain.table('accounts').entries()].flatMap(([, account]) => Object.values(account.allocations)).reduce((sum, value) => sum + value.bytes, 0)
     const initialBytes = allocated()
     for (let edit = 1; edit <= 100; edit++) {
@@ -139,6 +145,8 @@ describe('real durable whiteboard storage and jobs', () => {
       expect(allocated() - initialBytes).toBeLessThan(2 * 1024 * 1024)
       if (edit % 25 === 0) console.info(JSON.stringify({ capacityEdits: edit, completeBytes, allocatedBytes: allocated(), growthBytes: allocated() - initialBytes }))
     }
+    expect(previousDocumentReads).not.toHaveBeenCalled()
+    previousDocumentReads.mockRestore()
     await f.restart()
     const restored = await f.service.read(a, document.id)
     expect(restored.document.scene.elements[0]?.points).toEqual(points)

@@ -169,7 +169,11 @@ describe('real Loader composition - account-private Canvas HTTP', { timeout: CAN
     expect(oldUnit.unit).toEqual({ name: 'physicsos_learning', version: 0 })
     expect(Object.keys(oldUnit.tables).sort()).toEqual(['attempts', 'saved_scenes'])
     expect(oldUnit.tables.attempts[attemptKey(a.actor.userKey, attempt.id)]).toEqual(legacyAttempt.item)
-    expect(oldUnit.tables.saved_scenes[savedSceneKey(a.actor.userKey, legacyScene.sceneId)]).toEqual(saved.item)
+    const storedScene = oldUnit.tables.saved_scenes[savedSceneKey(a.actor.userKey, legacyScene.sceneId)]
+    const derivedRecentFields = ['recentState', 'recentVersion', 'recentGeneration']
+    expect(saved.item).toMatchObject({ recentState: 'live', recentVersion: 0, recentGeneration: 0 })
+    expect(storedScene).toEqual(Object.fromEntries(Object.entries(saved.item).filter(([key]) => !derivedRecentFields.includes(key))))
+    for (const field of derivedRecentFields) expect(storedScene).not.toHaveProperty(field)
 
     const created = await create(fixture, a, 'shared-id', 'A private Canvas')
     expect(created.head).toMatchObject({ id: 'shared-id', title: 'A private Canvas', version: 1, generation: 1, changeSeq: 1 })

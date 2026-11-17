@@ -25,6 +25,19 @@ describe('courseware durable originals, CAS, scopes and lessons', () => {
     await expect(f.service.import(cwTeacher, { ...importBody('forged_owner'), owner: { schoolId: cwForeign.schoolId, userKey: cwForeign.userKey } })).rejects.toMatchObject({ status: 400 })
     await expect(f.service.manage(cwAdmin, record.deck.id, { expectedRevision: 1, action: 'publish', operationId: 'admin_override' })).rejects.toMatchObject({ status: 404 })
   })
+  it('rejects preflight validation through the Promise API without committing writes', async () => {
+    const f = await coursewareFixture(); const before = structuredClone(f.service.domain.table('catalog').get('catalog'))
+    const invalidWrites: readonly (() => Promise<unknown>)[] = [
+      () => f.service.import(cwTeacher, {}),
+      () => f.service.activate(cwTeacher, 'deck_invalid', {}),
+      () => f.service.manage(cwTeacher, 'deck_invalid', {}),
+      () => f.service.startLesson(cwTeacher, 'deck_invalid', {}),
+      () => f.service.saveAnnotation(cwTeacher, 'deck_invalid', 'lesson_invalid', 'document', {}),
+      () => f.service.addBlankPage(cwTeacher, 'deck_invalid', 'lesson_invalid', {}),
+    ]
+    for (const write of invalidWrites) await expect(write()).rejects.toMatchObject({ status: 400, code: 'BAD_REQUEST' })
+    expect(f.service.domain.table('catalog').get('catalog')).toEqual(before)
+  })
   it('publishes explicitly to the same school and revokes old shared versions on replacement or unpublish', async () => {
     const f = await coursewareFixture(); let record = await f.service.import(cwTeacher, importBody())
     record = await f.service.manage(cwTeacher, record.deck.id, { action: 'publish', expectedRevision: record.deck.revision, operationId: 'publish_1' })
@@ -134,8 +147,15 @@ describe('courseware durable originals, CAS, scopes and lessons', () => {
     expect((await f.service.readAnnotation(cwTeacher, record.deck.id, lesson.id, 'document')).scene).toEqual(ink())
     const ticket = await f.service.issueTicket(cwTeacher, record.deck.id, record.deck.activeVersionId)
     expect((await f.service.content(ticket.wrapperUrl.split('/').at(-1)!)).bytes.byteLength).toBeGreaterThan(0)
-    await expect(f.service.import(cwTeacher, importBody('bridge_import'))).rejects.toMatchObject({ code: 'WRITES_DISABLED' })
-    await expect(f.service.saveAnnotation(cwTeacher, record.deck.id, lesson.id, 'document', { expectedRevision: 1, operationId: 'bridge_ink', scene: ink('x') })).rejects.toMatchObject({ code: 'WRITES_DISABLED' })
+    const before = structuredClone(f.service.domain.table('catalog').get('catalog'))
+    await expect(f.service.import(cwTeacher, importBody('bridge_import'))).rejects.toMatchObject({ status: 423, code: 'WRITES_DISABLED' })
+    await expect(f.service.import(cwTeacher, { ...importBody('bridge_replace'), expectedActiveId: record.deck.activeVersionId }, record.deck.id)).rejects.toMatchObject({ status: 423, code: 'WRITES_DISABLED' })
+    await expect(f.service.activate(cwTeacher, record.deck.id, { expectedActiveId: record.deck.activeVersionId, versionId: record.deck.activeVersionId, operationId: 'bridge_activate' })).rejects.toMatchObject({ status: 423, code: 'WRITES_DISABLED' })
+    await expect(f.service.manage(cwTeacher, record.deck.id, { expectedRevision: record.deck.revision, action: 'publish', operationId: 'bridge_manage' })).rejects.toMatchObject({ status: 423, code: 'WRITES_DISABLED' })
+    await expect(f.service.startLesson(cwTeacher, record.deck.id, { versionId: record.deck.activeVersionId, operationId: 'bridge_lesson' })).rejects.toMatchObject({ status: 423, code: 'WRITES_DISABLED' })
+    await expect(f.service.saveAnnotation(cwTeacher, record.deck.id, lesson.id, 'document', { expectedRevision: 1, operationId: 'bridge_ink', scene: ink('x') })).rejects.toMatchObject({ status: 423, code: 'WRITES_DISABLED' })
+    await expect(f.service.addBlankPage(cwTeacher, record.deck.id, lesson.id, { expectedRevision: lesson.revision, operationId: 'bridge_blank' })).rejects.toMatchObject({ status: 423, code: 'WRITES_DISABLED' })
+    expect(f.service.domain.table('catalog').get('catalog')).toEqual(before)
     expect(f.service.capabilities(cwTeacher)).toMatchObject({ writesEnabled: false, canImport: false, canTeach: false })
   })
   it.each(['ACCOUNT_QUOTA', 'SCHOOL_QUOTA', 'GLOBAL_QUOTA'] as const)('rejects %s without releasing old files or publishing partial imports', async code => {

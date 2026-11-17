@@ -46,6 +46,7 @@ describe.skipIf(!enabled || database === undefined)('activity 90-day + ten-times
     const replayOldestDay = activityReplayOldestDay(retainedAt)
     const schema = `activity_capacity_${randomUUID().replaceAll('-', '')}`, pool = new Pool({ connectionString: database, max: 1 })
     let context: Context | undefined, backend: PostgresStorageBackend | undefined, domain: ActivityDomain | undefined, service: ActivityService | undefined, loadCalls = 0, clock = new Date('2026-11-16T00:00:00.000Z')
+    let lastOpen: { storagePluginMs: number; facilityOpenMs: number; backendLoadAllMs: number; initializeMs: number } | undefined
     // Query the full registered roster, not just DAU in a single synthetic school.
     const roster: ActivityRoster = {
       version: `capacity-${scale}`,
@@ -55,16 +56,23 @@ describe.skipIf(!enabled || database === undefined)('activity 90-day + ten-times
     const close = async () => { await service?.dispose(); await domain?.close(); await backend?.close(); await context?.fiber.dispose(); service = undefined; domain = undefined; backend = undefined; context = undefined }
     onTestFinished(async () => { await close(); try { await pool.query(`DROP SCHEMA IF EXISTS ${quoteIdentifier(schema)} CASCADE`) } finally { await pool.end() } }, 60_000)
     const open = async () => {
+      const pluginStart = performance.now(); let backendLoadAllMs = 0
       context = new Context(); await context.plugin(Storage)
+      const storagePluginMs = performance.now() - pluginStart
       backend = new PostgresStorageBackend({ connectionString: database, schema, maxConnections: 2 })
       const actual = backend, wrapped: StorageBackend = { kv: { open: async descriptor => {
         const unit = await actual.kv.open(descriptor)
-        return { loadAll: () => { loadCalls += 1; return unit.loadAll() }, putRecord: (table, key, value) => unit.putRecord(table, key, value), deleteRecord: (table, key) => unit.deleteRecord(table, key), setGlobal: value => unit.setGlobal(value), close: () => unit.close() }
+        return { loadAll: async () => {
+          loadCalls += 1; const began = performance.now()
+          try { return await unit.loadAll() } finally { backendLoadAllMs += performance.now() - began }
+        }, putRecord: (table, key, value) => unit.putRecord(table, key, value), deleteRecord: (table, key) => unit.deleteRecord(table, key), setGlobal: value => unit.setGlobal(value), close: () => unit.close() }
       } }, close: () => actual.close() }
       context.storage.backend.register('postgres', wrapped); context.provide('storageDomain', new DomainFacility(context, { backend: 'postgres' }))
-      domain = await openActivityDomain(context)
+      const facilityStart = performance.now(); domain = await openActivityDomain(context)
+      const facilityOpenMs = performance.now() - facilityStart
       service = new ActivityService(domain, { mode: 'enabled', now: () => clock, roster: () => roster, queryCapacityVerified: true })
-      await service.initialize()
+      const initializeStart = performance.now(); await service.initialize()
+      lastOpen = { storagePluginMs, facilityOpenMs, backendLoadAllMs, initializeMs: performance.now() - initializeStart }
       return service
     }
     clock = collectionStart; await open()
@@ -121,6 +129,7 @@ describe.skipIf(!enabled || database === undefined)('activity 90-day + ten-times
     clock = retainedAt; gc()
     const heapBefore = process.memoryUsage().heapUsed, loadBefore = loadCalls, start = performance.now(), opened = await open(), coldMs = performance.now() - start
     gc(); const coldHeapBytes = Math.max(0, process.memoryUsage().heapUsed - heapBefore)
+    console.info('activity-capacity-cold', { scale, dailyActiveUsers: users, rosterUsers, schoolCount, rows: seededRows, bytes: seededBytes, coldMs, coldHeapBytes, stages: lastOpen })
     expect(loadCalls - loadBefore).toBe(1)
     expect(coldMs).toBeLessThanOrEqual(DEFAULT_ACTIVITY_LIMITS.maxColdStartMs)
     expect(coldHeapBytes).toBeLessThanOrEqual(512 * 1024 * 1024)

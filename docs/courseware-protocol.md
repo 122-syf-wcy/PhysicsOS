@@ -169,6 +169,30 @@ embedded 副本隐藏重复 chrome/deck-controls 但保留其 DOM 与业务引�
 
 本轮提供 learning-host 的 courseware adapter/security/blob/service/http 测试，客户端的 protocol/coordinates/pointer/controller/persistence 测试，以及 `scripts/verify-courseware.browser.mjs`。源码阶段不在 Mac 执行。正式集成须在服务器 Docker 完成类型检查、现有 usage/canvas/whiteboard 回归、真实 PostgreSQL 落盘与冷启动、桥接往返及精确 CSP 反代验收。
 
-真实脚本用独立 teacher storage-state，通过正式课件入口导入真实 31 页 HTML，检查逐页 ack、字体图片、滑块、真实合成音、opaque Cookie/DOM 拒绝、压力／DPR／letterbox／全屏坐标、空白页、撤销重做、断网重放、1440/1280/1024/390/320 布局，另以计算属性构造攻击入口测试外域自导航／弹窗／frame/fetch 不发请求。脚本不 mock body/API，不禁用 Chromium sandbox，不输出 Cookie／完整环境变量。`COURSEWARE_STUDENT_STATE`／`COURSEWARE_FOREIGN_STATE` 可增加真实授权角色矩阵；缺少这些状态不表示角色验收已通过。
+真实入口为已启动的候选 Web App → 独立测试账号登录 → 侧栏「课件与授课」，不是 demos HTML 或 `/physicsos/courseware` API 页面。浏览器脚本从主仓库根依赖解析锁定的 Playwright；保持 `chromiumSandbox:true`，所有成功页面／API body 均来自真实服务，正常 API 使用同源浏览器 fetch 生成真实 Origin／Fetch Metadata。上传原始文件严格固定为 3317789 B 与上述 SHA，不重建或修改示例。外域请求尝试在浏览器路由中立即拦截，但记录到尝试仍判失败，不把拦截当 CSP 成功。
+
+`COURSEWARE_PHASE=core` 保留真实 31 页导航、图片字体／660 Hz 模型交互、隔离、压力／实际 child stage 与 SVG CSS 矩形对照、全屏、触控、五种宽度、按页笔迹、undo/redo、断网重放与真实 GET 保存确认；另把 popup/fetch/frame/self/top 负例独立导入并证明各程序真实触发。`ready` 本身不是持久保存；必须已显示「批注已保存」、完整草稿 pending=0，并与实际单页 GET 的 revision／完整 scene／图元顺序一致。原坐标 `.01/.015`、布局 ±1 px 和原 timeout 不放宽；真实 stage/SVG 矩形另加 `.75` CSS px 对照，不乘 DPR。core 清理自身新建课件并输出 `fullAcceptance:false`，不代表高级／重启验收通过。所有新增验收代码尚未在本机或服务器运行，执行和结果由主代理在服务器候选／批准的浏览器 runner 完成。
+
+`COURSEWARE_PHASE=before-restart` 才执行完整 enabled 写入阶段：core 加激光约700ms真实消退且不入库、聚光40/600半径与临时状态、清空确认＋完整撤销、两张 blank 与 cover 的完整笔迹隔离及 undo/redo、DPR1/2与真实 iframe letterbox 外落笔拒绝、同候选双 context 的 CAS 非重叠重放／顺序／新 operationId 与同图元拒绝。冲突本机完整 JSON 先私有导出，测试明确放弃的也仅为专用 fixture 草稿。丢 ACK 只在准确 annotation PUT 路由调用真实 `route.fetch({maxRedirects:0,maxRetries:0})`，验证实际提交回执后 `route.abort` 浏览器交付；报告记录 transport fault、原 operationId／请求SHA／appliedRevision。后续成功走原始路由，不 `fulfill` 成功 body；同标签页刷新由真实IDB重放相同完整请求，并保留另一context已更新的最新服务端 head。此阶段先核对删除所有 hostile probe，再保留主课件，写私有 `courseware-before-restart.json`，仍输出 `fullAcceptance:false`。
+
+`COURSEWARE_PHASE=after-restart` 不创建课件：要求绝对路径 `COURSEWARE_CHECKPOINT` 指向上述 checkpoint，并核对其关联 before-result 为真实 `before-restart`、passed=true、三身份与core/advanced全通过。checkpoint 保存准确 fixtureKey、candidateOrigin、teacher身份、deck/version不可变元数据及每个 lesson／slide／blank 的 revision、完整原始scene与SHA。必须另提供 `COURSEWARE_RESTART_RECEIPT`，其无凭据结构为 `{schemaVersion:1,candidateOrigin,fixtureKey,checkpointSha256,appRestarted:true,appContainerIds:[完整64位小写hex CID],databaseRestarted:boolean,databaseContainerIds:[完整64位CID],completedAt:ISO}`；databaseRestarted=true时数据库CID列表必需。主代理按完整CID在服务器串行重启、保留原数据卷，再写回执，脚本不执行SSH/Docker。新 browser context 仅加载auth state、不恢复旧IDB，逐页真实GET和正式UI恢复比较完整数据。仅应用重启可通过该范围，但PG明确未验证、fullAcceptance仍false；配对完整 before证据与数据库重启回执全部通过才允许fullAcceptance=true。
+
+`COURSEWARE_PHASE=bridge` 是独立只读／拒写阶段，不强制enabled：读取同候选checkpoint；如为独立恢复副本，必须在预期配置明确 `restoredFromOrigin`，且checkpoint的准确teacher仍匹配目标测试身份。正式UI恢复所有页、校验笔迹和disabled工具；用有效完整原始HTML导入／新授课／原场景PUT验证423拒写，并核对既有metadata／scene／revision不变。不提供回执时明确restart未验证；bridge自身始终fullAcceptance=false。若错误接受写入，报告准确unexpectedBridgeWrites，不能把其当安全成功；该情况的隔离数据由主代理核查，不在bridge偷偷改回或执行破坏清理。after/bridge输出目录不得覆盖before证据，保留fixture供后续核对，最终清理由主代理使用正式权限路径处理。
+
+核心阶段必须同时提供绝对路径的 `COURSEWARE_STORAGE_STATE`（教师）、`COURSEWARE_STUDENT_STATE`（同校学生）、`COURSEWARE_FOREIGN_STATE`（异校账号）和 `COURSEWARE_EXPECTED_FIXTURE`。后者是无凭据的预期身份配置：`{schemaVersion:1,candidateOrigin,mode:'enabled',isolatedTestData:true,teacher:{schoolId,schoolName,username,id,role:'TEACHER',testAccount:true},student:{schoolId,schoolName,username,id,role:'STUDENT',testAccount:true},foreign:{schoolId,schoolName,username,id,role,testAccount:true}}`。每个 context 都按现有 auth-api 的真实 `{user:AuthUser}` DTO 核验 id/schoolId/schoolName/username/role；school字段在user平层、id为原始string不猜UUID。角色严格闭集 `TEACHER/STUDENT/SCHOOL_ADMIN/SUPER_ADMIN`，无lowercase alias或fallback猜测，报告记录wire enum。学生须同校不同账号，foreign须异校。storage-state只允许本候选Cookie/localStorage，不接受旧IndexedDB／其它origin；不得把Cookie或完整state写入文档／日志／版本库。缺失或不匹配即失败，不把缺少fixture称为全绿。教师浏览器须HTTPS或可信loopback、真实crypto.randomUUID/IndexedDB，以覆盖稳定tab与IDB刷新合同。
+
+浏览器helper对每个自建context计数并阻断明确的POST推理触发：`/physicsos/whiteboards/:id/generations`、`/physicsos/learning/canvases/:id/assistant/jobs`、`/v1/chat/completions`、`/v1/responses`、`/v1/messages`；模型列表GET、job read/cancel和原课件物理模型不是推理。尝试推理或外域请求即失败，不能用被拦截的结果冒充成功；脚本不点击生成助手，不发送假use事件或模型请求。所有业务成功证据来自实际资源／授课／批注API及其回执，非mock body。
+
+`COURSEWARE_BASE` 必须与预期配置中的独立候选 origin 完全一致；公开生产主机 `physics.dongsiwei.com`（含其它端口）一律拒绝。隔离数据库、私有目录卷及测试账号／学校须由主代理确认；不同生产路径前缀不构成独立候选。完整 core 写入流程只允许真实 enabled 能力；bridge 不能借该流程导入或写入。`COURSEWARE_OUTPUT` 应是每候选、每次运行独立的私有绝对路径，结果及截图不包含 Cookie／完整环境变量。核心流程仅清理实际创建响应中的准确课件 ID，核对 delete 响应与最终 tombstone；清理失败使该阶段失败。软删除仍占额度，不提供永久清空或自动 prune。
+
+主代理在根依赖和匹配Chromium缓存就绪后，以下各阶段都带同一候选的真实 `COURSEWARE_BASE`、`COURSEWARE_EXPECTED_FIXTURE`、三份auth state和每阶段独立的私有 `COURSEWARE_OUTPUT`，逐候选串行调用 `node <absolute-main-repo>/scripts/verify-courseware.browser.mjs`：
+
+- `COURSEWARE_PHASE=core`：核心／清理范围，fullAcceptance=false。
+- `COURSEWARE_PHASE=before-restart`：完整enabled写入与高级范围，保存checkpoint并保留主fixture，fullAcceptance=false。
+- 主代理在服务器按完整CID串行重启应用／数据库，保留卷并写上述receipt；不要让脚本启动服务或在Mac补装后端环境。
+- `COURSEWARE_PHASE=after-restart COURSEWARE_CHECKPOINT=<absolute-before-checkpoint> COURSEWARE_RESTART_RECEIPT=<absolute-operator-receipt>`：新auth-only context核对真实GET；PG未重启则明确非完整范围。
+- `COURSEWARE_PHASE=bridge COURSEWARE_CHECKPOINT=<absolute-before-checkpoint>`：真实bridge只读／有效拒写范围；有独立重启回执可额外传入，但此范围仍非enabled完整全绿。
+
+占位符由主代理已批准的独立fixture填充，不在聊天或版本库填写真实凭据。原始课件、teacher-preview、source/adapted SHA均不变；实际运行／结果须另外回执，源码文件存在或某阶段passed不表示所有门槛已完成。脚本不SSH、不Docker、不启动／重启服务。
 
 服务器剩余空间不足时，必须先补容量，不能降低 minFreeBytes、自动 prune 或把源码测试文件存在当作真实验收已通过。

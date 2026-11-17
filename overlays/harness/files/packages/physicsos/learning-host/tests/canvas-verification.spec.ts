@@ -1,3 +1,6 @@
+import { ok } from 'node:assert/strict'
+import { Buffer } from 'node:buffer'
+import { isDeepStrictEqual } from 'node:util'
 import { describe, expect, it, vi } from 'vitest'
 import type { SimulationOptions, SimulationRequest, SimulationResult, SimulationState } from '@physicsos/physics-core'
 import { ENGINES, getSimulationPlan, pickEngine, simulateScene, type EngineEntry } from '@physicsos/physics-runtime'
@@ -167,23 +170,38 @@ describe('verifyCanvasCapture with actual selected engines and retained requests
     expect(snapshot.datasets).toEqual([])
     expect(result.simulationId).toBe(present(value.capture.request).simulationId)
     expect(result.trace).toEqual(present(value.capture.request).trace)
-    expect(result.states).toEqual(original.states)
+    ok(isDeepStrictEqual(result.states, original.states), 'Every raw server replay state and field must match the original capture.')
     expect(result.events).toEqual(original.events)
     expect(result.measurements).toEqual(original.measurements)
     expect(result.derivedQuantities).toEqual(original.derivedQuantities)
     expect(result.verification.status).toBe('passed')
     expect(result.verification.checks).toContainEqual(expect.objectContaining({ id: 'mechanics_kinematic_consistency', type: 'numerical', passed: true }))
 
-    expect(outcome.datasets).toEqual(datasetFromSimulationResult(original, { sourceScene: value.capture.scene, conditions: conditionsFromScene(value.source.scene) }))
+    ok(
+      isDeepStrictEqual(
+        outcome.datasets,
+        datasetFromSimulationResult(original, { sourceScene: value.capture.scene, conditions: conditionsFromScene(value.source.scene) }),
+      ),
+      'Server datasets must match the independent extraction of every original sample and field.',
+    )
     const states = present(outcome.datasets.find(dataset => dataset.origin.collection === 'states'))
     const derived = present(outcome.datasets.find(dataset => dataset.origin.collection === 'derived'))
     expect(states.rows).toHaveLength(original.states.length)
     expect(states.rows.length).toBeGreaterThan(512)
-    expect(states.rows.map(row => row.axes.time)).toEqual(original.states.map(state => canonicalValue(state.time)))
+    ok(
+      isDeepStrictEqual(states.rows.map(row => row.axes.time), original.states.map(state => canonicalValue(state.time))),
+      'Every dataset time axis value must match the original states.',
+    )
     for (const key of ['position', 'velocity', 'acceleration'] as const) {
       for (const component of ['x', 'y', 'z'] as const) {
         const metric = present(states.metrics.find(metric => metric.semanticKey === key && metric.component === component && metric.targetId === 'body-1'))
-        expect(states.rows.map(row => row.values[metric.id])).toEqual(original.states.map(state => present(present(state.objects[0])[key]).vector[component]))
+        ok(
+          isDeepStrictEqual(
+            states.rows.map(row => row.values[metric.id]),
+            original.states.map(state => present(present(state.objects[0])[key]).vector[component]),
+          ),
+          `Every ${key}.${component} dataset value must match the original states.`,
+        )
       }
     }
     expect(states.rows[1]?.evidence?.rawTime).toEqual(original.states[1]?.time)
@@ -194,9 +212,9 @@ describe('verifyCanvasCapture with actual selected engines and retained requests
     expect(deeplyFrozen(snapshot)).toBe(true)
     expect(deeplyFrozen(outcome.datasets)).toBe(true)
     expect(canvasHash(canonicalBytes(snapshot))).not.toBe(input.captureDigest)
-    expect(canonicalBytes(value.source)).toEqual(sourceBytes)
-    expect(canonicalBytes(value.source.scene)).toEqual(sceneBytes)
-    expect(canonicalBytes(value.capture)).toEqual(captureBytes)
+    ok(Buffer.from(canonicalBytes(value.source)).equals(sourceBytes), 'Original scene-object bytes must remain unchanged.')
+    ok(Buffer.from(canonicalBytes(value.source.scene)).equals(sceneBytes), 'Original scene bytes must remain unchanged.')
+    ok(Buffer.from(canonicalBytes(value.capture)).equals(captureBytes), 'Original capture bytes must remain unchanged.')
     expect(deeplyFrozen(value.source)).toBe(true)
     expect(deeplyFrozen(value.capture)).toBe(true)
   })
