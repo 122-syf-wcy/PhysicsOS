@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createMechanicsScene } from '@physicsos/physics-scene'
-import { openQuestionCodeDomain, type QuestionCodeRecord } from '../src/question-code-domain.ts'
+import { openQuestionCodeDomain, QUESTION_CODE_VALIDATION_HISTORY_LIMIT, type QuestionCodeRecord } from '../src/question-code-domain.ts'
 import { QuestionCodeArtifactService, canonicalQuestionJson, questionSceneSha256 } from '../src/question-code-service.ts'
 import { QuestionCodeJobs, QuestionCodeJobError, type ValidationSourceBinding } from '../src/question-code-jobs.ts'
 import { currentCandidateSource, validateFrozenCandidate, retryFrozenCandidate } from '../src/question-code-validation.ts'
@@ -20,6 +20,7 @@ afterEach(async () => {
 })
 const config = { url: 'http://worker:8099', token: 'v'.repeat(32), timeoutMs: 5_000 }
 const report = { passed: true, durationMs: 1, checks: [{ name: 'first-frame', passed: true }, { name: 'motion-sampled', passed: true }] }
+const rejectedReport = { passed: false, durationMs: 1, checks: [{ name: 'geometry-probe', passed: false, detail: 'fixture rejection' }], screenshot: 's'.repeat(101) }
 const respond = (body: unknown = report, status = 200): typeof fetch => (async () => Response.json(body, { status })) as typeof fetch
 const renderer = `export function renderFrame(snapshot) {
   const view = snapshot.view, root = document.getElementById('canvas');
@@ -65,6 +66,7 @@ async function setup() {
   const sourceFence = (binding: ValidationSourceBinding): void => {
     if (owner !== binding.ownerKey || current.ref.ownerSessionId !== binding.ownerSessionId
       || current.ref.artifactId !== binding.artifactId || current.ref.sha256 !== binding.candidateSha256
+      || current.ref.requestSha256 !== binding.requestSha256
       || current.scene.id !== binding.sceneId || current.scene.revision !== binding.sceneRevision
       || questionSceneSha256(current.scene) !== binding.sceneSha256) throw new QuestionCodeJobError('STALE_SOURCE', 'source changed')
   }
@@ -77,6 +79,21 @@ async function setup() {
   return { root, artifacts, jobs, domain, row, candidate, scene, started, submitted, identity, ticket, input, deps, retryDeps, queue,
     setOwner: (value: string | undefined) => { owner = value }, setClock: (value: Date) => { clock = value },
     setCurrent: (value: typeof current) => { current = value } }
+}
+
+async function rejectCandidate(h: Awaited<ReturnType<typeof setup>>) {
+  const ticket = h.ticket()
+  expect(await validateFrozenCandidate(config, h.input(ticket.token), h.deps(respond(rejectedReport)))).toMatchObject({ kind: 'rejected' })
+  const job = structuredClone(h.jobs.get(h.submitted.id, contributor.userKey))
+  expect(job).toMatchObject({ status: 'failed', code: 'ACCEPTANCE_REJECTED', validation: { passed: false, leaseEpoch: h.started.epoch, sourceRef: h.row.id } })
+  expect(job.attempts.at(-1)?.status).toBe('rejected')
+  return job
+}
+
+function generationSpies(h: Awaited<ReturnType<typeof setup>>) {
+  const spies = [vi.spyOn(h.artifacts, 'create'), vi.spyOn(h.artifacts, 'restoreGeneration'), vi.spyOn(h.artifacts, 'generateAsset'),
+    vi.spyOn(h.jobs, 'submit'), vi.spyOn(h.jobs, 'startAttempt')]
+  return () => { for (const spy of spies) expect(spy).not.toHaveBeenCalled() }
 }
 
 async function routeOrigin(h: Awaited<ReturnType<typeof setup>>, fetchImpl: typeof fetch = respond(), configured = true) {
@@ -350,6 +367,159 @@ describe('owner-only validate-only retry route', () => {
     expect(h.jobs.get(h.submitted.id, contributor.userKey).validation).toBeUndefined()
     expect(h.jobs.get(h.submitted.id, contributor.userKey).attempts).toHaveLength(1)
     expect(() => h.jobs.validationTicket(token, h.row.sha256)).toThrow()
+  })
+
+  it.each([true, false])('owner revalidates the same rejected source to passed=%s without generation and retains every rejection', async passed => {
+    const h = await setup(), rejected = await rejectCandidate(h), artifact = structuredClone(h.row), assertNoGeneration = generationSpies(h)
+    const fetchMock = vi.fn(respond(passed ? report : rejectedReport)), base = await routeOrigin(h, fetchMock as unknown as typeof fetch)
+    const response = await post(base)
+    expect(response.status).toBe(200)
+    const body = await response.json()
+    expect(body).toMatchObject({ job: { status: passed ? 'ready' : 'failed', validation: { passed } } })
+    expect(body).not.toHaveProperty('job.validationHistory')
+    const current = structuredClone(h.jobs.get(h.submitted.id, contributor.userKey))
+    expect(current.validation).toMatchObject({ passed, leaseEpoch: rejected.leaseEpoch + 1, sourceRef: h.row.id,
+      candidateSha256: h.row.sha256, sceneSha256: h.row.sceneSha256, sceneRevision: h.row.sceneRevision })
+    expect(current.validationHistory).toEqual([rejected.validation])
+    expect(h.domain.table('jobs').get(rejected.id)).not.toHaveProperty('validationHistory')
+    expect(current.attempts).toHaveLength(rejected.attempts.length)
+    expect(current.attempts.at(-1)).toMatchObject({ index: 0, startedAt: rejected.attempts[0]!.startedAt, candidateSha256: h.row.sha256 })
+    expect(h.domain.table('artifacts').get(h.row.id)).toEqual(artifact)
+    expect(h.domain.table('jobs').size).toBe(1)
+    expect((await post(base)).status).toBe(passed ? 409 : 200)
+    const next = h.jobs.get(h.submitted.id, contributor.userKey)
+    expect(next.validationHistory).toEqual(passed ? [rejected.validation] : [rejected.validation, current.validation])
+    expect(h.domain.table('validation_history').size).toBe(passed ? 1 : 2)
+    expect(h.domain.table('jobs').get(rejected.id)).not.toHaveProperty('validationHistory')
+    expect(next.attempts).toHaveLength(rejected.attempts.length)
+    expect(h.domain.table('artifacts').get(h.row.id)).toEqual(artifact)
+    expect(fetchMock).toHaveBeenCalledTimes(passed ? 1 : 2)
+    assertNoGeneration()
+  })
+
+  it.each(['ready', 'cancelled', 'superseded', 'model-failed'] as const)('refuses %s on the owner route without generation or a worker request', async kind => {
+    const h = await setup()
+    if (kind === 'ready') { const ticket = h.ticket(); await validateFrozenCandidate(config, h.input(ticket.token), h.deps()) }
+    if (kind === 'cancelled') await h.jobs.cancel(h.submitted.id, contributor.userKey)
+    if (kind === 'superseded') await h.jobs.supersede(h.submitted.id, 'source moved')
+    if (kind === 'model-failed') await h.jobs.finish(h.submitted.id, h.started.epoch, { status: 'rejected', code: 'MODEL_FAILED' })
+    const before = structuredClone(h.jobs.get(h.submitted.id, contributor.userKey)), assertNoGeneration = generationSpies(h)
+    const fetchMock = vi.fn(respond()), base = await routeOrigin(h, fetchMock as unknown as typeof fetch)
+    expect((await post(base)).status).toBe(409)
+    expect(h.jobs.get(h.submitted.id, contributor.userKey)).toEqual(before)
+    expect(fetchMock).not.toHaveBeenCalled(); assertNoGeneration()
+  })
+
+  it.each(['missing', 'old-lease', 'passed', 'wrong-source', 'empty-checks', 'history-full'] as const)('refuses rejected-candidate retry with %s evidence before changing its lease', async kind => {
+    const h = await setup(), rejected = await rejectCandidate(h), assertNoGeneration = generationSpies(h)
+    const record = h.domain.table('jobs').get(rejected.id)!, { validation, ...rest } = record
+    await h.domain.table('jobs').put(rejected.id, kind === 'missing' ? rest : { ...record,
+      ...(kind === 'history-full' ? { leaseEpoch: QUESTION_CODE_VALIDATION_HISTORY_LIMIT + 1 } : {}),
+      validation: { ...validation!, ...(kind === 'old-lease' ? { leaseEpoch: 0 } : kind === 'passed' ? { passed: true }
+        : kind === 'wrong-source' ? { sourceRef: 'qcode_' + 'f'.repeat(32) } : kind === 'empty-checks' ? { checks: [] }
+          : kind === 'history-full' ? { leaseEpoch: QUESTION_CODE_VALIDATION_HISTORY_LIMIT + 1 } : {}) } })
+    if (kind === 'history-full') for (let index = 0; index < QUESTION_CODE_VALIDATION_HISTORY_LIMIT; index++) {
+      await h.domain.table('validation_history').put(`full-history-${index + 1}`, { jobId: rejected.id, ownerKey: rejected.ownerKey,
+        leaseEpoch: index + 1, validation: { ...validation!, leaseEpoch: index + 1 } })
+    }
+    const before = structuredClone(h.jobs.get(rejected.id, contributor.userKey))
+    const fetchMock = vi.fn(respond()), base = await routeOrigin(h, fetchMock as unknown as typeof fetch), response = await post(base)
+    expect(response.status).toBe(409)
+    if (kind === 'history-full') expect(await response.json()).toMatchObject({ error: { code: 'VALIDATION_HISTORY_FULL' } })
+    expect(h.jobs.get(rejected.id, contributor.userKey)).toEqual(before)
+    expect(fetchMock).not.toHaveBeenCalled(); assertNoGeneration()
+  })
+
+  it.each(['owner', 'revision', 'hash', 'source', 'request', 'candidate', 'scene-bytes', 'configuration'] as const)(
+    'refuses a rejected-source retry after %s moves without archiving or regeneration', async change => {
+      const h = await setup(), rejected = await rejectCandidate(h), assertNoGeneration = generationSpies(h), fetchMock = vi.fn(respond())
+      if (change === 'owner') h.setOwner(other.userKey)
+      if (change === 'revision') h.setCurrent({ scene: { ...h.scene, revision: 2 }, ref: h.candidate })
+      if (change === 'hash') h.setCurrent({ scene: { ...h.scene, metadata: { ...h.scene.metadata, title: 'new facts' } }, ref: h.candidate })
+      if (change === 'source') h.setCurrent({ scene: h.scene, ref: { ...h.candidate, artifactId: 'qcode_' + 'f'.repeat(32) } })
+      if (change === 'request') h.setCurrent({ scene: h.scene, ref: { ...h.candidate, requestSha256: 'f'.repeat(64) } })
+      if (change === 'candidate') await h.domain.table('artifacts').delete(h.row.id)
+      if (change === 'scene-bytes') await unlink(join(h.root, 'private', 'blobs', h.row.files.find(file => file.name === 'question-scene.json')!.sha256))
+      const base = await routeOrigin(h, fetchMock as unknown as typeof fetch, change !== 'configuration')
+      expect((await post(base)).status).toBe(change === 'owner' ? 404 : change === 'configuration' ? 503 : 409)
+      expect(h.jobs.get(rejected.id, contributor.userKey)).toEqual(rejected)
+      expect(h.domain.table('jobs').size).toBe(1)
+      expect(fetchMock).not.toHaveBeenCalled(); assertNoGeneration()
+    })
+
+  it('keeps failed-candidate owner scope and request-injection guards unchanged', async () => {
+    const h = await setup(), rejected = await rejectCandidate(h), assertNoGeneration = generationSpies(h), fetchMock = vi.fn(respond())
+    const base = await routeOrigin(h, fetchMock as unknown as typeof fetch)
+    for (const [account, status] of [['unknown', 401], ['other', 404], ['admin', 404]] as const) expect((await post(base, account)).status).toBe(status)
+    expect((await post(base, 'contributor', {}, { origin: 'http://attacker.example' })).status).toBe(403)
+    expect((await post(base, 'contributor', { entryUrl: 'http://attacker' })).status).toBe(400)
+    expect(h.jobs.get(rejected.id, contributor.userKey)).toEqual(rejected)
+    expect(fetchMock).not.toHaveBeenCalled(); assertNoGeneration()
+  })
+
+  it('claims a rejected candidate once, hides old/current history during the new lease and revokes its real capability', async () => {
+    const h = await setup(), rejected = await rejectCandidate(h), assertNoGeneration = generationSpies(h)
+    let release!: (response: Response) => void, entered!: () => void
+    const dispatched = new Promise<void>(resolve => { entered = resolve })
+    const fetchMock = vi.fn((_url: string | URL | Request, _init?: RequestInit) => new Promise<Response>(resolve => { release = resolve; entered() }))
+    const base = await routeOrigin(h, fetchMock as unknown as typeof fetch), pending = post(base)
+    await dispatched
+    expect((await post(base)).status).toBe(409)
+    const current = h.jobs.get(rejected.id, contributor.userKey)
+    expect(current).toMatchObject({ status: 'validating', leaseEpoch: rejected.leaseEpoch + 1 })
+    expect(current.validation).toEqual(rejected.validation)
+    expect(current.validationHistory).toEqual([rejected.validation])
+    const projected = await (await fetch(`${base}/physicsos/question-code/jobs/${rejected.id}`, { headers: { 'x-test-account': 'contributor' } })).json()
+    expect(projected).not.toHaveProperty('job.validation'); expect(projected).not.toHaveProperty('job.validationHistory')
+    const body = JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body))
+    const capability = new URL(body.entryUrl).pathname.split('/')[4]!
+    expect(h.jobs.validationTicket(capability, h.row.sha256).epoch).toBe(current.leaseEpoch)
+    release(Response.json(report))
+    expect((await pending).status).toBe(200)
+    expect(h.jobs.get(rejected.id, contributor.userKey)).toMatchObject({ status: 'ready', validation: { passed: true, leaseEpoch: current.leaseEpoch } })
+    expect(h.jobs.get(rejected.id, contributor.userKey).validationHistory).toEqual([rejected.validation])
+    expect(() => h.jobs.validationTicket(capability, h.row.sha256)).toThrow(QuestionCodeJobError)
+    expect(fetchMock).toHaveBeenCalledOnce(); assertNoGeneration()
+  })
+
+  it.each(['revision', 'source', 'request', 'lease', 'expiry'] as const)('never publishes a failed candidate from a late passed response after %s moves', async change => {
+    const h = await setup(), rejected = await rejectCandidate(h), assertNoGeneration = generationSpies(h)
+    const fetchMock = vi.fn((async () => {
+      if (change === 'revision') h.setCurrent({ scene: { ...h.scene, revision: 2 }, ref: h.candidate })
+      if (change === 'source') h.setCurrent({ scene: h.scene, ref: { ...h.candidate, artifactId: 'qcode_' + 'f'.repeat(32) } })
+      if (change === 'request') h.setCurrent({ scene: h.scene, ref: { ...h.candidate, requestSha256: 'f'.repeat(64) } })
+      if (change === 'lease') await h.jobs.supersede(rejected.id, 'new source')
+      if (change === 'expiry') h.setClock(new Date('2026-11-16T00:05:01Z'))
+      return Response.json(report)
+    }) as typeof fetch)
+    await expect(retryFrozenCandidate(config, rejected.id, contributor, h.retryDeps(fetchMock as unknown as typeof fetch))).rejects.toBeInstanceOf(Error)
+    const current = h.jobs.get(rejected.id, contributor.userKey)
+    expect(current.status).toBe(change === 'expiry' ? 'queued' : 'superseded')
+    expect(current.validation).toEqual(rejected.validation)
+    expect(current.validationHistory).toEqual([rejected.validation])
+    expect(h.domain.table('jobs').get(rejected.id)).not.toHaveProperty('validationHistory')
+    expect(current.attempts).toHaveLength(rejected.attempts.length)
+    const body = JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body))
+    expect(() => h.jobs.validationTicket(new URL(body.entryUrl).pathname.split('/')[4]!, h.row.sha256)).toThrow()
+    assertNoGeneration()
+  })
+
+  it('never projects or publishes a passed historical report as acceptance for a new lease', async () => {
+    const h = await setup()
+    await h.jobs.recordValidation(h.submitted.id, h.started.epoch, { passed: true, candidateSha256: h.row.sha256, checks: report.checks })
+    await h.jobs.finish(h.submitted.id, h.started.epoch, { status: 'infrastructure-failed', code: 'WRITE_FAILED' })
+    const previous = structuredClone(h.jobs.get(h.submitted.id, contributor.userKey).validation), assertNoGeneration = generationSpies(h)
+    const binding = h.artifacts.validationSource(h.submitted.id, contributor)
+    const claimed = await h.jobs.claimValidation(h.submitted.id, contributor.userKey, () => { h.artifacts.assertValidationSource(binding); h.deps().sourceFence(binding) })
+    expect(claimed.job.validationHistory).toEqual([previous])
+    const fetchMock = vi.fn(respond()), base = await routeOrigin(h, fetchMock as unknown as typeof fetch)
+    const response = await fetch(`${base}/physicsos/question-code/jobs/${h.submitted.id}`, { headers: { 'x-test-account': 'contributor' } })
+    expect(response.status).toBe(200)
+    const body = await response.json()
+    expect(body).not.toHaveProperty('job.validation'); expect(body).not.toHaveProperty('job.validationHistory')
+    await expect(h.jobs.finish(h.submitted.id, claimed.epoch, { status: 'passed', resultRef: h.row.id, resultSha256: h.row.sha256 }))
+      .rejects.toMatchObject({ code: 'CANDIDATE_MISMATCH' })
+    expect(fetchMock).not.toHaveBeenCalled(); assertNoGeneration()
   })
 
   it('keeps old passed evidence stored but does not advertise an unbound or earlier-lease report as this preview passed', async () => {

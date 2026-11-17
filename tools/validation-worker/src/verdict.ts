@@ -52,6 +52,15 @@ const finite = (value: unknown): value is number => typeof value === 'number' &&
 const validBody = (frame: SampledFrame): boolean => finite(frame.engineBody?.x) && finite(frame.engineBody?.y)
 const close = (left: number, right: number): boolean => Math.abs(left - right) <= 1e-6
 
+/** Canvas transforms are Float32; this subpixel bound never changes world-unit checks. */
+const pixelClose = (left: number, right: number, ...calibration: number[]): boolean => {
+  const values = [left, right, ...calibration]
+  if (!values.every(finite)) return false
+  const magnitude = Math.max(1, ...values.map(Math.abs))
+  const ulp = 2 ** (Math.floor(Math.log2(magnitude)) - 23)
+  return Math.abs(left - right) <= Math.min(1 / 1024, 4 * ulp)
+}
+
 /** Native centre must be internally consistent and have surviving actual fill. */
 const nativeBody = (draw: DrawnBody): boolean => {
   if (draw.source !== 'canvas-2d-arc-fill'
@@ -105,14 +114,16 @@ function groundBodyTrack(frames: readonly SampledFrame[], changedFrame?: Sampled
     const projected = groundProjection(first, anchor)
     if (projected === undefined) continue
     for (const candidate of first.drawnBodies ?? []) {
-      if (!nativeBody(candidate) || candidate.surface !== anchor.surface || !close(candidate.pixelX, projected.x) || !close(candidate.pixelY, projected.y)) continue
+      const calibration = [anchor.pixelFrom.x, anchor.pixelFrom.y, anchor.pixelTo.x, anchor.pixelTo.y]
+      if (!nativeBody(candidate) || candidate.surface !== anchor.surface || !pixelClose(candidate.pixelX, projected.x, ...calibration) || !pixelClose(candidate.pixelY, projected.y, ...calibration)) continue
       const track: DrawnBody[] = []
       const allFrames = changedFrame === undefined ? frames : [...frames, changedFrame]
       for (const frame of allFrames) {
         const line = frame.drawnGrounds?.find(item => item.surface === anchor.surface && item.strokeIndex === anchor.strokeIndex && groundProjection(frame, item) !== undefined)
         const expected = line === undefined ? undefined : groundProjection(frame, line)
-        const draw = expected === undefined ? undefined : frame.drawnBodies?.find(item => item.surface === candidate.surface && item.drawIndex === candidate.drawIndex
-          && nativeBody(item) && close(item.pixelX, expected.x) && close(item.pixelY, expected.y))
+        const draw = expected === undefined || line === undefined ? undefined : frame.drawnBodies?.find(item => item.surface === candidate.surface && item.drawIndex === candidate.drawIndex
+          && nativeBody(item) && pixelClose(item.pixelX, expected.x, line.pixelFrom.x, line.pixelTo.x, line.pixelFrom.y)
+          && pixelClose(item.pixelY, expected.y, line.pixelFrom.x, line.pixelTo.x, line.pixelFrom.y))
         if (draw === undefined) break
         track.push(draw)
       }
@@ -182,7 +193,7 @@ export function evaluateObservation(observation: Observation): { passed: boolean
 
   const times = observation.frames.map(frame => frame.time)
   const paints = new Set(observation.frames.map(frame => frame.paintHash))
-  const moved = track !== undefined && track.some(draw => !close(draw.pixelX, track[0]!.pixelX) || !close(draw.pixelY, track[0]!.pixelY))
+  const moved = track !== undefined && track.some(draw => !pixelClose(draw.pixelX, track[0]!.pixelX) || !pixelClose(draw.pixelY, track[0]!.pixelY))
   checks.push({
     name: 'motion-sampled',
     passed: observation.frames.length >= 2 && times.every(time => finite(time) && time >= 0)

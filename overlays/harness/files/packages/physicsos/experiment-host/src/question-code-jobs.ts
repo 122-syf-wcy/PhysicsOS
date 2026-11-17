@@ -7,13 +7,14 @@
  * whether a candidate passed isolated browser acceptance, and why a retry
  * happened. It is the single writer for that record.
  *
- * Storage is the same `physicsos_question_code` unit as the artifacts, in a
- * new `jobs` table. The domain version stays 0 (the Postgres backend rejects
- * version changes on an existing unit); the table is created on open.
+ * Storage stays in `physicsos_question_code`, version 0. Strict legacy jobs
+ * rows retain their exact shape; prior reports are append-only records in
+ * `validation_history`, merged only into read DTOs, never written back to jobs.
  */
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import type { Domain } from '@deepseek-ai/dsh-storage-domain'
-import type { questionCodeDomain, QuestionCodeJob, QuestionCodeRecord } from './question-code-domain.ts'
+import { QUESTION_CODE_VALIDATION_HISTORY_LIMIT, type questionCodeDomain, type QuestionCodeJob, type QuestionCodeJobRecord,
+  type QuestionCodeRecord, type QuestionCodeValidation, type QuestionCodeValidationHistory } from './question-code-domain.ts'
 
 export type JobStatus = QuestionCodeJob['status']
 export type JobAttempt = QuestionCodeJob['attempts'][number]
@@ -41,7 +42,7 @@ export interface ValidationInput {
 }
 
 export class QuestionCodeJobError extends Error {
-  constructor(readonly code: 'NOT_FOUND' | 'NOT_LIVE' | 'STALE_LEASE' | 'STALE_SOURCE' | 'VALIDATION_BUSY' | 'CANDIDATE_MISMATCH' | 'NO_ATTEMPT', message: string) {
+  constructor(readonly code: 'NOT_FOUND' | 'NOT_LIVE' | 'STALE_LEASE' | 'STALE_SOURCE' | 'VALIDATION_BUSY' | 'VALIDATION_HISTORY_FULL' | 'VALIDATION_ARCHIVE_FAILED' | 'CANDIDATE_MISMATCH' | 'NO_ATTEMPT', message: string) {
     super(message)
     this.name = 'QuestionCodeJobError'
   }
@@ -49,6 +50,13 @@ export class QuestionCodeJobError extends Error {
 
 const LIVE: ReadonlySet<JobStatus> = new Set(['queued', 'running', 'candidate', 'validating'])
 const isLive = (status: JobStatus): boolean => LIVE.has(status)
+const validationHistoryKey = (job: QuestionCodeJobRecord, validation: QuestionCodeValidation): string =>
+  createHash('sha256').update(JSON.stringify([job.id, job.ownerKey, validation.leaseEpoch ?? 0])).digest('hex')
+const validationValue = (value: QuestionCodeValidation): string => JSON.stringify([value.version, value.passed, value.candidateSha256,
+  value.leaseEpoch, value.sceneSha256, value.sceneRevision, value.sourceRef,
+  value.checks.map(check => [check.name, check.passed, check.detail]), value.screenshotRef, value.finishedAt])
+const sameValidation = (left: QuestionCodeValidation, right: QuestionCodeValidation): boolean => validationValue(left) === validationValue(right)
+const archiveWritesByDomain = new WeakMap<Domain<typeof questionCodeDomain>, Map<string, Promise<void>>>()
 
 /**
  * One authoritative job store over the `jobs` table. Every mutation is
@@ -90,12 +98,15 @@ const VALIDATION_LEASE_MS = MAX_TICKET_TTL_MS
 export class QuestionCodeJobs {
   private readonly tickets = new Map<string, ValidationTicket>()
   private readonly activeTickets = new Map<string, ValidationTicket>()
+  private readonly archiveWrites: Map<string, Promise<void>>
   private readonly now: () => Date
   constructor(
     private readonly domain: Domain<typeof questionCodeDomain>,
     options: { readonly now?: () => Date } = {},
   ) {
     this.now = options.now ?? (() => new Date())
+    this.archiveWrites = archiveWritesByDomain.get(domain) ?? new Map<string, Promise<void>>()
+    archiveWritesByDomain.set(domain, this.archiveWrites)
   }
 
   /**
@@ -112,8 +123,11 @@ export class QuestionCodeJobs {
       return existing
     }
     const at = this.now().toISOString()
-    const job: QuestionCodeJob = {
-      ...input,
+    const job: QuestionCodeJobRecord = {
+      // Select input fields, never spread a possible read DTO into the durable row.
+      id: input.id, ownerSessionId: input.ownerSessionId, ownerKey: input.ownerKey,
+      sceneId: input.sceneId, sceneRevision: input.sceneRevision, sceneSha256: input.sceneSha256,
+      ...(input.requestSha256 === undefined ? {} : { requestSha256: input.requestSha256 }),
       status: 'queued',
       leaseEpoch: 0,
       attempts: [],
@@ -128,7 +142,7 @@ export class QuestionCodeJobs {
   get(id: string, ownerKey: string): QuestionCodeJob {
     const job = this.domain.table('jobs').get(id)
     if (job === undefined || job.ownerKey !== ownerKey) throw new QuestionCodeJobError('NOT_FOUND', '未找到该生成任务。')
-    return job
+    return this.withHistory(job)
   }
 
   /** Claim queued work, or reclaim a running attempt whose lease expired. */
@@ -141,9 +155,12 @@ export class QuestionCodeJobs {
   }
 
   /**
-   * Retry only an already frozen candidate after worker infrastructure failed.
-   * Reuses the same attempt/source: no child run, new job or reset write budget.
-   * The domain's update slot makes simultaneous POSTs observe the new lease.
+   * Owner-requested revalidation of an already frozen candidate, including a
+   * proven acceptance rejection. Other terminal jobs stay terminal. The same
+   * attempt/source and generation budget are reused, never a child or new job.
+   * The update slot claims one new lease, leaving current evidence intact.
+   * Archival then runs under that lease before any new ticket/report is allowed;
+   * failure settles this lease, never clearing current or forging a pass.
    */
   async claimValidation(id: string, ownerKey: string, fence: () => void): Promise<{ job: QuestionCodeJob; epoch: number }> {
     this.get(id, ownerKey)
@@ -151,10 +168,12 @@ export class QuestionCodeJobs {
       if (current.ownerKey !== ownerKey) throw new QuestionCodeJobError('NOT_FOUND', '未找到该生成任务。')
       fence()
       const attempt = current.attempts.at(-1)
+      const rejectedCandidate = current.status === 'failed' && current.code === 'ACCEPTANCE_REJECTED'
+        && attempt?.status === 'rejected'
       const expiredLease = current.status === 'validating' && attempt?.status === 'running'
         && Date.parse(current.updatedAt) + VALIDATION_LEASE_MS <= this.now().getTime()
       if ([...this.activeTickets.values()].some(ticket => ticket.jobId === id && ticket.expiresAt > this.now().getTime())
-        || current.status !== 'queued' && current.status !== 'candidate' && !expiredLease) {
+        || current.status !== 'queued' && current.status !== 'candidate' && !expiredLease && !rejectedCandidate) {
         throw new QuestionCodeJobError('VALIDATION_BUSY', '候选正在验收或任务已结束。')
       }
       if (attempt === undefined || attempt.candidateSha256 === undefined
@@ -165,6 +184,21 @@ export class QuestionCodeJobs {
       const row = [...this.domain.table('artifacts').entries()]
         .map(([, value]) => value).find(value => questionCodeJobMatchesArtifact(current, value))
       if (row === undefined) throw new QuestionCodeJobError('CANDIDATE_MISMATCH', '任务的冻结源不一致。')
+      const previous = current.validation
+      // sourceRef also pins the request/owner/job identity checked on the row above.
+      if (rejectedCandidate && (previous === undefined || previous.version !== 1 || previous.passed !== false
+        || previous.candidateSha256 !== attempt.candidateSha256 || previous.leaseEpoch !== current.leaseEpoch
+        || previous.sceneSha256 !== current.sceneSha256 || previous.sceneRevision !== current.sceneRevision
+        || previous.sourceRef !== row.id || previous.checks.length === 0)) {
+        throw new QuestionCodeJobError('CANDIDATE_MISMATCH', '旧拒绝证据未完整绑定当前冻结候选。')
+      }
+      if (previous !== undefined && this.domain.table('validation_history').get(validationHistoryKey(current, previous)) !== undefined
+        && !this.archived(current, previous)) {
+        throw new QuestionCodeJobError('CANDIDATE_MISMATCH', '同租约历史报告不一致，不能覆盖。')
+      }
+      if (this.historyEntries(current).length >= QUESTION_CODE_VALIDATION_HISTORY_LIMIT) {
+        throw new QuestionCodeJobError('VALIDATION_HISTORY_FULL', '验收历史已达上限，不能覆盖旧判定。')
+      }
       const at = this.now().toISOString()
       this.revokeJobTickets(id)
       return {
@@ -174,7 +208,29 @@ export class QuestionCodeJobs {
         updatedAt: at,
       }
     })
-    return { job, epoch: job.leaseEpoch }
+    try {
+      await this.archiveValidation(job, fence)
+      const current = this.requireLive(id, job.leaseEpoch)
+      if (current.status !== 'validating' || current.attempts.at(-1)?.status !== 'running') {
+        throw new QuestionCodeJobError('NOT_LIVE', '本次验收租约已结束。')
+      }
+      fence()
+      this.assertArchived(current)
+      return { job: this.withHistory(current), epoch: current.leaseEpoch }
+    } catch (error) {
+      if (error instanceof QuestionCodeJobError && error.code === 'STALE_SOURCE') {
+        await this.supersede(id, '归档期间题目源已变化，旧候选不能发布。', job.leaseEpoch)
+      } else {
+        try { await this.finish(id, job.leaseEpoch, { status: 'infrastructure-failed', code: 'VALIDATION_ARCHIVE_FAILED' }, fence) }
+        catch (settlement) {
+          if (!(settlement instanceof QuestionCodeJobError && ['NOT_LIVE', 'STALE_LEASE', 'NOT_FOUND'].includes(settlement.code))) {
+            await this.supersede(id, '验收归档未完成，旧候选不能发布。', job.leaseEpoch)
+          }
+        }
+      }
+      if (error instanceof QuestionCodeJobError) throw error
+      throw new QuestionCodeJobError('VALIDATION_ARCHIVE_FAILED', '旧验收报告未能持久化，候选仍未通过。')
+    }
   }
 
   /** Start the next bounded attempt. Attempts are capped at 2 (initial + one repair). */
@@ -217,8 +273,8 @@ export class QuestionCodeJobs {
   }
 
   /**
-   * Record isolated-browser evidence. The report must name the same candidate
-   * digest the attempt froze; a mismatched or missing report never passes.
+   * Commit current isolated-browser evidence only under its live source/lease.
+   * The report must name the frozen digest; prior history never supplies a pass.
    */
   async recordValidation(id: string, epoch: number, validation: ValidationInput, fence?: () => void): Promise<QuestionCodeJob> {
     this.requireLive(id, epoch)
@@ -226,6 +282,7 @@ export class QuestionCodeJobs {
       const job = this.requireLive(id, epoch)
       if (job !== current) throw new QuestionCodeJobError('STALE_LEASE', '任务已变化。')
       fence?.()
+      this.assertArchived(job)
       const attempt = job.attempts.at(-1)
       if (attempt?.status !== 'running' || attempt.candidateSha256 !== validation.candidateSha256
         || validation.passed && (validation.checks.length === 0 || validation.checks.some(check => !check.passed))) {
@@ -262,7 +319,7 @@ export class QuestionCodeJobs {
     readonly message?: string
   }, fence?: () => void): Promise<QuestionCodeJob> {
     this.requireLive(id, epoch)
-    return this.domain.table('jobs').update(id, current => {
+    const next = await this.domain.table('jobs').update(id, current => {
       const job = this.requireLive(id, epoch)
       if (job !== current) throw new QuestionCodeJobError('STALE_LEASE', '任务已变化。')
       fence?.()
@@ -296,7 +353,7 @@ export class QuestionCodeJobs {
           ...(input.code === undefined ? {} : { code: input.code }),
         }
         : item)
-      const next: QuestionCodeJob = input.status === 'passed'
+      const next: QuestionCodeJobRecord = input.status === 'passed'
         ? { ...job, status: 'ready', attempts, resultRef: input.resultRef, resultSha256: input.resultSha256, updatedAt: at }
         : input.status === 'cancelled'
           ? { ...job, status: 'cancelled', attempts, code: input.code ?? 'CANCELLED', message: input.message, updatedAt: at }
@@ -307,6 +364,7 @@ export class QuestionCodeJobs {
       this.revokeJobTickets(id)
       return next
     })
+    return this.withHistory(next)
   }
 
   /** Cancellation is terminal; any in-flight attempt becomes cancelled. */
@@ -333,6 +391,55 @@ export class QuestionCodeJobs {
     })
   }
 
+  private historyEntries(job: QuestionCodeJobRecord): QuestionCodeValidationHistory[] {
+    return [...this.domain.table('validation_history').entries()].map(([, entry]) => entry)
+      .filter(entry => entry.jobId === job.id && entry.ownerKey === job.ownerKey)
+      .sort((left, right) => left.leaseEpoch - right.leaseEpoch)
+  }
+
+  private withHistory(job: QuestionCodeJobRecord): QuestionCodeJob {
+    const validationHistory = this.historyEntries(job).map(({ validation }) => ({ ...validation, checks: validation.checks.map(check => ({ ...check })) }))
+    return validationHistory.length === 0 ? job : { ...job, validationHistory }
+  }
+
+  private archived(job: QuestionCodeJobRecord, validation: QuestionCodeValidation): boolean {
+    const entry = this.domain.table('validation_history').get(validationHistoryKey(job, validation))
+    return entry !== undefined && entry.jobId === job.id && entry.ownerKey === job.ownerKey
+      && entry.leaseEpoch === (validation.leaseEpoch ?? 0) && sameValidation(entry.validation, validation)
+  }
+
+  /** A claimed/reclaimed lease cannot overwrite prior current evidence before durable archival, even after restart. */
+  private assertArchived(job: QuestionCodeJobRecord): void {
+    const previous = job.validation
+    if (job.status === 'validating' && previous !== undefined && previous.leaseEpoch !== job.leaseEpoch && !this.archived(job, previous)) {
+      throw new QuestionCodeJobError('VALIDATION_BUSY', '旧验收报告尚未归档，不能开始新的判定。')
+    }
+  }
+
+  /** Idempotent, immutable insert by job/owner/old lease; the caller still owns the newly claimed lease. */
+  private async archiveValidation(job: QuestionCodeJobRecord, fence: () => void): Promise<void> {
+    const previous = job.validation
+    if (previous === undefined) return
+    const table = this.domain.table('validation_history'), key = validationHistoryKey(job, previous)
+    const existing = table.get(key)
+    if (existing === undefined) {
+      const pending = this.archiveWrites.get(key)
+      if (pending !== undefined) await pending
+      else {
+        this.requireLive(job.id, job.leaseEpoch)
+        fence()
+        if (this.historyEntries(job).length >= QUESTION_CODE_VALIDATION_HISTORY_LIMIT) {
+          throw new QuestionCodeJobError('VALIDATION_HISTORY_FULL', '验收历史已达上限，不能覆盖旧判定。')
+        }
+        const write = table.put(key, { jobId: job.id, ownerKey: job.ownerKey, leaseEpoch: previous.leaseEpoch ?? 0,
+          validation: { ...previous, checks: previous.checks.map(check => ({ ...check })) } })
+        this.archiveWrites.set(key, write)
+        try { await write } finally { if (this.archiveWrites.get(key) === write) this.archiveWrites.delete(key) }
+      }
+    }
+    if (!this.archived(job, previous)) throw new QuestionCodeJobError('CANDIDATE_MISMATCH', '同租约历史报告不一致，不能覆盖。')
+  }
+
   private revokeJobTickets(id: string): void {
     for (const ticket of [...this.tickets.values(), ...this.activeTickets.values()]) {
       if (ticket.jobId === id) this.revokeTicket(ticket.token)
@@ -342,6 +449,7 @@ export class QuestionCodeJobs {
   /** Mint a bounded capability only for this attempt's verified source record. */
   issueTicket(id: string, epoch: number, ttlMs = MAX_TICKET_TTL_MS): ValidationTicket {
     const job = this.requireLive(id, epoch)
+    this.assertArchived(job)
     const digest = job.attempts.at(-1)?.candidateSha256
     if (digest === undefined) throw new QuestionCodeJobError('CANDIDATE_MISMATCH', '没有冻结的候选可供验收。')
     const row = [...this.domain.table('artifacts').entries()]
@@ -419,7 +527,7 @@ export class QuestionCodeJobs {
         && Date.parse(job.attempts.at(-1)!.startedAt) + leaseMs <= now.getTime())
   }
 
-  private requireLive(id: string, epoch: number): QuestionCodeJob {
+  private requireLive(id: string, epoch: number): QuestionCodeJobRecord {
     const job = this.domain.table('jobs').get(id)
     if (job === undefined) throw new QuestionCodeJobError('NOT_FOUND', '未找到该生成任务。')
     if (!isLive(job.status)) throw new QuestionCodeJobError('NOT_LIVE', '任务已经结束，迟到的结果不会发布。')

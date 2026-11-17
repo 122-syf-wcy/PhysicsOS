@@ -71,6 +71,29 @@ describe('experiment acceptance verdict', () => {
     expect(groundBase().changedFrame?.engineGround).not.toEqual(ground)
   })
 
+  it('accepts only bounded Float32 subpixel quantization of an independently calibrated camera', () => {
+    const native = (sample: SampledFrame): SampledFrame => {
+      const projected = grounded(sample, sample.engineGround ?? ground, 7.3104166667, 299.7994791667)
+      const body = projected.drawnBodies![0]!
+      const pixelX = Math.fround(body.pixelX), pixelY = Math.fround(body.pixelY)
+      return { ...projected, drawnBodies: [{ ...body, pixelX, pixelY, transform: [1, 0, 0, 1, pixelX, pixelY] }] }
+    }
+    const observation = groundBase()
+    const quantized = { ...observation, frames: observation.frames.map(native), changedFrame: native(observation.changedFrame!) }
+    expect(Math.abs(quantized.frames[0]!.drawnBodies![0]!.pixelX - 299.7994791667)).toBeGreaterThan(1e-6)
+    expect(evaluateObservation(quantized).passed).toBe(true)
+    const sample = quantized.frames[1]!, body = sample.drawnBodies![0]!
+    const pixelX = body.pixelX + 0.01
+    expect(failing({ ...quantized, frames: [quantized.frames[0]!, { ...sample, drawnBodies: [{ ...body, pixelX, transform: [1, 0, 0, 1, pixelX, body.pixelY] }] }] }))
+      .toContain('geometry-follows-engine')
+  })
+
+  it('keeps the original world-coordinate precision while tolerating native pixels', () => {
+    const observation = base(), sample = observation.frames[0]!
+    expect(failing({ ...observation, frames: [{ ...sample, drawnBodies: [draw(2e-6, 0)] }, observation.frames[1]!] }))
+      .toContain('geometry-follows-engine')
+  })
+
   it.each(['x', 'y'] as const)('does not fit the ground camera to a wrong observed body %s', axis => {
     const observation = groundBase(), sample = observation.frames[1]!, actual = sample.drawnBodies![0]!
     const transform = [...actual.transform] as [number, number, number, number, number, number]

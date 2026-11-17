@@ -223,7 +223,18 @@ async function workerContainers(docker, compose, source) {
   return containers
 }
 
+// The sole HostConfig equivalence: absent/null/false all keep the OOM killer
+// enabled. Never drop other fields or treat true/non-booleans as a default.
+function normalizedWorkerHostConfig(host) {
+  if (!host || typeof host !== 'object' || Array.isArray(host) || ![undefined, null, false].includes(host.OomKillDisable))
+    throw new Error('Worker must keep the OOM killer enabled')
+  const result = structuredClone(host)
+  result.OomKillDisable = false
+  return result
+}
+
 function guardWorkerContainer(plan, source, container, expectedImage) {
+  normalizedWorkerHostConfig(container.HostConfig)
   const labels = container.Config?.Labels ?? {}, name = workerName(source)
   if (!containerId.test(container.Id ?? '') || container.Image !== expectedImage || container.Name !== `/${name}` ||
     labels['com.docker.compose.project'] !== source.config.name || labels['com.docker.compose.service'] !== WORKER_SERVICE ||
@@ -269,7 +280,7 @@ function workerNetworking(source, container) {
 function workerRequestFromContainer(source, container) {
   const config = structuredClone(container.Config)
   if (automaticWorkerHostname(source, container)) config.Hostname = ''
-  return { ...config, HostConfig: structuredClone(container.HostConfig), NetworkingConfig: workerNetworking(source, container) }
+  return { ...config, HostConfig: normalizedWorkerHostConfig(container.HostConfig), NetworkingConfig: workerNetworking(source, container) }
 }
 
 // Runtime allocation fields are checked only after start. Labels are never
@@ -280,7 +291,7 @@ function workerSettings(source, container) {
   const networks = Object.fromEntries(Object.entries(container.NetworkSettings?.Networks ?? {}).map(([name, value]) =>
     [name, { id: value.NetworkID, ipam: value.IPAMConfig ?? null, links: value.Links ?? null, driver: value.DriverOpts ?? null, gatewayPriority: value.GwPriority ?? 0,
       aliases: (value.Aliases ?? []).filter(alias => ![container.Id, container.Id.slice(0, 12)].includes(alias) || source.config.services[WORKER_SERVICE].networks?.[name]?.aliases?.includes(alias)).sort() }]))
-  return { config, host: container.HostConfig, mounts: [...container.Mounts].sort((a, b) => a.Destination.localeCompare(b.Destination)), networks, ports: container.NetworkSettings?.Ports }
+  return { config, host: normalizedWorkerHostConfig(container.HostConfig), mounts: [...container.Mounts].sort((a, b) => a.Destination.localeCompare(b.Destination)), networks, ports: container.NetworkSettings?.Ports }
 }
 
 function guardWorkerSettings(source, container, creation) {
@@ -293,7 +304,7 @@ function guardWorkerSettings(source, container, creation) {
       delete expected.config.Hostname
       if (container.Config.Hostname !== container.Id.slice(0, 12)) throw new Error('Worker automatic hostname changed')
     }
-    expected.host = HostConfig
+    expected.host = normalizedWorkerHostConfig(HostConfig)
     if (!container.State?.Running) {
       if (!isDeepStrictEqual(expected.config, actual.config) || !isDeepStrictEqual(expected.host, actual.host)) throw new Error('Created worker configuration changed')
       // Created containers may have no ports, mounts or allocated NetworkID yet.

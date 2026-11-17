@@ -58,7 +58,7 @@ async function fixture(t, { withWorker = false, envText, envMode = 0o600 } = {})
   newWorkerImage.Id = WORKER_NEW
   newWorkerImage.Config.Labels = { 'org.opencontainers.image.revision': REVISION, 'io.physicsos.worker.inputs': WORKER_INPUTS }
   newWorkerImage.RootFS.Layers.push(`sha256:${'b'.repeat(64)}`)
-  const workerHostConfig = { ReadonlyRootfs: true, Privileged: false, AutoRemove: false, CapDrop: ['ALL'], SecurityOpt: ['no-new-privileges:true', 'seccomp=fixture-profile'],
+  const workerHostConfig = { ReadonlyRootfs: true, Privileged: false, AutoRemove: false, OomKillDisable: null, CapDrop: ['ALL'], SecurityOpt: ['no-new-privileges:true', 'seccomp=fixture-profile'],
     Binds: [`${workerToken}:/run/secrets/ui_validation_token:ro`], PortBindings: {}, Tmpfs: { '/tmp': 'size=256m,mode=1777' },
     RestartPolicy: { Name: 'unless-stopped', MaximumRetryCount: 0 }, Memory: 1024 ** 3, NanoCpus: 1_000_000_000, NetworkMode: 'physicsos_default' }
   const workerMounts = [{ Type: 'bind', Source: workerToken, Destination: '/run/secrets/ui_validation_token', Mode: 'ro', RW: false, Propagation: 'rprivate' },
@@ -304,7 +304,7 @@ async function fixture(t, { withWorker = false, envText, envMode = 0o600 } = {})
     const worker = await inspectWorker(), config = structuredClone(worker.Config)
     config.Hostname = ''
     const endpoint = worker.NetworkSettings.Networks.physicsos_default
-    const body = { ...config, HostConfig: worker.HostConfig, NetworkingConfig: { EndpointsConfig: { physicsos_default: {
+    const body = { ...config, HostConfig: { ...worker.HostConfig, OomKillDisable: false }, NetworkingConfig: { EndpointsConfig: { physicsos_default: {
       NetworkID: 'fixture-network', IPAMConfig: null, Links: null, DriverOpts: null,
       Aliases: endpoint.Aliases.filter(alias => ![worker.Id, worker.Id.slice(0, 12)].includes(alias)) } } } }
     const file = join(root, '.physicsos-release', 'validation-worker.json')
@@ -582,6 +582,44 @@ for (const [name, change] of [
   })
 }
 
+for (const [name, value] of [['unset', undefined], ['null', null], ['false', false]]) {
+  test(`worker OomKillDisable ${name} becomes explicit daemon false without changing other fields`, async t => {
+    const f = await fixture(t, { withWorker: true })
+    if (value === undefined) delete f.workerHostConfig.OomKillDisable
+    else f.workerHostConfig.OomKillDisable = value
+    const result = await f.releaseSwitch(f.workerPlan, f.dependencies)
+    assert.equal(result.deployed, true)
+    assert.equal(f.state.creates[0].body.HostConfig.OomKillDisable, false)
+    assert.deepEqual(f.state.creates[0].body.HostConfig, { ...f.workerHostConfig, OomKillDisable: false })
+    const running = await f.inspectWorker()
+    assert.equal(running.HostConfig.OomKillDisable, false)
+    const owner = JSON.parse(await readFile(join(f.root, '.physicsos-release', 'validation-worker.json'), 'utf8'))
+    assert.equal(owner.requestSha256, jsonHash(f.state.creates[0].body))
+  })
+}
+
+for (const [name, value] of [['true', true], ['zero', 0], ['string', 'false'], ['array', []], ['object', {}]]) {
+  test(`worker preflight rejects OomKillDisable ${name} before any stop/create`, async t => {
+    const f = await fixture(t, { withWorker: true })
+    f.workerHostConfig.OomKillDisable = value
+    await assert.rejects(f.releaseSwitch(f.workerPlan, f.dependencies), error => error.phase === 'preflight-validation-worker')
+    assert.equal(f.state.events.includes('stop'), false)
+    assert.equal(f.state.removedWorkerIds.length, 0)
+    assert.equal(f.state.creates.length, 0)
+  })
+}
+
+test('OomKillDisable normalization does not hide other HostConfig drift', async t => {
+  const f = await fixture(t, { withWorker: true })
+  f.state.mode = 'auth'
+  f.state.onCandidate = () => { f.state.workerHostOverride = { OomKillDisable: undefined, Memory: 2 * 1024 ** 3 } }
+  await assert.rejects(f.releaseSwitch(f.workerPlan, f.dependencies), error => error.rollbackHealthy === false)
+  assert.equal(f.state.events.includes('worker-rollback'), false)
+  assert.deepEqual(f.state.removedWorkerIds, [CONTAINERS.worker])
+  assert.equal(f.state.app, false)
+  assert.equal(f.state.redis, false)
+})
+
 for (const [name, configure] of [
   ['service-level MAC', service => { service.mac_address = '02:42:ac:14:00:09' }],
   ['logical default MAC on physical physicsos_default', service => { service.networks = { default: { mac_address: '02:42:ac:14:00:09' } } }],
@@ -651,7 +689,7 @@ test('paired release captures once, Engine-creates worker with nonce proof, then
   assert.equal(create.body.Image, WORKER_NEW)
   assert.equal(create.body.Hostname, '')
   assert.equal(create.body.User, 'pwuser')
-  assert.deepEqual(create.body.HostConfig, f.workerHostConfig)
+  assert.deepEqual(create.body.HostConfig, { ...f.workerHostConfig, OomKillDisable: false })
   assert.deepEqual(create.body.Env, [...f.oldWorkerImage.Config.Env, 'PHYSICSOS_VALIDATION_PORT=8099', 'PHYSICSOS_VALIDATION_TOKEN_FILE=/run/secrets/ui_validation_token'])
   assert.deepEqual(create.body.NetworkingConfig.EndpointsConfig.physicsos_default, { NetworkID: 'fixture-network', IPAMConfig: null, Links: null,
     DriverOpts: null, Aliases: [WORKER_NAME, 'validation-worker'] })
@@ -836,6 +874,7 @@ for (const [name, change] of [
   ['missing nonce pair', f => { delete f.state.workerLabels[OPERATION_LABEL]; delete f.state.workerLabels[CREATE_LABEL] }],
   ['another label', f => { f.state.workerLabels['io.physicsos.unexpected'] = 'changed' }],
   ['HostConfig memory', f => { f.state.workerHostOverride = { Memory: 2 * 1024 ** 3 } }],
+  ['OOM killer disabled', f => { f.state.workerHostOverride = { OomKillDisable: true } }],
   ['logical-network fixed MAC', f => { f.config.services['validation-worker'].networks = { default: { mac_address: '02:42:ac:14:00:09' } } }],
   ['service fixed MAC', f => { f.config.services['validation-worker'].mac_address = '02:42:ac:14:00:09' }],
 ]) {
@@ -896,6 +935,7 @@ for (const [name, change] of [
   ['PostgreSQL configuration', f => { f.config.services.postgres.image = 'postgres:unexpected' }],
   ['unrelated env value', async f => { await writeFile(join(f.root, '.env'), (await readFile(join(f.root, '.env'), 'utf8')).replace('CUSTOM_SETTING=keep', 'CUSTOM_SETTING=changed')) }],
   ['runtime worker ports', f => { f.state.workerHostOverride = { PortBindings: { '8099/tcp': [{ HostIp: '0.0.0.0', HostPort: '18099' }] } } }],
+  ['runtime OOM killer disabled', f => { f.state.workerHostOverride = { OomKillDisable: true } }],
 ]) {
   test(`paired recovery does not exempt changed ${name}`, async t => {
     const f = await fixture(t, { withWorker: true })

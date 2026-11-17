@@ -35,6 +35,29 @@ export const questionCodeRecordSchema = z
   })
   .strict()
 export type QuestionCodeRecord = z.infer<typeof questionCodeRecordSchema>
+const questionCodeValidationSchema = z.object({
+  version: z.literal(1),
+  passed: z.boolean(),
+  candidateSha256: digest,
+  /** New evidence is source/lease-bound; optional so original records stay readable. */
+  leaseEpoch: z.number().int().nonnegative().optional(),
+  sceneSha256: digest.optional(),
+  sceneRevision: z.number().int().nonnegative().optional(),
+  sourceRef: z.string().regex(/^qcode_[a-f0-9]{32}$/).optional(),
+  checks: z.array(z.object({ name: z.string().max(80), passed: z.boolean(), detail: z.string().max(600).optional() }).strict()).max(20),
+  screenshotRef: z.string().max(300).optional(),
+  finishedAt: z.string(),
+}).strict()
+export type QuestionCodeValidation = z.infer<typeof questionCodeValidationSchema>
+export const QUESTION_CODE_VALIDATION_HISTORY_LIMIT = 16
+/** Append-only evidence outside legacy strict jobs rows; lease 0 also keys unbound legacy reports. */
+export const questionCodeValidationHistorySchema = z.object({
+  jobId: z.string().min(1).max(200),
+  ownerKey: z.string().min(1).max(300),
+  leaseEpoch: z.number().int().nonnegative(),
+  validation: questionCodeValidationSchema,
+}).strict()
+export type QuestionCodeValidationHistory = z.infer<typeof questionCodeValidationHistorySchema>
 /**
  * Durable execution job for one generated experiment.
  *
@@ -66,20 +89,8 @@ export const questionCodeJobSchema = z
       reason: z.string().max(200).optional(),
       diagnostics: z.array(z.string().max(1000)).max(20).optional(),
     }).strict()).max(8),
-    /** Validation outcome for the accepted attempt, if any. */
-    validation: z.object({
-      version: z.literal(1),
-      passed: z.boolean(),
-      candidateSha256: digest,
-      /** New evidence is source/lease-bound; optional so original records stay readable. */
-      leaseEpoch: z.number().int().nonnegative().optional(),
-      sceneSha256: digest.optional(),
-      sceneRevision: z.number().int().nonnegative().optional(),
-      sourceRef: z.string().regex(/^qcode_[a-f0-9]{32}$/).optional(),
-      checks: z.array(z.object({ name: z.string().max(80), passed: z.boolean(), detail: z.string().max(600).optional() }).strict()).max(20),
-      screenshotRef: z.string().max(300).optional(),
-      finishedAt: z.string(),
-    }).strict().optional(),
+    /** Current outcome; a retry keeps the old lease-bound report until a new report commits. */
+    validation: questionCodeValidationSchema.optional(),
     resultRef: z.string().max(300).optional(),
     resultSha256: digest.optional(),
     code: z.string().max(100).optional(),
@@ -88,18 +99,21 @@ export const questionCodeJobSchema = z
     updatedAt: z.string(),
   })
   .strict()
-export type QuestionCodeJob = z.infer<typeof questionCodeJobSchema>
+export type QuestionCodeJobRecord = z.infer<typeof questionCodeJobSchema>
+/** Read DTO only: never persist this history projection in a legacy strict jobs row. */
+export type QuestionCodeJob = QuestionCodeJobRecord & { readonly validationHistory?: readonly QuestionCodeValidation[] }
 
 export const questionCodeDomain = defineDomain({
   name: 'physicsos_question_code',
-  // Version stays 0 on purpose: the Postgres backend rejects any version
-  // change on an existing unit (`version-mismatch`). Adding a table is a
-  // `CREATE TABLE IF NOT EXISTS` increment, so existing deployments open the
-  // same unit and get the new (initially empty) job table without migration.
+  // Version and artifacts/jobs schemas stay unchanged. Postgres opens only
+  // declared physical tables and creates the additional table if absent;
+  // this is not a migration. JSON single-layout old writers, unlike Postgres,
+  // drop undeclared tables on a later write: no all-backend rollback guarantee.
   version: 0,
   tables: {
     artifacts: domainTable<string, QuestionCodeRecord>(questionCodeRecordSchema),
-    jobs: domainTable<string, QuestionCodeJob>(questionCodeJobSchema),
+    jobs: domainTable<string, QuestionCodeJobRecord>(questionCodeJobSchema),
+    validation_history: domainTable<string, QuestionCodeValidationHistory>(questionCodeValidationHistorySchema),
   },
 })
 export const openQuestionCodeDomain = (ctx: {

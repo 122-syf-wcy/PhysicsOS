@@ -10,8 +10,9 @@
  *      Owner-only preview readiness is a separate, non-acceptance state.
  *
  * Failure policy:
- *   - a rejection consumes the attempt (the existing repair loop decides
- *     whether a second attempt is allowed);
+ *   - a rejection closes the generation attempt. An explicit owner request may
+ *     revalidate that same frozen source with complete, retained rejection
+ *     evidence; it never restores the generation/repair budget;
  *   - an unreachable worker is an infrastructure failure: the job returns to
  *     `queued` and the model repair budget is NOT consumed;
  *   - a missing worker configuration leaves the candidate unaccepted. It is
@@ -216,7 +217,7 @@ export async function validateFrozenCandidate(
   }
 }
 
-/** Owner-only recovery of worker failures, without generation or model calls. */
+/** Owner-only revalidation of worker failures or proven same-source rejections; no generation/model budget reset. */
 export async function retryFrozenCandidate(
   config: ValidationWorkerConfig | undefined,
   jobId: string,
@@ -240,6 +241,7 @@ export async function retryFrozenCandidate(
   // Verify canonical frozen bytes before changing the lease, not from request JSON.
   await deps.artifacts.validatorScene(binding)
   assertCurrent()
+  // Claim returns only after prior evidence is archived outside legacy strict jobs rows.
   const started = await deps.jobs.claimValidation(jobId, actor.userKey, assertCurrent)
   const ticket = deps.jobs.issueTicket(jobId, started.epoch)
   await validateFrozenCandidate(config, {

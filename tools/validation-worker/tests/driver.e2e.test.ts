@@ -51,16 +51,63 @@ const createFixtureRuntime = (_scene: Record<string, unknown>): FrameSource => {
 const plan = planScene(scene, createFixtureRuntime, experimentId)
 const snapshots = plan.frames
 const changed = plan.changedFrame!
+
+/** Recorded scientific positions only: protocol/paint regression, NOT a solver. */
+const fractionalFacts = {
+  total: 4.081632653061225,
+  apexEvent: 2.04081632653061,
+  ground: { from: -27.363945578231306, to: 28.363945578231306, y: 0 },
+  changedGround: { from: -28.725196987392685, to: 29.725196987392685, y: 0 },
+  launch: { x: 0, y: 0 },
+  roundedApex: { x: 0, y: 20.4081631 },
+  impact: { x: 0, y: -1.4210854715202004e-14 },
+  changed: { x: 0, y: 1 },
+}
+const fractionalScene = { ...scene, validationFixture: 'float32-fractional-protocol' }
+const createFractionalFixtureRuntime = (input: Record<string, unknown>): FrameSource => {
+  const base = createFixtureRuntime(input).getSnapshot()
+  let time = 0, height = 0
+  const snapshot = () => ({
+    ...base,
+    title: 'Canvas Float32 协议绘制夹具（非物理精度证明）',
+    clock: { time, total: height === 0 ? fractionalFacts.total : 4.1310347149501006, running: false, rate: 1 },
+    inspector: [{ id: 'fixture', parameters: [{ id: 'height', label: '夹具高度', value: height, min: 0, max: 5, step: 1 }] }],
+    view: {
+      bodies: [{ at: height !== 0 ? fractionalFacts.changed : time === 0 ? fractionalFacts.launch
+        : time === 2.041 ? fractionalFacts.roundedApex : fractionalFacts.impact }], visible: {},
+      ground: height === 0 ? fractionalFacts.ground : fractionalFacts.changedGround,
+    },
+    events: [{ kind: 'apex', time: fractionalFacts.apexEvent }, { kind: 'impact', time: height === 0 ? fractionalFacts.total : 4.1310347149501006 }],
+    trajectoryTimes: [0, fractionalFacts.apexEvent, height === 0 ? fractionalFacts.total : 4.1310347149501006],
+  })
+  return {
+    getSnapshot: snapshot,
+    seek(requested) {
+      // planFrames/sampleTimes must request 2.041, not the exact apex event.
+      if (requested !== 0 && requested !== 2.041 && requested !== 4.082) throw new Error('unexpected fractional fixture sample')
+      time = Math.min(requested, fractionalFacts.total)
+      return snapshot()
+    },
+    editParameter(id, value) {
+      if (id !== 'height' || value !== 1) throw new Error('unexpected fractional fixture parameter')
+      height = value; time = 0
+      return snapshot()
+    },
+  }
+}
+const fractionalPlan = planScene(fractionalScene, createFractionalFixtureRuntime, experimentId)
+const fractionalModes = ['ground-fractional', 'ground-fractional-wrong-x', 'ground-fractional-wrong-y', 'ground-fractional-wrong-changed'] as const
 const groundModes = ['ground-good', 'ground-wrong-x', 'ground-wrong-y', 'ground-reversed-ground', 'ground-reversed-y', 'ground-wrong-scale', 'ground-static-trajectory', 'ground-unpainted', 'ground-covered', 'ground-wrong-changed'] as const
-const modes = ['good', 'wrong-x', 'wrong-y', 'static', 'stamp-only', 'unpainted', 'overpainted', 'same-color-cover', 'oversized', 'transparent', 'hidden', 'filtered', 'wrong-transform', 'pixel-space', 'wrong-changed', ...groundModes, 'ground-tainted', 'ground-cors-denied', 'ground-external-asset'] as const
+const modes = ['good', 'wrong-x', 'wrong-y', 'static', 'stamp-only', 'unpainted', 'overpainted', 'same-color-cover', 'oversized', 'transparent', 'hidden', 'filtered', 'wrong-transform', 'pixel-space', 'wrong-changed', ...groundModes, ...fractionalModes, 'ground-tainted', 'ground-cors-denied', 'ground-external-asset'] as const
 type Mode = typeof modes[number]
 
 /** Manual equal-unit projection + translate/arc(0,0), with a keypoint over the centre. */
 const groundRuntime = (mode: Mode): string => `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden}#canvas{position:fixed;inset:0}canvas{display:block;width:100%;height:100%}</style></head><body><div id="canvas"></div><script type="module">
 import { connectExperiment } from './protocol.js'
 const mode = ${JSON.stringify(mode)}
+const fractional = mode.startsWith('ground-fractional')
 const canvas = document.createElement('canvas')
-canvas.width = 320; canvas.height = 240
+canvas.width = fractional ? 607 : 320; canvas.height = fractional ? 290 : 240
  document.getElementById('canvas').append(canvas)
 const ctx = canvas.getContext('2d')
 let backgroundImage
@@ -79,14 +126,19 @@ if (['ground-tainted', 'ground-cors-denied', 'ground-external-asset'].includes(m
 connectExperiment(snapshot => {
   const ground = snapshot.view.ground, body = snapshot.view.bodies[0].at
   const speed = snapshot.inspector[0].parameters[0].value
-  const scale = speed === 20 ? 20 : 18
-  const point = p => ({ x: 60 + p.x * scale, y: 180 - p.y * scale })
-  ctx.setTransform(1.1, 0, 0, 1.1, 0, 0)
+  const scale = fractional ? 7.401041666666667 : speed === 20 ? 20 : 18
+  // Fixed authored camera constants reproduce the measured 607×290 projection.
+  // No expected body fitting or Math.fround: Canvas translate does the rounding.
+  const point = fractional
+    ? p => ({ x: 299.79947916666663 + p.x * scale, y: 220.52083333333323 - p.y * scale })
+    : p => ({ x: 60 + p.x * scale, y: 180 - p.y * scale })
+  const deviceScale = fractional ? 1 : 1.1
+  ctx.setTransform(deviceScale, 0, 0, deviceScale, 0, 0)
   const background = 'rgb(' + Math.round(15 + snapshot.clock.time * 12 + speed) + ',30,40)'
-  ctx.fillStyle = background; ctx.fillRect(0, 0, 320, 240)
+  ctx.fillStyle = background; ctx.fillRect(0, 0, canvas.width, canvas.height)
   // Realistic native onerror fallback: the renderer can still ACK and draw.
   // The driver must separately reject the actual required asset failure.
-  if (backgroundImage?.naturalWidth > 0) ctx.drawImage(backgroundImage, 0, 0, 320, 240)
+  if (backgroundImage?.naturalWidth > 0) ctx.drawImage(backgroundImage, 0, 0, canvas.width, canvas.height)
   let a = point({ x: ground.from, y: ground.y }), b = point({ x: ground.to, y: ground.y })
   if (mode === 'ground-reversed-ground') [a, b] = [b, a]
   ctx.strokeStyle = '#8d7354'; ctx.lineWidth = 2.5
@@ -100,6 +152,9 @@ connectExperiment(snapshot => {
     if (mode === 'ground-wrong-y') p.y -= 12
     if (mode === 'ground-reversed-y') p.y = 180 + position.y * scale
     if (mode === 'ground-wrong-scale') { p.x = 60 + position.x * scale * 1.2; p.y = 180 - position.y * scale * 1.2 }
+    // Genuine errors exceed the absolute subpixel cap, despite accurate stamps.
+    if (mode === 'ground-fractional-wrong-x' || (mode === 'ground-fractional-wrong-changed' && speed !== 0)) p.x += 0.01
+    if (mode === 'ground-fractional-wrong-y') p.y += 0.01
     ctx.save(); ctx.translate(p.x, p.y)
     const gradient = ctx.createRadialGradient(-5, -6, 2, 0, 0, 15)
     gradient.addColorStop(0, '#f3b866'); gradient.addColorStop(1, '#a4631f')
@@ -111,7 +166,7 @@ connectExperiment(snapshot => {
     ctx.fillStyle = '#fffdf8'; ctx.strokeStyle = '#3f7a9e'
     ctx.beginPath(); ctx.arc(p.x, p.y, 4.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke()
   }
-  if (mode !== 'ground-good' && mode !== 'ground-tainted') {
+  if (mode !== 'ground-good' && mode !== 'ground-tainted' && mode !== 'ground-fractional') {
     canvas.setAttribute('data-body-x', String(body.x)); canvas.setAttribute('data-body-y', String(body.y))
     window.__physicsosDrawStats = { geometry: [body, ground] }
   }
@@ -209,7 +264,8 @@ describeE2E('isolated browser acceptance (standard V3 SDK)', () => {
       }
       if (file === 'host.html') {
         res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
-        res.end(validationHostPage({ token, wrapperPath: assetsFor(mode as Mode).wrapperUrl, frames: snapshots, changedFrame: changed }))
+        const servedPlan = mode?.startsWith('ground-fractional') ? fractionalPlan : plan
+        res.end(validationHostPage({ token, wrapperPath: assetsFor(mode as Mode).wrapperUrl, frames: servedPlan.frames, changedFrame: servedPlan.changedFrame }))
         return
       }
       if (file === 'index.html') { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); res.end(authoredRuntime(mode as Mode)); return }
@@ -238,7 +294,7 @@ describeE2E('isolated browser acceptance (standard V3 SDK)', () => {
     origin = `http://127.0.0.1:${address.port}`
     worker = await startValidationWorker({
       token, screenshots: false,
-      runtimeFor: async input => { runtimeScenes.push(input); return createFixtureRuntime },
+      runtimeFor: async input => { runtimeScenes.push(input); return input.validationFixture === fractionalScene.validationFixture ? createFractionalFixtureRuntime : createFixtureRuntime },
     })
     // Reuse the worker's sandboxed browser; each validation still gets a fresh context.
     browser = worker.browser
@@ -453,6 +509,77 @@ describeE2E('isolated browser acceptance (standard V3 SDK)', () => {
     const { result } = await validateCandidate({ browser, assets: assetsFor('ground-wrong-changed'), frames: snapshots, changedFrame: changed })
     const verdict = evaluateObservation({ ...result, ...identity })
     expect(verdict.checks.find(check => check.name === 'geometry-follows-engine')?.passed).toBe(true)
+    expect(verdict.checks.find(check => check.name === 'parameter-change')?.passed).toBe(false)
+    expect(verdict.passed).toBe(false)
+  }, 120_000)
+
+  it('accepts actual Canvas Float32 translation with a planner-rounded 2.041 apex and frozen-like ground facts', async () => {
+    const assets = assetsFor('ground-fractional')
+    const response = await post({ scene: fractionalScene, wrapperUrl: assets.wrapperUrl, entryUrl: assets.entryUrl })
+    expect(response.status).toBe(200)
+    const body = await response.json() as ValidationResponse
+    expect(body.result.firstFrameAcknowledged).toBe(true)
+    expect(body.result.runtimeError).toBeUndefined()
+    expect(body.result.frames.map(frame => frame.time)).toEqual([0, 2.041, fractionalFacts.total])
+    expect(body.result.frames.map(frame => frame.engineBody)).toEqual([fractionalFacts.launch, fractionalFacts.roundedApex, fractionalFacts.impact])
+    expect(body.result.changedFrame?.engineBody).toEqual(fractionalFacts.changed)
+    expect(body.result.frames.every(frame => frame.revision === sceneRevision && frame.stamped === undefined)).toBe(true)
+    expect(body.result.changedFrame?.revision).toBe(sceneRevision)
+    expect(body.result.frames.every(frame => JSON.stringify(frame.engineGround) === JSON.stringify(fractionalFacts.ground))).toBe(true)
+    expect(body.result.changedFrame?.engineGround).toEqual(fractionalFacts.changedGround)
+    for (const frame of [...body.result.frames, body.result.changedFrame!]) {
+      const draw = frame.drawnBodies?.find(item => item.drawIndex === 0)
+      const line = frame.drawnGrounds?.find(item => item.strokeIndex === 0 && item.surface === draw?.surface)
+      expect(draw).toMatchObject({ source: 'canvas-2d-arc-fill', x: 0, y: 0, paintedPixels: 0 })
+      expect(draw?.paintedPatches).toBeGreaterThanOrEqual(2)
+      expect(line?.paintedPatches).toBeGreaterThanOrEqual(2)
+      if (!draw || !line || !frame.engineBody || !frame.engineGround) throw new Error('missing native fractional proof')
+      expect(draw.transform.slice(0, 4)).toEqual([1, 0, 0, 1])
+      const scale = (line.pixelTo.x - line.pixelFrom.x) / (frame.engineGround.to - frame.engineGround.from)
+      const expectedX = line.pixelFrom.x + (frame.engineBody.x - frame.engineGround.from) * scale
+      const expectedY = line.pixelFrom.y - (frame.engineBody.y - frame.engineGround.y) * scale
+      // The renderer passes doubles directly to translate. These observations
+      // come from native DOMMatrix/getImageData, NOT tester-written coordinates.
+      expect(draw.pixelX).toBe(Math.fround(expectedX))
+      expect(draw.pixelY).toBe(Math.fround(expectedY))
+      expect(Math.abs(draw.pixelX - expectedX)).toBeGreaterThan(1e-6)
+      expect(Math.abs(draw.pixelX - expectedX)).toBeLessThan(1 / 1024)
+    }
+    expect(body.checks.filter(check => !check.passed)).toEqual([])
+    expect(body.passed).toBe(true)
+  }, 120_000)
+
+  it.each(['ground-fractional-wrong-x', 'ground-fractional-wrong-y'] as const)('rejects %s: real 0.01-pixel errors are not Float32 noise', async mode => {
+    const { result } = await validateCandidate({ browser, assets: assetsFor(mode), frames: fractionalPlan.frames, changedFrame: fractionalPlan.changedFrame! })
+    const verdict = evaluateObservation({ ...result, ...identity })
+    expect(result.firstFrameAcknowledged).toBe(true)
+    expect(result.runtimeError).toBeUndefined()
+    expect(result.frames).toHaveLength(3)
+    for (const frame of result.frames) {
+      const draw = frame.drawnBodies?.find(item => item.drawIndex === 0), line = frame.drawnGrounds?.[0]
+      expect(draw?.paintedPatches).toBeGreaterThanOrEqual(2)
+      expect(line?.paintedPatches).toBeGreaterThanOrEqual(2)
+      if (!draw || !line || !frame.engineBody || !frame.engineGround) throw new Error('missing real wrong-projection paint')
+      const scale = (line.pixelTo.x - line.pixelFrom.x) / (frame.engineGround.to - frame.engineGround.from)
+      const expected = mode === 'ground-fractional-wrong-x'
+        ? line.pixelFrom.x + (frame.engineBody.x - frame.engineGround.from) * scale
+        : line.pixelFrom.y - (frame.engineBody.y - frame.engineGround.y) * scale
+      const actual = mode === 'ground-fractional-wrong-x' ? draw.pixelX : draw.pixelY
+      expect(Math.abs(actual - expected)).toBeGreaterThan(1 / 1024)
+    }
+    expect(verdict.checks.find(check => check.name === 'geometry-follows-engine')?.passed).toBe(false)
+    expect(verdict.passed).toBe(false)
+  }, 120_000)
+
+  it('also rejects a 0.01-pixel changed-frame error after otherwise valid fractional frames', async () => {
+    const { result } = await validateCandidate({ browser, assets: assetsFor('ground-fractional-wrong-changed'), frames: fractionalPlan.frames, changedFrame: fractionalPlan.changedFrame! })
+    const verdict = evaluateObservation({ ...result, ...identity })
+    expect(result.firstFrameAcknowledged).toBe(true)
+    expect(result.runtimeError).toBeUndefined()
+    expect(result.parameterChanged).toBe(true)
+    expect(result.changedFrame?.drawnBodies?.find(item => item.drawIndex === 0)?.paintedPatches).toBeGreaterThanOrEqual(2)
+    expect(verdict.checks.find(check => check.name === 'geometry-follows-engine')?.passed).toBe(true)
+    expect(verdict.checks.find(check => check.name === 'motion-sampled')?.passed).toBe(true)
     expect(verdict.checks.find(check => check.name === 'parameter-change')?.passed).toBe(false)
     expect(verdict.passed).toBe(false)
   }, 120_000)
