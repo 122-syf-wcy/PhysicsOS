@@ -1,0 +1,27 @@
+{
+  "checkedAt": "2026-11-17T05:10:57.457510+00:00",
+  "readOnlyTransactions": true,
+  "configEqualIncludingSealedSecrets": true,
+  "sameMountedEncryptionRoot": true,
+  "onlyDynamicFieldsDiffer": {
+    "channels": [],
+    "keys": [
+      "lastUsedAt",
+      "requestCount",
+      "updatedAt"
+    ],
+    "settings": []
+  },
+  "channels": 4,
+  "keys": 4,
+  "enabledChannels": 3,
+  "disabledChannels": 1,
+  "activeKeys": 4,
+  "cooldownKeys": 0,
+  "eligibleKeys": 3,
+  "enabledChannelsSupportDefaultModel": true,
+  "modelRequests": 0,
+  "productionWrites": 0,
+  "decryptedKeys": false,
+  "sealedConfigPersisted": false
+}

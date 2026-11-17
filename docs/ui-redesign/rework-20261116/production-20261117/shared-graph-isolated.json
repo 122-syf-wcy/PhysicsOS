@@ -1,0 +1,13 @@
+{
+  "checkedAt": "2026-11-17T04:59:53.774749+00:00",
+  "exitCode": 0,
+  "seconds": 20.04,
+  "scope": "Existing single shared graph case in isolated server Docker execution; no source, assertion, wall-clock limit or timeout changes",
+  "originalWallClockThresholdMs": 1500,
+  "productionMutation": false,
+  "summary": [
+    " Test Files  1 passed (1)",
+    "      Tests  1 passed | 86 skipped (87)",
+    "   Duration  15.64s (transform 10.71s, setup 1.12s, import 12.75s, tests 1.23s, environment 0ms)"
+  ]
+}

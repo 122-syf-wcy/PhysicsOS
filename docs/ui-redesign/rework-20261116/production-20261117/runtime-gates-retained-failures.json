@@ -1,0 +1,57 @@
+{
+  "revision": "f6e7fb71fa7ae27e13b0f8f2db6c38202e171e9b",
+  "priorRevision": "08fdda85d82db4e9fdf78e5cb41154e846aa6710",
+  "productionMutation": false,
+  "stages": [
+    {
+      "name": "project",
+      "exitCode": 0,
+      "seconds": 52.76
+    },
+    {
+      "name": "sync",
+      "exitCode": 0,
+      "seconds": 119.92
+    },
+    {
+      "name": "source-before",
+      "exitCode": 0,
+      "seconds": 42.43
+    },
+    {
+      "name": "host-tool",
+      "exitCode": 1,
+      "seconds": 213.77
+    },
+    {
+      "name": "worker-pure",
+      "exitCode": 0,
+      "seconds": 6.82
+    },
+    {
+      "name": "worker-types",
+      "exitCode": 0,
+      "seconds": 9.41
+    },
+    {
+      "name": "experiment-host-types",
+      "exitCode": 0,
+      "seconds": 10.52
+    },
+    {
+      "name": "tool-physicsos-types",
+      "exitCode": 0,
+      "seconds": 5.92
+    },
+    {
+      "name": "source-after",
+      "exitCode": 0,
+      "seconds": 42.2
+    }
+  ],
+  "projectionPeakBudget": 362604433,
+  "sourceDigest": "dc71bd38de6b5d072985aa6289b90cf566a360f4be21f92edc1e363c2a9b0f32",
+  "discardedOwnVerifiedProjectionCopy": true,
+  "ok": false,
+  "freeBytesAfter": 667279360
+}

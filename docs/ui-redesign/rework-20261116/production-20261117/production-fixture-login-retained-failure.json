@@ -1,0 +1,9 @@
+{
+  "origin": "https://physics.dongsiwei.com",
+  "checks": [],
+  "modelRequests": 0,
+  "errors": [],
+  "step": "cleanup",
+  "ok": false,
+  "failure": "Expected values to be strictly equal:\n\n401 !== 200\n"
+}

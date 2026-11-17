@@ -1,0 +1,17 @@
+{
+  "fixtureRevision": "e5754802ca72ed4cf536673c0b4dcc4bf043abff",
+  "results": [
+    {
+      "name": "jobs",
+      "exitCode": 0,
+      "seconds": 12.42
+    },
+    {
+      "name": "timing",
+      "exitCode": 1,
+      "seconds": 79.1
+    }
+  ],
+  "productionMutation": false,
+  "ok": false
+}

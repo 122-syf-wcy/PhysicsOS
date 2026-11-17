@@ -1,0 +1,21 @@
+{
+  "ownerContainer": "7937413a717e5be63b73884703a019a4f5afc98191af714ac31640102a3a3ef8",
+  "task": "ui-redesign-20261115",
+  "sourceRevision": "f6e7fb71fa7ae27e13b0f8f2db6c38202e171e9b",
+  "cacheDirectory": "/tmp/node-compile-cache",
+  "inventorySha256": "bfdd710c5ea67ee1dafb8139a9675c4a581a2b2c1cf8783124fba8205d931b04",
+  "fileCount": 9806,
+  "originalBytes": 82256388,
+  "allocatedFileBytes": 110673920,
+  "archive": "/opt/physicsos/.physicsos-release/compile-cache-preserved-f6e7fb71-20261117/node-compile-cache.tar.xz",
+  "archiveBytes": 2766048,
+  "archiveSha256": "f95f127cf3a8ed9f2350a9aee79bfed2d3f1b8d18b9eedcf887cf00c5fe169e1",
+  "allArchiveMembersVerified": true,
+  "beforeRemovalInventoryUnchanged": true,
+  "freeBytesBefore": 310759424,
+  "restoreCommand": "xz -dc /opt/physicsos/.physicsos-release/compile-cache-preserved-f6e7fb71-20261117/node-compile-cache.tar.xz | docker exec -i 7937413a717e5be63b73884703a019a4f5afc98191af714ac31640102a3a3ef8 tar -C /tmp -xf -",
+  "removedExpandedCopy": true,
+  "freeBytesAfter": 418930688,
+  "seconds": 49.69,
+  "finishedAt": "2026-11-17T04:32:42.868760+00:00"
+}

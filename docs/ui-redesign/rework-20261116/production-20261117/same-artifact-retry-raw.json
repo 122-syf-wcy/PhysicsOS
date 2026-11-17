@@ -1,0 +1,63 @@
+{
+  "origin": "http://physicsos-validation.invalid:3199",
+  "image": "sha256:eddf40d1307b644db51edd995c98f731ecec8ee4cb668f7237447bbbba765bdc",
+  "ownerScopeHash": "a4cd5651d7c8fefec9e51fe85c07b214ee85921d2807776ceb58ff36e6f79c58",
+  "modelRequests": 0,
+  "checks": [
+    "other-account-read-and-retry-refused",
+    "injected-input-and-guest-refused"
+  ],
+  "step": "cleanup",
+  "before": {
+    "status": "failed",
+    "code": "ACCEPTANCE_REJECTED",
+    "attemptCount": 1,
+    "jobScopeHash": "2d0a92fc0c21aab40bd0349314d5748668b668c9d545d759f3c50592bf79525a"
+  },
+  "validation": {
+    "status": 200,
+    "durationMs": 5213,
+    "jobStatus": "ready",
+    "code": "ACCEPTANCE_REJECTED",
+    "validation": {
+      "passed": true,
+      "checks": [
+        {
+          "name": "scene-binding",
+          "passed": true
+        },
+        {
+          "name": "first-frame",
+          "passed": true
+        },
+        {
+          "name": "runtime-error",
+          "passed": true
+        },
+        {
+          "name": "subject-drawn",
+          "passed": true
+        },
+        {
+          "name": "geometry-follows-engine",
+          "passed": true
+        },
+        {
+          "name": "motion-sampled",
+          "passed": true
+        },
+        {
+          "name": "parameter-change",
+          "passed": true
+        },
+        {
+          "name": "mobile-layout",
+          "passed": true
+        }
+      ],
+      "finishedAt": "2026-11-17T03:34:55.652Z"
+    }
+  },
+  "ok": false,
+  "failure": "Previous rejected evidence must remain readable"
+}

@@ -1,0 +1,18 @@
+{
+  "revision": "a3970cffaa5684b5ca95aa95f93fbf227e07d776",
+  "sourceDigest": "6de198c0071ec22a88e088c389c318f14cf75ef19e190d6c52fd4f213ff26282",
+  "exportSha256": "bc866598300f1061d5b9655654d2797845dea6beebaa4a587a5f141e0c35345a",
+  "fileCount": 234,
+  "originalBytes": 65467671,
+  "archive": "/opt/physicsos/.physicsos-release/builds/rework-a3970cff-20261116/runtime-with-registry-reuse/context-preserved-20261117/context.tar.xz",
+  "archiveBytes": 17066612,
+  "archiveSha256": "62620701c975fd46eaf09eaa05382bbd0cbfcbeaaa66b8e3eb6310c29cf1ef33",
+  "allHashesMatchFrozenContext": true,
+  "verifiedBeforeRemoval": true,
+  "restoreCommand": "tar -C /opt/physicsos/.physicsos-release/builds/rework-a3970cff-20261116/runtime-with-registry-reuse -xJf /opt/physicsos/.physicsos-release/builds/rework-a3970cff-20261116/runtime-with-registry-reuse/context-preserved-20261117/context.tar.xz",
+  "freeBytesBefore": 125272064,
+  "removedExpandedCopy": true,
+  "freeBytesAfter": 174448640,
+  "seconds": 58.27,
+  "finishedAt": "2026-11-17T04:49:44.907571+00:00"
+}

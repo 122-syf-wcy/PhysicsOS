@@ -1,0 +1,8 @@
+{
+  "status": 200,
+  "resultCount": 33,
+  "relevantCount": 22,
+  "modelRequests": 0,
+  "checkedFrom": "production app namespace",
+  "provider": "searxng"
+}

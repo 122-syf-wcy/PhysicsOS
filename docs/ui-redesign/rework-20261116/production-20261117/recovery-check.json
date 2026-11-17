@@ -1,0 +1,37 @@
+{
+  "verifiedAt": "2026-11-17T04:45:05.003670+00:00",
+  "format": "physicsos-paired-recovery/1",
+  "consistent": true,
+  "files": {
+    "postgres.dump": {
+      "bytes": 1210763,
+      "sha256": "743557b4ecec79b7031864b9c3049ee48765018a6e254e1fc379cbcb06a9c4de"
+    },
+    "app_data.tar.gz": {
+      "bytes": 232541141,
+      "sha256": "69d214f5f120960034a16b121b8045381a71c56b1e401c161715810d1268316d",
+      "archiveMembersReadable": 7295
+    },
+    "redis_data.tar.gz": {
+      "bytes": 37202,
+      "sha256": "6dc7ecd6288116b1a2012017685ef0fb25f06eaa5227677f7ecf9280291320fc",
+      "archiveMembersReadable": 6
+    }
+  },
+  "settingsVerified": true,
+  "secretRecoveryFilesVerified": true,
+  "liveDataRestored": false,
+  "secretRecoveryFileCount": 10,
+  "appRollbackImage": "sha256:93cb03a815a86fa85a5997bbd907471e53dbc8ae10c94c756f1c1b8c0d5d2376",
+  "workerRollbackImage": "sha256:b179e714b47d2571c4c146894a96fe0014661e76f5948f0f2e85f2f847a3d950",
+  "postgresDumpCatalogEntries": 316,
+  "workerSandbox": {
+    "user": "pwuser",
+    "readonlyRootfs": true,
+    "capDrop": [
+      "ALL"
+    ],
+    "seccompConfigured": true,
+    "health": "healthy"
+  }
+}

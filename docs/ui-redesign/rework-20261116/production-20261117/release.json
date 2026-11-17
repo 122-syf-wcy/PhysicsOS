@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-11-17T05:15:18.011047+00:00",
+  "productionOrigin": "https://physics.dongsiwei.com",
+  "runtimeRevision": "f6e7fb71fa7ae27e13b0f8f2db6c38202e171e9b",
+  "checkoutRevision": "7382a9501c5df15c7683ab1b4f86de2e16a4151d",
+  "sourceDigest": "dc71bd38de6b5d072985aa6289b90cf566a360f4be21f92edc1e363c2a9b0f32",
+  "codeDigest": "5eced88fd13754064c7a30b068b81365c2bdfa34ab4ea8a24c9306e3e2e4a511",
+  "app": {
+    "image": "sha256:eddf40d1307b644db51edd995c98f731ecec8ee4cb668f7237447bbbba765bdc",
+    "containerId": "f8d97362d4019495acba2630537087d83687377332e995364621444ded83ff49",
+    "checkedFiles": 14781,
+    "signedPluginEntries": 12,
+    "coldVerified": true
+  },
+  "validationWorker": {
+    "image": "sha256:e888ca49106c262defbe416bbbcc58ab8bd729a00d78ff8fe0a7a800d7d1f940",
+    "containerId": "9b236e3956d5a311e90f49516831eae09098a79741bf603470ff83bf887e6c5c"
+  },
+  "backup": {
+    "mode": "paired",
+    "directory": "/opt/physicsos/backups/releases/20261117T042057Z-ui-f6e7fb71-v2",
+    "manifest": "/opt/physicsos/backups/releases/20261117T042057Z-ui-f6e7fb71-v2/paired-manifest.json",
+    "sha256": "cb9e19bdab118684976d8368ae288e3a40d1c0f26312dbcb3a0a6f0c645d9f72",
+    "files": {
+      "postgres.dump": {
+        "size": 1210763,
+        "sha256": "743557b4ecec79b7031864b9c3049ee48765018a6e254e1fc379cbcb06a9c4de"
+      },
+      "app_data.tar.gz": {
+        "size": 232541141,
+        "sha256": "69d214f5f120960034a16b121b8045381a71c56b1e401c161715810d1268316d"
+      },
+      "redis_data.tar.gz": {
+        "size": 37202,
+        "sha256": "6dc7ecd6288116b1a2012017685ef0fb25f06eaa5227677f7ecf9280291320fc"
+      }
+    }
+  },
+  "serialSwitch": {
+    "exitCode": 0,
+    "seconds": 235.44,
+    "checks": {
+      "readyJson": true,
+      "root": true,
+      "login": true,
+      "accountScope": true,
+      "protectedRead": true
+    },
+    "nginxUnchanged": true
+  },
+  "publishedSourceMatchesRuntime": true,
+  "normal76Acceptance": {
+    "count": 76,
+    "instrumented": false,
+    "sourceRevision": "0766d29dc6fb1d7dfba7baac365ab0e739652bf0",
+    "sourceDigest": "94518a8669f753f3062920e25fb2314260a7da9768635b25b278881aa47f6347",
+    "version": "2.3.0",
+    "errors": 0,
+    "externalRequests": 0,
+    "failures": 0
+  },
+  "labPublication": {
+    "schema": "physicsos-original-lab-publication/1",
+    "complete": true,
+    "count": 76,
+    "firstBeforeSha256": "2099f30efa02f01577bdca7e80685f0e0b9a721b729ca457d164127a7e286e99",
+    "publicationSha256": "fd238f01f85971a2d92a2b8e5432a8bc293b1506108e7f48b2a3205454ca0ed4",
+    "archiveSha256": "32d228fb3bfe3a061d8dc6756cfed9c875cd39705bffcfca8c5278d8a4dbd2fb",
+    "appImage": "sha256:eddf40d1307b644db51edd995c98f731ecec8ee4cb668f7237447bbbba765bdc",
+    "workerImage": "sha256:e888ca49106c262defbe416bbbcc58ab8bd729a00d78ff8fe0a7a800d7d1f940",
+    "finishedAt": "2026-11-17T04:35:38.268658+00:00"
+  },
+  "retainedFirstSwitchFailure": {
+    "phase": "failed",
+    "exitCode": 1,
+    "productionStopped": false,
+    "reason": "Legacy Compose image label differed from immutable daemon image; fixed in checkout 7382a950 before the successful switch"
+  },
+  "freeBytesAfterPublicationAndOwnedArchival": 174243840,
+  "workerBuildReceiptKeys": [
+    "revision",
+    "sourceDigest",
+    "baseImage",
+    "productionMutation",
+    "stages",
+    "ok",
+    "image",
+    "labels",
+    "sourceInputArchiveSha256",
+    "receiptFile",
+    "receiptSha256",
+    "protectedContainersUnchanged"
+  ]
+}

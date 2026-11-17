@@ -1,0 +1,92 @@
+{
+  "ownedExportReadOnly": true,
+  "authenticationMetadataUpdated": true,
+  "eventType": "request/header",
+  "verifiedAt": "2026-11-17T04:20:06.587Z",
+  "ownerScopeHash": "a4cd5651d7c8fefec9e51fe85c07b214ee85921d2807776ceb58ff36e6f79c58",
+  "outputContainsRawIdentifiersOrContent": false,
+  "exportHttpStatus": 200,
+  "evidence": {
+    "ownedLocator": {
+      "path": "/private/tmp/physicsos-research-animation-20261116-acceptance-0766/owned-resume-private.json",
+      "sha256": "625a25b9a1ae443f7048f3748c344ba794cc18a38447efb994ca1e816601e5ba"
+    },
+    "savedDiagnostic": {
+      "path": "/private/tmp/physicsos-research-animation-20261116-acceptance-0766/owned-runtime-diagnostic.json",
+      "sha256": "8e114fde037395e7ebb92983949c4119add305107d84998da9f167522009a7e8",
+      "childCountField": "$.children",
+      "childRequestCountField": "$.children[*].requestCount",
+      "parentToolCallCountField": "$.toolCallSequence"
+    },
+    "savedParentRequests": {
+      "path": "/private/tmp/physicsos-research-animation-20261116-acceptance-0766/evidence.json",
+      "sha256": "8e9ff96a85cdd1439c14ada62a766b35287ae1bdea5c4ca3fae7adadfe5fb635",
+      "field": "$.parentModelRequests"
+    }
+  },
+  "source": {
+    "existingBrowserContextReused": false,
+    "existingPageReused": false,
+    "ownedExportGetCount": 1,
+    "newLoginCount": 1,
+    "promptCalls": 0,
+    "validateCalls": 0,
+    "regenerateCalls": 0,
+    "rawExportPersisted": false
+  },
+  "before": {
+    "parentModelRequestCount": 1,
+    "parentModelRequestSummarySha256": "fa3f2fff31a9cd4568d99a2f91abb5a2de6af7502b7f169e4ad7fb21eeb6fbe5",
+    "childCount": 3,
+    "children": [
+      {
+        "scopeHash": "28113160127dfdd992a72d8676b066b3cfb72801873894a51f92723b19897cec",
+        "requestCount": 1
+      },
+      {
+        "scopeHash": "7ecc2bfbad28960d5f053d215583921c6779d4161507484add2365be3b558869",
+        "requestCount": 1
+      },
+      {
+        "scopeHash": "edcb3cd63009447be0a15ed91f70dc6845584eb8b997c7ac4beb0569316dfae1",
+        "requestCount": 1
+      }
+    ],
+    "parentToolCallCount": 8,
+    "totalOwnedRequestHeaderCount": 4
+  },
+  "after": {
+    "parentModelRequestCount": 1,
+    "parentModelRequestSummarySha256": "fa3f2fff31a9cd4568d99a2f91abb5a2de6af7502b7f169e4ad7fb21eeb6fbe5",
+    "childCount": 3,
+    "children": [
+      {
+        "scopeHash": "28113160127dfdd992a72d8676b066b3cfb72801873894a51f92723b19897cec",
+        "requestCount": 1
+      },
+      {
+        "scopeHash": "7ecc2bfbad28960d5f053d215583921c6779d4161507484add2365be3b558869",
+        "requestCount": 1
+      },
+      {
+        "scopeHash": "edcb3cd63009447be0a15ed91f70dc6845584eb8b997c7ac4beb0569316dfae1",
+        "requestCount": 1
+      }
+    ],
+    "parentToolCallCount": 8,
+    "totalOwnedRequestHeaderCount": 4
+  },
+  "comparison": {
+    "baselineOwnerHashesMatch": true,
+    "baselineChildParentHashesMatch": true,
+    "childHashSetsEqual": true,
+    "perChildRequestHeaderCountsEqual": true,
+    "parentModelRequestCountsEqual": true,
+    "parentModelRequestSummariesEqual": true,
+    "parentToolCallCountsEqual": true,
+    "totalOwnedRequestHeaderCountsEqual": true
+  },
+  "noAdditionalChildOrModelRequestOrParentToolCall": true,
+  "ok": true,
+  "existingContextAndPagesLeftOpen": true
+}

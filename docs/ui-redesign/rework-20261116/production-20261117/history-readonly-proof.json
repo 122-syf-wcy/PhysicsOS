@@ -1,0 +1,180 @@
+{
+  "ok": true,
+  "verifiedAt": "2026-11-17T03:49:54.487Z",
+  "backend": "postgresql",
+  "transactionReadOnly": true,
+  "credentialFile": "/run/secrets/database_url",
+  "domain": "physicsos_question_code",
+  "schema": "physicsos_ui_20261115",
+  "physicalTables": {
+    "jobs": "u_64c0606e6cf18cda6282ec40507dc8bf438d4a7c35090196c94b9ae74230",
+    "validation_history": "u_ee33765cd720927d6fe79de565fe34ea94928d062059e99552313a74429c",
+    "artifacts": "u_1b80eb409f2a8f0ca912e603db56d915647fee9bedae5cb1eb38bd56a235"
+  },
+  "scope": {
+    "ownedSessionSha256": "a4cd5651d7c8fefec9e51fe85c07b214ee85921d2807776ceb58ff36e6f79c58",
+    "jobScopeHash": "2d0a92fc0c21aab40bd0349314d5748668b668c9d545d759f3c50592bf79525a",
+    "jobHashMatchesRetry": true,
+    "ownerBindingPresent": true,
+    "ownedSessionMatches": true,
+    "ownedJobCount": 2
+  },
+  "current": {
+    "status": "ready",
+    "code": "ACCEPTANCE_REJECTED",
+    "attemptCount": 1,
+    "leaseEpoch": 3,
+    "validationPresent": true,
+    "historyFieldInDurableJobRow": false,
+    "resultRefPresent": true,
+    "resultSha256": "44cf3825966d36fce3288303d88db8e9fb7066e0edda763123adb62cfd5a7224",
+    "validation": {
+      "sha256": "f7c37dd46a634f4c705bd147772b7cdfda4fac55473c55f2ce5b8ba481ede929",
+      "passed": true,
+      "version": 1,
+      "leaseEpoch": 3,
+      "checkCount": 8,
+      "passedCheckCount": 8,
+      "failedCheckNames": [],
+      "checks": [
+        {
+          "name": "scene-binding",
+          "passed": true,
+          "detailPresent": false
+        },
+        {
+          "name": "first-frame",
+          "passed": true,
+          "detailPresent": false
+        },
+        {
+          "name": "runtime-error",
+          "passed": true,
+          "detailPresent": false
+        },
+        {
+          "name": "subject-drawn",
+          "passed": true,
+          "detailPresent": false
+        },
+        {
+          "name": "geometry-follows-engine",
+          "passed": true,
+          "detailPresent": false
+        },
+        {
+          "name": "motion-sampled",
+          "passed": true,
+          "detailPresent": false
+        },
+        {
+          "name": "parameter-change",
+          "passed": true,
+          "detailPresent": false
+        },
+        {
+          "name": "mobile-layout",
+          "passed": true,
+          "detailPresent": false
+        }
+      ],
+      "finishedAt": "2026-11-17T03:34:55.652Z",
+      "candidateSha256": "44cf3825966d36fce3288303d88db8e9fb7066e0edda763123adb62cfd5a7224",
+      "sceneSha256Present": true,
+      "sceneRevisionPresent": true,
+      "sourceRefPresent": true,
+      "screenshotRefPresent": true
+    },
+    "finishedAtMatchesRecordedPostValidate": true
+  },
+  "history": {
+    "rowCount": 1,
+    "oldFailedCount": 1,
+    "entries": [
+      {
+        "historyKeySha256": "f345c490467c3adf428bc2777149e11e19e54ee827f5dd7ecc105f55c8a942d8",
+        "expectedHistoryKeyMatches": true,
+        "ownerAndJobBindingMatch": true,
+        "leaseEpoch": 2,
+        "report": {
+          "sha256": "9fb3b3ae22e964c20a44bb0688a908baa3a14837ec8da488c66eec23b7f7c1d1",
+          "passed": false,
+          "version": 1,
+          "leaseEpoch": 2,
+          "checkCount": 8,
+          "passedCheckCount": 5,
+          "failedCheckNames": [
+            "geometry-follows-engine",
+            "motion-sampled",
+            "parameter-change"
+          ],
+          "checks": [
+            {
+              "name": "scene-binding",
+              "passed": true,
+              "detailPresent": false
+            },
+            {
+              "name": "first-frame",
+              "passed": true,
+              "detailPresent": false
+            },
+            {
+              "name": "runtime-error",
+              "passed": true,
+              "detailPresent": false
+            },
+            {
+              "name": "subject-drawn",
+              "passed": true,
+              "detailPresent": false
+            },
+            {
+              "name": "geometry-follows-engine",
+              "passed": false,
+              "detailPresent": true,
+              "detailSha256": "f59bfe50b1a4bba2094b480181d6162df692478a0d0a7b312e36787833a72c17"
+            },
+            {
+              "name": "motion-sampled",
+              "passed": false,
+              "detailPresent": true,
+              "detailSha256": "dc80e430c2b8f8e8847d07c23c04b11dc2e778a3070fbd369ced5f59eb92b13c"
+            },
+            {
+              "name": "parameter-change",
+              "passed": false,
+              "detailPresent": true,
+              "detailSha256": "06faaf1761e3be2e9c7c1c155a259e993953b9c4eceb6d87cc5ef0a60694f92f"
+            },
+            {
+              "name": "mobile-layout",
+              "passed": true,
+              "detailPresent": false
+            }
+          ],
+          "finishedAt": "2026-11-16T13:50:27.373Z",
+          "candidateSha256": "44cf3825966d36fce3288303d88db8e9fb7066e0edda763123adb62cfd5a7224",
+          "sceneSha256Present": true,
+          "sceneRevisionPresent": true,
+          "sourceRefPresent": true,
+          "screenshotRefPresent": true
+        },
+        "sameCandidateAsCurrent": true,
+        "olderThanCurrentLease": true
+      }
+    ]
+  },
+  "artifact": {
+    "matchingRowCount": 1,
+    "currentResultBound": true
+  },
+  "readTransactionRolledBack": true,
+  "evidenceInputs": {
+    "ownedLocator": "/private/tmp/physicsos-research-animation-20261116-acceptance-0766/owned-resume-private.json",
+    "ownedLocatorSha256": "625a25b9a1ae443f7048f3748c344ba794cc18a38447efb994ca1e816601e5ba",
+    "retryResult": "/private/tmp/physicsos-zero-model-retry-final-f6e7fb71-20261117/result.json",
+    "retryResultSha256": "afbc118379f6252d9c1de3466bae7cb02c053d297b7d79b84151076b1ceb8d71"
+  },
+  "expectedCandidateImage": "sha256:eddf40d1307b644db51edd995c98f731ecec8ee4cb668f7237447bbbba765bdc"
+}

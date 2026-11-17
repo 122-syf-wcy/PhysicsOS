@@ -1,0 +1,86 @@
+{
+  "revision": "f6e7fb71fa7ae27e13b0f8f2db6c38202e171e9b",
+  "sourceDigest": "dc71bd38de6b5d072985aa6289b90cf566a360f4be21f92edc1e363c2a9b0f32",
+  "productionMutation": false,
+  "stages": [
+    {
+      "name": "dependency-inventory",
+      "exitCode": 0,
+      "seconds": 3.88
+    },
+    {
+      "name": "start",
+      "exitCode": 0,
+      "seconds": 0.41
+    },
+    {
+      "name": "copy-dependencies",
+      "exitCode": 0,
+      "seconds": 1.8
+    },
+    {
+      "name": "copy-source",
+      "exitCode": 0,
+      "seconds": 0.34
+    },
+    {
+      "name": "copy-verification-input",
+      "exitCode": 0,
+      "seconds": 0.27
+    },
+    {
+      "name": "source-and-dependencies-before",
+      "exitCode": 0,
+      "seconds": 3.3
+    },
+    {
+      "name": "worker-types",
+      "exitCode": 0,
+      "seconds": 11.3
+    },
+    {
+      "name": "worker-pure",
+      "exitCode": 0,
+      "seconds": 6.42
+    },
+    {
+      "name": "standard-sdk-browser",
+      "exitCode": 0,
+      "seconds": 70.62
+    },
+    {
+      "name": "source-and-dependencies-after",
+      "exitCode": 0,
+      "seconds": 3.12
+    }
+  ],
+  "dependencies": {
+    "versions": {
+      "vitest": "4.1.10",
+      "@playwright/test": "1.62.1",
+      "typescript": "6.0.3",
+      "@types/node": "24.13.3"
+    },
+    "bytes": 104597680,
+    "fileCount": 2929,
+    "locatorCount": 96,
+    "digest": "32c44d9ef576a0edeeb29181b223598330014490783a208e53b4ae8b9adca2a7"
+  },
+  "runner": {
+    "id": "d30bf52393292036d857a4612f613fbb9f08c9da94fb11f7535f0da962cc102b",
+    "name": "physicsos-worker-browser-f6e7fb71-1e62de1a",
+    "image": "sha256:8b23bf88e8d0138e074eef0c04e3d04d4b567fc09aecd059eb4b16f98ee8ce33",
+    "network": "none",
+    "uid": 1001,
+    "readOnlyRoot": true,
+    "capDrop": [
+      "ALL"
+    ],
+    "seccompSha256": "f6abd6f17210fed3ff978fc557b7f8780ed6fa20e8f28fd09dfbfe5dfd94cbcd",
+    "chromiumSandbox": true
+  },
+  "ok": true,
+  "runnerOomKilled": false,
+  "cleanupExit": 0,
+  "protectedContainersUnchanged": true
+}

@@ -1,0 +1,11 @@
+{
+  "schema": "physicsos-original-lab-publication/1",
+  "complete": true,
+  "count": 76,
+  "firstBeforeSha256": "2099f30efa02f01577bdca7e80685f0e0b9a721b729ca457d164127a7e286e99",
+  "publicationSha256": "fd238f01f85971a2d92a2b8e5432a8bc293b1506108e7f48b2a3205454ca0ed4",
+  "archiveSha256": "32d228fb3bfe3a061d8dc6756cfed9c875cd39705bffcfca8c5278d8a4dbd2fb",
+  "appImage": "sha256:eddf40d1307b644db51edd995c98f731ecec8ee4cb668f7237447bbbba765bdc",
+  "workerImage": "sha256:e888ca49106c262defbe416bbbcc58ab8bd729a00d78ff8fe0a7a800d7d1f940",
+  "finishedAt": "2026-11-17T04:35:38.268658+00:00"
+}
