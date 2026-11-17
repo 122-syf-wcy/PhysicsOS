@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-11-17T15:44:03.273285+00:00",
+  "productionCheckoutRevision": "e8151f730acb7944e906811234867517f1d1de97",
+  "featureBranch": "codex/teaching-tools-avatars-20261117",
+  "featureImplementationCommit": "2afa80f3",
+  "containers": [
+    {"name": "physicsos-app-1", "image": "sha256:eddf40d1307b644db51edd995c98f731ecec8ee4cb668f7237447bbbba765bdc", "running": true, "health": "healthy", "restartCount": 0},
+    {"name": "physicsos-validation-worker-1", "image": "sha256:e888ca49106c262defbe416bbbcc58ab8bd729a00d78ff8fe0a7a800d7d1f940", "running": true, "health": "healthy", "restartCount": 0},
+    {"name": "physicsos-postgres-1", "image": "sha256:858bb5e98eed02eb8cafbcdc007f9a65d1b613972028944a8ec2133ccaf80d27", "running": true, "health": "healthy", "restartCount": 0},
+    {"name": "physicsos-redis-1", "image": "sha256:bd28fff4b665fdf1b73e8b5b73ec05d2f858f4fa3c8ea0d7c9bc09f7f6bf7039", "running": true, "health": "healthy", "restartCount": 0}
+  ],
+  "disk": {"freeBytes": 169349120, "deviceBytes": 53687091200, "minimumBuildReserveBytes": 268435456, "buildPayloadBytesNotYetAdmitted": true},
+  "staticChecks": {
+    "typescriptFilesParsed": 189,
+    "typescriptSyntaxDiagnostics": 0,
+    "typecheckPerformed": false,
+    "fullPatchAppliesToPinnedUpstream": true,
+    "pinnedUpstream": "477b4f420553e8a52c2fbccc464d7561b239c443",
+    "baselineSourceFilesChecked": 98,
+    "directDependencyGraphVerified": {"acorn": "8.18.0", "css-tree": "3.2.1", "parse5": "8.0.1"},
+    "pluginEntryHashesAndSignaturesVerified": 12,
+    "existingPluginTrustRootUnchanged": true,
+    "avatarSources": 12,
+    "avatarRuntimeFiles": 84,
+    "avatarRuntimeBytes": 2719920,
+    "avatarHashesVerified": true,
+    "sourceWhitespaceCheck": "passed with exact-path exceptions preserving three SHA-bound original lesson/license files",
+    "priorWhitespaceFailureRetainedInRecord": true
+  },
+  "applicationTestsRun": false,
+  "postgresTestsRun": false,
+  "browserAcceptanceRun": false,
+  "capacityLoadTestRun": false,
+  "buildPerformed": false,
+  "deploymentPerformed": false,
+  "productionMutationPerformed": false,
+  "releaseReady": false,
+  "blockedBy": ["INSUFFICIENT_DISK_CAPACITY"]
+}
