@@ -10,6 +10,7 @@
  */
 
 import { createSnapshotStore, type SnapshotStore } from './runtime-compat.ts'
+import { avatarUrlForId, isAvatarId, sameAvatarOwner, type AvatarId, type AvatarOwner } from './avatar-catalog.ts'
 import type {
   AuthApi, AuthApiError, AuthUser, LoginInput, RegisterInput, RegisterOutcome,
 } from './auth-api.ts'
@@ -175,6 +176,8 @@ export interface AuthController {
   register: (input: RegisterInput) => Promise<RegisterOutcome>
   /** Revoke the server session, drop the identity hint, reload. */
   logout: () => Promise<void>
+  /** Publish the saved server principal without reloading/rebinding per-user stores. */
+  setAvatar: (avatarId: AvatarId, expectedOwner: AvatarOwner) => Promise<void>
   /** The storage namespace the data controllers should use this boot. */
   userStorage: Storage
   /** Adopt anonymous progress the first time this user authenticates here. */
@@ -191,6 +194,37 @@ export function createAuthController(api: AuthApi, base: Storage): AuthControlle
   const stored = readStoredAuthUser(base)
   const userStorage = stored === undefined ? base : namespacedStorage(base, stored.id)
   const store = createSnapshotStore<AuthState>({ status: 'loading' })
+  let sessionRequest = 0
+  let ownerEpoch = 0
+  let avatarRequest = 0
+  let changingSession = false
+  const identityKey = (state: AuthState): string => JSON.stringify(
+    state.status === 'authed' && state.user !== undefined
+      ? ['authed', state.user.id, state.user.schoolId, state.user.username] : [state.status],
+  )
+  let observedIdentity = identityKey(store.getSnapshot())
+  store.subscribe(() => {
+    const next = identityKey(store.getSnapshot())
+    if (next === observedIdentity) return
+    observedIdentity = next
+    ownerEpoch += 1
+    avatarRequest += 1
+  })
+  const beginSessionRequest = () => {
+    changingSession = true
+    avatarRequest += 1
+    return { request: ++sessionRequest, owner: ownerEpoch }
+  }
+  const currentSessionRequest = (attempt: { request: number; owner: number }): boolean =>
+    attempt.request === sessionRequest && attempt.owner === ownerEpoch
+  const endSessionRequest = (attempt: { request: number }): void => {
+    if (attempt.request === sessionRequest) changingSession = false
+  }
+  const avatarError = (code: string, message: string): AuthApiError => {
+    const error = new Error(message) as AuthApiError
+    Object.defineProperty(error, 'code', { value: code })
+    return error
+  }
 
   const enterSession = (user: AuthUser): void => {
     migrateAnonymousProgress(base, user.id)
@@ -206,8 +240,10 @@ export function createAuthController(api: AuthApi, base: Storage): AuthControlle
     userStorage,
     migrate: (user) => { migrateAnonymousProgress(base, user.id) },
     boot: async () => {
+      const attempt = beginSessionRequest()
       try {
         const { user } = await api.me()
+        if (!currentSessionRequest(attempt)) return
         /* A live cookie for a different account or with no hint wins — the
            server is authoritative, and the data namespace must rebind, so
            hand the mismatch to a fresh boot rather than writing into the
@@ -227,6 +263,7 @@ export function createAuthController(api: AuthApi, base: Storage): AuthControlle
         migrateAnonymousProgress(base, user.id)
         store.set({ status: 'authed', user })
       } catch (error) {
+        if (!currentSessionRequest(attempt)) return
         const code = (error as AuthApiError).code
         if (code === 'UNAUTHENTICATED') {
           writeStoredAuthUser(base, undefined)
@@ -236,28 +273,76 @@ export function createAuthController(api: AuthApi, base: Storage): AuthControlle
         /* Network/5xx: do not drop the identity hint on a transient failure —
            surface guest so the shell does not half-mount private data. */
         store.set({ status: 'guest' })
+      } finally {
+        endSessionRequest(attempt)
       }
     },
     login: async (input) => {
-      const { user } = await api.login(input)
-      enterSession(user)
+      const attempt = beginSessionRequest()
+      try {
+        const { user } = await api.login(input)
+        if (currentSessionRequest(attempt)) enterSession(user)
+      } finally {
+        endSessionRequest(attempt)
+      }
     },
     register: async (input) => {
-      const outcome = await api.register(input)
-      /* A parked registration has no session — entering one would show an
-         empty signed-in shell whose /me then 401s. */
-      if (outcome.kind === 'registered') enterSession(outcome.user)
-      return outcome
+      const attempt = beginSessionRequest()
+      try {
+        const outcome = await api.register(input)
+        /* A parked registration has no session — entering one would show an
+           empty signed-in shell whose /me then 401s. */
+        if (outcome.kind === 'registered' && currentSessionRequest(attempt)) enterSession(outcome.user)
+        return outcome
+      } finally {
+        endSessionRequest(attempt)
+      }
     },
     logout: async () => {
+      const attempt = beginSessionRequest()
+      // Tear down the account view immediately, not after a delayed logout or
+      // an avatar response. A later login must not be cleared by this finally.
+      store.set({ status: 'guest' })
+      const logoutEpoch = ownerEpoch
       try {
         await api.logout()
       } catch {
         /* Best effort — the local identity is being torn down regardless. */
       } finally {
-        writeStoredAuthUser(base, undefined)
-        window.location.reload()
+        if (attempt.request === sessionRequest && logoutEpoch === ownerEpoch) {
+          writeStoredAuthUser(base, undefined)
+          window.location.reload()
+        }
+        endSessionRequest(attempt)
       }
+    },
+    setAvatar: async (avatarId, expectedOwner) => {
+      if (!isAvatarId(avatarId)) throw avatarError('BAD_REQUEST', '请选择可用的头像')
+      const state = store.getSnapshot()
+      if (changingSession || state.status !== 'authed' || !sameAvatarOwner(state.user, expectedOwner)) {
+        throw avatarError('OWNER_CHANGED', '登录账号已变更，请重新打开头像选择')
+      }
+      const owner: AvatarOwner = {
+        id: expectedOwner.id, schoolId: expectedOwner.schoolId, username: expectedOwner.username,
+      }
+      const epoch = ownerEpoch
+      const session = sessionRequest
+      const request = ++avatarRequest
+      const { user } = await api.setAvatar(avatarId, owner)
+      const current = store.getSnapshot()
+      if (request !== avatarRequest || epoch !== ownerEpoch || session !== sessionRequest
+        || current.status !== 'authed' || !sameAvatarOwner(current.user, owner)) {
+        throw avatarError('OWNER_CHANGED', '账号或头像选择已变更，已忽略旧请求结果')
+      }
+      if (!sameAvatarOwner(user, owner)) {
+        throw avatarError('OWNER_CHANGED', '头像响应所属账号不一致，请刷新后重试')
+      }
+      if (user.avatarId !== avatarId || user.avatarUrl !== avatarUrlForId(avatarId)) {
+        throw avatarError('BAD_RESPONSE', '头像保存响应无效，请刷新确认后重试')
+      }
+      // A new principal snapshot is the only client write. No profile mirror,
+      // local avatar hint, role changes, namespace migration, or reload.
+      store.set({ status: 'authed', user })
     },
   }
 }

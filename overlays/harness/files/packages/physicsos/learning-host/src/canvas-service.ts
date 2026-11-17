@@ -28,6 +28,7 @@ import type {
   CanvasVerificationReceipt,
   CanvasVerificationListResponse,
   CanvasResourcePolicy,
+  WorkbenchLifecycleCapabilities,
 } from '@physicsos/physics-workbench/protocol'
 import type {
   CanvasGraph,
@@ -63,15 +64,17 @@ import {
 } from './canvas-blob-store.ts'
 import type { CanvasConfig } from './canvas-config.ts'
 import { CanvasError } from './canvas-error.ts'
+import type { ActivityReplaySource, ActivitySink, ActivitySuccessCapsule } from './activity-contract.ts'
+import { WorkbenchActivityReplay } from './workbench-activity-replay.ts'
 
 const identifier = z.string().min(1).max(128).regex(/^[A-Za-z0-9._-]+(?![\s\S])/)
 const digestSchema = z.string().length(64).regex(/^[a-f0-9]{64}(?![\s\S])/)
 const version = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
 const createWire = z.strictObject({ id: identifier, title: z.string().min(1), mutationId: identifier, manifestDigest: digestSchema.optional() })
-const commitWire = z.strictObject({ expectedVersion: version, expectedGeneration: version.optional(), mutationId: identifier, manifestDigest: digestSchema })
-const renameWire = z.strictObject({ expectedVersion: version, mutationId: identifier, title: z.string().min(1), manifestDigest: digestSchema.optional() })
+const commitWire = z.strictObject({ expectedVersion: version, expectedGeneration: version.optional(), mutationId: identifier, manifestDigest: digestSchema, editingSessionId: identifier.optional() })
+const renameWire = z.strictObject({ expectedVersion: version, expectedGeneration: version.optional(), mutationId: identifier, title: z.string().min(1), manifestDigest: digestSchema.optional() })
 const lifecycleWire = z.strictObject({ expectedVersion: version, expectedGeneration: version.optional(), mutationId: identifier })
-const copyWire = z.strictObject({ expectedVersion: version, mutationId: identifier, id: identifier, title: z.string().min(1).optional(), manifestDigest: digestSchema.optional() })
+const copyWire = z.strictObject({ expectedVersion: version, expectedGeneration: version.optional(), mutationId: identifier, id: identifier, title: z.string().min(1).optional(), manifestDigest: digestSchema.optional() })
 const verifyWire = z.strictObject({ captureDigest: digestSchema, mutationId: identifier })
 
 /** Account-private list filters; cursors are bound to these filters and cannot grant access. */
@@ -84,9 +87,23 @@ export interface CanvasListQuery {
   readonly order?: string
 }
 
-/** Instance-local clock input; production uses real time and server-derived receipt identities. */
+/** A replayable durable fact, not a delivery/exactly-once claim. Contains no document content. */
+export interface CanvasDurableOperation {
+  readonly owner: { readonly schoolId: string; readonly userKey: string }
+  readonly resourceId: string
+  readonly operationId: string
+  readonly requestHash: string
+  readonly operation: CanvasCommitCapsule['operation']
+  readonly occurredAt: string
+  readonly version: number
+  readonly generation: number
+}
+/** The sink deduplicates operationId + owner/resource and may be called again after restart. */
 export interface CanvasServiceOptions {
   readonly now?: () => Date
+  readonly onDurableOperation?: (operation: CanvasDurableOperation) => Promise<void>
+  readonly onDurableOperationError?: (error: unknown) => void
+  readonly activitySink?: ActivitySink
 }
 
 interface RequestContext { readonly signal: AbortSignal }
@@ -119,10 +136,13 @@ interface MutationInput {
   readonly operation: Operation
   readonly expectedVersion: number
   readonly expectedGeneration?: number | undefined
+  readonly editingSessionId?: string | undefined
   readonly manifest: CanvasManifest
   readonly manifestDigest: string
   readonly deleted: boolean
 }
+type LifecycleOperation = 'delete' | 'restore' | 'archive' | 'unarchive'
+const lifecycleOperations: readonly string[] = ['delete', 'restore', 'archive', 'unarchive']
 interface ListCursor {
   readonly version: 1
   readonly filters: string
@@ -156,6 +176,8 @@ const bytesOf = (bytes: Uint8Array): Iterable<Uint8Array> => [bytes]
  */
 export class CanvasService {
   private readonly queues = new Map<string, Promise<void>>()
+  private readonly activityReplay = new WorkbenchActivityReplay('canvas-edit')
+  get activityReplaySource(): ActivityReplaySource { return this.activityReplay.source }
   private readonly requests = new Set<Promise<unknown>>()
   private readonly requestContext = new AsyncLocalStorage<RequestContext>()
   private readonly now: () => Date
@@ -166,7 +188,7 @@ export class CanvasService {
     private readonly domain: CanvasDomain,
     private readonly blobs: CanvasBlobStore,
     readonly config: CanvasConfig,
-    options: CanvasServiceOptions = {},
+    private readonly options: CanvasServiceOptions = {},
   ) {
     this.now = options.now ?? (() => new Date())
   }
@@ -175,7 +197,28 @@ export class CanvasService {
    * Initialize the real filesystem before the REST registration becomes visible.
    * @returns Completion after private directories and ancestor entries are durable.
    */
-  initialize(): Promise<void> { return this.blobs.initialize() }
+  async initialize(): Promise<void> {
+    await this.blobs.initialize()
+    await this.replayDurableOperations()
+  }
+
+  /** At-least-once recovery from existing capsules/receipts; sink failures never undo a business ACK. */
+  async replayDurableOperations(): Promise<void> {
+    const seen = new Set<string>()
+    for (const [, receipt] of this.receipts.entries()) {
+      seen.add(canvasRecordKey(receipt.schoolId, receipt.userKey, receipt.canvasId, receipt.mutationId))
+      await this.deliverDurableOperation(receipt, receipt)
+    }
+    for (const [, row] of this.heads.entries()) {
+      if (!seen.has(canvasRecordKey(row.schoolId, row.userKey, row.id, row.lastCommit.mutationId))) await this.deliverDurableOperation(row, row.lastCommit)
+    }
+  }
+
+  capabilities(actor: IdentityActor): Promise<WorkbenchLifecycleCapabilities> {
+    return this.account(actor, async () => ({ schemaVersion: 1, lifecycleBridge: true,
+      lifecycleWritesEnabled: this.config.lifecycleWritesEnabled === true, archive: this.config.lifecycleWritesEnabled === true,
+      delete: true, restore: true, generationRequired: true }))
+  }
 
   /**
    * Admit the complete HTTP operation, including body reading, into disposal quiescence.
@@ -235,10 +278,10 @@ export class CanvasService {
    */
   list(actor: IdentityActor, query: CanvasListQuery = {}): Promise<CanvasListResponse> {
     return this.account(actor, async () => {
-      const state = query.state ?? 'live'
+      const state = query.state ?? 'active'
       const sort = query.sort ?? 'updated'
       const order = query.order ?? (sort === 'title' ? 'asc' : 'desc')
-      if (!['live', 'deleted', 'all'].includes(state) || !['updated', 'created', 'title'].includes(sort) || !['asc', 'desc'].includes(order)) {
+      if (!['active', 'live', 'archived', 'deleted', 'all'].includes(state) || !['updated', 'created', 'title'].includes(sort) || !['asc', 'desc'].includes(order)) {
         throw new CanvasError(400, 'BAD_REQUEST', 'Canvas list state, sort, or order is invalid.')
       }
       const search = query.search ?? ''
@@ -253,7 +296,8 @@ export class CanvasService {
       }
       const normalized = search.toLocaleLowerCase('und')
       const ordered = [...this.heads.entries()].map(([, row]) => row)
-        .filter(row => own(actor, row) && (state === 'all' || (row.deletedAt === undefined) === (state === 'live')))
+        .filter(row => own(actor, row) && (state === 'all' || (state === 'deleted' ? row.deletedAt !== undefined :
+          row.deletedAt === undefined && (state === 'archived' ? row.archivedAt !== undefined : row.archivedAt === undefined))))
         .map(canvasHeadOf)
         .filter(head => head.title.toLocaleLowerCase('und').includes(normalized))
         .sort((left, right) => compare({ primary: primary(left), id: left.id }, { primary: primary(right), id: right.id }))
@@ -298,7 +342,7 @@ export class CanvasService {
    */
   uploadObject(actor: IdentityActor, canvasId: string, digest: string, bytes: Uint8Array): Promise<CanvasObjectUploadResponse> {
     return this.account(actor, async () => {
-      this.requireHead(actor, canvasId, false)
+      this.requireWritableHead(actor, canvasId)
       const prepared = this.prepareBytes(bytes, canvasDigest(digest), canvasId, true)
       const existed = await this.storeObject(actor, canvasId, prepared)
       return { digest: prepared.digest, kind: prepared.kind, byteLength: prepared.bytes.byteLength, bytes: prepared.bytes.byteLength, existed }
@@ -334,7 +378,8 @@ export class CanvasService {
       const hash = this.requestHash('commit', canvasId, input)
       const replay = await this.replayIfPresent(actor, canvasId, input.mutationId, hash)
       if (replay !== undefined) return this.openReplay(actor, replay)
-      const current = this.requireHead(actor, canvasId, false)
+      const current = this.requireWritableHead(actor, canvasId)
+      this.requireGeneration(input.expectedGeneration)
       const graph = await this.readGraph(actor, canvasId, input.manifestDigest)
       this.checkManifestAgainstHead(graph.manifest, current)
       return this.publishMutation(actor, current, {
@@ -359,7 +404,8 @@ export class CanvasService {
       const hash = this.requestHash('rename', canvasId, input)
       const replay = await this.replayIfPresent(actor, canvasId, input.mutationId, hash)
       if (replay !== undefined) return this.openReplay(actor, replay)
-      const current = this.requireHead(actor, canvasId, false)
+      const current = this.requireWritableHead(actor, canvasId)
+      this.requireGeneration(input.expectedGeneration)
       const original = await this.readGraph(actor, canvasId, current.manifestDigest)
       const reservation = this.reservations.get(this.mutationKey(actor, canvasId, input.mutationId))
       if (reservation !== undefined && (!own(actor, reservation) || reservation.operation !== 'rename' || reservation.requestHash !== hash)) {
@@ -383,7 +429,7 @@ export class CanvasService {
       await this.storeObject(actor, canvasId, prepared)
       return this.publishMutation(actor, current, {
         mutationId: input.mutationId, requestHash: hash, operation: 'rename',
-        expectedVersion: input.expectedVersion, manifest, manifestDigest: prepared.digest, deleted: false,
+        expectedVersion: input.expectedVersion, expectedGeneration: input.expectedGeneration, manifest, manifestDigest: prepared.digest, deleted: false,
       })
     })
   }
@@ -396,7 +442,7 @@ export class CanvasService {
    * @returns Durable tombstone with an incremented version and generation.
    */
   delete(actor: IdentityActor, canvasId: string, body: unknown): Promise<CanvasCommitResponse> {
-    return this.account(actor, () => this.lifecycle(actor, canvasId, body, true))
+    return this.account(actor, () => this.lifecycle(actor, canvasId, body, 'delete'))
   }
 
   /**
@@ -407,7 +453,14 @@ export class CanvasService {
    * @returns Durable restored head with another monotonic version and generation.
    */
   restore(actor: IdentityActor, canvasId: string, body: unknown): Promise<CanvasCommitResponse> {
-    return this.account(actor, () => this.lifecycle(actor, canvasId, body, false))
+    return this.account(actor, () => this.lifecycle(actor, canvasId, body, 'restore'))
+  }
+
+  archive(actor: IdentityActor, canvasId: string, body: unknown): Promise<CanvasCommitResponse> {
+    return this.account(actor, () => this.lifecycle(actor, canvasId, body, 'archive'))
+  }
+  unarchive(actor: IdentityActor, canvasId: string, body: unknown): Promise<CanvasCommitResponse> {
+    return this.account(actor, () => this.lifecycle(actor, canvasId, body, 'unarchive'))
   }
 
   /**
@@ -426,11 +479,12 @@ export class CanvasService {
       const replay = await this.replayIfPresent(actor, input.id, input.mutationId, hash)
       if (replay !== undefined) return this.openReplay(actor, replay)
       if (this.heads.get(this.key(actor, input.id)) !== undefined) throw new CanvasError(409, 'ID_CONFLICT', 'Copy destination id is already retained by this account.')
-      const source = this.requireHead(actor, canvasId, false)
+      const source = this.requireHead(actor, canvasId, true)
+      this.requireGeneration(input.expectedGeneration)
       try {
         await this.heads.update(this.key(actor, canvasId), current => {
           if (!own(actor, current) || current.id !== canvasId) throw notFound()
-          if (current.version !== input.expectedVersion || current.deletedAt !== undefined) throw new CanvasError(409, 'VERSION_CONFLICT', 'Source Canvas changed before copying.', { currentHead: canvasHeadOf(current) })
+          if (current.version !== input.expectedVersion || current.generation !== input.expectedGeneration) throw new CanvasError(409, 'VERSION_CONFLICT', 'Source Canvas changed before copying.', { currentHead: canvasHeadOf(current) })
           throw new ReplayCommit(current.lastCommit)
         })
       } catch (error) { if (!(error instanceof ReplayCommit)) throw error }
@@ -551,7 +605,7 @@ export class CanvasService {
         await this.releaseReservation(actor, canvasId, input.mutationId, hash)
         return { receipt: canvasVerificationOf(existing), ...(existing.resultDigest === undefined ? {} : { resultDigest: existing.resultDigest }), replayed: true }
       }
-      this.requireHead(actor, canvasId, false)
+      this.requireWritableHead(actor, canvasId)
       const mutationHead = this.heads.get(this.key(actor, canvasId))!
       if (this.validateReplay(actor, canvasId, input.mutationId, hash, mutationHead) !== undefined) {
         throw new CanvasError(409, 'MUTATION_CONFLICT', 'mutationId belongs to a different Canvas mutation.')
@@ -842,6 +896,14 @@ export class CanvasService {
     if (!allowDeleted && row.deletedAt !== undefined) throw new CanvasError(410, 'DELETED', 'Canvas is deleted.', { currentHead: canvasHeadOf(row) })
     return row
   }
+  private requireGeneration(value: number | undefined): void {
+    if (value === undefined) throw new CanvasError(409, 'CLIENT_UPGRADE_REQUIRED', '请刷新并升级画布客户端后重试；旧客户端缺少生命周期代际保护，未执行写入。')
+  }
+  private requireWritableHead(actor: IdentityActor, canvasId: string): CanvasHeadRecord {
+    const row = this.requireHead(actor, canvasId, false)
+    if (row.archivedAt !== undefined) throw new CanvasError(409, 'ARCHIVED_READ_ONLY', '画布已归档，只能查看或导出；取消归档后才能编辑。', { currentHead: canvasHeadOf(row) })
+    return row
+  }
   private requireObject(actor: IdentityActor, canvasId: string, digest: string): CanvasObjectRecord {
     const row = this.objects.get(this.objectKey(actor, canvasId, digest))
     if (row === undefined || !own(actor, row) || row.canvasId !== canvasId) throw new CanvasError(404, 'OBJECT_NOT_FOUND', 'Object is not stored in this account and Canvas.')
@@ -1093,7 +1155,8 @@ export class CanvasService {
     const capsule = receipt ?? (current.lastCommit.mutationId === mutationId ? current.lastCommit : undefined)
     if (capsule === undefined) return undefined
     if (capsule.requestHash !== requestHash) throw new CanvasError(409, 'MUTATION_CONFLICT', 'mutationId was already used for different request content.')
-    return { mutationId: capsule.mutationId, requestHash: capsule.requestHash, operation: capsule.operation, head: capsule.head }
+    return { mutationId: capsule.mutationId, requestHash: capsule.requestHash, operation: capsule.operation, head: capsule.head,
+      ...(capsule.activitySuccess === undefined ? {} : { activitySuccess: capsule.activitySuccess }) }
   }
   private async replayIfPresent(actor: IdentityActor, canvasId: string, mutationId: string, requestHash: string): Promise<CanvasCommitCapsule | undefined> {
     this.assertId(canvasId)
@@ -1125,11 +1188,24 @@ export class CanvasService {
     if (existing !== undefined) {
       if (!own(actor, existing) || existing.canvasId !== canvasId) throw notFound()
       if (existing.requestHash !== capsule.requestHash || canonicalStringify(existing.head) !== canonicalStringify(capsule.head)) throw new CanvasError(409, 'MUTATION_CONFLICT', 'Durable mutation receipt disagrees with its committed head.')
+      await this.deliverDurableOperation(existing, existing)
       return
     }
     const receipt = this.receipt(actor, canvasId, capsule)
     this.checkCapacity(actor, { table: 'receipts', key, canvasId, value: receipt })
     await this.receipts.put(key, receipt)
+    await this.deliverDurableOperation(receipt, receipt)
+  }
+  private async deliverDurableOperation(owner: { readonly schoolId: string; readonly userKey: string }, capsule: CanvasCommitCapsule): Promise<void> {
+    this.activityReplay.record(capsule.activitySuccess)
+    if (capsule.activitySuccess !== undefined) {
+      try { await this.options.activitySink?.success(capsule.activitySuccess) } catch (error) { try { this.options.onDurableOperationError?.(error) } catch { /* An integration error cannot revoke a business ACK. */ } }
+    }
+    try {
+      await this.options.onDurableOperation?.({ owner: { schoolId: owner.schoolId, userKey: owner.userKey },
+        resourceId: capsule.head.id, operationId: capsule.mutationId, requestHash: capsule.requestHash,
+        operation: capsule.operation, occurredAt: capsule.head.updatedAt, version: capsule.head.version, generation: capsule.head.generation })
+    } catch (error) { try { this.options.onDurableOperationError?.(error) } catch { /* A downstream sink cannot invalidate a durable operation. */ } }
   }
   private async publishNewHead(
     actor: IdentityActor, canvasId: string, manifest: CanvasManifest, object: PreparedObject,
@@ -1156,17 +1232,23 @@ export class CanvasService {
     await this.releaseReservation(actor, canvasId, mutationId, requestHash)
     return { head, manifest, replayed: false }
   }
-  private async lifecycle(actor: IdentityActor, canvasId: string, body: unknown, deleted: boolean): Promise<CanvasCommitResponse> {
+  private async lifecycle(actor: IdentityActor, canvasId: string, body: unknown, operation: LifecycleOperation): Promise<CanvasCommitResponse> {
     this.checkRequestBytes(body)
     const input = parseWire(lifecycleWire, body)
-    const operation = deleted ? 'delete' : 'restore'
     const hash = this.requestHash(operation, canvasId, input)
     const replay = await this.replayIfPresent(actor, canvasId, input.mutationId, hash)
     if (replay !== undefined) return this.openReplay(actor, replay)
     const row = this.requireHead(actor, canvasId, true)
-    if ((row.deletedAt !== undefined) === deleted) throw new CanvasError(409, deleted ? 'ALREADY_DELETED' : 'NOT_DELETED', 'Canvas lifecycle state differs from this operation.', { currentHead: canvasHeadOf(row) })
+    this.requireGeneration(input.expectedGeneration)
+    if ((operation === 'archive' || operation === 'unarchive') && this.config.lifecycleWritesEnabled !== true) {
+      throw new CanvasError(409, 'LIFECYCLE_WRITES_DISABLED', '归档功能尚未开启；兼容保护和既有删除恢复仍然有效。', { currentHead: canvasHeadOf(row) })
+    }
+    const valid = operation === 'delete' ? row.deletedAt === undefined : operation === 'restore' ? row.deletedAt !== undefined :
+      row.deletedAt === undefined && (operation === 'archive' ? row.archivedAt === undefined : row.archivedAt !== undefined)
+    if (!valid) throw new CanvasError(operation === 'delete' || operation === 'restore' ? 409 : row.deletedAt !== undefined ? 410 : 409,
+      operation === 'delete' ? 'ALREADY_DELETED' : operation === 'restore' ? 'NOT_DELETED' : 'LIFECYCLE_CONFLICT', '画布状态已变化，请刷新后重试。', { currentHead: canvasHeadOf(row) })
     const graph = await this.readGraph(actor, canvasId, row.manifestDigest)
-    return this.publishMutation(actor, row, { ...input, operation, requestHash: hash, manifest: graph.manifest, manifestDigest: row.manifestDigest, deleted })
+    return this.publishMutation(actor, row, { ...input, operation, requestHash: hash, manifest: graph.manifest, manifestDigest: row.manifestDigest, deleted: operation === 'delete' })
   }
   private async publishMutation(actor: IdentityActor, observed: CanvasHeadRecord, input: MutationInput): Promise<CanvasCommitResponse> {
     await this.ensureReceipt(actor, observed.id, observed.lastCommit)
@@ -1178,11 +1260,24 @@ export class CanvasService {
     if (historical.length > this.config.limits.maxHistoryEntries) throw new CanvasError(413, 'HISTORY_LIMIT', 'Canvas retained head history exceeds its configured entry limit.')
     const head: CanvasHead = {
       id: observed.id, title: input.manifest.title, version: nextInteger(observed.version, 'Canvas version'),
-      generation: (input.operation === 'delete' || input.operation === 'restore') ? nextInteger(observed.generation, 'Canvas generation') : observed.generation,
+      generation: lifecycleOperations.includes(input.operation) ? nextInteger(observed.generation, 'Canvas generation') : observed.generation,
       changeSeq: this.nextSequence(actor), manifestDigest: input.manifestDigest, createdAt: observed.createdAt, updatedAt: at,
-      ...(input.deleted ? { deletedAt: at } : {}),
+      ...(input.operation === 'delete' ? { deletedAt: at } : input.operation === 'restore' || observed.deletedAt === undefined ? {} : { deletedAt: observed.deletedAt }),
+      ...(input.operation === 'archive' ? { archivedAt: at } : input.operation === 'unarchive' || observed.archivedAt === undefined ? {} : { archivedAt: observed.archivedAt }),
     }
-    const capsule: CanvasCommitCapsule = { mutationId: input.mutationId, requestHash: input.requestHash, operation: input.operation, head }
+    let activitySuccess: ActivitySuccessCapsule | undefined
+    if (this.config.lifecycleWritesEnabled === true && input.operation === 'commit' && input.editingSessionId !== undefined) {
+      const operationId = `canvas-edit:${canvasScopeKey(observed.id, input.editingSessionId)}`
+      const recorded = [...this.receipts.entries()].some(([, receipt]) => own(actor, receipt) && receipt.activitySuccess?.operationId === operationId) || observed.lastCommit.activitySuccess?.operationId === operationId
+      if (!recorded) {
+        const before = (await this.readGraph(actor, observed.id, observed.manifestDigest)).manifest
+        const content = ({ viewport: _viewport, createdAt: _createdAt, updatedAt: _updatedAt, history: _history, ...value }: CanvasManifest) => value
+        if (canonicalStringify(content(before)) !== canonicalStringify(content(input.manifest))) activitySuccess = { version: 1, source: 'canvas-edit',
+          operationId, occurredAt: at, owner: { schoolId: actor.schoolId, userKey: actor.userKey } }
+      }
+    }
+    const capsule: CanvasCommitCapsule = { mutationId: input.mutationId, requestHash: input.requestHash, operation: input.operation, head,
+      ...(activitySuccess === undefined ? {} : { activitySuccess }) }
     const row: CanvasHeadRecord = { ...head, userKey: actor.userKey, schoolId: actor.schoolId, lastCommit: capsule, history: [...historical] }
     const receipt = this.receipt(actor, observed.id, capsule)
     await this.reserve(actor, observed.id, input.mutationId, input.requestHash, input.operation, [input.manifestDigest, observed.manifestDigest], [
@@ -1197,12 +1292,14 @@ export class CanvasService {
       const durable = await this.heads.update(this.key(actor, observed.id), current => {
         const replay = this.validateReplay(actor, observed.id, input.mutationId, input.requestHash, current)
         if (replay !== undefined) throw new ReplayCommit(replay)
-        if (current.version !== input.expectedVersion || current.version !== observed.version || (input.expectedGeneration !== undefined && current.generation !== input.expectedGeneration)) {
+        this.requireGeneration(input.expectedGeneration)
+        if (current.version !== input.expectedVersion || current.version !== observed.version || current.generation !== input.expectedGeneration) {
           throw new CanvasError(409, 'VERSION_CONFLICT', 'Canvas was changed by another device.', { currentHead: canvasHeadOf(current) })
         }
         const requiresDeleted = input.operation === 'restore'
-        if ((current.deletedAt !== undefined) !== requiresDeleted) {
-          throw new CanvasError(current.deletedAt === undefined ? 409 : 410, 'LIFECYCLE_CONFLICT', 'Canvas deletion state changed before this commit.', { currentHead: canvasHeadOf(current) })
+        if ((current.deletedAt !== undefined) !== requiresDeleted || current.archivedAt !== observed.archivedAt ||
+          (!lifecycleOperations.includes(input.operation) && current.archivedAt !== undefined)) {
+          throw new CanvasError(current.deletedAt === undefined ? 409 : 410, 'LIFECYCLE_CONFLICT', 'Canvas lifecycle changed before this commit; reload before editing.', { currentHead: canvasHeadOf(current) })
         }
         return row
       })

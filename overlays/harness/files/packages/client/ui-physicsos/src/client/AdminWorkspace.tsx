@@ -6,9 +6,9 @@
  * scoped to their own tenant.
  */
 
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type {
-  AdminApi, AdminUserRow, AuditEventRow, SchoolRequestRow,
+  AdminApi, AdminUserRow, AuditEventRow, AuthUser, SchoolRequestRow,
 } from './auth-api.ts'
 import type { PaperApi } from './paper-api.ts'
 import type { NoticeApi } from './notice-api.ts'
@@ -27,6 +27,10 @@ import { createModerationApi, type ModerationApi } from './moderation-api.ts'
 import { isAdminRole, type AuthState } from './auth-store.ts'
 import type { PhysicsosKey } from './locales.ts'
 import type { ModelPoolApi } from './model-pool-api.ts'
+import type { ActivityApi } from './activity-api.ts'
+import { AdminUserActivity } from './AdminUserActivity.tsx'
+import { AdminSchoolRanking } from './AdminSchoolRanking.tsx'
+import { ActivityAvatar } from './AdminActivityPrimitives.tsx'
 import type { UsageApi } from './usage-api.ts'
 import { UsageWorkspace } from './UsageWorkspace.tsx'
 import { GlassSelect } from './GlassSelect.tsx'
@@ -51,6 +55,7 @@ type Tab =
   | 'overview'
   | 'requests'
   | 'schools'
+  | 'schoolRanking'
   | 'users'
   | 'experimentReview'
   | 'feedback'
@@ -83,6 +88,8 @@ export interface AdminWorkspaceProps {
   modelPoolApi?: ModelPoolApi
   /** Account and tenant scope are decided by the usage host, not this page. */
   usageApi?: UsageApi
+  /** Independent v1 activity client; never reinterpret legacy UsageApi.use:view. */
+  activityApi?: ActivityApi
   /** Conversation evidence and human decisions; live SUPER_ADMIN Cookie only. */
   moderationApi?: ModerationApi
   /** Platform-wide official website configuration and private feedback inbox. */
@@ -101,7 +108,7 @@ const defaultModerationApi = createModerationApi()
 const defaultWebsiteApi = createWebsiteApi()
 
 export function AdminWorkspace({
-  api, paperApi, noticeApi, modelPoolApi, usageApi,
+  api, paperApi, noticeApi, modelPoolApi, usageApi, activityApi,
   moderationApi = defaultModerationApi, websiteApi = defaultWebsiteApi, useAuth, t,
 }: AdminWorkspaceProps) {
   const principal = useAuth(state => state.user)
@@ -125,6 +132,7 @@ export function AdminWorkspace({
       { id: 'requests' as const, label: t('admin.tab.requests'), group: 'overview' as const },
       { id: 'schools' as const, label: t('admin.tab.schools'), group: 'overview' as const },
     ] : []),
+    ...(activityApi === undefined ? [] : [{ id: 'schoolRanking' as const, label: '学校排行', group: 'overview' as const }]),
     { id: 'users' as const, label: t('admin.tab.users'), group: 'people' as const },
     ...(isSuper ? [{ id: 'moderation' as const, label: t('admin.tab.moderation'), group: 'people' as const }] : []),
     ...(isSuper || paperApi !== undefined
@@ -143,7 +151,7 @@ export function AdminWorkspace({
   const active = tabs.some(item => item.id === tab) ? tab : fallback.id
   const navigationIcons: Record<Tab, ReactNode> = {
     overview: <IconChart size={18} />, requests: <IconLibrary size={18} />,
-    schools: <IconLibrary size={18} />, users: <IconScene size={18} />,
+    schools: <IconLibrary size={18} />, schoolRanking: <IconChart size={18} />, users: <IconScene size={18} />,
     experimentReview: <IconVerified size={18} />, feedback: <IconAnnouncement size={18} />,
     website: <IconArchive size={18} />, moderation: <IconChatBubble size={18} />,
     modelPool: <IconComputed size={18} />,
@@ -175,12 +183,13 @@ export function AdminWorkspace({
       >
         {active === 'requests' && isSuper && <RequestsTab api={api} t={t} />}
         {active === 'schools' && isSuper && <SchoolsTab api={api} t={t} />}
+        {active === 'schoolRanking' && activityApi !== undefined && <AdminSchoolRanking api={activityApi} isSuper={isSuper} />}
         {active === 'overview' && <AdminOverviewTab api={api} isSuper={isSuper} t={t}
           summary={usageApi === undefined ? <AdminEmpty>{t('admin.overview.usageUnavailable')}</AdminEmpty>
             : <UsageWorkspace api={usageApi} admin t={t} />}
           audit={<AuditTab api={api} t={t} />} />}
         {active === 'users' && <AdminAccountsTab api={api} t={t} isSuper={isSuper}
-          accounts={<UsersTab api={api} t={t} isSuper={isSuper} />} />}
+          accounts={<UsersTab api={api} t={t} isSuper={isSuper} activityApi={activityApi} viewer={principal} />} />}
         {active === 'experimentReview' && <ReviewTab paperApi={paperApi} isSuper={isSuper} reviewer={username} t={t} />}
         {active === 'feedback' && noticeApi !== undefined && <FeedbackTab api={noticeApi} isSuper={isSuper} t={t} />}
         {active === 'modelPool' && modelPoolApi !== undefined && isSuper && (
@@ -232,15 +241,17 @@ function FeedbackTab({ api, isSuper, t }: {
 const useLoad = <T,>(load: () => Promise<T>, deps: readonly unknown[]) => {
   const [data, setData] = useState<T | undefined>()
   const [error, setError] = useState<string | undefined>()
+  const generation = useRef(0)
   const reload = useCallback(() => {
-    setError(undefined)
-    load().then(setData).catch((reason: unknown) => {
-      setError(reason instanceof Error ? reason.message : String(reason))
+    const request = ++generation.current
+    setError(undefined); setData(undefined)
+    load().then(value => { if (request === generation.current) setData(value) }).catch((reason: unknown) => {
+      if (request === generation.current) setError(reason instanceof Error ? reason.message : String(reason))
     })
     /* The dep array is the caller's: `load` closes over the tab's query
        state and is expected to be recreated. */
   }, deps)
-  useEffect(() => { reload() }, [reload])
+  useEffect(() => { reload(); return () => { generation.current += 1 } }, [reload])
   return { data, error, reload }
 }
 
@@ -464,7 +475,7 @@ function SchoolsTab({ api, t }: { api: AdminApi; t: (key: PhysicsosKey) => strin
 
 /* ---- 用户 tab ---- */
 
-function UsersTab({ api, t, isSuper }: { api: AdminApi; t: (key: PhysicsosKey) => string; isSuper: boolean }) {
+function UsersTab({ api, t, isSuper, activityApi, viewer }: { api: AdminApi; t: (key: PhysicsosKey) => string; isSuper: boolean; activityApi: ActivityApi | undefined; viewer: AuthUser | undefined }) {
   const [q, setQ] = useState('')
   const [roleFilter, setRoleFilter] = useState('')
   const { data, error, reload } = useLoad(
@@ -484,6 +495,7 @@ function UsersTab({ api, t, isSuper }: { api: AdminApi; t: (key: PhysicsosKey) =
     }).finally(() => { setBusy(false) })
   }
   const userKey = (user: AdminUserRow): string => `${user.schoolId}:${user.username}`
+  const avatarFor = (user: AdminUserRow): string | undefined => viewer?.schoolId === user.schoolId && viewer.username === user.username ? viewer.avatarUrl : user.avatarUrl
   const current = data?.find(user => userKey(user) === selected) ?? data?.[0]
   if (error !== undefined) return <p className={css.error} role="alert">{error}</p>
   return <>
@@ -515,15 +527,15 @@ function UsersTab({ api, t, isSuper }: { api: AdminApi; t: (key: PhysicsosKey) =
           <thead><tr><th>{t('admin.users.field.username')}</th><th>{t('admin.users.field.displayName')}</th><th>{t('admin.schools.field.name')}</th><th>{t('admin.users.field.role')}</th><th>{t('admin.users.status')}</th><th>{t('admin.users.actions')}</th></tr></thead>
           <tbody>{data.map(user => <tr key={userKey(user)}
             data-selected={current !== undefined && userKey(current) === userKey(user) || undefined}>
-            <td><button type="button" className={css.tableLink} onClick={() => { setSelected(userKey(user)); setResetFor(undefined); setNewPassword('') }}>{user.username}</button></td>
+            <td><button type="button" className={`${css.tableLink} ${css.userIdentity}`} aria-label={user.username} onClick={() => { setSelected(userKey(user)); setResetFor(undefined); setNewPassword('') }}><ActivityAvatar url={avatarFor(user)} label={user.displayName} /><span>{user.username}</span></button></td>
             <td>{user.displayName}</td><td>{user.schoolName}</td><td><span className={css.action}>{t(`role.${user.role}`)}</span></td>
             <td><span className={user.status === 'active' ? css.badgeActive : css.badgeRevoked}>{t(user.status === 'active' ? 'admin.schools.status.active' : 'admin.schools.status.disabled')}</span></td>
             <td><button type="button" className={css.ghost} aria-label={`${t('admin.users.select')} ${user.username}`} onClick={() => { setSelected(userKey(user)); setResetFor(undefined); setNewPassword('') }}>···</button></td>
           </tr>)}</tbody>
         </AdminTable>}
       </section>
-      {current !== undefined && <AdminCard className={css.detailPane}>
-        <AdminCardTitle as="h2">{t('admin.users.details')}</AdminCardTitle>
+      {current !== undefined && <AdminCard key={userKey(current)} className={css.detailPane}>
+        <div className={css.userDetailsHeading}><ActivityAvatar url={avatarFor(current)} label={current.displayName} /><AdminCardTitle as="h2">{t('admin.users.details')}</AdminCardTitle></div>
         <dl className={css.detailFields}>
           <div><dt>{t('admin.users.field.displayName')}</dt><dd>{current.displayName}</dd></div>
           <div><dt>{t('admin.users.field.username')}</dt><dd>{current.username}</dd></div>
@@ -532,6 +544,7 @@ function UsersTab({ api, t, isSuper }: { api: AdminApi; t: (key: PhysicsosKey) =
           <div><dt>{t('admin.users.status')}</dt><dd>{t(current.status === 'active' ? 'admin.schools.status.active' : 'admin.schools.status.disabled')}</dd></div>
         </dl>
         <p className={css.cardMeta}>{t('admin.users.scope')}</p>
+        {activityApi === undefined ? <p className={css.note}>使用统计服务尚未接入；不以旧版页面进入次数替代有效使用。</p> : <AdminUserActivity api={activityApi} schoolId={current.schoolId} username={current.username} status={current.status} />}
         {current.role !== 'SUPER_ADMIN' && <>
           <AdminCardActions className={css.detailActions}>
             <button type="button" className={current.status === 'active' ? css.danger : css.ghost} disabled={busy} onClick={() => { run(() => api.setUserStatus(current.schoolId, current.username, current.status === 'active' ? 'disabled' : 'active')) }}>{t(current.status === 'active' ? 'admin.users.disable' : 'admin.users.enable')}</button>

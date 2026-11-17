@@ -25,6 +25,7 @@ import type { AuthState } from './auth-store.ts'
 import { LabEmptyState } from './LabEmptyState.tsx'
 import { UsageWorkspace } from './UsageWorkspace.tsx'
 import type { UsageApi } from './usage-api.ts'
+import type { ActivityApi } from './activity-api.ts'
 import { ContributeWorkspace } from './ContributeWorkspace.tsx'
 import { PaperWorkspace } from './PaperWorkspace.tsx'
 import type { PaperApi } from './paper-api.ts'
@@ -63,6 +64,7 @@ export interface PhysicsSurfaceInjected {
   /** `/physicsos/admin` client — absent in stripped test compositions. */
   adminApi?: AdminApi
   usageApi?: UsageApi
+  activityApi?: ActivityApi
   /** `/physicsos/notice` client — absent in stripped test compositions. */
   noticeApi?: NoticeApi
   /** `/physicsos/model-pool` client — absent in stripped test compositions. */
@@ -114,6 +116,7 @@ export function PhysicsSurface({
   paperApi,
   adminApi,
   usageApi,
+  activityApi,
   noticeApi,
   modelPoolApi,
   useAuth,
@@ -153,7 +156,7 @@ export function PhysicsSurface({
   )
   useEffect(() => () => { runtime?.dispose?.() }, [runtime])
 
-  if (surface === 'home' || surface === 'canvas' || surface === 'whiteboard') return null
+  if (surface === 'home' || surface === 'canvas' || surface === 'whiteboard' || surface === 'courseware') return null
   /* 出卷专区 is a teacher workflow over the host REST surface, not a lab
      scene: it renders without the physics runtime and covers the composer. */
   if (surface === 'paper') {
@@ -195,6 +198,7 @@ export function PhysicsSurface({
       <AdminWorkspace
         api={adminApi}
         {...(usageApi === undefined ? {} : { usageApi })}
+        {...(activityApi === undefined ? {} : { activityApi })}
         {...(paperApi === undefined ? {} : { paperApi })}
         {...(noticeApi === undefined ? {} : { noticeApi })}
         {...(modelPoolApi === undefined ? {} : { modelPoolApi })}

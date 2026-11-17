@@ -4,7 +4,7 @@ import type {
   CanvasObjectUploadResponse, CanvasOpenResponse, CanvasRestoreRequest,
   CanvasVerificationReceipt, CanvasVerifyRequest,
   CanvasVerificationListResponse,
-  CanvasResourcePolicy,
+  CanvasResourcePolicy, CanvasArchiveRequest, CanvasUnarchiveRequest, WorkbenchLifecycleCapabilities,
 } from '@physicsos/physics-workbench/protocol'
 import type { CanvasManifest, CanvasStoredValue, JsonObject, MergeConflict, WorkbenchObject } from '@physicsos/physics-workbench/types'
 import { parseCanvasAnnotations, type CanvasAnnotationScene } from '@physicsos/physics-whiteboard'
@@ -20,7 +20,8 @@ export interface CanvasListQuery {
   readonly limit?: number
   readonly search?: string
   readonly sort?: 'updated' | 'created' | 'title'
-  readonly deleted?: 'live' | 'deleted' | 'all'
+  readonly deleted?: 'live' | 'active' | 'archived' | 'deleted' | 'all'
+  readonly state?: 'active' | 'archived' | 'deleted' | 'all'
 }
 export type CanvasChanges = CanvasChangesResponse
 export interface CanvasRequestOwner {
@@ -139,7 +140,19 @@ const committed = (value: unknown): CanvasCommitResponse => {
   return { head, replayed: boolean(input.replayed, '/replayed'), ...(manifest === undefined ? {} : { manifest }) }
 }
 
+export const readLifecycleCapabilities = (value: unknown): WorkbenchLifecycleCapabilities => {
+  const input = record(value, '/capabilities')
+  exactKeys(input, ['schemaVersion', 'lifecycleBridge', 'lifecycleWritesEnabled', 'archive', 'delete', 'restore', 'generationRequired'], '/capabilities')
+  if (input.schemaVersion !== 1 || input.lifecycleBridge !== true || input.generationRequired !== true) throw new CanvasRequestError(502, 'LIFECYCLE_CAPABILITIES_INVALID', 'The lifecycle bridge capability is unsupported.', undefined, false)
+  return { schemaVersion: 1, lifecycleBridge: true, generationRequired: true,
+    lifecycleWritesEnabled: boolean(input.lifecycleWritesEnabled, '/capabilities/lifecycleWritesEnabled'), archive: boolean(input.archive, '/capabilities/archive'),
+    delete: boolean(input.delete, '/capabilities/delete'), restore: boolean(input.restore, '/capabilities/restore') }
+}
+
 export interface CanvasApi {
+  capabilities?(signal?: AbortSignal): Promise<WorkbenchLifecycleCapabilities>
+  archive?(id: string, request: CanvasArchiveRequest, signal?: AbortSignal): Promise<CanvasHead>
+  unarchive?(id: string, request: CanvasUnarchiveRequest, signal?: AbortSignal): Promise<CanvasHead>
   startAssistant(id: string, request: CanvasAssistantRequest, signal?: AbortSignal): Promise<CanvasAssistantJob>
   assistantJob(id: string, jobId: string, signal?: AbortSignal): Promise<CanvasAssistantJob>
   cancelAssistant(id: string, jobId: string, operationId: string, signal?: AbortSignal): Promise<CanvasAssistantJob>
@@ -249,6 +262,9 @@ export function createCanvasApi(
       return job
     }),
     forOwner: expected => createCanvasApi(fetcher, expected),
+    capabilities: signal => parseResponse(() => request(`${base}/capabilities`, 'GET', undefined, signal), readLifecycleCapabilities),
+    archive: (id, body, signal) => parseResponse(() => request(`${path(id)}/archive`, 'POST', body, signal), value => readCanvasHead(record(value, '').head)),
+    unarchive: (id, body, signal) => parseResponse(() => request(`${path(id)}/unarchive`, 'POST', body, signal), value => readCanvasHead(record(value, '').head)),
     resourcePolicy: signal => parseResponse(() => request(`${base}/policy`, 'GET', undefined, signal), readCanvasResourcePolicy),
     list: (query = {}, signal) => parseResponse(async () => {
       const params = new URLSearchParams()
@@ -256,7 +272,7 @@ export function createCanvasApi(
       if (query.limit !== undefined) params.set('limit', String(query.limit))
       if (query.search !== undefined) params.set('search', query.search)
       if (query.sort !== undefined) params.set('sort', query.sort)
-      if (query.deleted !== undefined) params.set('state', query.deleted)
+      if (query.state !== undefined || query.deleted !== undefined) params.set('state', query.state ?? query.deleted!)
       return request(`${base}?${params}`, 'GET', undefined, signal)
     }, value => {
       const input = record(value, '')
@@ -307,7 +323,7 @@ export function createCanvasApi(
             const head = readCanvasHead(change.head, `${at}/head`)
             const seq = integer(change.seq, `${at}/seq`, 1)
             if (seq !== head.changeSeq) throw new CanvasRequestError(502, 'RESPONSE_INVALID', 'Change sequence does not match its head.', undefined, false)
-            return { seq, head, operation: oneOf(change.operation, ['create', 'commit', 'rename', 'delete', 'restore', 'copy'], `${at}/operation`),
+            return { seq, head, operation: oneOf(change.operation, ['create', 'commit', 'rename', 'delete', 'restore', 'copy', 'archive', 'unarchive'], `${at}/operation`),
               mutationId: text(change.mutationId, `${at}/mutationId`, true) }
           }),
           cursor: integer(input.cursor, '/cursor'), hasMore: boolean(input.hasMore, '/hasMore'),

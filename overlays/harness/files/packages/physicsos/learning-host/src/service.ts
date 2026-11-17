@@ -76,7 +76,7 @@ const pageSize = (value: string | undefined): number => {
 const compareText = (left: string, right: string): number =>
   left === right ? 0 : left < right ? -1 : 1
 
-const pageOf = <T>(
+export const pageOf = <T>(
   rows: readonly T[],
   query: ListQuery,
   primaryOf: (row: T) => string,
@@ -157,8 +157,24 @@ const sceneSignature = (scene: {
     buildMode: scene.buildMode,
   })
 
+/** Mounted only by the gated bridge; the legacy storage schema remains unchanged. */
+export interface RecentSceneLifecycleAdapter {
+  withSceneWrite<T extends SavedSceneRecord>(actor: IdentityActor, id: string, generation: number | undefined, write: () => Promise<T>): Promise<T>
+  decorateScene(actor: IdentityActor, row: SavedSceneRecord): SavedSceneRecord
+  sceneVisible(actor: IdentityActor, id: string): boolean
+  deleteScene(actor: IdentityActor, id: string): Promise<void>
+}
+
+const sceneGenerationOf = (body: unknown): number | undefined => {
+  if (typeof body !== 'object' || body === null || !('recentGeneration' in body)) return undefined
+  const value = (body as { recentGeneration: unknown }).recentGeneration
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0)
+    throw new LearningError(400, 'BAD_REQUEST', '最近记录代际无效')
+  return value
+}
+
 export class LearningService {
-  constructor(private readonly domain: LearningDomain) {}
+  constructor(private readonly domain: LearningDomain, private readonly lifecycle?: RecentSceneLifecycleAdapter) {}
 
   private get attempts() {
     return this.domain.table('attempts')
@@ -227,28 +243,32 @@ export class LearningService {
     if (Buffer.byteLength(JSON.stringify([parsed.data.scene, parsed.data.originScene]), 'utf8') > MAX_SCENE_BYTES) {
       throw new LearningError(413, 'PAYLOAD_TOO_LARGE', '实验场景过大')
     }
-    const key = savedSceneKey(actor.userKey, id)
-    const existing = this.scenes.get(key)
-    if (existing !== undefined) {
-      if (!this.ownsScene(actor, existing)) {
-        throw new LearningError(404, 'NOT_FOUND', '场景不存在')
+    const write = async (): Promise<SavedSceneRecord> => {
+      const key = savedSceneKey(actor.userKey, id)
+      const existing = this.scenes.get(key)
+      if (existing !== undefined) {
+        if (!this.ownsScene(actor, existing)) {
+          throw new LearningError(404, 'NOT_FOUND', '场景不存在')
+        }
+        if (sceneSignature(existing) === sceneSignature(parsed.data)) return existing
       }
-      if (sceneSignature(existing) === sceneSignature(parsed.data)) return existing
+      const record: SavedSceneRecord = {
+        ...parsed.data,
+        userKey: actor.userKey,
+        schoolId: actor.schoolId,
+        savedAt: new Date().toISOString(),
+      }
+      await this.scenes.put(key, record)
+      return record
     }
-    const record: SavedSceneRecord = {
-      ...parsed.data,
-      userKey: actor.userKey,
-      schoolId: actor.schoolId,
-      savedAt: new Date().toISOString(),
-    }
-    await this.scenes.put(key, record)
-    return record
+    return this.lifecycle === undefined ? write() : this.lifecycle.withSceneWrite(actor, id, sceneGenerationOf(body), write)
   }
 
   listScenes(actor: IdentityActor, query: ListQuery = {}): Page<SavedSceneRecord> {
     const rows = [...this.scenes.entries()]
       .map(([, row]) => row)
-      .filter(row => this.ownsScene(actor, row))
+      .filter(row => this.ownsScene(actor, row) && (this.lifecycle?.sceneVisible(actor, row.sceneId) ?? true))
+      .map(row => this.lifecycle?.decorateScene(actor, row) ?? row)
     return pageOf(
       rows,
       query,
@@ -259,6 +279,7 @@ export class LearningService {
 
   async deleteScene(actor: IdentityActor, pathId: string): Promise<void> {
     const id = assertId(pathId)
+    if (this.lifecycle !== undefined) return this.lifecycle.deleteScene(actor, id)
     const key = savedSceneKey(actor.userKey, id)
     const existing = this.scenes.get(key)
     if (existing === undefined) return

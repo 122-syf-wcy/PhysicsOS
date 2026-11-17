@@ -41,13 +41,17 @@
 }
 
 .row {
-  position: relative;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
 }
 
 .item {
   display: grid;
-  grid-template-columns: 16px minmax(0, 1fr) auto auto;
+  grid-template-columns: 16px minmax(0, 1fr);
+  min-width: 0;
   align-items: center;
   column-gap: 8px;
   width: 100%;
@@ -109,43 +113,24 @@
   white-space: nowrap;
 }
 
-.row:hover .item {
-  padding-right: 30px;
-}
-
-.remove {
-  position: absolute;
-  top: 50%;
-  right: 6px;
-  transform: translateY(-50%);
-  display: none;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: none;
-  border-radius: 5px;
-  background: transparent;
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 14px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.row:hover .remove,
-.remove:focus-visible {
-  display: flex;
-}
-
-.remove:hover {
-  background: var(--dsw-alias-interactive-bg-active, rgba(0, 0, 0, 0.08));
-  color: var(--dsw-alias-label-primary);
-}
-
-.remove:focus-visible {
-  outline: 2px solid var(--physicsos-focus, #3b82f6);
-  outline-offset: 1px;
+.kind, .time { grid-column: 2; justify-self: start; }
+.kind { display: none; }
+.item:disabled { color: var(--dsw-alias-label-tertiary); cursor: default; }
+.actions { display: flex; align-items: center; gap: 4px; flex: none; }
+.action { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; min-height: 40px; padding: 0 6px; border: 0; border-radius: 8px; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 13px; cursor: pointer; }
+.action:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.action:disabled { opacity: .5; cursor: default; }
+.action:focus-visible, .filter select:focus-visible, .notice button:focus-visible, .confirmActions button:focus-visible, .foldHeading:focus-visible { outline: 2px solid var(--physicsos-focus, #3b82f6); outline-offset: 1px; }
+.filter { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 4px 10px 8px; color: var(--dsw-alias-label-secondary); font-size: 12px; }
+.filter select, .notice button, .confirmActions button { min-height: 40px; padding: 6px 10px; border: 1px solid var(--physics-glass-border-soft); border-radius: 8px; background: var(--physics-glass-fill); color: var(--physics-ink); font: inherit; }
+.notice { margin: 4px 10px 8px; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.notice button { margin-inline-start: 6px; cursor: pointer; }
+.confirmActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.confirmActions button { min-height: 44px; cursor: pointer; }
+@media (pointer: coarse), (max-width: 600px) {
+  .row { grid-template-columns: minmax(0, 1fr); }
+  .actions { justify-self: end; }
+  .action { min-width: 44px; min-height: 44px; }
 }
 
 .foldHeading { display:flex; align-items:center; justify-content:space-between; width:100%; padding:4px 0; border:0; background:none; color:inherit; font:inherit; cursor:pointer; text-align:start; }

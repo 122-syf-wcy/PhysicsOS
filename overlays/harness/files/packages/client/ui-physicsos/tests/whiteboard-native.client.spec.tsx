@@ -8,6 +8,21 @@ import { NativeEditor } from '../src/client/whiteboard/NativeEditor.tsx'
 import { whiteboardEn } from '../src/client/whiteboard/locales.ts'
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 describe('native editable whiteboard', () => {
+  it('keeps archived data visible but blocks drawing, selected-element deletion, text editing and save shortcuts', () => {
+    const scene = { elements: [{ id: 'label', type: 'text', text: 'Original F', x: 20, y: 20 }], appState: {} }
+    const change = vi.fn(); const save = vi.fn(); const undo = vi.fn()
+    const props = { documentId: 'archived', scene, history: { undo: [], redo: [] }, onUndo: undo, onRedo: undo, onChange: change, onSave: save, images: {}, clearRequest: 0, t: (key: keyof typeof whiteboardEn) => whiteboardEn[key] }
+    const view = render(<NativeEditor {...props} readOnly />)
+    expect(view.getByText('Original F')).toBeTruthy()
+    expect(view.getByRole('button', { name: 'Pen' })).toHaveProperty('disabled', true)
+    fireEvent.doubleClick(view.getByText('Original F'))
+    expect(view.queryByRole('textbox', { name: 'Edit text' })).toBeNull()
+    fireEvent.keyDown(view.getByRole('application'), { key: 'Delete' })
+    fireEvent.keyDown(view.getByRole('application'), { key: 's', ctrlKey: true })
+    fireEvent.keyDown(view.getByRole('application'), { key: 'z', ctrlKey: true })
+    view.rerender(<NativeEditor {...props} clearRequest={1} readOnly />)
+    expect(change).not.toHaveBeenCalled(); expect(save).not.toHaveBeenCalled(); expect(undo).not.toHaveBeenCalled()
+  })
   it.each(['text', 'freedraw'] as const)('creates a real %s element when only crypto.getRandomValues is available', tool => {
     const getRandomValues = globalThis.crypto.getRandomValues.bind(globalThis.crypto)
     vi.stubGlobal('crypto', { getRandomValues })

@@ -1,0 +1,137 @@
+{
+  "schemaVersion": 1,
+  "adapterVersion": "sound-guizhou-c-v1",
+  "original": {
+    "file": "sound-properties-guizhou-c.original.html",
+    "sha256": "9ab882e3643fc669d04138388b590f492151ca48c1022b61dc68627acb92403e",
+    "bytes": 3317789,
+    "sourcePath": "/Users/dongsiwei/Desktop/PhysicsOS/demos/knowledge-visualization/sound-properties-guizhou-c.html",
+    "generatedFrom": [
+      "/Users/dongsiwei/Desktop/PhysicsOS/demos/knowledge-visualization/course/lesson.mjs",
+      "/Users/dongsiwei/Desktop/PhysicsOS/demos/knowledge-visualization/course/layout.mjs",
+      "/Users/dongsiwei/Desktop/PhysicsOS/demos/knowledge-visualization/course/model.mjs",
+      "/Users/dongsiwei/Desktop/PhysicsOS/demos/knowledge-visualization/course/course.css",
+      "/Users/dongsiwei/Desktop/PhysicsOS/demos/knowledge-visualization/course/runtime.js",
+      "/Users/dongsiwei/Desktop/PhysicsOS/demos/knowledge-visualization/course/build-course.mjs"
+    ],
+    "copyPolicy": "Exact original import bytes; do not normalize, rebuild, or overwrite the source lesson or teacher preview."
+  },
+  "adapted": {
+    "file": "sound-properties-guizhou-c.adapted.html",
+    "sha256": "911b5f372a3623557095139cb0c4665b7b15a80c75110dfd81947ca51ff071d1",
+    "bytes": 3328723,
+    "standalone": true,
+    "executionDuringGeneration": false,
+    "generation": "Source-text substitutions only; no build script, lesson script, adapter execution, test runner, or browser was run."
+  },
+  "stage": {
+    "width": 1920,
+    "height": 1080
+  },
+  "slideIds": [
+    "cover",
+    "guizhou-question",
+    "goals",
+    "vibration",
+    "pitch-chapter",
+    "ruler-prediction",
+    "ruler-method",
+    "ruler-record",
+    "frequency-definition",
+    "wave-reading",
+    "pitch-lab",
+    "hearing-range",
+    "pitch-check",
+    "loudness-chapter",
+    "fork-method",
+    "amplitude-definition",
+    "amplitude-lab",
+    "distance",
+    "language",
+    "timbre-chapter",
+    "timbre-definition",
+    "timbre-lab",
+    "instrument-transfer",
+    "summary",
+    "guizhou-answer",
+    "compare-waves",
+    "calculation",
+    "quiz",
+    "exit",
+    "homework",
+    "credits"
+  ],
+  "sources": [
+    {
+      "id": "S1",
+      "title": "人教版物理八年级上册 · 声音的特性",
+      "url": "https://jymxkt.com/rht_soft_updata/jiaocai/%E7%89%A9%E7%90%86%E5%85%AB%E5%B9%B4%E7%BA%A7%E4%B8%8A%E5%86%8C-2024%E6%96%B0%E7%89%88%E6%9C%AC.pdf",
+      "evidenceDateInOriginal": "2026-11-16",
+      "referencedPdfSha256": "466b19607c4089b1b235c14ce67b698b6b937af0f1fddb3eac2d611fc55d27eb",
+      "scope": "教材第三方镜像，印刷页37–43；仅转述知识，不复制教材页面、照片或原图。不是出版社官方域名。"
+    },
+    {
+      "id": "S2",
+      "title": "2025年贵州省初中学业水平考试 · 理科综合物理第3题",
+      "url": "https://max.book118.com/html/2025/0605/8021052103007074.shtm",
+      "evidenceDateInOriginal": "2026-11-16",
+      "scope": "原作者读取第三方公开预览后改写题意；不分发原卷，不声称核验官方答案。本次适配未重新访问来源。"
+    },
+    {
+      "id": "S3",
+      "title": "PhysicsOS 角色文化与使用说明",
+      "url": "https://www.ihchina.cn/art/detail/id/13989.html",
+      "projectRightsReference": "design-refs/guizhou-ip-2026-11-14/CULTURE-AND-USAGE.md",
+      "scope": "贵州苗绣与苗族银饰灵感的当代组合设计；不代表侗族人物、特定村寨服饰、仪式复原、非遗传承人或官方联名。上游权利链以项目既有档案为准。"
+    },
+    {
+      "id": "S4",
+      "title": "本课插图、数值模型与许可",
+      "url": "https://github.com/zarazhangrui/frontend-slides",
+      "scope": "情境插图为项目生成素材或既有角色；不是实拍、非遗记录或测量数据。波形由明确参数计算，音频为浏览器合成。"
+    }
+  ],
+  "copyright": {
+    "courseware": "PhysicsOS 课程编排与教学模型；保留原文全部来源、文化说明及权利边界，不新增第三方授权声明。",
+    "fonts": [
+      {
+        "originalName": "Noto Sans SC",
+        "embeddedName": "PhysicsOS Course Sans",
+        "notice": "Copyright 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'",
+        "license": "SIL Open Font License 1.1",
+        "licenseText": "Embedded unchanged in both HTML copies.",
+        "manifestCopyright": "(c) 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'.",
+        "sourceRepository": "https://github.com/google/fonts",
+        "sourceRevision": "cc39c4c2c304bc368c9b7c311ea2bcc6013299fe",
+        "sourceSha256": "a3041811a78c361b1de50f953c805e0244951c21c5bd412f7232ef0d899af0da",
+        "embeddedSha256": "ca36519d2f303e4bee304e826ed8724f466e2b0eda861680756d5e0c815a8cd0"
+      },
+      {
+        "originalName": "Noto Serif SC",
+        "embeddedName": "PhysicsOS Course Serif",
+        "notice": "Copyright 2017-2024 Adobe (http://www.adobe.com/)",
+        "license": "SIL Open Font License 1.1",
+        "licenseText": "Embedded unchanged in both HTML copies.",
+        "manifestCopyright": "(c) 2017-2024 Adobe (http://www.adobe.com/).",
+        "sourceRepository": "https://github.com/google/fonts",
+        "sourceRevision": "cc39c4c2c304bc368c9b7c311ea2bcc6013299fe",
+        "sourceSha256": "050080d9255a86808f2945bffac582b31ef32bc36411ce29563b4961670c66f9",
+        "embeddedSha256": "6019ec906a0df546fb2dadd4059dc69c774f302b383f8450d752e00b66528e49"
+      }
+    ],
+    "fixedStageCSS": {
+      "source": "https://github.com/zarazhangrui/frontend-slides",
+      "notice": "Copyright (c) 2025 Zara Zhang",
+      "license": "MIT",
+      "licenseText": "Embedded unchanged in both HTML copies."
+    },
+    "artwork": "PhysicsOS 教学情境生成素材及项目既有角色；角色上游许可与文化使用边界仍以原项目权利档案为准。",
+    "rightsCaveat": "引用、知识改写和页面制作不等于获得第三方教材、试题、角色上游素材或非遗名称的任意商业许可。适配不扩大原有授权。"
+  },
+  "integrationBoundary": {
+    "originalRetention": "The service must store the original bytes separately; the adapter does not persist files.",
+    "bundle": "HTML examples remain standalone files; never inline these documents into a JavaScript bundle.",
+    "security": "Exact script CSP hashes, parent wrapper, service integration, and generic third-party HTML sanitization/bridge are intentionally not implemented here.",
+    "records": "Real observations remain separate from explicitly simulated model records. JSON is selectable text in a dialog, not a sandbox download."
+  }
+}

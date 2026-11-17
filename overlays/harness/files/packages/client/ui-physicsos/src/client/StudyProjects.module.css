@@ -11,7 +11,14 @@
 .layout { width: min(1120px, 100%); margin: 28px auto 0; }
 .folders { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
 .folders > input { grid-column: 1 / -1; justify-self: start; width: min(360px, 100%); border-radius: 999px; margin-bottom: 4px; }
-.folder { display: flex; flex-direction: column; gap: 16px; align-items: stretch; text-align: left; min-height: 190px; padding: 16px !important; border: 1px solid var(--physics-glass-border-soft); background: var(--physics-glass-fill); box-shadow: var(--physics-glass-inset), var(--physics-glass-shadow); }
+.folder { display: flex; flex-direction: column; gap: 16px; align-items: stretch; text-align: left; min-width: 0; width: 100%; min-height: 190px; padding: 16px !important; border: 1px solid var(--physics-glass-border-soft); background: var(--physics-glass-fill); box-shadow: var(--physics-glass-inset), var(--physics-glass-shadow); }
+.projectCard { display: flex; min-width: 0; flex-direction: column; gap: 8px; }
+.filter { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; grid-column: 1 / -1; color: var(--physics-ink-muted); font-size: 13px; }
+.notice { width: min(1120px, 100%); margin-inline: auto; color: var(--physics-ink-muted); font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
+.notice button, .error button { margin-inline-start: 8px; }
+.root button:focus-visible, .root input:focus-visible, .root select:focus-visible, .dialog button:focus-visible, .dialog input:focus-visible, .dialog select:focus-visible { outline: 2px solid var(--physicsos-focus, #3b82f6); outline-offset: 2px; }
+.root button, .dialog button { min-height: 44px; }
+.folder > span { overflow-wrap: anywhere; }
 .folderMark { display: grid; place-items: center; height: 90px; border-radius: 10px; color: var(--physics-accent-strong); background: var(--physics-accent-soft); }
 .folder small, .open small { display: block; margin-top: 7px; color: var(--physics-ink-muted); font-size: 12px; }
 .content { margin-top: 24px; min-width: 0; }

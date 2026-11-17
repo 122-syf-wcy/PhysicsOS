@@ -5,6 +5,7 @@ import type { CanvasHead, CanvasVerificationReceipt } from '@physicsos/physics-w
 import type { ObjectRef } from '@physicsos/physics-workbench/types'
 import { jsonObject } from '@physicsos/physics-workbench/json'
 import { canvasScopeKey } from './canvas-blob-store.ts'
+import { activitySuccessCapsuleSchema } from './activity-contract.ts'
 
 const id = z.string().min(1).max(128).regex(/^[A-Za-z0-9._-]+(?![\s\S])/)
 const digest = z.string().length(64).regex(/^[a-f0-9]{64}(?![\s\S])/)
@@ -12,7 +13,7 @@ const integer = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
 const date = z.string().datetime()
 const owner = { userKey: z.string().min(1).max(160), schoolId: z.string().min(1).max(64) }
 const ref = z.strictObject({ kind: z.enum(['scene', 'snapshot', 'dataset', 'history']), digest })
-const operation = z.enum(['create', 'commit', 'rename', 'delete', 'restore', 'copy'])
+const operation = z.enum(['create', 'commit', 'rename', 'delete', 'restore', 'copy', 'archive', 'unarchive'])
 
 const headFields = {
   id,
@@ -24,6 +25,7 @@ const headFields = {
   createdAt: date,
   updatedAt: date,
   deletedAt: date.optional(),
+  archivedAt: date.optional(),
 }
 const headWire = z.strictObject(headFields)
 const commit = z.strictObject({
@@ -31,6 +33,8 @@ const commit = z.strictObject({
   requestHash: digest,
   operation,
   head: headWire,
+  /** First effective save of an explicit editing session, committed with the head itself. */
+  activitySuccess: activitySuccessCapsuleSchema.optional(),
 })
 const historicalHead = z.strictObject({
   manifestDigest: digest,
@@ -66,7 +70,7 @@ const reservation = z.strictObject({
   id: digest,
   mutationId: id,
   requestHash: digest,
-  operation: z.enum(['create', 'commit', 'rename', 'delete', 'restore', 'copy', 'verify']),
+  operation: z.enum(['create', 'commit', 'rename', 'delete', 'restore', 'copy', 'verify', 'archive', 'unarchive']),
   roots: z.array(digest),
   allocations: z.array(allocation),
   verificationAttempt: z.strictObject({
@@ -178,6 +182,7 @@ export function canvasHeadOf(row: CanvasCommitCapsule['head']): CanvasHead {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     ...(row.deletedAt === undefined ? {} : { deletedAt: row.deletedAt }),
+    ...(row.archivedAt === undefined ? {} : { archivedAt: row.archivedAt }),
   }
 }
 

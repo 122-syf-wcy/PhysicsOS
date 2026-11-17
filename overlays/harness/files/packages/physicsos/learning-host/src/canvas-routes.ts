@@ -116,6 +116,10 @@ export function canvasRoutes(deps: CanvasRouteDependencies): (req: IncomingMessa
           reply(200, await deps.service.changes(actor, parameter(url, 'cursor') ?? '0', parameter(url, 'limit')))
           return
         }
+        if (segments.length === 1 && segments[0] === 'capabilities' && method === 'GET') {
+          reply(200, await deps.service.capabilities(actor))
+          return
+        }
         if (segments.length === 1 && segments[0] === 'policy' && method === 'GET') {
           reply(200, await deps.service.resourcePolicy(actor))
           return
@@ -167,6 +171,8 @@ export function canvasRoutes(deps: CanvasRouteDependencies): (req: IncomingMessa
           if (action === 'commit') { reply(200, await deps.service.commit(actor, id, await read())); return }
           if (action === 'rename') { reply(200, await deps.service.rename(actor, id, await read())); return }
           if (action === 'restore') { reply(200, await deps.service.restore(actor, id, await read())); return }
+          if (action === 'archive') { reply(200, await deps.service.archive(actor, id, await read())); return }
+          if (action === 'unarchive') { reply(200, await deps.service.unarchive(actor, id, await read())); return }
           if (action === 'copy') {
             const response = await deps.service.copy(actor, id, await read())
             reply(response.replayed ? 200 : 201, response)

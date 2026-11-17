@@ -44,6 +44,21 @@ def inventory_fixture(files, mode='host'):
 
 
 class RuntimeDeltaTests(unittest.TestCase):
+    def test_teaching_tools_marker_is_exported_and_labels_are_bound_to_the_manifest(self):
+        marker = runtime.TEACHING_TOOLS_MARKER
+        request = runtime.inventory_request({'changed': [marker], 'deleted': [], 'packageScopes': []})
+        self.assertIn(marker, request['exact'])
+        self.assertEqual(runtime.teaching_tools_bridge_label({}), '')
+        self.assertEqual(runtime.teaching_tools_bridge_label({marker: 'a' * 64}), 'teaching-tools-bridge-v1')
+        with self.assertRaises(ValueError):
+            runtime.teaching_tools_bridge_label({marker: 'unverified'})
+        record = {'revision': 'b' * 40, 'sourceDigest': 'c' * 64, 'codeDigest': 'd' * 64, 'teachingToolsBridge': 'teaching-tools-bridge-v1'}
+        labels = {'org.opencontainers.image.revision': record['revision'], 'physicsos.source.digest': record['sourceDigest'], 'physicsos.code.digest': record['codeDigest'], runtime.TEACHING_TOOLS_LABEL: record['teachingToolsBridge']}
+        metadata = {'id': 'sha256:' + 'e' * 64, 'labels': labels}
+        self.assertEqual(runtime.validate_image_labels(metadata, record), metadata['id'])
+        with self.assertRaises(ValueError):
+            runtime.validate_image_labels({**metadata, 'labels': {**labels, runtime.TEACHING_TOOLS_LABEL: ''}}, record)
+
     def test_incremental_build_replaces_inherited_manifest_byte_label(self):
         with tempfile.TemporaryDirectory() as temporary:
             output = pathlib.Path(temporary)

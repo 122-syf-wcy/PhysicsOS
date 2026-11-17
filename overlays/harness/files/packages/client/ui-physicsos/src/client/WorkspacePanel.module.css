@@ -1,0 +1,66 @@
+.dialog {
+  background-color: var(--dsw-alias-bg-base);
+  background-image: none;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 18px;
+  color: var(--physics-ink-muted);
+  font-size: 13px;
+}
+
+.toolbar select {
+  min-height: 44px;
+  max-width: 100%;
+  padding: 0 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  background: var(--dsw-specific-input-major);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+}
+
+.row { flex-wrap: wrap; }
+.rowActions { flex-wrap: wrap; justify-content: flex-end; }
+.rowActions button,
+.actions button { min-height: 44px; height: auto; }
+
+.danger { color: var(--dsw-alias-state-error-primary); }
+.danger:hover:not(:disabled) { border-color: var(--dsw-alias-state-error-primary); }
+
+.notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 16px 0 0;
+  padding: 12px 14px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--physics-ink-muted);
+}
+
+.confirmation { margin-top: 22px; line-height: 1.75; overflow-wrap: anywhere; }
+.confirmation h3 { margin: 0 0 10px; color: var(--physics-ink-strong); font-size: 17px; }
+.confirmation p { color: var(--physics-ink); font-size: 14px; }
+
+.dialog button:focus-visible,
+.toolbar select:focus-visible {
+  outline: 2px solid var(--physicsos-focus, #4b765e);
+  outline-offset: 3px;
+}
+
+@media (max-width: 600px) {
+  .dialog { padding: 18px; }
+  .rowActions { width: 100%; justify-content: flex-start; }
+  .rowActions button { flex: 1 1 auto; }
+  .actions { flex-wrap: wrap; }
+}

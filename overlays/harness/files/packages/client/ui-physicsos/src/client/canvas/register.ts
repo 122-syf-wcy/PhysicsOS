@@ -85,8 +85,9 @@ export function registerCanvasViews(
     create: (title: string) => announce(() => controller.create(title), 'canvas.created'),
     rename: (canvasId: string, title: string) => announce(() => controller.rename(canvasId, title), 'canvas.renamed'),
     duplicate: (canvasId: string, title?: string) => announce(() => controller.duplicate(canvasId, title), 'canvas.copied'),
-    remove: (canvasId: string) => announce(() => controller.remove(canvasId), 'canvas.deleted'),
-    restore: (canvasId: string) => announce(() => controller.restore(canvasId), 'canvas.restored'),
+    // Lifecycle views distinguish durable local pending from a server ACK; never toast success on local hide.
+    remove: controller.remove,
+    restore: controller.restore,
     importGraph: (input: unknown, title?: string) => announce(() => controller.importGraph(input, title), 'canvas.imported'),
   }
   const isCurrent = (): boolean => {

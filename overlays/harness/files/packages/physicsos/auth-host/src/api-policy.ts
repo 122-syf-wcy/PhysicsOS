@@ -194,6 +194,10 @@ export interface ApiPolicyDeps {
   actorFromRequest(req: IncomingMessage): ApiPolicyActor | null
   readonly store: ApiPolicyStore
   ensureWorkspace(actor: ApiPolicyActor, title?: string): Promise<ApiPolicyWorkspace>
+  /** Product projects retain native workspaces; legacy hard-delete must not bypass their lifecycle. */
+  projectDeleteAllowed?(actor: ApiPolicyActor, workspaceId: string): boolean
+  /** Deleted/archived product groups cannot accept new work; existing session reads stay available. */
+  projectOpenAllowed?(actor: ApiPolicyActor, workspaceId: string): boolean
   /**
    * Server-filesystem browsing (`host.listDirectory` / `pickDirectory` /
    * `createDirectory`). `deny` (the default) refuses every role — a hosted
@@ -797,10 +801,23 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
       }
     }
 
+    if (method === 'session.create') {
+      const workspaceId = workspaceIdOf(payload)
+      if (workspaceId !== undefined && deps.store.owns(actor, 'workspace', workspaceId) && deps.projectOpenAllowed?.(actor, workspaceId) === false) {
+        return rpcError(rpcId, 'workspace-unavailable', 'Restore this project before adding a conversation.', {})
+      }
+    }
     if (method === 'workspace.rename' || method === 'workspace.delete' || method === 'workspace.insertBefore') {
       const workspaceId = workspaceIdOf(payload)
       if (workspaceId === undefined || !deps.store.owns(actor, 'workspace', workspaceId)) {
         return denyNotFound(rpcId, 'workspace', workspaceId ?? '')
+      }
+      if (method !== 'workspace.delete' && deps.projectOpenAllowed?.(actor, workspaceId) === false) {
+        return rpcError(rpcId, 'workspace-unavailable', 'Restore this project before changing its grouping.', {})
+      }
+      if (method === 'workspace.delete' && deps.projectDeleteAllowed?.(actor, workspaceId) === false) {
+        return rpcError(rpcId, 'workspace-soft-delete-required',
+          'Use the project recycle bin; native workspace deletion is disabled for managed projects.', {})
       }
     }
     if (method === 'workspace.insertSessionBefore') {
@@ -811,6 +828,9 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
       }
       if (sessionId === undefined || (!admin(actor) && !deps.store.owns(actor, 'session', sessionId))) {
         return denyNotFound(rpcId, 'session', sessionId ?? '')
+      }
+      if (deps.projectOpenAllowed?.(actor, workspaceId) === false) {
+        return rpcError(rpcId, 'workspace-unavailable', 'Restore this project before adding a conversation.', {})
       }
     }
     if (method === 'workspace.archiveSession') {

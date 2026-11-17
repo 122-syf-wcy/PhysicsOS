@@ -6,6 +6,7 @@ import z from '@deepseek-ai/schemastery'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import { openExperimentDomain } from './domain.ts'
 import { ExperimentService } from './service.ts'
+import { createExperimentCatalogService, EXPERIMENT_CATALOG_SERVICE } from './catalog-service.ts'
 import { experimentAssets, experimentRoutes } from './routes.ts'
 import { identityOf } from './identity.ts'
 import { openDeveloperPromptDomain } from './prompt-domain.ts'
@@ -34,6 +35,8 @@ export type {
 } from './question-code-service.ts'
 export type { QuestionCodeContext } from './question-code-context.ts'
 export { ExperimentService } from './service.ts'
+export { EXPERIMENT_CATALOG_SERVICE } from './catalog-service.ts'
+export type { PhysicsosExperimentCatalog } from './catalog-service.ts'
 export type { PackageView, ExperimentOptions } from './service.ts'
 export { experimentRoutes, experimentAssets } from './routes.ts'
 export { experimentDomain, openExperimentDomain } from './domain.ts'
@@ -67,6 +70,7 @@ export async function apply(ctx: Context, config: Config = {}): Promise<() => Pr
     yield () => domain.close()
     yield () => service.close()
     await service.initialize()
+    ctx.provide(EXPERIMENT_CATALOG_SERVICE, createExperimentCatalogService())
     const promptDomain = await openDeveloperPromptDomain(ctx)
     const prompts = new DeveloperPromptService(promptDomain, PROMPT_SEED)
     yield () => promptDomain.close()

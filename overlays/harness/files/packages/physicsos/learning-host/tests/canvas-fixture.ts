@@ -17,7 +17,7 @@ import * as authHost from '../../auth-host/src/index.ts'
 import { userKey } from '../../auth-host/src/domain.ts'
 import type { PublicUser } from '../../auth-host/src/service.ts'
 import * as learningHost from '../src/index.ts'
-import { resolveCanvasConfig, type CanvasConfig, type CanvasLimits } from '../src/canvas-config.ts'
+import { resolveCanvasConfig, type CanvasConfig, type CanvasLimits, type TeachingToolsMode } from '../src/canvas-config.ts'
 import { canvasDomain } from '../src/canvas-domain.ts'
 import type { IdentityActor } from '../src/identity.ts'
 
@@ -38,6 +38,7 @@ export interface CanvasAccount {
 /** A supplied root is borrowed; otherwise each caller acquires its own mkdtemp root. */
 export interface CanvasFixtureOptions {
   readonly canvasLimits?: Partial<CanvasLimits>
+  readonly teachingToolsMode?: TeachingToolsMode
   readonly postgres?: { readonly connectionString: string; readonly schema: string }
   readonly root?: string
   readonly test?: Pick<TestContext, 'onTestFinished' | 'signal'>
@@ -125,7 +126,7 @@ export async function loadCanvasFixture(options: CanvasFixtureOptions = {}): Pro
   const registerCleanup = options.test?.onTestFinished ?? onTestFinished
   registerCleanup(() => close(), CANVAS_FIXTURE_TIMEOUT)
 
-  const config = resolveCanvasConfig({ canvasDshHome: root, ...(options.canvasLimits === undefined ? {} : { canvasLimits: options.canvasLimits }) })
+  const config = resolveCanvasConfig({ canvasDshHome: root, ...(options.teachingToolsMode === undefined ? {} : { teachingToolsMode: options.teachingToolsMode }), ...(options.canvasLimits === undefined ? {} : { canvasLimits: options.canvasLimits }) })
   const boot = async (): Promise<void> => {
     const configPath = join(root, 'cordis.yml')
     const bootModules = new Map(modules)
@@ -159,6 +160,7 @@ export async function loadCanvasFixture(options: CanvasFixtureOptions = {}): Pro
       "  name: '@deepseek-ai/dsh-learning-host'",
       '  config:',
       `    canvasDshHome: ${JSON.stringify(root)}`,
+      ...(options.teachingToolsMode === undefined ? [] : [`    teachingToolsMode: ${options.teachingToolsMode}`]),
       ...(options.canvasLimits === undefined ? [] : [`    canvasLimits: ${JSON.stringify(options.canvasLimits)}`]),
       '- id: auth-host',
       "  name: '@deepseek-ai/dsh-auth-host'",

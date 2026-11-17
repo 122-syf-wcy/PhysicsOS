@@ -24,6 +24,13 @@ const table = <T>() => {
   return {
     get: (id: string) => map.get(id),
     put: async (id: string, record: T) => { map.set(id, record) },
+    update: async (id: string, change: (current: T) => T) => {
+      const current = map.get(id)
+      if (current === undefined) throw new Error(`missing key: ${id}`)
+      const next = change(current)
+      map.set(id, next)
+      return next
+    },
     entries: () => map.entries(),
     delete: async (id: string) => map.delete(id),
   }

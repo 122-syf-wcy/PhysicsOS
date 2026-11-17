@@ -8,6 +8,8 @@
  * the code, so views can branch on `UNAUTHENTICATED` vs `INVALID_CREDENTIALS`.
  */
 
+import { AVATAR_OWNER_HEADER, isAvatarId, type AvatarId, type AvatarOwner } from './avatar-catalog.ts'
+
 export interface AuthApiError extends Error {
   readonly code: string
   /** `SCHOOL_REQUIRED`/`SCHOOL_AMBIGUOUS` carry the schools to pick from. */
@@ -65,6 +67,8 @@ export interface AuthUser {
   readonly username: string
   readonly displayName: string
   readonly avatarUrl?: string
+  /** Derived by the server from an exact catalog path; legacy URLs have no id. */
+  readonly avatarId?: AvatarId
   readonly role: 'STUDENT' | 'TEACHER' | 'SCHOOL_ADMIN' | 'SUPER_ADMIN'
 }
 
@@ -461,6 +465,8 @@ export interface AuthApi {
   searchSchools: (query: string) => Promise<{ schools: SchoolRow[] }>
   logout: () => Promise<{ ok: boolean }>
   me: () => Promise<{ user: AuthUser }>
+  /** Cookie-only self update. The expected owner only rejects stale account tabs. */
+  setAvatar: (avatarId: AvatarId, expectedOwner: AvatarOwner) => Promise<{ user: AuthUser }>
   forgotPassword: (input: { username: string; schoolId?: string }) => Promise<{ ok: boolean }>
   /** Redeem a one-time token; the host revokes every live session on success. */
   resetPassword: (input: { token: string; newPassword: string }) => Promise<{ ok: boolean }>
@@ -490,7 +496,24 @@ export function createAuthApi(): AuthApi {
       request(AUTH_BASE, `/schools?q=${encodeURIComponent(query)}`),
     login: input => post('/login', input),
     logout: () => post('/logout'),
-    me: () => request(AUTH_BASE, '/me'),
+    me: () => request(AUTH_BASE, '/me', { cache: 'no-store', credentials: 'same-origin' }),
+    setAvatar: async (avatarId, expectedOwner) => {
+      if (!isAvatarId(avatarId)) {
+        const error = new Error('请选择可用的头像') as AuthApiError
+        Object.defineProperty(error, 'code', { value: 'BAD_REQUEST' })
+        throw error
+      }
+      return request(AUTH_BASE, '/me/avatar', {
+        method: 'POST', credentials: 'same-origin', cache: 'no-store',
+        headers: {
+          'content-type': 'application/json',
+          [AVATAR_OWNER_HEADER]: encodeURIComponent(JSON.stringify({
+            id: expectedOwner.id, schoolId: expectedOwner.schoolId, username: expectedOwner.username,
+          })),
+        },
+        body: JSON.stringify({ avatarId }),
+      })
+    },
     forgotPassword: input => post('/password/forgot', input),
     resetPassword: input => post('/password/reset', input),
     reportLearning: async (input) => {

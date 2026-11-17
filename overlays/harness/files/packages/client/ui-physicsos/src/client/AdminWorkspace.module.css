@@ -1361,3 +1361,8 @@
 
 .poolChannels { display: grid; gap: 18px; }
 .poolChannels[hidden] { display: none; }
+
+.userIdentity { display: inline-flex; align-items: center; gap: 9px; min-height: 44px; }
+.userIdentity > span:last-child { overflow-wrap: anywhere; }
+.userIdentity:focus-visible { outline: 2px solid var(--dsw-focus-ring-color); outline-offset: 3px; border-radius: 6px; }
+.userDetailsHeading { display: flex; align-items: center; gap: 11px; }

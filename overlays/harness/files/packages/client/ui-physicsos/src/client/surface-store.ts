@@ -3,7 +3,8 @@ import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { PhysicsScene } from '@physicsos/physics-scene'
 import type { InstanceSource, TemplateReleaseIdentity } from '@physicsos/physics-workbench/types'
 
-import type { LearningApi } from './learning-api.ts'
+import { collectLearningPages, LearningApiError } from './learning-api.ts'
+import type { LearningApi, PersonalProductApi, ProductStateMutation, RecentSceneLifecycle } from './learning-api.ts'
 import { domainOfScene } from './physics/domain-of-scene.ts'
 
 /** Student-visible PhysicsOS surface; `admin` is the role-gated console. */
@@ -12,6 +13,7 @@ export type PhysicsSurfaceId =
   | 'lab'
   | 'canvas'
   | 'whiteboard'
+  | 'courseware'
   | 'projects'
   | 'record'
   | 'paper'
@@ -31,6 +33,7 @@ export const PHYSICS_PANEL_IDS = {
   lab: 'physicsos-lab' as MainPanelId,
   canvas: 'physicsos-canvas' as MainPanelId,
   whiteboard: 'physicsos-whiteboard' as MainPanelId,
+  courseware: 'physicsos-courseware' as MainPanelId,
   projects: 'physicsos-projects' as MainPanelId,
   paper: 'physicsos-paper' as MainPanelId,
   notice: 'physicsos-notice' as MainPanelId,
@@ -43,6 +46,7 @@ const SURFACE_BY_PANEL: Readonly<Record<string, PhysicsSurfaceId>> = {
   [PHYSICS_PANEL_IDS.lab]: 'lab',
   [PHYSICS_PANEL_IDS.canvas]: 'canvas',
   [PHYSICS_PANEL_IDS.whiteboard]: 'whiteboard',
+  [PHYSICS_PANEL_IDS.courseware]: 'courseware',
   [PHYSICS_PANEL_IDS.projects]: 'projects',
   [PHYSICS_PANEL_IDS.paper]: 'paper',
   [PHYSICS_PANEL_IDS.notice]: 'notice',
@@ -94,6 +98,7 @@ export interface PhysicsSurfaceState {
   surface: PhysicsSurfaceId
   canvasId?: string
   whiteboardId?: string
+  coursewareId?: string
   routeNotice?: string
   /** Changes only on an explicit handover, never a write-back. */
   sceneGeneration?: number
@@ -119,7 +124,7 @@ export interface PhysicsSurfaceState {
 }
 
 /** One recently opened real scene, restorable exactly as it was created. */
-export interface RecentExperimentEntry {
+export interface RecentExperimentEntry extends Partial<RecentSceneLifecycle> {
   readonly sceneId: string
   readonly title: string
   /** Lab domain the scene routes to; labels the entry in the sidebar. */
@@ -139,14 +144,35 @@ export interface RecentExperimentEntry {
 /** Snapshot the sidebar recent-space list subscribes to. */
 export interface RecentExperimentsState {
   items: readonly RecentExperimentEntry[]
+  archivedItems?: readonly RecentExperimentEntry[]
+  deletedItems?: readonly RecentExperimentEntry[]
+  pendingSceneIds?: readonly string[]
+  lifecycleEnabled?: boolean
+  lifecycleReadable?: boolean
+  accountKey?: string
+  notice?: string
+}
+
+export interface PhysicsSurfaceAccount {
+  /** Include tenant and immutable account id; never just a display name. */
+  readonly key: string
+  readonly storage?: SceneStorage
+}
+export interface PhysicsSurfaceOptions {
+  /** Re-evaluated before requests, publications and persistence, not just at boot. */
+  readonly account?: () => PhysicsSurfaceAccount | undefined
+  readonly recentLifecycleEnabled?: () => boolean
+  readonly recentLifecycleReadable?: () => boolean
+  readonly recentLifecycleReady?: () => boolean
 }
 
 const RECENT_SCENES_KEY = 'physicsos.recent-scenes'
 const RECENT_SCENES_DELETED_KEY = 'physicsos.recent-scenes.deleted'
 const RECENT_SCENES_LIMIT = 8
 
-type SceneStorage = Pick<Storage, 'getItem' | 'setItem'>
-type SavedSceneSync = Pick<LearningApi, 'listScenes' | 'putScene' | 'deleteScene'>
+export type SceneStorage = Pick<Storage, 'getItem' | 'setItem'>
+type SavedSceneSync = Pick<LearningApi, 'listScenes' | 'putScene' | 'deleteScene'> & Partial<PersonalProductApi>
+type PersonalRecentApi = SavedSceneSync & Pick<PersonalProductApi, 'listRecentScenes' | 'getRecentState' | 'mutateRecentScene'>
 
 /** Parse persisted entries defensively: a corrupt payload yields an empty list. */
 const readStoredScenes = (storage: SceneStorage | undefined): RecentExperimentEntry[] => {
@@ -162,7 +188,9 @@ const readStoredScenes = (storage: SceneStorage | undefined): RecentExperimentEn
           entry !== null &&
           typeof (entry as { sceneId?: unknown }).sceneId === 'string' &&
           typeof (entry as { title?: unknown }).title === 'string' &&
-          typeof (entry as { scene?: unknown }).scene === 'object',
+          typeof (entry as { updatedAt?: unknown }).updatedAt === 'string' &&
+          Number.isFinite(Date.parse((entry as { updatedAt: string }).updatedAt)) &&
+          typeof (entry as { scene?: unknown }).scene === 'object' && (entry as { scene?: unknown }).scene !== null,
       )
       .slice(0, RECENT_SCENES_LIMIT)
   } catch {
@@ -179,6 +207,7 @@ export interface PhysicsSurfaceController {
   /** Select a workbench without replacing the independently resumable lab scene. */
   openCanvas: (canvasId?: string) => void
   openWhiteboard: (whiteboardId?: string) => void
+  openCourseware: (coursewareId?: string) => void
   /**
    * Show a scene without adding it to 最近空间.
    *
@@ -203,6 +232,11 @@ export interface PhysicsSurfaceController {
   openExperimentPicker: () => void
   /** Drop a scene from 最近空间; an active scene keeps running in the Lab. */
   removeRecent: (sceneId: string) => void
+  restoreRecent: (sceneId: string) => void
+  archiveRecent: (sceneId: string) => void
+  unarchiveRecent: (sceneId: string) => void
+  /** Invalidate requests and reload only the new account's namespace. */
+  refreshAccount: () => void
   /** Merge account-backed scenes and migrate local-only entries. */
   sync: () => Promise<void>
   /**
@@ -223,6 +257,230 @@ export interface PhysicsSurfaceNavigation {
   selectSurface: (surface: PhysicsSurfaceId) => void
 }
 
+const RECENT_LIFECYCLE_KEY = 'physicsos.recent-scenes.lifecycle.v1'
+type PendingRecentMutation = ProductStateMutation & { readonly sceneId: string }
+const operationId = (): string => globalThis.crypto?.randomUUID?.() ?? `recent-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+const lifecycleOf = (entry: RecentExperimentEntry): RecentSceneLifecycle => ({
+  sceneId: entry.sceneId, recentGeneration: entry.recentGeneration ?? 0,
+  recentVersion: entry.recentVersion ?? 0, recentState: entry.recentState ?? 'live',
+  ...(entry.recentRestoreState === undefined ? {} : { recentRestoreState: entry.recentRestoreState }),
+})
+const validLifecycle = (value: unknown): value is RecentSceneLifecycle => {
+  if (value === null || typeof value !== 'object') return false
+  const row = value as Partial<RecentSceneLifecycle>
+  return typeof row.sceneId === 'string' && typeof row.recentGeneration === 'number'
+    && Number.isSafeInteger(row.recentGeneration) && row.recentGeneration >= 0
+    && typeof row.recentVersion === 'number' && Number.isSafeInteger(row.recentVersion) && row.recentVersion >= 0
+    && ['live', 'archived', 'deleted'].includes(row.recentState ?? '')
+}
+
+/** One account lifetime. Discarding it fences every queued request and late response. */
+function createPersonalRecentController(
+  recent: SnapshotStore<RecentExperimentsState>, storage: SceneStorage | undefined,
+  remote: PersonalRecentApi, alive: () => boolean, writesEnabled: () => boolean, accountKey?: string,
+) {
+  const entries = new Map(readStoredScenes(storage).map(entry => [entry.sceneId, entry]))
+  const heads = new Map<string, RecentSceneLifecycle>()
+  const pending = new Map<string, PendingRecentMutation[]>()
+  const writes = new Map<string, Promise<unknown>>()
+  const access = new Map<string, number>()
+  const suppressed = new Set<string>()
+  let notice: string | undefined
+  let syncing: Promise<void> | undefined
+  try {
+    const saved = JSON.parse(storage?.getItem(RECENT_LIFECYCLE_KEY) ?? 'null') as {
+      version?: unknown; items?: RecentExperimentEntry[]; heads?: RecentSceneLifecycle[]; pending?: PendingRecentMutation[]
+    } | null
+    if (saved?.version === 1) {
+      for (const item of saved.items ?? []) if (item !== null && typeof item === 'object' && typeof item.sceneId === 'string'
+        && typeof item.title === 'string' && typeof item.updatedAt === 'string' && Number.isFinite(Date.parse(item.updatedAt))
+        && item.scene !== null && typeof item.scene === 'object') entries.set(item.sceneId, item)
+      for (const head of saved.heads ?? []) if (validLifecycle(head)) heads.set(head.sceneId, head)
+      for (const op of saved.pending ?? []) if (op !== null && typeof op === 'object' && typeof op.sceneId === 'string' && typeof op.operationId === 'string'
+        && ['delete', 'restore', 'archive', 'unarchive', 'reopen'].includes(op.action)
+        && Number.isSafeInteger(op.expectedGeneration) && op.expectedGeneration >= 0
+        && Number.isSafeInteger(op.expectedVersion) && op.expectedVersion >= 0) {
+        pending.set(op.sceneId, [...pending.get(op.sceneId) ?? [], op])
+      }
+    }
+    // Migrate old, unacknowledged local deletes without ever clearing them on ACK.
+    const legacy = JSON.parse(storage?.getItem(RECENT_SCENES_DELETED_KEY) ?? '[]') as unknown
+    if (Array.isArray(legacy)) for (const id of legacy) if (typeof id === 'string' && !heads.has(id) && !pending.has(id)) {
+      pending.set(id, [{ sceneId: id, action: 'delete', expectedGeneration: 0, expectedVersion: 0, operationId: operationId() }])
+    }
+  } catch { /* A corrupt cache cannot change a server generation. */ }
+  const headOf = (id: string): RecentSceneLifecycle => heads.get(id) ?? lifecycleOf(entries.get(id) ?? { sceneId: id } as RecentExperimentEntry)
+  const effective = (id: string): RecentSceneLifecycle => {
+    let head = headOf(id)
+    for (const op of pending.get(id) ?? []) {
+      const state = op.action === 'delete' ? 'deleted' : op.action === 'archive' ? 'archived'
+        : op.action === 'restore' ? head.recentRestoreState ?? 'live' : 'live'
+      head = { sceneId: id, recentGeneration: op.expectedGeneration + 1, recentVersion: op.expectedVersion + 1,
+        recentState: state, ...(state === 'deleted' ? { recentRestoreState: head.recentState === 'deleted' ? head.recentRestoreState ?? 'live' : head.recentState } : {}) }
+    }
+    return head
+  }
+  const publish = (): void => {
+    if (!alive()) return
+    const all = [...entries.values()].map(entry => ({ ...entry, ...effective(entry.sceneId) }))
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.sceneId.localeCompare(a.sceneId))
+    recent.set({ items: all.filter(entry => entry.recentState === 'live').slice(0, RECENT_SCENES_LIMIT),
+      archivedItems: all.filter(entry => entry.recentState === 'archived'), deletedItems: all.filter(entry => entry.recentState === 'deleted'),
+      pendingSceneIds: [...pending.keys()], lifecycleEnabled: writesEnabled(), lifecycleReadable: true, ...(accountKey === undefined ? {} : { accountKey }),
+      ...(notice === undefined ? {} : { notice }) })
+    try {
+      storage?.setItem(RECENT_SCENES_KEY, JSON.stringify(all.filter(entry => entry.recentState === 'live').slice(0, RECENT_SCENES_LIMIT)))
+      storage?.setItem(RECENT_LIFECYCLE_KEY, JSON.stringify({ version: 1, items: all, heads: [...heads.values()], pending: [...pending.values()].flat() }))
+      storage?.setItem(RECENT_SCENES_DELETED_KEY, JSON.stringify([...new Set([...heads.keys(), ...pending.keys()])].filter(id => effective(id).recentState === 'deleted')))
+    } catch { /* The in-memory fence still holds; a server tombstone is never evicted. */ }
+  }
+  const enqueue = <T>(id: string, job: () => Promise<T>): Promise<T | undefined> => {
+    const next = (writes.get(id) ?? Promise.resolve()).catch(() => {}).then(() => alive() ? job() : undefined)
+    writes.set(id, next)
+    void next.finally(() => { if (writes.get(id) === next) writes.delete(id) }).catch(() => {})
+    return next
+  }
+  const conflict = (id: string, error: unknown): boolean => {
+    if (!(error instanceof LearningApiError) || ![403, 404, 409, 410].includes(error.status)) return false
+    if (validLifecycle(error.current) && error.current.sceneId === id) heads.set(id, error.current)
+    // Authorization errors do not become an offline retry under a different account.
+    if (error.status === 403 || error.status === 404) entries.delete(id)
+    pending.delete(id)
+    suppressed.add(id)
+    notice = error.message
+    publish()
+    return true
+  }
+  const flush = (id: string, freshOpen?: string): Promise<unknown> => enqueue(id, async () => {
+    if (!writesEnabled()) return
+    while (alive() && (pending.get(id)?.length ?? 0) > 0) {
+      let op = pending.get(id)![0]!
+      try {
+        // This read belongs to the user's CURRENT click only. Offline replay
+        // keeps its original CAS: it must not adopt a later unseen tombstone.
+        if (freshOpen === op.operationId) {
+          const result = await remote.getRecentState(id)
+          if (!alive()) return
+          heads.set(id, result.state)
+          const generationDelta = result.state.recentGeneration - op.expectedGeneration
+          const versionDelta = result.state.recentVersion - op.expectedVersion
+          const queue = pending.get(id)!
+          pending.set(id, queue.map(value => ({ ...value, expectedGeneration: value.expectedGeneration + generationDelta,
+            expectedVersion: value.expectedVersion + versionDelta })))
+          op = pending.get(id)![0]!
+          publish()
+          freshOpen = undefined
+        }
+        const { sceneId: _id, ...mutation } = op
+        const result = await remote.mutateRecentScene(id, mutation)
+        if (!alive()) return
+        heads.set(id, result.state)
+        const remaining = pending.get(id)!.slice(1)
+        if (remaining.length === 0) pending.delete(id); else pending.set(id, remaining)
+        const local = entries.get(id)
+        if (op.action === 'reopen' && local !== undefined) entries.set(id, { ...local, ...result.state })
+        else if (result.item !== undefined) entries.set(id, result.item)
+        else if (local !== undefined) entries.set(id, { ...local, ...result.state })
+        if (op.action === 'reopen') { access.set(id, result.state.recentGeneration); suppressed.delete(id) }
+        else if (op.action === 'delete') suppressed.add(id)
+        notice = undefined
+        publish()
+      } catch (error) {
+        if (!alive()) return
+        if (!conflict(id, error)) { notice = '整理操作已保存在本机，联网后会重试；不会重新上传已移除的记录。'; publish() }
+        throw error
+      }
+    }
+  })
+  const save = (id: string, known?: RecentExperimentEntry, restoredSnapshot = false): Promise<unknown> => enqueue(id, async () => {
+    if (pending.has(id) || !alive()) return
+    const entry = entries.get(id), head = headOf(id)
+    if (entry === undefined || head.recentState === 'deleted' || (suppressed.has(id) && !restoredSnapshot)) return
+    // A newer lifecycle may be read while an old Lab is still running. Never
+    // relabel that Lab's old snapshot with the newly read generation.
+    if ((entry.recentGeneration ?? 0) !== head.recentGeneration) return
+    if (known !== undefined && (known.recentGeneration ?? 0) === head.recentGeneration && entry.updatedAt <= known.updatedAt) return
+    try {
+      const saved = await remote.putScene({ ...entry, ...head })
+      if (!alive()) return
+      const latest = entries.get(id)
+      if (latest !== undefined && latest.updatedAt === entry.updatedAt && !pending.has(id)) entries.set(id, { ...latest, ...lifecycleOf(saved.item) })
+      publish()
+    } catch (error) { if (alive()) conflict(id, error); throw error }
+  })
+  const mutate = (id: string, action: ProductStateMutation['action'], fresh = false): void => {
+    if (!alive()) return
+    if (!writesEnabled()) { notice = '兼容模式保留现有整理状态；新的归档、删除与恢复尚未启用。'; publish(); return }
+    const current = effective(id)
+    const op: PendingRecentMutation = { sceneId: id, action, expectedGeneration: current.recentGeneration,
+      expectedVersion: current.recentVersion, operationId: operationId() }
+    pending.set(id, [...pending.get(id) ?? [], op])
+    if (action === 'delete') suppressed.add(id)
+    publish()
+    void flush(id, fresh ? op.operationId : undefined).then(() => save(id, undefined, action === 'restore')).catch(() => {})
+  }
+  const canUpdate = (id: string): boolean => {
+    const last = pending.get(id)?.at(-1)
+    if (last?.action === 'reopen') return true
+    const head = headOf(id)
+    return !suppressed.has(id) && head.recentState !== 'deleted'
+      && (access.get(id) === undefined || access.get(id) === head.recentGeneration)
+  }
+  publish()
+  return {
+    canUpdate,
+    suppress: (id: string): void => { suppressed.add(id) },
+    record: (entry: RecentExperimentEntry, explicit: boolean): void => {
+      if (!alive() || (!explicit && !canUpdate(entry.sceneId))) return
+      const head = effective(entry.sceneId)
+      if (!writesEnabled()) {
+        if (head.recentState === 'deleted' || suppressed.has(entry.sceneId)) return
+        entries.set(entry.sceneId, { ...entry, ...head })
+        if (explicit) access.set(entry.sceneId, head.recentGeneration)
+        publish()
+        void save(entry.sceneId).catch(() => {})
+        return
+      }
+      entries.set(entry.sceneId, { ...entry, ...head })
+      if (explicit) {
+        // An explicit visit is the only action (besides restore) allowed to
+        // establish a new access generation. A background edit cannot do so.
+        access.set(entry.sceneId, head.recentGeneration)
+        mutate(entry.sceneId, 'reopen', true)
+      } else {
+        publish()
+        void save(entry.sceneId).catch(() => {})
+      }
+    },
+    mutate,
+    refresh: publish,
+    remove: (id: string): void => { mutate(id, 'delete') },
+    sync: (): Promise<void> => {
+      syncing ??= (async () => {
+        await Promise.allSettled([...writes.values()])
+        const failures: unknown[] = []
+        for (const id of [...pending.keys()]) { try { await flush(id) } catch (error) { failures.push(error) } }
+        if (!alive()) return
+        const rows = await collectLearningPages(cursor => remote.listRecentScenes({ state: 'all', limit: 100, ...(cursor === undefined ? {} : { cursor }) }))
+        if (!alive()) return
+        const known = new Map(rows.map(row => [row.sceneId, row]))
+        for (const row of rows) {
+          const incoming = lifecycleOf(row), previous = headOf(row.sceneId), local = entries.get(row.sceneId)
+          if (incoming.recentGeneration < previous.recentGeneration || incoming.recentVersion < previous.recentVersion) continue
+          heads.set(row.sceneId, incoming)
+          if (!pending.has(row.sceneId) && (local === undefined || (local.recentGeneration ?? 0) !== incoming.recentGeneration || local.updatedAt <= row.updatedAt)) entries.set(row.sceneId, row)
+          if (incoming.recentState === 'deleted' || incoming.recentGeneration > previous.recentGeneration
+            || (access.has(row.sceneId) && access.get(row.sceneId) !== incoming.recentGeneration)) suppressed.add(row.sceneId)
+        }
+        publish()
+        for (const id of entries.keys()) { try { await save(id, known.get(id)) } catch (error) { failures.push(error) } }
+        if (failures.length > 0) throw failures[0]
+      })().finally(() => { syncing = undefined })
+      return syncing
+    },
+  }
+}
+
 /**
  * Create the Home / Lab / Record surface switch.
  *
@@ -233,14 +491,21 @@ export interface PhysicsSurfaceNavigation {
  * @returns the surface controller the chrome binds against.
  */
 export function createPhysicsSurfaceController(
-  storage?: SceneStorage,
+  initialStorage?: SceneStorage,
   remote?: SavedSceneSync,
   navigation?: PhysicsSurfaceNavigation,
+  options: PhysicsSurfaceOptions = {},
 ): PhysicsSurfaceController {
+  let account = options.account?.()
+  let storage = options.account === undefined ? initialStorage : account?.storage
+  let accountEpoch = 0
+  let capabilityWasReady = options.recentLifecycleReady?.() !== false
+  let personal: ReturnType<typeof createPersonalRecentController> | undefined
   let generation = 0
   const store = createSnapshotStore<PhysicsSurfaceState>({ surface: 'home' })
   const recent = createSnapshotStore<RecentExperimentsState>({
-    items: readStoredScenes(storage),
+    items: options.recentLifecycleReady?.() === false ? [] : readStoredScenes(storage),
+    ...(account === undefined ? {} : { accountKey: account.key }),
   })
   const readDeleted = (): Set<string> => {
     try {
@@ -253,12 +518,54 @@ export function createPhysicsSurfaceController(
     }
   }
   const deleted = readDeleted()
+  const currentAccount = (epoch = accountEpoch): boolean => epoch === accountEpoch
+    && (options.account === undefined || (account !== undefined && options.account()?.key === account.key))
+  const refreshAccount = (): void => {
+    if (options.account === undefined) return
+    const next = options.account()
+    if (next?.key === account?.key) return
+    accountEpoch += 1
+    account = next
+    storage = next?.storage
+    personal = undefined
+    activeSync = undefined
+    writes.clear()
+    deleted.clear()
+    for (const id of readDeleted()) deleted.add(id)
+    removedDuringSync.clear()
+    recent.set({ items: options.recentLifecycleReady?.() === false ? [] : readStoredScenes(storage), ...(next === undefined ? {} : { accountKey: next.key }) })
+    store.set({ surface: 'home' })
+  }
+  const recentReadable = (): boolean => options.recentLifecycleReadable?.() ?? options.recentLifecycleEnabled?.() ?? false
+  const personalRecent = (): ReturnType<typeof createPersonalRecentController> | undefined => {
+    refreshAccount()
+    const ready = options.recentLifecycleReady?.() !== false
+    if (!ready) {
+      capabilityWasReady = false
+      recent.set({ items: [], ...(account === undefined ? {} : { accountKey: account.key }) })
+      return undefined
+    }
+    if (!capabilityWasReady) {
+      capabilityWasReady = true
+      recent.set({ items: readStoredScenes(storage), ...(account === undefined ? {} : { accountKey: account.key }) })
+    }
+    if (!recentReadable() || !currentAccount()
+      || remote?.listRecentScenes === undefined || remote.getRecentState === undefined || remote.mutateRecentScene === undefined) return undefined
+    if (personal === undefined) {
+      const epoch = accountEpoch
+      personal = createPersonalRecentController(recent, storage, remote as PersonalRecentApi,
+        () => currentAccount(epoch) && recentReadable() && options.recentLifecycleReady?.() !== false,
+        () => options.recentLifecycleEnabled?.() === true, account?.key)
+    }
+    return personal
+  }
   // A server delete can be acknowledged while this sync still holds an older
   // remote page. Keep its tombstone until that reconciliation has completed.
   const removedDuringSync = new Set<string>()
 
   const persistItems = (items: readonly RecentExperimentEntry[]): void => {
-    recent.set({ items })
+    if (!currentAccount()) return
+    recent.set({ items, ...(account === undefined ? {} : { accountKey: account.key }) })
     try {
       storage?.setItem(RECENT_SCENES_KEY, JSON.stringify(items))
     } catch {
@@ -266,6 +573,7 @@ export function createPhysicsSurfaceController(
     }
   }
   const persistDeleted = (): void => {
+    if (!currentAccount()) return
     try {
       storage?.setItem(RECENT_SCENES_DELETED_KEY, JSON.stringify([...deleted]))
     } catch {
@@ -290,8 +598,12 @@ export function createPhysicsSurfaceController(
   }
   const writes = new Map<string, Promise<unknown>>()
   const enqueue = <T>(sceneId: string, write: () => Promise<T>): Promise<T> => {
+    const epoch = accountEpoch
     const previous = writes.get(sceneId) ?? Promise.resolve()
-    const job = previous.catch(() => {}).then(write)
+    const job = previous.catch(() => {}).then(() => {
+      if (!currentAccount(epoch) || options.recentLifecycleReady?.() === false) throw new Error('RECENT_ACCOUNT_CHANGED')
+      return write()
+    })
     writes.set(sceneId, job)
     void job.finally(() => {
       if (writes.get(sceneId) === job) writes.delete(sceneId)
@@ -309,12 +621,18 @@ export function createPhysicsSurfaceController(
     })
   let activeSync: Promise<void> | undefined
   const sync = (): Promise<void> => {
-    if (remote === undefined) return Promise.resolve()
+    const advanced = personalRecent()
+    if (advanced !== undefined) return advanced.sync()
+    if (remote === undefined || !currentAccount() || options.recentLifecycleReady?.() === false) return Promise.resolve()
+    const epoch = accountEpoch
     activeSync ??= (async () => {
       await Promise.allSettled([...writes.values()])
+      if (!currentAccount(epoch)) return
       for (const sceneId of deleted) {
         await remote.deleteScene(sceneId)
-        deleted.delete(sceneId)
+        if (!currentAccount(epoch)) return
+        // Retain the tombstone after acknowledgement; only an explicit new
+        // visit may clear the legacy local fence.
       }
       persistDeleted()
 
@@ -323,6 +641,7 @@ export function createPhysicsSurfaceController(
       let cursor: string | undefined
       for (let page = 0; page < 100; page += 1) {
         const result = await remote.listScenes(cursor === undefined ? {} : { cursor })
+        if (!currentAccount(epoch)) return
         remoteItems.push(...result.items)
         if (result.nextCursor === undefined) break
         if (seenCursors.has(result.nextCursor)) throw new Error('scene sync repeated a cursor')
@@ -334,18 +653,22 @@ export function createPhysicsSurfaceController(
       const sceneIds = recent.getSnapshot().items.map(entry => entry.sceneId)
       for (const sceneId of sceneIds) {
         const saved = await saveNewest(sceneId, remoteById.get(sceneId))
+        if (!currentAccount(epoch)) return
         if (saved !== undefined) remoteById.set(sceneId, saved.item)
       }
       const items = merge([remoteItems, [...remoteById.values()], recent.getSnapshot().items])
       persistItems(items)
     })().finally(() => {
+      if (accountEpoch !== epoch) return
       activeSync = undefined
       removedDuringSync.clear()
     })
     return activeSync
   }
 
-  const record = (sceneRef: PhysicsSceneRef): void => {
+  const record = (sceneRef: PhysicsSceneRef, explicit = false): void => {
+    const advanced = personalRecent()
+    if (!currentAccount() || options.recentLifecycleReady?.() === false || (advanced === undefined && !explicit && deleted.has(sceneRef.sceneId))) return
     const scene = sceneRef.scene
     const entry: RecentExperimentEntry = {
       sceneId: sceneRef.sceneId,
@@ -364,6 +687,7 @@ export function createPhysicsSurfaceController(
       ...(sceneRef.canvasSource === undefined ? {} : { canvasSource: sceneRef.canvasSource }),
       ...(sceneRef.canvasTemplateRelease === undefined ? {} : { canvasTemplateRelease: sceneRef.canvasTemplateRelease }),
     }
+    if (advanced !== undefined) { advanced.record(entry, explicit); return }
     deleted.delete(entry.sceneId)
     removedDuringSync.delete(entry.sceneId)
     persistDeleted()
@@ -380,6 +704,7 @@ export function createPhysicsSurfaceController(
   /* Show a scene without remembering it: one surface swap, shared by the
      reader's own opens and the agent's working visits. */
   const show = (surface: PhysicsSurfaceId, sceneRef: PhysicsSceneRef): void => {
+    refreshAccount()
     store.set({
       surface, sceneRef, sceneGeneration: ++generation,
       ...(sceneRef.buildMode === true ? { buildMode: true } : {}),
@@ -391,6 +716,7 @@ export function createPhysicsSurfaceController(
     store,
     recent,
     open: (surface, sceneRef) => {
+      refreshAccount()
       /* The active scene survives navigation: leaving for Home or the record
          and coming back resumes the same experiment. Only an explicit handover
          replaces it. The picker flag is deliberately dropped on every open, so
@@ -405,9 +731,10 @@ export function createPhysicsSurfaceController(
         ...(active?.buildMode === true || (sceneRef === undefined && previous.buildMode === true) ? { buildMode: true } : {}),
       })
       navigation?.selectSurface(surface)
-      if (sceneRef !== undefined) record(sceneRef)
+      if (sceneRef !== undefined) record(sceneRef, true)
     },
     openCanvas: (canvasId) => {
+      refreshAccount()
       const next = { ...store.getSnapshot(), surface: 'canvas' as const }
       delete next.canvasId
       delete next.routeNotice
@@ -416,6 +743,7 @@ export function createPhysicsSurfaceController(
       navigation?.selectSurface('canvas')
     },
     openWhiteboard: (whiteboardId) => {
+      refreshAccount()
       const next = { ...store.getSnapshot(), surface: 'whiteboard' as const }
       delete next.whiteboardId
       delete next.routeNotice
@@ -423,9 +751,19 @@ export function createPhysicsSurfaceController(
       store.set(whiteboardId === undefined ? next : { ...next, whiteboardId })
       navigation?.selectSurface('whiteboard')
     },
+    openCourseware: (coursewareId) => {
+      refreshAccount()
+      const next = { ...store.getSnapshot(), surface: 'courseware' as const }
+      delete next.coursewareId
+      delete next.routeNotice
+      delete next.experimentPicker
+      store.set(coursewareId === undefined ? next : { ...next, coursewareId })
+      navigation?.selectSurface('courseware')
+    },
     openTransient: show,
-    remember: record,
+    remember: ref => { record(ref) },
     updateScene: (scene) => {
+      refreshAccount()
       const current = store.getSnapshot()
       const previous = current.sceneRef
       if (previous === undefined || (previous.scene.id === scene.id && previous.scene.revision === scene.revision && previous.scene.metadata.experimentNotebook === scene.metadata.experimentNotebook)) return
@@ -440,13 +778,17 @@ export function createPhysicsSurfaceController(
         ...(previous.canvasTemplateRelease === undefined ? {} : { canvasTemplateRelease: previous.canvasTemplateRelease }),
       }
       store.set({ ...current, sceneRef })
+      const advanced = personalRecent()
+      if (advanced !== undefined && !advanced.canUpdate(previous.sceneId)) advanced.suppress(sceneRef.sceneId)
+      else if (advanced === undefined && deleted.has(previous.sceneId)) { deleted.add(sceneRef.sceneId); persistDeleted() }
       record(sceneRef)
     },
     openBuilder: (ref) => {
+      refreshAccount()
       const sceneRef: PhysicsSceneRef = { ...ref, buildMode: true }
       store.set({ surface: 'lab', sceneRef, sceneGeneration: ++generation, buildMode: true })
       navigation?.selectSurface('lab')
-      record(sceneRef)
+      record(sceneRef, true)
     },
     setRouteNotice: (message) => {
       // Clearing the notice must drop the key: exactOptionalPropertyTypes rejects `undefined`.
@@ -459,6 +801,10 @@ export function createPhysicsSurfaceController(
       navigation?.selectSurface('lab')
     },
     removeRecent: (sceneId) => {
+      const advanced = personalRecent()
+      if (advanced !== undefined) { advanced.remove(sceneId); return }
+      if (!currentAccount() || options.recentLifecycleReady?.() === false) return
+      const epoch = accountEpoch
       const items = recent.getSnapshot().items.filter(entry => entry.sceneId !== sceneId)
       if (items.length === recent.getSnapshot().items.length) return
       deleted.add(sceneId)
@@ -467,15 +813,22 @@ export function createPhysicsSurfaceController(
       persistItems(items)
       if (remote !== undefined) void enqueue(sceneId, () => remote.deleteScene(sceneId))
         .then(() => {
-          deleted.delete(sceneId)
+          if (!currentAccount(epoch)) return
+          // The legacy transport has no durable server head. Keep the local
+          // tombstone too; an active Lab cannot re-add it after an ACK.
           persistDeleted()
         })
         .catch(() => {
           /* Keep the tombstone so a later sync cannot resurrect the row. */
         })
     },
+    restoreRecent: sceneId => { personalRecent()?.mutate(sceneId, 'restore') },
+    archiveRecent: sceneId => { personalRecent()?.mutate(sceneId, 'archive') },
+    unarchiveRecent: sceneId => { personalRecent()?.mutate(sceneId, 'unarchive') },
+    refreshAccount: () => { refreshAccount(); personalRecent()?.refresh() },
     sync,
     adoptPanel: (panelId) => {
+      refreshAccount()
       const surface = physicsSurfaceOfPanel(panelId)
       if (surface === undefined) return
       const current = store.getSnapshot()

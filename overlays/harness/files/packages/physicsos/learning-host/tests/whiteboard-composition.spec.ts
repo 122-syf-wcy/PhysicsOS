@@ -10,7 +10,7 @@ describe('Loader mounted account whiteboard routes', () => {
     const created = await responseJson<WhiteboardRecord>(await f.call('POST', '/physicsos/whiteboards', { title: 'Class board', operationId: 'create-http' }, a))
     const url = `/physicsos/whiteboards/${created.document.id}`
     const scene = { elements: [{ id: 'pen', type: 'freedraw', x: 10, y: 20, points: [[1, 2], [1, 2], [3, 4]], pressures: [0.2, 0.6, 0.9] }], appState: { scrollX: -20 } }
-    const payload = { document: { ...created.document, scene }, expectedRevision: 1, operationId: 'save-http' }
+    const payload = { document: { ...created.document, scene }, expectedRevision: 1, expectedGeneration: created.generation, operationId: 'save-http' }
     const saved = await responseJson<WhiteboardRecord>(await f.call('PUT', url, payload, a))
     expect(saved.revision).toBe(2)
     expect(await responseJson(await f.call('PUT', url, payload, a))).toEqual(saved)

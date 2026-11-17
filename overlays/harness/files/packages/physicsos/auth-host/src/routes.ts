@@ -16,6 +16,7 @@ import {
 import { readSessionCookie, writeSessionCookie } from './cookies.ts'
 import { userKey } from './domain.ts'
 import { clientAddress, requestScheme } from './proxy.ts'
+import { AVATAR_OWNER_HEADER, avatarOwnerWire, type AvatarOwner } from './avatar-catalog.ts'
 
 const BODY_LIMIT = 16 * 1024
 
@@ -70,6 +71,21 @@ const segment = (parts: readonly string[], index: number): string => {
   const value = parts[index]
   if (value === undefined) throw new AuthError(400, 'BAD_REQUEST', '路径缺少参数')
   return value
+}
+
+/** Strict stale-account precondition, encoded the same way as Canvas/usage owner headers. */
+const avatarOwnerOf = (req: IncomingMessage): AvatarOwner => {
+  const raw = req.headers[AVATAR_OWNER_HEADER]
+  const count = req.rawHeaders.filter((_, index) => index % 2 === 0
+    && req.rawHeaders[index]?.toLowerCase() === AVATAR_OWNER_HEADER).length
+  if (count > 1 || typeof raw !== 'string' || raw.length === 0 || raw.length > 4096) {
+    throw new AuthError(400, 'BAD_REQUEST', '请确认当前头像选择所属账号')
+  }
+  try {
+    return avatarOwnerWire.parse(JSON.parse(decodeURIComponent(raw)))
+  } catch {
+    throw new AuthError(400, 'BAD_REQUEST', '头像账号校验信息无效')
+  }
 }
 
 /** Reads a capped JSON body; over-limit and non-JSON fail as BAD_REQUEST. */
@@ -223,11 +239,33 @@ export function authRoutes(service: AuthService):
       }
 
       if (method === 'GET' && path === '/me') {
+        res.setHeader('cache-control', 'private, no-store')
+        res.setHeader('x-content-type-options', 'nosniff')
         const resolved = credentialOf(service, req)
         if (resolved === null) {
           throw new AuthError(401, 'UNAUTHENTICATED', '未登录或会话已失效')
         }
         send(res, 200, { user: resolved.user })
+        return
+      }
+
+      if (method === 'POST' && path === '/me/avatar') {
+        res.setHeader('cache-control', 'private, no-store')
+        res.setHeader('x-content-type-options', 'nosniff')
+        checkCsrf(req, trustedProxies)
+        // Never downgrade a Bearer request to its ambient Cookie. Even a write
+        // token (or an actor resolved by another host) is not avatar authority.
+        if (req.headers.authorization !== undefined) {
+          throw new AuthError(401, 'UNAUTHENTICATED', '头像设置仅接受 Cookie 登录会话')
+        }
+        const token = readSessionCookie(req)
+        if (token === null || service.resolveSession(token) === null) {
+          throw new AuthError(401, 'UNAUTHENTICATED', '未登录或会话已失效')
+        }
+        if (url.search !== '') throw new AuthError(400, 'BAD_REQUEST', '头像设置不接受目标账号或查询参数')
+        const expectedOwner = avatarOwnerOf(req)
+        const user = await service.setOwnAvatar(token, await readJson(req), expectedOwner)
+        send(res, 200, { user })
         return
       }
 

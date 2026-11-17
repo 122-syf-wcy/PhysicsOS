@@ -14,6 +14,13 @@ const table = <T>() => {
   return {
     get: (id: string) => map.get(id),
     put: async (id: string, record: T) => { map.set(id, record) },
+    update: async (id: string, change: (current: T) => T) => {
+      const current = map.get(id)
+      if (current === undefined) throw new Error(`missing key: ${id}`)
+      const next = change(current)
+      map.set(id, next)
+      return next
+    },
     entries: () => map.entries(),
     delete: async (id: string) => map.delete(id),
   }
@@ -273,11 +280,11 @@ it('restores a reset token after a failed password write so it can be redeemed a
   const hash = passwordResetTokenHash(issued.token)
   const original = domain.table('password_reset_tokens').get(hash)
   const users = domain.table('users')
-  const put = users.put.bind(users)
-  users.put = async () => { throw new Error('password write failed') }
+  const update = users.update.bind(users)
+  users.update = async () => { throw new Error('password write failed') }
   await expect(service.submitPasswordReset({ token: issued.token, newPassword: 'new-password' })).rejects.toThrow('password write failed')
   expect(domain.table('password_reset_tokens').get(hash)).toEqual(original)
-  users.put = put
+  users.update = update
   await expect(service.submitPasswordReset({ token: issued.token, newPassword: 'new-password' })).resolves.toBeUndefined()
 }, 20_000)
 
@@ -292,7 +299,7 @@ it('preserves administrator cancellation when a concurrent password write rolls 
   let started!: () => void
   const entered = new Promise<void>((resolve) => { started = resolve })
   const blocked = new Promise<void>((resolve) => { release = resolve })
-  domain.table('users').put = async () => { started(); await blocked; throw new Error('failed') }
+  domain.table('users').update = async () => { started(); await blocked; throw new Error('failed') }
   const resetting = service.submitPasswordReset({ token: issued.token, newPassword: 'new-password' }).catch((error: unknown) => error)
   await entered
   const cancelling = service.cancelPasswordReset(admin, requestId)

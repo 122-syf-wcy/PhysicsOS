@@ -1,7 +1,7 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
 import type {
   CanvasCommitRequest, CanvasCreateRequest, CanvasDeleteRequest, CanvasHead,
-  CanvasOpenResponse, CanvasRestoreRequest,
+  CanvasOpenResponse, CanvasRestoreRequest, CanvasArchiveRequest, CanvasUnarchiveRequest,
 } from '@physicsos/physics-workbench/protocol'
 import type { CanvasManifest, JsonObject, JsonValue, MergeConflict, WorkbenchObject } from '@physicsos/physics-workbench/types'
 import { parseObject } from '@physicsos/physics-workbench/codec'
@@ -21,6 +21,8 @@ export type PendingCanvasMutation =
   | (SealedMutation & { readonly kind: 'commit'; readonly request: CanvasCommitRequest; readonly manifest: CanvasManifest })
   | (SealedMutation & { readonly kind: 'delete'; readonly request: CanvasDeleteRequest })
   | (SealedMutation & { readonly kind: 'restore'; readonly request: CanvasRestoreRequest })
+  | (SealedMutation & { readonly kind: 'archive'; readonly request: CanvasArchiveRequest })
+  | (SealedMutation & { readonly kind: 'unarchive'; readonly request: CanvasUnarchiveRequest })
 
 export interface CanvasConflictCopy {
   readonly base: CanvasManifest
@@ -90,9 +92,24 @@ export interface LocalCanvasRecord {
   readonly documentHistory?: CanvasDocumentHistory
   readonly pendingNoteDrafts?: readonly CanvasPendingNoteDraft[]
   readonly deleted: boolean
+  /** Optional for old IDB records; absence inherits the last server head. */
+  readonly archived?: boolean
+  readonly editingSessionId?: string
   readonly savedAt: string
   readonly error?: CanvasClientError
 }
+
+export const canvasArchived = (record: LocalCanvasRecord): boolean => record.archived ?? record.head?.archivedAt !== undefined
+/** A requested unarchive/restore remains read-only until the server ACK. */
+export const canvasReadOnly = (record: LocalCanvasRecord): boolean => record.deleted || canvasArchived(record) || record.head?.deletedAt !== undefined || record.head?.archivedAt !== undefined ||
+  [...(record.conflict?.conflicts ?? []), ...(record.localConflict?.conflicts ?? [])].some(conflict => conflict.path === '/lifecycle')
+export const canvasLifecyclePending = (record: LocalCanvasRecord): boolean =>
+  record.pending !== undefined && !['create', 'commit'].includes(record.pending.kind) || record.head !== undefined &&
+    (record.deleted !== (record.head.deletedAt !== undefined) || canvasArchived(record) !== (record.head.archivedAt !== undefined))
+export const canvasLifecycleFields = (record: LocalCanvasRecord | undefined, head: CanvasHead): Pick<LocalCanvasRecord, 'deleted' | 'archived'> => ({
+  deleted: head.deletedAt !== undefined,
+  ...(record?.archived === undefined && head.archivedAt === undefined ? {} : { archived: head.archivedAt !== undefined }),
+})
 
 interface StoredObject {
   readonly key: string

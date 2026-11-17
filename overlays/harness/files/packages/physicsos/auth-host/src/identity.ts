@@ -14,7 +14,7 @@
  */
 
 import type { IncomingMessage } from 'node:http'
-import type { AuthService } from './service.ts'
+import type { ActivityRoster, AuthService, AvatarAdoptionAccount } from './service.ts'
 
 /**
  * Cordis service name. A consumer injects this exact string — see
@@ -53,6 +53,10 @@ export interface PhysicsosIdentity {
   sessionOwnerKey(sessionId: string): string | undefined
   usageSessionOwner(sessionId: string): { readonly schoolId: string; readonly userKey: string } | undefined
   usageOwnedSessions(): readonly { readonly sessionId: string; readonly schoolId: string; readonly userKey: string }[]
+  /** Internal safe roster only; the activity host must still authorize each request. */
+  activityRoster(actor: IdentityActor): ActivityRoster
+  /** Current adoption facts, no counters, URLs, password hashes, or other secrets. */
+  avatarAdoptionSnapshot(): readonly AvatarAdoptionAccount[]
   /**
    * Append to the platform audit ledger. The school is taken from the actor
    * rather than the caller, so a host cannot file an action under a tenant it
@@ -80,5 +84,7 @@ export const createIdentityService = (service: AuthService): PhysicsosIdentity =
   sessionOwnerKey: sessionId => service.sessionOwnerKey(sessionId),
   usageSessionOwner: sessionId => service.usageSessionOwner(sessionId),
   usageOwnedSessions: () => service.usageOwnedSessions(),
+  activityRoster: actor => service.activityRoster(actor),
+  avatarAdoptionSnapshot: () => service.avatarAdoptionSnapshot(),
   record: (actor, action, target, detail) => service.auditAs(actor, action, target, detail),
 })

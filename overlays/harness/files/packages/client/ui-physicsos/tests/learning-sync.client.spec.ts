@@ -96,6 +96,24 @@ const api = (): LearningApi & {
 }
 
 describe('client personal learning sync', () => {
+  it('fences the server-resolved owner at request time and discards a late prior-account response', async () => {
+    let current: { schoolId: string; username: string } | undefined = { schoolId: 'GZU', username: 'alice' }
+    let finish!: (response: Response) => void
+    const calls: RequestInit[] = []
+    const client = createLearningApi({ owner: () => current, fetch: async (_url, init) => {
+      calls.push(init ?? {})
+      return await new Promise(resolve => { finish = resolve })
+    } })
+    const result = client.listProjectStates({ state: 'all' })
+    await vi.waitFor(() => { expect(calls).toHaveLength(1) })
+    expect(new Headers(calls[0]?.headers).get('x-physicsos-learning-owner')).toBe(encodeURIComponent(JSON.stringify(current)))
+    current = { schoolId: 'GZNU', username: 'bob' }
+    finish(new Response(JSON.stringify({ items: [{ projectId: 'alice-private' }] }), { status: 200 }))
+    await expect(result).rejects.toMatchObject({ code: 'LEARNING_OWNER_MISMATCH' })
+    current = undefined
+    await expect(client.listScenes()).rejects.toMatchObject({ code: 'LEARNING_OWNER_REQUIRED' })
+    expect(calls).toHaveLength(1)
+  })
   it('encodes ids and cursors and preserves the host error code', async () => {
     const calls: { url: string; init: RequestInit | undefined }[] = []
     const fakeFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
@@ -390,7 +408,7 @@ it('does not resurrect a scene deleted and acknowledged during another scene upl
   controller.removeRecent('B')
   await vi.waitFor(() => {
     expect(remote.scenes.has('B')).toBe(false)
-    expect(values.get('physicsos.recent-scenes.deleted')).toBe('[]')
+    expect(values.get('physicsos.recent-scenes.deleted')).toBe('["B"]')
   })
   releaseA.resolve()
   await syncing

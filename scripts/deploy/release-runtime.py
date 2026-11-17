@@ -41,6 +41,8 @@ LEGACY_EXACT = {
     'student-preset/bundle.patch.yml': f'{HARNESS}/packages/bundle/web-app/presets/physics-student.patch.yml',
 }
 DEFAULT_TRUST = {'entryRoot': HARNESS, 'manifestPath': f'{HARNESS}/packages/physicsos/plugin-center/plugins/manifest.json', 'publicKeyPath': f'{HARNESS}/packages/physicsos/plugin-center/plugins/physicsos-plugin-signing.pub'}
+TEACHING_TOOLS_MARKER = 'packages/teaching-tools-capabilities.json'
+TEACHING_TOOLS_LABEL = 'physicsos.teaching-tools.bridge'
 
 
 def sha(data):
@@ -111,7 +113,7 @@ def normalize_manifest(value):
         if target in files and files[target] != checksum:
             raise ValueError('Conflicting legacy ownership aliases')
         files[target] = checksum
-    return {'schemaVersion': 2, 'ownership': 'physicsos-runtime/2', 'files': dict(sorted(files.items())), 'codeDigest': sha(canonical(files)), 'revision': value.get('revision', value.get('mainRevision')), 'sourceDigest': value.get('sourceDigest'), 'pluginTrust': value.get('pluginTrust', DEFAULT_TRUST), 'legacyFileCount': len(source), 'originSchema': value['schemaVersion'], **{key: value[key] for key in ['filesystem', 'filesystemDigest', 'runtimeConfigDigest', 'systemFilesystem', 'systemFSdigest', 'registryReuse', 'registryReuseDigest', 'baseImage'] if key in value}}
+    return {'schemaVersion': 2, 'ownership': 'physicsos-runtime/2', 'files': dict(sorted(files.items())), 'codeDigest': sha(canonical(files)), 'revision': value.get('revision', value.get('mainRevision')), 'sourceDigest': value.get('sourceDigest'), 'pluginTrust': value.get('pluginTrust', DEFAULT_TRUST), 'legacyFileCount': len(source), 'originSchema': value['schemaVersion'], **{key: value[key] for key in ['filesystem', 'filesystemDigest', 'runtimeConfigDigest', 'systemFilesystem', 'systemFSdigest', 'registryReuse', 'registryReuseDigest', 'baseImage', 'teachingToolsBridge'] if key in value}}
 
 
 def compute_delta(base, candidate, owned):
@@ -435,9 +437,20 @@ def verify_context(context, record):
     return len(actual)
 
 
+def teaching_tools_bridge_label(files):
+    checksum = files.get(TEACHING_TOOLS_MARKER)
+    if checksum is None:
+        return ''
+    if not isinstance(checksum, str) or not HEX64.fullmatch(checksum):
+        raise ValueError('Teaching tools capability marker is not covered by the runtime manifest')
+    return 'teaching-tools-bridge-v1'
+
+
 def validate_image_labels(metadata, record):
     labels = metadata.get('labels') or {}
     expected = {'org.opencontainers.image.revision': record['revision'], 'physicsos.source.digest': record['sourceDigest'], 'physicsos.code.digest': record['codeDigest']}
+    if 'teachingToolsBridge' in record:
+        expected[TEACHING_TOOLS_LABEL] = record['teachingToolsBridge']
     if record.get('filesystemDigest'):
         expected.update({'physicsos.filesystem.digest': record['filesystemDigest'], 'physicsos.runtime-config.digest': record['runtimeConfigDigest']})
         if record.get('systemFSdigest'): expected['physicsos.system-fs.digest'] = record['systemFSdigest']
@@ -649,7 +662,7 @@ def selections_for(plan):
         selections.append({'root': 'packages/' + name, 'mode': 'source', 'items': ['src', 'package.json'], 'ownedItems': ['src', 'package.json']})
     if plan.get('vite'):
         selections.append({'root': HARNESS + '/apps/web/dist', 'items': ['.'], 'ownedItems': ['.']})
-    startup = {'overlays/harness/files/packages/physicsos/health-host/deployment.patch.yml', 'package.json', 'scripts/docker-entrypoint.mjs', 'scripts/healthcheck.mjs', 'scripts/deploy/wait-for-ready.mjs', 'scripts/deploy/migrate-json-postgres.mjs'}
+    startup = {'overlays/harness/files/packages/physicsos/health-host/deployment.patch.yml', 'package.json', TEACHING_TOOLS_MARKER, 'scripts/docker-entrypoint.mjs', 'scripts/healthcheck.mjs', 'scripts/deploy/wait-for-ready.mjs', 'scripts/deploy/migrate-json-postgres.mjs'}
     exact.extend(sorted(startup & set(plan.get('changed', []) + plan.get('deleted', []))))
     return selections, exact
 
@@ -972,12 +985,15 @@ def export_runtime(args):
         manifest = {'schemaVersion': 2, 'ownership': 'physicsos-runtime/2', 'baseImage': args.base_image, 'revision': args.revision, 'mainRevision': args.revision, 'sourceDigest': source['sourceDigest'], 'codeDigest': delta['codeDigest'], 'files': delta['files'], 'pluginTrust': {**trust, **candidate_signature}}
         if reuse:
             manifest.update({'registryReuse': reuse, 'registryReuseDigest': reuse['proofDigest']})
+        manifest['teachingToolsBridge'] = teaching_tools_bridge_label(delta['files'])
         for name in METADATA:
             atomic_json(app / name, manifest)
-        dockerfile = '\n'.join(['ARG BASE_IMAGE=scratch', 'FROM ${BASE_IMAGE}', 'ARG REVISION', 'ARG SOURCE_DIGEST', 'ARG CODE_DIGEST', 'USER root', 'COPY --chown=999:999 app/ /app/', 'RUN node /app/physicsos-runtime-update.cjs', 'USER physicsos', 'LABEL org.opencontainers.image.revision=$REVISION', 'LABEL physicsos.source.digest=$SOURCE_DIGEST', 'LABEL physicsos.code.digest=$CODE_DIGEST', ''])
+        bridge = teaching_tools_bridge_label(delta['files'])
+        dockerfile = '\n'.join(['ARG BASE_IMAGE=scratch', 'FROM ${BASE_IMAGE}', 'ARG REVISION', 'ARG SOURCE_DIGEST', 'ARG CODE_DIGEST', 'USER root', 'COPY --chown=999:999 app/ /app/', 'RUN node /app/physicsos-runtime-update.cjs', 'USER physicsos', 'LABEL org.opencontainers.image.revision=$REVISION', 'LABEL physicsos.source.digest=$SOURCE_DIGEST', 'LABEL physicsos.code.digest=$CODE_DIGEST', f'LABEL {TEACHING_TOOLS_LABEL}="{bridge}"', ''])
         (temporary / 'Dockerfile').write_text(dockerfile)
         context_hashes = {str(path.relative_to(temporary)): sha(path.read_bytes()) for path in temporary.rglob('*') if path.is_file()}
         record = {**identity, 'codeDigest': delta['codeDigest'], 'context': str(output / 'context'), 'contextHashes': context_hashes, 'changedFiles': delta['changed'], 'deletedFiles': delta['deleted'], 'baseExtraFiles': extra, 'managedFileCount': len(delta['files']), 'bytesExported': sum(path.stat().st_size for path in temporary.rglob('*') if path.is_file()), 'legacyFilesNormalized': base['legacyFileCount']}
+        record['teachingToolsBridge'] = bridge
         if reuse:
             record['registryReuseDigest'] = reuse['proofDigest']
             record['registryRequests'] = len(reuse['requests'])
@@ -1311,6 +1327,7 @@ def export_full_runtime(args):
     atomic_json(output / 'owner.json', owner)
     context = output / 'context'
     context.mkdir(mode=0o700, exist_ok=True)
+    manifest['teachingToolsBridge'] = teaching_tools_bridge_label(manifest['files'])
     atomic_json(context / 'physicsos-runtime-manifest.json', manifest)
     atomic_json(context / 'canvas-source-manifest.json', manifest)
     dockerfile = '\n'.join(['ARG BASE_IMAGE=scratch', 'FROM ${BASE_IMAGE}', 'ARG REVISION', 'ARG SOURCE_DIGEST', 'ARG CODE_DIGEST',
@@ -1318,6 +1335,8 @@ def export_full_runtime(args):
                           'USER physicsos', 'LABEL org.opencontainers.image.revision=$REVISION',
                           'LABEL physicsos.source.digest=$SOURCE_DIGEST', 'LABEL physicsos.code.digest=$CODE_DIGEST',
                           'LABEL physicsos.role=verified-full-runtime', ''])
+    bridge = teaching_tools_bridge_label(manifest['files'])
+    dockerfile += f'LABEL {TEACHING_TOOLS_LABEL}="{bridge}"\n'
     if manifest.get('filesystemDigest'):
         dockerfile += 'ARG FILESYSTEM_DIGEST\nARG RUNTIME_CONFIG_DIGEST\nLABEL physicsos.filesystem.digest=$FILESYSTEM_DIGEST\nLABEL physicsos.runtime-config.digest=$RUNTIME_CONFIG_DIGEST\n'
     if manifest.get('systemFSdigest'):
@@ -1326,7 +1345,7 @@ def export_full_runtime(args):
     (context / 'Dockerfile').write_text(dockerfile)
     result = {**owner, **{key: manifest[key] for key in ['filesystemDigest', 'runtimeConfigDigest', 'systemFSdigest'] if key in manifest}, 'codeDigest': manifest['codeDigest'], 'checkedFiles': len(manifest['files']),
               'manifestSha256': sha((context / 'physicsos-runtime-manifest.json').read_bytes()),
-              'dockerfileSha256': sha(dockerfile), 'context': str(context.resolve())}
+              'dockerfileSha256': sha(dockerfile), 'context': str(context.resolve()), 'teachingToolsBridge': bridge}
     atomic_json(output / 'export.json', result)
     return result
 

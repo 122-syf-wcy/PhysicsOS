@@ -30,8 +30,8 @@ async function fixture(overrides: Partial<WhiteboardModel> = {}, settings: Parti
 }
 async function withImage(f: Awaited<ReturnType<typeof fixture>>) {
   const record = await f.service.create(a, { title: 'Lesson', operationId: 'create' })
-  const source = await f.service.upload(a, record.document.id, { mimeType: 'image/png', base64: Buffer.from('exact-original-bytes').toString('base64'), operationId: 'image' })
-  const saved = await f.service.save(a, record.document.id, { document: { ...record.document, sourceImages: [source] }, expectedRevision: 1, operationId: 'attach-image' })
+  const source = await f.service.upload(a, record.document.id, { mimeType: 'image/png', base64: Buffer.from('exact-original-bytes').toString('base64'), operationId: 'image', expectedRevision: record.revision, expectedGeneration: record.generation })
+  const saved = await f.service.save(a, record.document.id, { document: { ...record.document, sourceImages: [source] }, expectedRevision: 1, expectedGeneration: 1, operationId: 'attach-image' })
   return { record: saved, source }
 }
 const waitReady = async (service: WhiteboardService, boardId: string, jobId: string) => { for (let i = 0; i < 80; i++) { const job = await service.readGeneration(a, boardId, jobId); if (['ready', 'error', 'cancelled'].includes(job.status)) return job; await new Promise(resolve => setTimeout(resolve, 10)) }; throw new Error('Job did not settle') }
@@ -39,7 +39,7 @@ describe('real durable whiteboard storage and jobs', () => {
   it('preserves full pressure strokes and exact CAS receipts across restart and rejects foreign ownership', async () => {
     const f = await fixture(); const record = await f.service.create(a, { title: 'Lesson', operationId: 'create-1' })
     const points = Array.from({ length: 5001 }, (_, i) => [i / 8, (i % 113) / 7]); const pressures = points.map((_, i) => (i % 100) / 100)
-    const payload = { document: { ...record.document, scene: { elements: [{ id: 'pen', type: 'freedraw', points, pressures }], appState: { zoom: { value: 2 } } } }, expectedRevision: 1, operationId: 'save-1' }
+    const payload = { document: { ...record.document, scene: { elements: [{ id: 'pen', type: 'freedraw', points, pressures }], appState: { zoom: { value: 2 } } } }, expectedRevision: 1, expectedGeneration: 1, operationId: 'save-1' }
     const saved = await f.service.save(a, record.document.id, payload)
     expect(saved.revision).toBe(2)
     await f.restart()
@@ -59,7 +59,7 @@ describe('real durable whiteboard storage and jobs', () => {
   })
   it('singleflights one exact generation receipt and persists the validated artifact and usage', async () => {
     const f = await fixture(); const { record, source } = await withImage(f)
-    const input = { imageId: source.id, expectedRevision: record.revision, operationId: 'generate-1' }
+    const input = { imageId: source.id, expectedRevision: record.revision, expectedGeneration: record.generation, operationId: 'generate-1' }
     const [first, second] = await Promise.all([f.service.generate(a, record.document.id, input), f.service.generate(a, record.document.id, input)])
     expect(first.id).toBe(second.id)
     const ready = await waitReady(f.service, record.document.id, first.id)
@@ -71,21 +71,21 @@ describe('real durable whiteboard storage and jobs', () => {
   })
   it('rejects foreign/malformed model output as a real error without a ready artifact', async () => {
     const f = await fixture({ draw: async () => ({ diagram: { schemaVersion: 1, primitives: [] } }) }); const { record, source } = await withImage(f)
-    const job = await f.service.generate(a, record.document.id, { imageId: source.id, expectedRevision: record.revision, operationId: 'bad-model' })
+    const job = await f.service.generate(a, record.document.id, { imageId: source.id, expectedRevision: record.revision, expectedGeneration: record.generation, operationId: 'bad-model' })
     const result = await waitReady(f.service, record.document.id, job.id)
     expect(result.status).toBe('error'); expect(result.result).toBeUndefined(); expect(result.error).not.toContain('stack')
   })
   it('cancels a pending model operation and cannot publish a late successful result', async () => {
     let release!: () => void; const waiting = new Promise<void>(resolve => { release = resolve })
     const f = await fixture({ draw: async request => { await waiting; return { diagram: { schemaVersion: 1, sourceImageId: request.source.id, sourceImageSha256: request.source.sha256, viewBox: request.source.viewBox, primitives: [{ id: 'rail', type: 'line', points: [[1, 1], [2, 2]] }], uncertainties: [] } } } }); const { record, source } = await withImage(f)
-    const job = await f.service.generate(a, record.document.id, { imageId: source.id, expectedRevision: record.revision, operationId: 'cancel-model' })
-    await f.service.cancelGeneration(a, record.document.id, job.id, { operationId: 'cancel-1' }); release()
+    const job = await f.service.generate(a, record.document.id, { imageId: source.id, expectedRevision: record.revision, expectedGeneration: record.generation, operationId: 'cancel-model' })
+    await f.service.cancelGeneration(a, record.document.id, job.id, { operationId: 'cancel-1', expectedRevision: record.revision, expectedGeneration: record.generation }); release()
     expect((await waitReady(f.service, record.document.id, job.id)).status).toBe('cancelled')
   })
   it('settles an aborted model timeout as error instead of leaving validating forever', async () => {
     const f = await fixture({ draw: async (_request, signal) => { await new Promise<void>(resolve => { if (signal.aborted) resolve(); else signal.addEventListener('abort', () => resolve(), { once: true }) }); return { error: 'MODEL_ABORTED' } } }, { jobTimeoutMs: 20 })
     const { record, source } = await withImage(f)
-    const job = await f.service.generate(a, record.document.id, { imageId: source.id, expectedRevision: record.revision, operationId: 'timeout-model' })
+    const job = await f.service.generate(a, record.document.id, { imageId: source.id, expectedRevision: record.revision, expectedGeneration: record.generation, operationId: 'timeout-model' })
     expect((await waitReady(f.service, record.document.id, job.id)).status).toBe('error')
   })
 
@@ -93,7 +93,7 @@ describe('real durable whiteboard storage and jobs', () => {
     let started!: () => void; const entered = new Promise<void>(resolve => { started = resolve })
     const f = await fixture({ draw: async (_request, signal) => { started(); await new Promise<void>(resolve => signal.addEventListener('abort', () => resolve(), { once: true })); return { error: 'MODEL_ABORTED' } } })
     const { record, source } = await withImage(f)
-    const job = await f.service.generate(a, record.document.id, { imageId: source.id, expectedRevision: record.revision, operationId: 'restart-model' })
+    const job = await f.service.generate(a, record.document.id, { imageId: source.id, expectedRevision: record.revision, expectedGeneration: record.generation, operationId: 'restart-model' })
     await entered; await f.restart()
     expect((await f.service.readGeneration(a, record.document.id, job.id)).status).toBe('error')
     expect(f.receipts).toHaveLength(1)
@@ -102,13 +102,13 @@ describe('real durable whiteboard storage and jobs', () => {
 
   it('advertises a ready unapplied artifact to a fresh device until its insertion is saved', async () => {
     const f = await fixture(); const { record, source } = await withImage(f)
-    const job = await f.service.generate(a, record.document.id, { imageId: source.id, expectedRevision: record.revision, operationId: 'offline-ready' })
+    const job = await f.service.generate(a, record.document.id, { imageId: source.id, expectedRevision: record.revision, expectedGeneration: record.generation, operationId: 'offline-ready' })
     const ready = await waitReady(f.service, record.document.id, job.id)
     await f.restart()
     const restored = await f.service.read(a, record.document.id)
     expect(restored.recoverableGenerations).toContainEqual({ jobId: job.id, imageId: source.id, status: 'ready' })
     const applied = insertDiagram(restored.document, ready.result!, job.id)
-    await f.service.save(a, record.document.id, { document: applied, expectedRevision: restored.revision, operationId: 'apply-recovered' })
+    await f.service.save(a, record.document.id, { document: applied, expectedRevision: restored.revision, expectedGeneration: restored.generation, operationId: 'apply-recovered' })
     expect((await f.service.read(a, record.document.id)).recoverableGenerations ?? []).not.toContainEqual({ jobId: job.id, imageId: source.id, status: 'ready' })
     expect(f.draws).toBe(1)
   })
@@ -116,7 +116,7 @@ describe('real durable whiteboard storage and jobs', () => {
     const recorded: UsageModelReceiptInput[] = []
     const f = await fixture({ draw: async () => ({ diagram: { oversized: 'x'.repeat(40000) }, usage: { inputTokens: 123, outputTokens: 45 } }) }, { maxDocumentBytes: 16384, recordUsage: async input => { recorded.push(input) } })
     const { record, source } = await withImage(f)
-    const job = await f.service.generate(a, record.document.id, { imageId: source.id, expectedRevision: record.revision, operationId: 'artifact-limit' })
+    const job = await f.service.generate(a, record.document.id, { imageId: source.id, expectedRevision: record.revision, expectedGeneration: record.generation, operationId: 'artifact-limit' })
     expect((await waitReady(f.service, record.document.id, job.id)).status).toBe('error')
     expect(recorded).toHaveLength(1)
     expect(recorded[0]?.usage).toEqual({ inputTokens: 123, outputTokens: 45 })
@@ -129,13 +129,13 @@ describe('real durable whiteboard storage and jobs', () => {
     let document: WhiteboardDocument = { ...remote.document, scene: { elements: [{ id: 'large-pen', type: 'freedraw', points, pressures }, { id: 'label', type: 'text', text: '0', x: 20, y: 20 }], appState: {} } }
     const completeBytes = Buffer.byteLength(JSON.stringify(document))
     expect(completeBytes).toBeGreaterThan(8 * 1024 * 1024)
-    remote = await f.service.save(a, document.id, { document, expectedRevision: 1, operationId: 'large-initial' })
+    remote = await f.service.save(a, document.id, { document, expectedRevision: 1, expectedGeneration: 1, operationId: 'large-initial' })
     const allocated = () => [...f.service.domain.table('accounts').entries()].flatMap(([, account]) => Object.values(account.allocations)).reduce((sum, value) => sum + value.bytes, 0)
     const initialBytes = allocated()
     for (let edit = 1; edit <= 100; edit++) {
       const scene = { ...document.scene, elements: [document.scene.elements[0]!, { id: 'label', type: 'text', text: String(edit), x: 20, y: 20 }] }
       document = { ...document, scene, history: { undo: [...(document.history?.undo ?? []), diffScene(document.scene, scene)], redo: [] } }
-      remote = await f.service.save(a, document.id, { document, expectedRevision: remote.revision, operationId: `large-edit-${edit}` })
+      remote = await f.service.save(a, document.id, { document, expectedRevision: remote.revision, expectedGeneration: remote.generation, operationId: `large-edit-${edit}` })
       expect(allocated() - initialBytes).toBeLessThan(2 * 1024 * 1024)
       if (edit % 25 === 0) console.info(JSON.stringify({ capacityEdits: edit, completeBytes, allocatedBytes: allocated(), growthBytes: allocated() - initialBytes }))
     }
@@ -161,7 +161,7 @@ describe('real durable whiteboard storage and jobs', () => {
 
   it('explains a text-only model capability error without publishing any diagram', async () => {
     const f = await fixture({ draw: async () => ({ error: 'MODEL_VISION_UNAVAILABLE' }) }); const { record, source } = await withImage(f)
-    const job = await f.service.generate(a, record.document.id, { imageId: source.id, expectedRevision: record.revision, operationId: 'vision-disabled' })
+    const job = await f.service.generate(a, record.document.id, { imageId: source.id, expectedRevision: record.revision, expectedGeneration: record.generation, operationId: 'vision-disabled' })
     const result = await waitReady(f.service, record.document.id, job.id)
     expect(result.status).toBe('error'); expect(result.error).toContain('图像输入'); expect(result.result).toBeUndefined()
   })
@@ -174,7 +174,7 @@ describe('real durable whiteboard storage and jobs', () => {
     const f = await fixture({}, { model: { ...adapter, prepareImage: async () => ({ width: 800, height: 400, attachment: { attachmentId: 'test-image', width: 800, height: 400 } }) }, recordUsage: async input => { recorded.push(input) } })
     const { record, source } = await withImage(f)
     for (const operationId of ['preflight-1', 'preflight-retry']) {
-      const job = await f.service.generate(a, record.document.id, { imageId: source.id, expectedRevision: record.revision, operationId })
+      const job = await f.service.generate(a, record.document.id, { imageId: source.id, expectedRevision: record.revision, expectedGeneration: record.generation, operationId })
       const result = await waitReady(f.service, record.document.id, job.id)
       expect(result.status).toBe('error'); expect(result.error).toContain('图像输入')
       await f.restart()
@@ -190,7 +190,7 @@ describe('real durable whiteboard storage and jobs', () => {
     const adapter = createWhiteboardModel(ctx, { provider: 'test-provider', model: 'vision' })
     const f = await fixture({}, { model: { ...adapter, prepareImage: async () => ({ width: 800, height: 400, attachment: { attachmentId: 'test-image', width: 800, height: 400 } }) }, recordUsage: async input => { recorded.push(input) } })
     const { record, source } = await withImage(f)
-    const job = await f.service.generate(a, record.document.id, { imageId: source.id, expectedRevision: record.revision, operationId: 'real-failure' })
+    const job = await f.service.generate(a, record.document.id, { imageId: source.id, expectedRevision: record.revision, expectedGeneration: record.generation, operationId: 'real-failure' })
     expect((await waitReady(f.service, record.document.id, job.id)).status).toBe('error')
     await f.restart()
     expect(calls).toBe(1); expect(recorded).toHaveLength(1); expect(recorded[0]?.usage).toBeUndefined()

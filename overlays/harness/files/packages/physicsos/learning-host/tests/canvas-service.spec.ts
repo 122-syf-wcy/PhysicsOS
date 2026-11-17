@@ -174,9 +174,9 @@ describe('CanvasService on the actual domain write chain and JSON medium', () =>
     faults.before = async write => {
       if (write.table === 'heads' && isHead(write.value) && write.value.version === 2) { entered.resolve(); await release.promise }
     }
-    const first = service.commit(actor, 'cas', { expectedVersion: 1, mutationId: 'left', manifestDigest: leftDigest })
+    const first = service.commit(actor, 'cas', { expectedVersion: 1, expectedGeneration: 1, mutationId: 'left', manifestDigest: leftDigest })
     await entered.promise
-    const second = service.commit(actor, 'cas', { expectedVersion: 1, mutationId: 'right', manifestDigest: rightDigest })
+    const second = service.commit(actor, 'cas', { expectedVersion: 1, expectedGeneration: 1, mutationId: 'right', manifestDigest: rightDigest })
     const settled = Promise.allSettled([first, second])
     expect(domain.table('heads').get(canvasRecordKey(actor.schoolId, actor.userKey, 'cas'))?.version).toBe(1)
     release.resolve()
@@ -198,7 +198,7 @@ describe('CanvasService on the actual domain write chain and JSON medium', () =>
     faults.before = async write => { if (write.table === 'heads' && isHead(write.value) && write.value.title === 'External') { entered.resolve(); await release.promise } }
     const outside = domain.table('heads').update(key, current => ({ ...current, title: 'External', version: current.version + 1 }))
     await entered.promise
-    const stale = service.commit(actor, 'chain', { expectedVersion: 1, mutationId: 'stale', manifestDigest: nextDigest })
+    const stale = service.commit(actor, 'chain', { expectedVersion: 1, expectedGeneration: 1, mutationId: 'stale', manifestDigest: nextDigest })
     const settled = Promise.allSettled([outside, stale])
     release.resolve()
     expect(await settled).toMatchObject([{ status: 'fulfilled' }, { status: 'rejected', reason: { code: 'VERSION_CONFLICT' } }])
@@ -211,7 +211,7 @@ describe('CanvasService on the actual domain write chain and JSON medium', () =>
     const manifestDigest = await upload(service, 'lost', { ...opened.manifest, title: 'Durable' })
     let failed = false
     faults.before = async write => { if (!failed && write.table === 'receipts' && write.value !== null && typeof write.value === 'object' && 'mutationId' in write.value && write.value.mutationId === 'commit-lost') { failed = true; throw new Error('injected receipt publication failure') } }
-    const request = { expectedVersion: 1, mutationId: 'commit-lost', manifestDigest }
+    const request = { expectedVersion: 1, expectedGeneration: 1, mutationId: 'commit-lost', manifestDigest }
     await expect(service.commit(actor, 'lost', request)).rejects.toThrow('injected')
     const head = domain.table('heads').get(canvasRecordKey(actor.schoolId, actor.userKey, 'lost'))
     expect(head?.version).toBe(2)
@@ -232,7 +232,7 @@ describe('CanvasService on the actual domain write chain and JSON medium', () =>
     faults.before = async write => {
       if (write.table === 'receipts' && write.value !== null && typeof write.value === 'object' && 'mutationId' in write.value && write.value.mutationId === 'lost-gc') throw new Error('injected lost GC receipt')
     }
-    const request = { expectedVersion: 1, mutationId: 'lost-gc', manifestDigest }
+    const request = { expectedVersion: 1, expectedGeneration: 1, mutationId: 'lost-gc', manifestDigest }
     await expect(service.commit(actor, 'gc-receipt', request)).rejects.toThrow('injected')
     const key = canvasRecordKey(actor.schoolId, actor.userKey, 'gc-receipt', 'lost-gc')
     expect(domain.table('receipts').get(key)).toBeUndefined()
@@ -253,13 +253,13 @@ describe('CanvasService on the actual domain write chain and JSON medium', () =>
     const dispose = context.on('domain/changed', change => { if (change.domain === 'physicsos_canvas' && change.table === 'heads') events.push(change) })
     onTestFinished(() => { dispose() })
     faults.before = async write => { if (write.table === 'heads') throw new Error('injected durable head failure') }
-    await expect(service.commit(actor, 'failure', { expectedVersion: 1, mutationId: 'rejected', manifestDigest: digest })).rejects.toThrow('injected')
+    await expect(service.commit(actor, 'failure', { expectedVersion: 1, expectedGeneration: 1, mutationId: 'rejected', manifestDigest: digest })).rejects.toThrow('injected')
     expect(domain.table('heads').get(canvasRecordKey(actor.schoolId, actor.userKey, 'failure'))?.version).toBe(1)
     expect(events).toEqual([])
     const persisted = JSON.parse(await readFile(join(root, 'storages', 'physicsos_canvas.json'), 'utf8')) as { tables: { heads: Record<string, CanvasHeadRecord> } }
     expect(persisted.tables.heads[canvasRecordKey(actor.schoolId, actor.userKey, 'failure')]?.version).toBe(1)
     faults.before = undefined
-    expect((await service.commit(actor, 'failure', { expectedVersion: 1, mutationId: 'rejected', manifestDigest: digest })).head.version).toBe(2)
+    expect((await service.commit(actor, 'failure', { expectedVersion: 1, expectedGeneration: 1, mutationId: 'rejected', manifestDigest: digest })).head.version).toBe(2)
   })
 
   it('keeps account and tenant isolation even for an administrator with a colliding userKey', async () => {
@@ -276,16 +276,16 @@ describe('CanvasService on the actual domain write chain and JSON medium', () =>
   it('retains monotonic delete and restore generations and never revives stale queued requests', async () => {
     const { service } = await fixture()
     const opened = await service.create(actor, { id: 'lifetime', title: 'Lifetime', mutationId: 'life-create' })
-    const deleted = await service.delete(actor, 'lifetime', { expectedVersion: 1, mutationId: 'delete' })
+    const deleted = await service.delete(actor, 'lifetime', { expectedVersion: 1, expectedGeneration: 1, mutationId: 'delete' })
     expect(deleted.head).toMatchObject({ version: 2, generation: 2, deletedAt: expect.any(String) })
-    await expect(service.commit(actor, 'lifetime', { expectedVersion: 1, mutationId: 'old', manifestDigest: opened.head.manifestDigest })).rejects.toMatchObject({ code: 'DELETED' })
+    await expect(service.commit(actor, 'lifetime', { expectedVersion: 1, expectedGeneration: 1, mutationId: 'old', manifestDigest: opened.head.manifestDigest })).rejects.toMatchObject({ code: 'DELETED' })
     const restored = await service.restore(actor, 'lifetime', { expectedVersion: 2, expectedGeneration: 2, mutationId: 'restore' })
     expect(restored.head).toMatchObject({ version: 3, generation: 3 })
     expect(restored.head.deletedAt).toBeUndefined()
-    const repeatedDelete = await service.delete(actor, 'lifetime', { expectedVersion: 1, mutationId: 'delete' })
+    const repeatedDelete = await service.delete(actor, 'lifetime', { expectedVersion: 1, expectedGeneration: 1, mutationId: 'delete' })
     expect(repeatedDelete).toMatchObject({ replayed: true, head: { version: 2, generation: 2 } })
     expect((await service.open(actor, 'lifetime')).head.version).toBe(3)
-    await expect(service.restore(actor, 'lifetime', { expectedVersion: 2, mutationId: 'stale-restore' })).rejects.toMatchObject({ code: 'NOT_DELETED' })
+    await expect(service.restore(actor, 'lifetime', { expectedVersion: 2, expectedGeneration: 1, mutationId: 'stale-restore' })).rejects.toMatchObject({ code: 'NOT_DELETED' })
     await expect(service.create(actor, { id: 'lifetime', title: 'Reused', mutationId: 'reuse' })).rejects.toMatchObject({ code: 'ID_CONFLICT' })
   })
 
@@ -297,7 +297,7 @@ describe('CanvasService on the actual domain write chain and JSON medium', () =>
     const release = deferred<void>()
     releaseOnCleanup(() => release.resolve())
     faults.before = async write => { if (write.table === 'heads') { entered.resolve(); await release.promise } }
-    const commit = service.commit(actor, 'changes', { expectedVersion: 1, mutationId: 'later', manifestDigest: digest })
+    const commit = service.commit(actor, 'changes', { expectedVersion: 1, expectedGeneration: 1, mutationId: 'later', manifestDigest: digest })
     await entered.promise
     const changes = service.changes(actor, String(opened.head.changeSeq))
     let completed = false
@@ -438,8 +438,8 @@ describe('CanvasService on the actual domain write chain and JSON medium', () =>
       domain: 'mechanics', source: { kind: 'free-build' }, buildMode: 'construct', clock: { time: 0, total: 0, running: false, rate: 1 }, instanceEditRevision: 0,
     }] }
     const manifestDigest = await upload(service, source.head.id, manifest)
-    await service.commit(actor, source.head.id, { expectedVersion: 1, mutationId: 'content', manifestDigest })
-    await expect(service.copy(actor, source.head.id, { expectedVersion: 2, mutationId: 'copy-too-many', id: 'copy-quota-destination', title: 'Copy' })).rejects.toMatchObject({ code: 'OBJECT_LIMIT' })
+    await service.commit(actor, source.head.id, { expectedVersion: 1, expectedGeneration: 1, mutationId: 'content', manifestDigest })
+    await expect(service.copy(actor, source.head.id, { expectedVersion: 2, expectedGeneration: 1, mutationId: 'copy-too-many', id: 'copy-quota-destination', title: 'Copy' })).rejects.toMatchObject({ code: 'OBJECT_LIMIT' })
     expect([...domain.table('objects').entries()].filter(([, row]) => row.canvasId === 'copy-quota-destination')).toEqual([])
     expect(domain.table('heads').get(canvasRecordKey(actor.schoolId, actor.userKey, 'copy-quota-destination'))).toBeUndefined()
   })
@@ -462,7 +462,7 @@ describe('CanvasService on the actual domain write chain and JSON medium', () =>
     await expect(service.create(actor, { id: 'utf8', title: '物理实验', mutationId: 'utf8-create' })).rejects.toMatchObject({ code: 'TITLE_TOO_LARGE' })
     await service.create(actor, { id: 'first', title: 'First', mutationId: 'first-create' })
     await expect(service.create(actor, { id: 'second', title: 'Second', mutationId: 'second-create' })).rejects.toMatchObject({ code: 'DOCUMENT_LIMIT' })
-    await service.delete(actor, 'first', { expectedVersion: 1, mutationId: 'first-delete' })
+    await service.delete(actor, 'first', { expectedVersion: 1, expectedGeneration: 1, mutationId: 'first-delete' })
     await expect(service.create(actor, { id: 'second', title: 'Second', mutationId: 'second-create' })).rejects.toMatchObject({ code: 'DOCUMENT_LIMIT' })
   })
 
@@ -491,9 +491,9 @@ describe('CanvasService on the actual domain write chain and JSON medium', () =>
       clock: { time: 0, total: 0, running: false, rate: 1 }, instanceEditRevision: 0,
     }], nodes: [{ id: 'node', kind: 'experiment', instanceId: 'instance', layout: { x: 0, y: 0, width: 500, height: 400, zIndex: 1 } }] }
     const manifestDigest = await upload(service, 'source', manifest)
-    await service.commit(actor, 'source', { expectedVersion: 1, mutationId: 'source-content', manifestDigest })
+    await service.commit(actor, 'source', { expectedVersion: 1, expectedGeneration: 1, mutationId: 'source-content', manifestDigest })
     const sourceBefore = canonicalStringify(domain.table('heads').get(canvasRecordKey(actor.schoolId, actor.userKey, 'source')))
-    const copied = await service.copy(actor, 'source', { expectedVersion: 2, mutationId: 'copy', id: 'copy', title: 'Copy' })
+    const copied = await service.copy(actor, 'source', { expectedVersion: 2, expectedGeneration: 1, mutationId: 'copy', id: 'copy', title: 'Copy' })
     expect(copied.head).toMatchObject({ id: 'copy', version: 1 })
     expect(canonicalStringify(domain.table('heads').get(canvasRecordKey(actor.schoolId, actor.userKey, 'source')))).toBe(sourceBefore)
     expect(copied.manifest.instances[0]?.instanceId).not.toBe('instance')
@@ -502,7 +502,7 @@ describe('CanvasService on the actual domain write chain and JSON medium', () =>
     const scene = graph.objects[copied.manifest.instances[0]!.currentScene.digest]
     expect(scene?.kind).toBe('scene')
     if (scene?.kind === 'scene') expect(scene.scene.id).not.toBe(sourceObject.scene.id)
-    const retry = await service.copy(actor, 'source', { expectedVersion: 2, mutationId: 'copy', id: 'copy', title: 'Copy' })
+    const retry = await service.copy(actor, 'source', { expectedVersion: 2, expectedGeneration: 1, mutationId: 'copy', id: 'copy', title: 'Copy' })
     expect(retry).toMatchObject({ replayed: true, head: { version: 1 } })
   })
 
@@ -513,7 +513,7 @@ describe('CanvasService on the actual domain write chain and JSON medium', () =>
     const release = deferred<void>()
     releaseOnCleanup(() => release.resolve())
     faults.before = async write => { if (write.table === 'heads') { entered.resolve(); await release.promise } }
-    const accepted = service.delete(actor, 'close', { expectedVersion: 1, mutationId: 'close-delete' })
+    const accepted = service.delete(actor, 'close', { expectedVersion: 1, expectedGeneration: 1, mutationId: 'close-delete' })
     await entered.promise
     let disposed = false
     const close = service.dispose().then(() => { disposed = true })

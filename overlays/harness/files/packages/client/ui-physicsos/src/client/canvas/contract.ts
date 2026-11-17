@@ -28,7 +28,7 @@ export type CanvasBoundViewActions = FactoryInjectParams<'physicsos.canvas.workb
 export type CanvasCommands = Pick<CanvasController,
   | 'appendAnnotations' | 'replaceAnnotations' | 'removeAnnotations'
   | 'startAssistant' | 'assistantJob' | 'cancelAssistant'
-  | 'create' | 'open' | 'list' | 'rename' | 'duplicate' | 'remove' | 'restore'
+  | 'beginEditingSession' | 'create' | 'open' | 'list' | 'rename' | 'duplicate' | 'remove' | 'restore' | 'archive' | 'unarchive'
   | 'sync' | 'retry' | 'resolveConflict' | 'useRemote' | 'keepLocalCopy' | 'exportGraph' | 'importGraph'
   | 'exportDatasetCsv' | 'addExperiment' | 'duplicateInstance' | 'removeNodes'
   | 'updateLayout' | 'updateViewport' | 'renameNode' | 'addNote' | 'updateNote'

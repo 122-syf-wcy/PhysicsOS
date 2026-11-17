@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "capability": "teaching-tools-bridge-v1",
+  "defaultMode": "bridge",
+  "lifecycleSchemaRevision": 1,
+  "readsAndPreserves": ["canvas-archive-v1", "whiteboard-lifecycle-v1", "activity-v1", "personal-product-state-v1", "courseware-v1"],
+  "rollbackPolicy": "image-and-config-only-no-data-restore"
+}

@@ -36,7 +36,7 @@ export function CanvasFrameStage(props: CanvasFrameProps) {
   const [failedUrl, setFailedUrl] = useState<string | undefined>()
   const [lensMode, setLensMode] = useState<'native' | '2d' | '3d'>('2d')
   const document = props.useCanvasDocument(canvasId)
-  const readOnly = document?.status === 'deleted' || document?.status === 'auth-required' || document?.loading === true
+  const readOnly = document?.readOnly === true || document?.status === 'deleted' || document?.status === 'archived' || document?.status === 'lifecycle-pending' || document?.status === 'auth-required' || document?.loading === true
   const root = useRef<HTMLDivElement>(null)
   const [narrowStage, setNarrowStage] = useState(false)
   useEffect(() => {
@@ -159,7 +159,7 @@ export function CanvasFrameStage(props: CanvasFrameProps) {
 export function CanvasInstanceView(props: CanvasInstanceProps) {
   const { t, instanceKey, presentation, canvasCommands } = props
   const document = props.useCanvasDocument(props.canvasId)
-  const readOnly = document?.status === 'deleted' || document?.status === 'auth-required' || document?.loading === true
+  const readOnly = document?.readOnly === true || document?.status === 'deleted' || document?.status === 'archived' || document?.status === 'lifecycle-pending' || document?.status === 'auth-required' || document?.loading === true
   const summary = props.useCanvasInstance(instanceKey)
   const displayKey = useId()
   const [dataTab, setDataTab] = useState<DataTab>('data')

@@ -51,6 +51,7 @@ const stubApi = (overrides: Partial<AuthApi> = {}): AuthApi => ({
   searchSchools: async () => ({ schools: [] }),
   logout: async () => ({ ok: true }),
   me: async () => ({ user: USER }),
+  setAvatar: async avatarId => ({ user: { ...USER, avatarId, avatarUrl: `/physicsos/avatars/guizhou-v1/${avatarId}-192.webp` } }),
   forgotPassword: async () => ({ ok: true }),
   resetPassword: async () => ({ ok: true }),
   reportLearning: async () => ({ ok: true }),

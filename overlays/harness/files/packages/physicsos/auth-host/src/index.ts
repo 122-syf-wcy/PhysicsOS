@@ -60,11 +60,21 @@ interface WorkspaceRecordSeam {
   readonly id: string
   readonly path: string
   readonly title: string
+  readonly sessionIds: readonly string[]
   setTitle(title: string): Promise<void>
 }
 
 interface WorkspaceRegistrySeam {
   create(path: string, title?: string): Promise<WorkspaceRecordSeam>
+  get(id: string): WorkspaceRecordSeam | undefined
+  list(): readonly WorkspaceRecordSeam[]
+}
+
+/** Optional learning-host bridge; off mode never opens its independent unit. */
+interface ProductStateSeam {
+  readonly nativeProjectSoftDelete: boolean
+  projectDeleted(actor: ApiPolicyActor, id: string): boolean
+  getProjectState(actor: ApiPolicyActor, id: string): { readonly state: 'live' | 'archived' | 'deleted' }
 }
 
 /** Plugin config: session lifetimes and attempt budgets are deployment knobs. */
@@ -247,6 +257,44 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       }
     }
 
+    // Personal project APIs never inherit SUPER_ADMIN's broad API-policy view.
+    // A matching persistent claim AND a surviving native registry row are required.
+    const ownWorkspace = (actor: ApiPolicyActor, id: string): WorkspaceRecordSeam | undefined => {
+      const claim = domain.table('api_resources').get(`workspace:${id}`)
+      if (claim?.kind !== 'workspace' || claim.resourceId !== id || claim.id !== `workspace:${id}`
+        || claim.ownerKey !== actor.userKey || claim.schoolId !== actor.schoolId) return undefined
+      return (ctx.get('workspaceRegistry') as WorkspaceRegistrySeam | undefined)?.get(id)
+    }
+    const ownedWorkspaces = (actor: ApiPolicyActor): readonly WorkspaceRecordSeam[] =>
+      ((ctx.get('workspaceRegistry') as WorkspaceRegistrySeam | undefined)?.list() ?? [])
+        .filter(workspace => ownWorkspace(actor, workspace.id) !== undefined)
+    const productState = (): ProductStateSeam | undefined => ctx.get('physicsosProductState') as ProductStateSeam | undefined
+    const usableWorkspace = (actor: ApiPolicyActor, id: string): WorkspaceRecordSeam | undefined => {
+      const workspace = ownWorkspace(actor, id)
+      if (workspace === undefined) return undefined
+      const state = productState()
+      if (state === undefined) return workspace
+      try { return state.getProjectState(actor, id).state === 'live' ? workspace : undefined } catch { return undefined }
+    }
+    ctx.provide('physicsosPersonalWorkspaces', {
+      get: (actor: ApiPolicyActor, id: string) => {
+        const workspace = ownWorkspace(actor, id)
+        return workspace === undefined ? undefined : { id: workspace.id, title: workspace.title, sessionIds: [...workspace.sessionIds] }
+      },
+      list: (actor: ApiPolicyActor) => ownedWorkspaces(actor).map(workspace => ({
+        id: workspace.id, title: workspace.title, sessionIds: [...workspace.sessionIds],
+      })),
+      ownsSession: (actor: ApiPolicyActor, id: string) => {
+        const claim = domain.table('api_resources').get(`session:${id}`)
+        return claim?.kind === 'session' && claim.id === `session:${id}` && claim.resourceId === id
+          && claim.ownerKey === actor.userKey && claim.schoolId === actor.schoolId
+      },
+      sessions: (actor: ApiPolicyActor) => [...domain.table('api_resources').entries()].flatMap(([key, claim]) =>
+        claim.kind === 'session' && key === claim.id && claim.id === `session:${claim.resourceId}`
+          && claim.ownerKey === actor.userKey && claim.schoolId === actor.schoolId ? [claim.resourceId] : []),
+    })
+    // Only concurrent calls share a Promise. Successful results must never be
+    // cached forever: native removal and product tombstones are checked anew.
     const workspacePromises = new Map<string, Promise<ApiPolicyWorkspace>>()
     /**
      * The harness names a workspace record after its directory basename — for
@@ -268,37 +316,52 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       }
       return title
     }
-    const ensureWorkspace = (
+    const ensureWorkspace = async (
       actor: ApiPolicyActor,
       requestedTitle?: string,
     ): Promise<ApiPolicyWorkspace> => {
-      const own = service.ownedApiResources(actor, 'workspace')
-      const limit = config.workspaceLimit ?? 20
-      const title = requestedTitle === undefined ? DEFAULT_WORKSPACE_TITLE : requestedTitle
-      const key = requestedTitle === undefined
-        ? actor.userKey
-        : `${actor.userKey}\u0000${requestedTitle}`
+      const key = JSON.stringify([actor.schoolId, actor.userKey, requestedTitle ?? null])
       const existing = workspacePromises.get(key)
-      if (existing !== undefined) return existing
+      if (existing !== undefined) {
+        const value = await existing
+        if (usableWorkspace(actor, value.id) !== undefined) return value
+        if (workspacePromises.get(key) === existing) workspacePromises.delete(key)
+      }
       const pending = (async (): Promise<ApiPolicyWorkspace> => {
-        if (own.size >= limit) {
-          throw new Error(`workspace limit reached (${String(limit)})`)
-        }
         const registry = ctx.get('workspaceRegistry') as WorkspaceRegistrySeam | undefined
         if (registry === undefined) throw new Error('workspaceRegistry is not mounted')
+        const live = ownedWorkspaces(actor).filter(workspace => usableWorkspace(actor, workspace.id) !== undefined)
+        // Reuse only a currently owned, registered, non-deleted default. Titles
+        // the student chose are not overwritten when selecting another project.
+        if (requestedTitle === undefined && live.length > 0) {
+          const workspace = live[0]!
+          return { id: workspace.id, path: workspace.path, title: workspace.title }
+        }
+        const limit = config.workspaceLimit ?? 20
+        if (live.length >= limit) throw new Error(`workspace limit reached (${String(limit)})`)
+        const title = requestedTitle ?? DEFAULT_WORKSPACE_TITLE
         const digest = createHash('sha256').update(actor.userKey).digest('hex').slice(0, 32)
-        const directory = requestedTitle === undefined ? digest : `${digest}-${randomUUID()}`
-        const path = join(config.workspaceRoot ?? dshHomePath('physicsos-users'), directory)
+        const root = config.workspaceRoot ?? dshHomePath('physicsos-users')
+        const canonical = join(root, digest)
+        // A soft-deleted native row still owns its directory. Allocate a new
+        // identity instead of registry.create(canonical) returning that row.
+        const occupied = ownedWorkspaces(actor).length > 0 || registry.list().some(workspace => workspace.path === canonical)
+        const directory = requestedTitle === undefined && !occupied ? digest : `${digest}-${randomUUID()}`
+        const path = join(root, directory)
         await mkdir(path, { recursive: true })
         const workspace = await registry.create(path, title)
         const displayTitle = await adoptWorkspaceTitle(workspace, title)
+        await service.claimApiResource(actor, 'workspace', workspace.id)
+        if (usableWorkspace(actor, workspace.id) === undefined) throw new Error('workspace is no longer available')
         return { id: workspace.id, path: workspace.path, title: displayTitle }
       })()
       workspacePromises.set(key, pending)
-      void pending.catch(() => {
+      void pending.finally(() => {
         if (workspacePromises.get(key) === pending) workspacePromises.delete(key)
-      })
-      return pending
+      }).catch(() => {})
+      const value = await pending
+      if (usableWorkspace(actor, value.id) === undefined) throw new Error('workspace is no longer available')
+      return value
     }
 
     ctx.provide(API_POLICY_SERVICE, createApiPolicy({
@@ -313,6 +376,13 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         release: (actor, kind, id) => service.releaseApiResource(actor, kind, id),
       },
       ensureWorkspace,
+      // Product deletion is reversible metadata, never the native registry RPC.
+      projectDeleteAllowed: () => productState()?.nativeProjectSoftDelete !== true,
+      projectOpenAllowed: (actor, id) => {
+        const state = productState()
+        if (state === undefined) return true
+        try { return state.getProjectState(actor, id).state === 'live' } catch { return false }
+      },
       hostFilesystemAccess: config.hostFilesystemAccess ?? 'deny',
       ...(apiPolicyLimiter === undefined ? {} : { limiter: apiPolicyLimiter }),
       ...(onceLedger === undefined ? {} : { onceLedger }),

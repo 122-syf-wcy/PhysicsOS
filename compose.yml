@@ -66,6 +66,9 @@ services:
       PHYSICSOS_STORAGE_BACKEND: postgres
       PHYSICSOS_STORAGE_SCHEMA: ${PHYSICSOS_STORAGE_SCHEMA:-physicsos}
       PHYSICSOS_SHARED_STATE_BACKEND: redis
+      # The bridge is the data-safe rollback floor before lifecycle writes.
+      PHYSICSOS_TEACHING_TOOLS_MODE: ${PHYSICSOS_TEACHING_TOOLS_MODE:-bridge}
+      PHYSICSOS_ACTIVITY_QUERY_CAPACITY_VERIFIED: ${PHYSICSOS_ACTIVITY_QUERY_CAPACITY_VERIFIED:-false}
       DATABASE_URL_FILE: /run/secrets/database_url
       REDIS_URL_FILE: /run/secrets/redis_url
       # 模型链路：Harness 的 DeepSeek 适配器指向容器内的平台模型池代理

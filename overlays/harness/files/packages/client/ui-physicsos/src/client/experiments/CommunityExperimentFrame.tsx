@@ -10,6 +10,7 @@ import {
 } from './contribution-protocol.ts'
 import { isSnapshot, isExperimentIntent } from './contract-wire.ts'
 import { isUniversalSnapshot } from './universal-contract.ts'
+import { bindExperimentRunPresentation } from './experiment-run-tracking.ts'
 import css from './ContributionPanel.module.css'
 
 export type CommunityFrameStatus = 'loading' | 'ready' | 'failed'
@@ -51,6 +52,8 @@ export function CommunityExperimentFrame({
   useEffect(() => {
     const element = frame.current
     if (element === null) return
+    // Ready only opens a display gate. The host session alone can observe a real first physics step.
+    const runPresentation = bindExperimentRunPresentation(session)
     setEmbedded(false)
     let disposed = false
     let connected = false
@@ -62,6 +65,7 @@ export function CommunityExperimentFrame({
     let sequence = 0
     let firstFrame: { frameId: string; revision: number } | undefined
     const updateStatus = (next: CommunityFrameStatus): void => {
+      runPresentation.setReady(next === 'ready')
       setStatus(next)
       statusCallback.current?.(next)
     }
@@ -157,7 +161,8 @@ export function CommunityExperimentFrame({
         }
         if (protocolVersion === 3) {
           try {
-            applyUniversalContributionIntent(session, message.data)
+            // A stale account/presentation may still render, but cannot attribute a late play to a new account.
+            applyUniversalContributionIntent(session, message.data, { observeRun: runPresentation.isCurrent() })
           } catch {
             fail()
           }
@@ -205,6 +210,7 @@ export function CommunityExperimentFrame({
       unsubscribe()
       resize?.disconnect()
       port?.close()
+      runPresentation.dispose()
       session.cancelPreview()
     }
   }, [entryUrl, session, attempt, protocolVersion, experimentId, requestedEmbedded])

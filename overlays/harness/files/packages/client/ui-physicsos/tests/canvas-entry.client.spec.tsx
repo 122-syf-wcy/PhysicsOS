@@ -285,7 +285,7 @@ describe('canvas normal-user entry controls', () => {
     const openSurface = vi.fn()
     const openCanvasView = vi.fn()
     const requestSceneInCanvas = vi.fn()
-    const view = render(<HomeActions t={t} openSurface={openSurface} openCanvasView={openCanvasView} newCanvas={newCanvas}
+    const view = render(<HomeActions t={t} openSurface={openSurface} openCanvasView={openCanvasView} newCanvas={newCanvas} removeRecent={vi.fn()}
       requestSceneInCanvas={requestSceneInCanvas} useRecentExperiments={selector => selector(recent.getSnapshot())} />)
     expect(view.container.querySelector('button button')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: t('home.quick.experiment') }))

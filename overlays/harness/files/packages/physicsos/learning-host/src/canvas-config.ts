@@ -2,6 +2,7 @@
 import { join } from 'node:path'
 import z from '@deepseek-ai/schemastery'
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
+import type { CoursewareLimits } from './courseware-config.ts'
 
 /** Admission and retention limits, measured in complete UTF-8 values. */
 export interface CanvasLimits {
@@ -37,18 +38,27 @@ export interface CanvasLimits {
   readonly relativeTolerance: number
 }
 
+/** Bridge is the rollback floor once enabled writes have produced additive lifecycle records. */
+export type TeachingToolsMode = 'off' | 'bridge' | 'enabled'
 /** Learning-host configuration; existing learning routes remain unchanged. */
 export interface LearningHostConfig {
+  readonly teachingToolsMode?: TeachingToolsMode
+  readonly activityQueryCapacityVerified?: boolean
   readonly canvasDshHome?: string
   readonly canvasLimits?: Partial<CanvasLimits>
+  readonly coursewareDshHome?: string
+  readonly coursewareLimits?: Partial<CoursewareLimits>
   readonly whiteboardProvider?: string
   readonly whiteboardModel?: string
+  /** Bridge guards/readers are always active; only new lifecycle writes are gated. */
+  readonly lifecycleWritesEnabled?: boolean
 }
 
 /** Resolved values supplied to every Canvas operation. */
 export interface CanvasConfig {
   readonly root: string
   readonly limits: CanvasLimits
+  readonly lifecycleWritesEnabled?: boolean
 }
 
 const integer = () => z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER)
@@ -86,12 +96,25 @@ const limitSchema: z<Partial<CanvasLimits>> = z.object({
   relativeTolerance: nonnegative(),
 })
 
+const coursewareLimitSchema: z<Partial<CoursewareLimits>> = z.object({
+  maxFileBytes: integer(), maxContentBytes: integer(), maxAnnotationBytes: integer(),
+  maxAccountBytes: integer(), maxSchoolBytes: integer(), maxGlobalBytes: integer(), minFreeBytes: integer(),
+  maxDecksPerAccount: integer(), maxDecksGlobal: integer(), maxVersionsPerDeck: integer(),
+  maxLessonsPerAccount: integer(), maxBlankPagesPerLesson: integer(), maxReceipts: integer(), maxMetadataBytes: integer(),
+  maxTickets: integer(), ticketTtlMs: integer(), maxInFlightRequests: integer(), requestTimeoutMs: integer(),
+})
+
 /** Cordis validates these fields before mounting the plugin. */
 export const learningHostConfig: z<LearningHostConfig> = z.object({
+  teachingToolsMode: z.enum(['off', 'bridge', 'enabled']).default('bridge'),
+  activityQueryCapacityVerified: z.boolean().default(false),
   canvasDshHome: z.string(),
   canvasLimits: limitSchema,
+  coursewareDshHome: z.string(),
+  coursewareLimits: coursewareLimitSchema,
   whiteboardProvider: z.string(),
   whiteboardModel: z.string(),
+  lifecycleWritesEnabled: z.boolean(),
 })
 
 const defaults: CanvasLimits = {
@@ -158,5 +181,9 @@ export function resolveCanvasConfig(input: LearningHostConfig = {}): CanvasConfi
   if (limits.maxHeadBytes > limits.maxMetadataBytes) throw new Error('Canvas maxHeadBytes exceeds maxMetadataBytes')
   if (limits.maxDocumentBytes > limits.maxAccountBytes) throw new Error('Canvas maxDocumentBytes exceeds maxAccountBytes')
   if (limits.maxVerificationAttemptBytes > limits.maxDocumentBytes) throw new Error('Canvas maxVerificationAttemptBytes exceeds maxDocumentBytes')
-  return { root: join(resolveDshHome(input.canvasDshHome), 'physicsos', 'canvases', 'v1'), limits }
+  if (input.lifecycleWritesEnabled !== undefined && typeof input.lifecycleWritesEnabled !== 'boolean') throw new Error('lifecycleWritesEnabled must be boolean')
+  if (input.teachingToolsMode !== undefined && !['off', 'bridge', 'enabled'].includes(input.teachingToolsMode)) throw new Error('Invalid teachingToolsMode')
+  const enabled = input.teachingToolsMode === undefined ? input.lifecycleWritesEnabled === true : input.teachingToolsMode === 'enabled'
+  if (input.teachingToolsMode !== undefined && input.lifecycleWritesEnabled !== undefined && input.lifecycleWritesEnabled !== enabled) throw new Error('lifecycleWritesEnabled contradicts teachingToolsMode')
+  return { root: join(resolveDshHome(input.canvasDshHome), 'physicsos', 'canvases', 'v1'), limits, lifecycleWritesEnabled: enabled }
 }

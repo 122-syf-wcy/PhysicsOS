@@ -38,7 +38,7 @@ function NodeChrome(props: CanvasNodeProps & { readonly node: CanvasNode; readon
   const [heightDraft, setHeightDraft] = useState('')
   const [resizeError, setResizeError] = useState<string>()
   const resizeBase = useRef<CanvasLayout | undefined>()
-  const readOnly = document?.status === 'deleted' || document?.status === 'auth-required' || document?.loading === true
+  const readOnly = document?.readOnly === true || document?.status === 'deleted' || document?.status === 'archived' || document?.status === 'lifecycle-pending' || document?.status === 'auth-required' || document?.loading === true
   const mounted = useRef(true)
   useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
   const run = async (operation: () => Promise<unknown>, success?: 'canvas.copied' | 'canvas.removed' | 'canvas.renamed'): Promise<void> => {
@@ -211,7 +211,7 @@ export function CanvasNoteNode(props: CanvasNodeProps<'note'>) {
   const mounted = useRef(true)
   useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
   useEffect(() => { setEditing(false) }, [noteKey])
-  const readOnly = document?.status === 'deleted' || document?.status === 'auth-required' || document?.loading === true
+  const readOnly = document?.readOnly === true || document?.status === 'deleted' || document?.status === 'archived' || document?.status === 'lifecycle-pending' || document?.status === 'auth-required' || document?.loading === true
   if (actual === undefined || draft === undefined) return null
   const change = (body: string, format: 'plain' | 'markdown'): void => {
     if (readOnly) return

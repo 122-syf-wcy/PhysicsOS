@@ -7,6 +7,10 @@
  */
 
 import crypto from 'node:crypto'
+import {
+  avatarIdFromUrl, avatarOwnerWire, avatarUrlForId, setAvatarWire,
+  type AvatarId, type AvatarOwner,
+} from './avatar-catalog.ts'
 import type {
   ApiTokenRecord, AuditEvent, AuthDomain, DeviceRecord, DeviceRevocation, InviteRecord,
   LearningCount, PendingRegistration, School, ResetRequest, SchoolRequestRecord, SessionRecord,
@@ -81,7 +85,41 @@ export interface PublicUser {
   username: string
   displayName: string
   avatarUrl?: string
+  /** Derived from a recognized catalog path; never a new persisted user field. */
+  avatarId?: AvatarId
   role: UserRecord['role']
+}
+
+/** Metadata-only current adoption facts for trusted statistics consumers. */
+export type AvatarAdoptionAccount = {
+  readonly userKey: string
+  readonly schoolId: string
+  readonly role: UserRecord['role']
+} & (
+  | { readonly kind: 'catalog'; readonly avatarId: AvatarId }
+  | { readonly kind: 'legacy' | 'unselected' }
+)
+
+/** Safe internal roster projection; never publish raw auth rows to statistics hosts. */
+export interface ActivityRoster {
+  readonly version: string
+  readonly schools: readonly {
+    readonly id: string
+    readonly name: string
+    readonly status: School['status']
+    readonly mergedInto?: string
+    readonly rosterAliasOf?: string
+    readonly archivedAt?: string
+    readonly reviewState?: School['reviewState']
+  }[]
+  readonly users: readonly {
+    readonly schoolId: string
+    readonly userKey: string
+    readonly username: string
+    readonly status: UserRecord['status']
+    readonly role: UserRecord['role']
+    readonly avatarUrl?: string
+  }[]
 }
 
 /** A successful register/login: the minted token plus the public principal. */
@@ -461,6 +499,131 @@ export class AuthService {
   private get resets() { return this.domain.table('reset_requests') }
   private get resetTokens() { return this.domain.table('password_reset_tokens') }
   private get apiResources() { return this.domain.table('api_resources') }
+
+  /**
+   * Patch an existing account at its write-chain slot, never a previously read
+   * whole row. In particular, login/TOTP/password/status writes must preserve a
+   * concurrently chosen avatar (and avatar writes must preserve credentials).
+   */
+  private updateExistingUser(
+    expected: UserRecord,
+    transform: (current: UserRecord) => UserRecord,
+  ): Promise<UserRecord> {
+    return this.users.update(userKey(expected.schoolId, expected.username), (current) => {
+      if (current.id !== expected.id || current.schoolId !== expected.schoolId
+        || current.username !== expected.username) {
+        throw new AuthError(409, 'OWNER_CHANGED', '账号已变更，请重新登录')
+      }
+      return transform(current)
+    })
+  }
+
+  /**
+   * One in-memory scan of current active account facts. No event counters or
+   * secondary profile store: changing an avatar only changes users.avatarUrl.
+   * This is an internal read-only seam; consumers still enforce admin scope and
+   * exclude operational tenants/roles according to their statistics contract.
+   */
+  avatarAdoptionSnapshot(): readonly AvatarAdoptionAccount[] {
+    const out: AvatarAdoptionAccount[] = []
+    for (const [key, record] of this.users.entries()) {
+      if (record.status !== 'active' || key !== userKey(record.schoolId, record.username)) continue
+      const school = this.schools.get(record.schoolId)
+      if (school === undefined || school.status !== 'active' || school.archivedAt !== undefined
+        || school.mergedInto !== undefined || school.rosterAliasOf !== undefined) continue
+      const avatarId = avatarIdFromUrl(record.avatarUrl)
+      const base = { userKey: key, schoolId: record.schoolId, role: record.role }
+      out.push(avatarId === undefined
+        ? { ...base, kind: record.avatarUrl === undefined || record.avatarUrl === '' ? 'unselected' : 'legacy' }
+        : { ...base, kind: 'catalog', avatarId })
+    }
+    return out
+  }
+
+  /**
+   * One tenant-scoped safe projection for trusted activity hosts. Status/tenant
+   * flags stay explicit so the consumer can apply a single documented roster
+   * policy. The content version invalidates caches on relevant account/school
+   * changes, not on unrelated lastLoginAt or credential writes.
+   */
+  activityRoster(actor: IdentityActor): ActivityRoster {
+    this.requireAdmin(actor)
+    const schools: ActivityRoster['schools'][number][] = []
+    const visibleSchools = new Set<string>()
+    for (const [, school] of this.schools.entries()) {
+      if (actor.role !== 'SUPER_ADMIN' && school.id !== actor.schoolId) continue
+      visibleSchools.add(school.id)
+      schools.push({
+        id: school.id,
+        name: school.canonicalName ?? school.name,
+        status: school.status,
+        ...(school.mergedInto === undefined ? {} : { mergedInto: school.mergedInto }),
+        ...(school.rosterAliasOf === undefined ? {} : { rosterAliasOf: school.rosterAliasOf }),
+        ...(school.archivedAt === undefined ? {} : { archivedAt: school.archivedAt }),
+        ...(school.reviewState === undefined ? {} : { reviewState: school.reviewState }),
+      })
+    }
+    const users: ActivityRoster['users'][number][] = []
+    for (const [key, record] of this.users.entries()) {
+      if (!visibleSchools.has(record.schoolId) || key !== userKey(record.schoolId, record.username)) continue
+      users.push({
+        schoolId: record.schoolId, userKey: key, username: record.username,
+        status: record.status, role: record.role,
+        ...(record.avatarUrl === undefined ? {} : { avatarUrl: record.avatarUrl }),
+      })
+    }
+    schools.sort((left, right) => left.id.localeCompare(right.id))
+    users.sort((left, right) => left.userKey.localeCompare(right.userKey))
+    const version = crypto.createHash('sha256').update(JSON.stringify({ schools, users })).digest('hex')
+    return { version, schools, users }
+  }
+
+  /**
+   * Change only the account authenticated by the actual Cookie session token.
+   * An actor (including an API-token actor) is deliberately not sufficient.
+   * Expected owner can only reject a stale tab, never name a target account.
+   */
+  async setOwnAvatar(token: string | null, body: unknown, expectedOwner: AvatarOwner): Promise<PublicUser> {
+    const input = setAvatarWire.safeParse(body)
+    const owner = avatarOwnerWire.safeParse(expectedOwner)
+    if (!input.success || !owner.success) {
+      throw new AuthError(400, 'BAD_REQUEST', '请选择可用的头像，并确认当前账号')
+    }
+    const requireOwner = (): ResolvedSession => {
+      const resolved = token === null ? null : this.resolveSession(token)
+      if (resolved === null) throw new AuthError(401, 'UNAUTHENTICATED', '未登录或会话已失效')
+      if (resolved.user.id !== owner.data.id || resolved.user.schoolId !== owner.data.schoolId
+        || resolved.user.username !== owner.data.username) {
+        throw new AuthError(409, 'OWNER_CHANGED', '登录账号已切换，请重新打开头像选择')
+      }
+      return resolved
+    }
+    const resolved = requireOwner()
+    const key = userKey(resolved.user.schoolId, resolved.user.username)
+    let updated: UserRecord
+    try {
+      updated = await this.users.update(key, (current) => {
+        // Revalidate inside the atomic slot: logout/disable/expiry while the
+        // request body or earlier domain writes were pending must fail closed.
+        requireOwner()
+        if (current.id !== resolved.user.id || current.status !== 'active') {
+          throw new AuthError(409, 'OWNER_CHANGED', '账号已变更，请重新登录')
+        }
+        return {
+          ...current,
+          avatarUrl: avatarUrlForId(input.data.avatarId),
+          updatedAt: this.now().toISOString(),
+        }
+      })
+    } catch (error) {
+      if (error instanceof AuthError) throw error
+      throw new AuthError(503, 'DEPENDENCY_UNAVAILABLE', '头像暂未保存，请稍后重试')
+    }
+    requireOwner()
+    const school = this.schools.get(updated.schoolId)
+    if (school === undefined) throw new AuthError(401, 'UNAUTHENTICATED', '未登录或会话已失效')
+    return this.toPublic(updated, school)
+  }
 
   /**
    * Whether an account owns one Harness session/workspace. Platform
@@ -1257,11 +1420,11 @@ export class AuthService {
       deviceId,
     )
     const now = this.now().toISOString()
-    await this.users.put(userKey(school.id, record.username), {
-      ...record,
+    await this.updateExistingUser(record, current => ({
+      ...current,
       lastLoginAt: now,
       updatedAt: now,
-    })
+    }))
     if (deviceId !== undefined) await this.touchDevice(record, deviceId)
     if (firstDevice || firstIp) {
       await this.audit(
@@ -1277,7 +1440,12 @@ export class AuthService {
         },
       )
     }
-    return result
+    // Device/audit writes above can yield after lastLoginAt was patched. Read
+    // the live principal again so a concurrently saved avatar also wins in the
+    // login response, not only in durable storage.
+    const current = this.resolveSession(result.token)
+    if (current === null) throw new AuthError(401, 'UNAUTHENTICATED', '未登录或会话已失效')
+    return { ...result, user: current.user }
   }
 
   /**
@@ -1295,11 +1463,11 @@ export class AuthService {
     }
     const secret = generateTotpSecret()
     const now = this.now()
-    await this.users.put(userKey(record.schoolId, record.username), {
-      ...record,
+    await this.updateExistingUser(record, current => ({
+      ...current,
       totpPendingSecret: secret,
       updatedAt: now.toISOString(),
-    })
+    }))
     const label = encodeURIComponent(`PhysicsOS:${record.schoolId}:${record.username}`)
     return {
       secret,
@@ -1345,11 +1513,10 @@ export class AuthService {
         createdAt: now,
       })
     }
-    delete record.totpPendingSecret
-    await this.users.put(actor.userKey, {
-      ...record,
-      totp: { secret, enabledAt: now },
-      updatedAt: now,
+    await this.updateExistingUser(record, (current) => {
+      const updated = { ...current, totp: { secret, enabledAt: now }, updatedAt: now }
+      delete updated.totpPendingSecret
+      return updated
     })
     await this.audit(actor, 'totp.enable', actor.userKey, actor.schoolId)
     return { recoveryCodes }
@@ -1387,10 +1554,12 @@ export class AuthService {
       throw new AuthError(401, 'INVALID_TWO_FACTOR_CODE', '验证码不正确')
     }
 
-    const updated: UserRecord = { ...record, updatedAt: this.now().toISOString() }
-    delete updated.totp
-    delete updated.totpPendingSecret
-    await this.users.put(actor.userKey, updated)
+    await this.updateExistingUser(record, (current) => {
+      const updated: UserRecord = { ...current, updatedAt: this.now().toISOString() }
+      delete updated.totp
+      delete updated.totpPendingSecret
+      return updated
+    })
     for (const [id, row] of [...this.recoveryCodes.entries()]) {
       if (row.userKey === actor.userKey) await this.recoveryCodes.delete(id)
     }
@@ -1827,10 +1996,12 @@ export class AuthService {
 
       // Do password hashing before reserving the token; restore the exact token
       // if the durable password write fails, with the mutation lock still held.
-      const next = { ...record, passwordHash: hashPassword(input.data.newPassword), updatedAt: now.toISOString() }
+      const passwordHash = hashPassword(input.data.newPassword)
       await this.resetTokens.put(hash, { ...token, usedAt: now.toISOString() })
       try {
-        await this.users.put(token.userKey, next)
+        await this.updateExistingUser(record, current => ({
+          ...current, passwordHash, updatedAt: now.toISOString(),
+        }))
       } catch (error) {
         await this.resetTokens.put(hash, token)
         throw error
@@ -2414,10 +2585,9 @@ export class AuthService {
       throw new AuthError(400, 'BAD_REQUEST', '不能停用自己的账号')
     }
     const target = this.loadManagedTarget(actor, schoolId, username)
-    const updated: UserRecord = {
-      ...target.record, status: input.data.status, updatedAt: this.now().toISOString(),
-    }
-    await this.users.put(target.userKey, updated)
+    const updated = await this.updateExistingUser(target.record, current => ({
+      ...current, status: input.data.status, updatedAt: this.now().toISOString(),
+    }))
     if (input.data.status === 'disabled') {
       // The durable disable is already effective. Each cleanup must be attempted
       // independently: a storage failure must not leave a live provider or inbox running.
@@ -2457,11 +2627,12 @@ export class AuthService {
     const input = resetPasswordWire.safeParse(body)
     if (!input.success) throw new AuthError(400, 'BAD_REQUEST', '请检查填写内容')
     const target = this.loadManagedTarget(actor, schoolId, username)
-    await this.users.put(target.userKey, {
-      ...target.record,
-      passwordHash: hashPassword(input.data.newPassword),
+    const passwordHash = hashPassword(input.data.newPassword)
+    await this.updateExistingUser(target.record, current => ({
+      ...current,
+      passwordHash,
       updatedAt: this.now().toISOString(),
-    })
+    }))
     await this.revokeUserSessions(target.record)
     await this.supersedeOpenResetRequests(target.userKey)
     await this.audit(actor, 'user.reset_password', target.userKey, schoolId)
@@ -3221,6 +3392,8 @@ export class AuthService {
     }
     if (school.shortName !== undefined) pub.schoolShortName = school.shortName
     if (user.avatarUrl !== undefined) pub.avatarUrl = user.avatarUrl
+    const avatarId = avatarIdFromUrl(user.avatarUrl)
+    if (avatarId !== undefined) pub.avatarId = avatarId
     return pub
   }
 }

@@ -25,7 +25,7 @@ describe.skipIf(database === undefined)('canvas PostgreSQL persistence and resta
       finally { await pool.end() }
     }, CANVAS_FIXTURE_TIMEOUT)
     if (database === undefined) throw new Error('Isolated PostgreSQL URL required')
-    const fixture = await loadCanvasFixture({ postgres: { connectionString: database, schema } })
+    const fixture = await loadCanvasFixture({ teachingToolsMode: 'enabled', postgres: { connectionString: database, schema } })
     close = fixture.close
     const account = await fixture.register(`owner_${randomUUID().slice(0, 8)}`)
     const other = await fixture.register(`other_${randomUUID().slice(0, 8)}`)
@@ -48,7 +48,7 @@ describe.skipIf(database === undefined)('canvas PostgreSQL persistence and resta
     const digest = createHash('sha256').update(bytes).digest('hex')
     expect((await fixture.raw('PUT', `${prefix}/persisted-board/objects/${digest}`, bytes, account)).status).toBe(200)
     const committed = await responseJson<CanvasCommitResponse>(await fixture.call('POST', `${prefix}/persisted-board/commit`, {
-      expectedVersion: initial.head.version, mutationId: 'commit-real-scene', manifestDigest: digest,
+      expectedVersion: initial.head.version, expectedGeneration: initial.head.generation, mutationId: 'commit-real-scene', manifestDigest: digest,
     }, account))
     expect(committed.head.version).toBe(initial.head.version + 1)
     const table = qualifiedTable(schema, recordTableName('physicsos_canvas', 'heads'))
@@ -56,7 +56,7 @@ describe.skipIf(database === undefined)('canvas PostgreSQL persistence and resta
     expect(stored.rows.map(row => JSON.parse(row.value))).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'persisted-board', manifestDigest: digest })]))
     expect((await fixture.call('GET', `${prefix}/persisted-board`, undefined, other)).status).toBe(404)
     const races = await Promise.all(['first', 'second'].map(name => fixture.call('POST', `${prefix}/persisted-board/rename`, {
-      expectedVersion: committed.head.version, mutationId: `rename-${name}`, title: name,
+      expectedVersion: committed.head.version, expectedGeneration: committed.head.generation, mutationId: `rename-${name}`, title: name,
     }, account)))
     expect(races.map(response => response.status).sort()).toEqual([200, 409])
     await fixture.restart()
@@ -65,14 +65,18 @@ describe.skipIf(database === undefined)('canvas PostgreSQL persistence and resta
     expect(opened.manifest.nodes).toEqual(manifest.nodes)
     const readBytes = Buffer.from(await (await fixture.call('GET', `${prefix}/persisted-board/objects/${sceneDigest}`, undefined, signedIn)).arrayBuffer())
     expect(readBytes).toEqual(Buffer.from(sceneBytes))
+    const archived = await responseJson<{ head: CanvasOpenResponse['head'] }>(await fixture.call('POST', `${prefix}/persisted-board/archive`, {
+      expectedVersion: opened.head.version, expectedGeneration: opened.head.generation, mutationId: 'archive-board',
+    }, signedIn))
     const deleted = await responseJson<{ head: CanvasOpenResponse['head'] }>(await fixture.call('DELETE', `${prefix}/persisted-board`, {
-      expectedVersion: opened.head.version, mutationId: 'delete-board',
+      expectedVersion: archived.head.version, expectedGeneration: archived.head.generation, mutationId: 'delete-board',
     }, signedIn))
     expect((await fixture.call('GET', `${prefix}/persisted-board`, undefined, signedIn)).status).toBe(410)
     const restored = await responseJson<{ head: CanvasOpenResponse['head'] }>(await fixture.call('POST', `${prefix}/persisted-board/restore`, {
-      expectedVersion: deleted.head.version, mutationId: 'restore-board',
+      expectedVersion: deleted.head.version, expectedGeneration: deleted.head.generation, mutationId: 'restore-board',
     }, signedIn))
     expect(restored.head.generation).toBeGreaterThan(opened.head.generation)
+    expect(restored.head.archivedAt).toBe(archived.head.archivedAt)
     const final = await responseJson<CanvasOpenResponse>(await fixture.call('GET', `${prefix}/persisted-board`, undefined, signedIn))
     expect(final.manifest.nodes).toEqual(manifest.nodes)
   }, CANVAS_FIXTURE_TIMEOUT)

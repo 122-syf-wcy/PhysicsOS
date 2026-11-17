@@ -7,6 +7,7 @@ import {
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { WorkspaceId } from './runtime-compat.ts'
 import { accountWorkspaceName, WorkspacePanel, type WorkspacePanelInjected } from './WorkspacePanel.tsx'
+import { useProjectWorkspaceRows } from './project-workspace-view.ts'
 import css from './HeaderWorkspace.module.css'
 
 /** The exact same account actions as the existing product WorkspacePanel. */
@@ -24,7 +25,8 @@ export function HeaderWorkspace(props: HeaderWorkspaceProps) {
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState(false)
   const trigger = useRef<HTMLButtonElement>(null)
-  const workspaces = useWorkspaces(snapshot => snapshot.items)
+  const registry = useWorkspaces(snapshot => snapshot)
+  const workspaces = useProjectWorkspaceRows(registry.items, registry.state, props.projectState).items
   const currentSessionId = useSessions(snapshot =>
     snapshot.ids.find(id => (snapshot.byId[id]?.retainedBy.mainView ?? 0) > 0))
   const selected = currentSessionId === undefined ? undefined

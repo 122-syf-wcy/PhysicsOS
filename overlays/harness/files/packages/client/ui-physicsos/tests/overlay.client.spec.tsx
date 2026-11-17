@@ -302,6 +302,7 @@ describe('PhysicsOS overlay presentation', () => {
       <HomeActions
         openSurface={openSurface}
         startQuestion={startQuestion}
+        removeRecent={vi.fn()}
         newCanvas={vi.fn()}
         openCanvasView={openCanvasView}
         requestSceneInCanvas={requestSceneInCanvas}
@@ -327,6 +328,7 @@ describe('PhysicsOS overlay presentation', () => {
     render(
       <HomeActions
         openSurface={openSurface}
+        removeRecent={vi.fn()}
         newCanvas={vi.fn()}
         openCanvasView={vi.fn()}
         requestSceneInCanvas={vi.fn()}
@@ -400,6 +402,7 @@ describe('PhysicsOS overlay presentation', () => {
     useRecentExperiments: (selector: (snapshot: { items: never[] }) => unknown) =>
       selector({ items: [] }),
     openSurface,
+    removeRecent: vi.fn(),
     t,
   }) as unknown as HomeBelowProps
 

@@ -136,6 +136,8 @@
 }
 
 .root.rail { gap: 9px; margin: 0; }
-.rail .item { width: 48px; height: 42px; min-height: 42px; border-radius: 50%; color: var(--physics-ink-muted); }
+.rail .item { flex: none; width: var(--physicsos-shell-rail-button, 48px); height: 44px; min-height: 44px; border-radius: 50%; color: var(--physics-ink-muted); }
+.rail .item:focus-visible { outline: 2px solid var(--physicsos-focus, #3b82f6); outline-offset: 1px; }
 .rail .active { color: var(--physics-accent-strong); background: var(--physics-accent-soft); box-shadow: inset 0 0 0 1px var(--physics-glass-border), 0 3px 8px color-mix(in srgb, var(--physics-accent) 10%, transparent); }
-@media (max-width: 600px) { .root.rail { flex-direction: row; gap: 2px; } .rail .item { width: 34px; height: 36px; min-height: 36px; } }
+:global([data-product-compact]) .root.rail { flex-direction: row; gap: 2px; }
+:global([data-product-compact]) .rail .item { width: var(--physicsos-shell-rail-button, 44px); height: 44px; min-height: 44px; }

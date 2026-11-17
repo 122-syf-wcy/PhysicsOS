@@ -2,7 +2,7 @@ import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client
 import type { PhysicsScene } from '@physicsos/physics-scene'
 import { parseCanvasAnnotations, readCanvasAnnotations } from '@physicsos/physics-whiteboard'
 import type { CanvasAnnotationRevision } from './types.ts'
-import type { CanvasHead, CanvasVerificationListResponse } from '@physicsos/physics-workbench/protocol'
+import type { CanvasHead, CanvasVerificationListResponse, WorkbenchLifecycleCapabilities } from '@physicsos/physics-workbench/protocol'
 import type {
   CanvasGraph, CanvasLayout, CanvasManifest, CanvasNode, ComparisonConfig,
   DatasetObject, ExperimentInstance, HistoryEntry, JsonObject, JsonValue, ObjectRef, SnapshotAlias,
@@ -25,7 +25,7 @@ import type { WorkspaceFrame } from '../physics/workspace-runtime.ts'
 import { CanvasRequestError, readCanvasResourcePolicy, readCanvasVerificationResponse, type CanvasApi, type CanvasListQuery, type CanvasVerificationResponse } from './api.ts'
 import { GRAPH_LIMITS, type GraphLimits } from '@physicsos/physics-workbench/graph'
 import { canvasId, createCanvasDigest, payloadDigest } from './digest.ts'
-import { CanvasCacheConflict, type CanvasDocumentPatch, type CanvasEntityPatch, type CanvasPendingNoteDraft, type LocalCanvasRecord } from './persistence.ts'
+import { canvasArchived, canvasReadOnly, canvasLifecyclePending, canvasLifecycleFields, CanvasCacheConflict, type CanvasDocumentPatch, type CanvasEntityPatch, type CanvasPendingNoteDraft, type LocalCanvasRecord } from './persistence.ts'
 import { assertCanvasReferences, canvasErrorOf, createCanvasSynchronizer, mergeCanvasGraphs, reachableCanvasGraph, type CanvasSynchronizer } from './sync.ts'
 import type {
   AddCanvasExperiment, CanvasAlignment, CanvasClipboard, CanvasComparisonInput,
@@ -289,6 +289,14 @@ export function createCanvasController(options: CanvasControllerOptions): Canvas
   const notes = new Map<string, NoteOwner>()
   const fallbackLimits = readCanvasResourcePolicy({ schemaVersion: 1, limits: { ...GRAPH_LIMITS, ...options.graphLimits } }).limits
   const policies = new Map<string, GraphLimits>()
+  const lifecycleCapabilities = new Map<string, WorkbenchLifecycleCapabilities>()
+  const editingSessions = new Map<string, string>()
+  const editingSession = (entry: DocumentEntry): string => {
+    const key = keyOf(entry.namespace, entry.id)
+    let session = editingSessions.get(key)
+    if (session === undefined) { session = id('editing-session'); editingSessions.set(key, session) }
+    return session
+  }
   const limitsFor = (namespace: string): GraphLimits => policies.get(namespace) ?? fallbackLimits
   const noteCells = new Map<string, SnapshotStore<CanvasNoteDraftState | undefined>>()
   const noteViews = new Map<string, ReturnType<CanvasController['noteDraftSource']>>()
@@ -439,7 +447,9 @@ export function createCanvasController(options: CanvasControllerOptions): Canvas
     if (entry.error !== undefined) return 'error'
     if (entry.record?.conflict !== undefined || entry.record?.localConflict !== undefined) return 'conflict'
     if (entry.record?.error !== undefined) return 'error'
+    if (entry.record !== undefined && canvasLifecyclePending(entry.record)) return 'lifecycle-pending'
     if (entry.record?.deleted) return 'deleted'
+    if (entry.record !== undefined && canvasArchived(entry.record)) return 'archived'
     if (entryNotes(entry).some(owner => owner.dirty)) return entry.localSaved ? 'local-saved' : 'unsaved'
     if (entry.syncing) return 'syncing'
     if (!entry.localSaved) return 'unsaved'
@@ -450,7 +460,8 @@ export function createCanvasController(options: CanvasControllerOptions): Canvas
   const summaryOf = (entry: DocumentEntry): CanvasDocumentSummary | undefined => entry.record === undefined ? undefined : ({
     id: entry.id, title: entry.record.working.title, createdAt: entry.record.head?.createdAt ?? entry.record.working.createdAt,
     updatedAt: entry.record.working.updatedAt,
-    deleted: entry.record.deleted, status: statusOf(entry), ...(entry.record.head === undefined ? {} : { head: entry.record.head }),
+    deleted: entry.record.deleted, archived: canvasArchived(entry.record), lifecycle: entry.record.deleted ? 'deleted' : canvasArchived(entry.record) ? 'archived' : 'active',
+    lifecyclePending: canvasLifecyclePending(entry.record), status: statusOf(entry), ...(entry.record.head === undefined ? {} : { head: entry.record.head }),
     ...(typeof entry.record.working.metadata?.studyProjectId === 'string' ? { projectId: entry.record.working.metadata.studyProjectId } : {}),
   })
   const publishRoster = (): void => {
@@ -462,7 +473,8 @@ export function createCanvasController(options: CanvasControllerOptions): Canvas
     const serverHeads = heads.get(scope.namespace) ?? new Map<string, CanvasHead>()
     const documents = new Map<string, CanvasDocumentSummary>()
     for (const head of serverHeads.values()) documents.set(head.id, { id: head.id, title: head.title, createdAt: head.createdAt, updatedAt: head.updatedAt,
-      deleted: head.deletedAt !== undefined, head, status: head.deletedAt === undefined ? 'saved' : 'deleted' })
+      deleted: head.deletedAt !== undefined, archived: head.archivedAt !== undefined, lifecycle: head.deletedAt !== undefined ? 'deleted' : head.archivedAt !== undefined ? 'archived' : 'active',
+      head, status: head.deletedAt !== undefined ? 'deleted' : head.archivedAt !== undefined ? 'archived' : 'saved' })
     for (const entry of entries.values()) {
       if (entry.namespace !== scope.namespace) continue
       const summary = summaryOf(entry)
@@ -471,6 +483,7 @@ export function createCanvasController(options: CanvasControllerOptions): Canvas
     publishRootState({ items: [...serverHeads.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
       documents: [...documents.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)), loading: rootLoading,
       namespace: scope.namespace, authScope: scope.api === undefined ? 'anonymous' : 'authenticated',
+      ...(lifecycleCapabilities.get(scope.namespace) === undefined ? {} : { capabilities: lifecycleCapabilities.get(scope.namespace)! }),
       ...(rootError === undefined ? {} : { error: rootError }) })
   }
   const publishDocument = (entry: DocumentEntry): void => {
@@ -480,6 +493,8 @@ export function createCanvasController(options: CanvasControllerOptions): Canvas
     const next: CanvasDocumentState = shown ? {
       canvasId: entry.id, namespace: entry.namespace, objects: entry.objects,
       ...(value === undefined ? {} : { manifest: value.working, ...(value.head === undefined ? {} : { head: value.head }), savedAt: value.savedAt }),
+      ...(value === undefined ? {} : { lifecycle: value.deleted ? 'deleted' as const : canvasArchived(value) ? 'archived' as const : 'active' as const,
+        lifecyclePending: canvasLifecyclePending(value), readOnly: canvasReadOnly(value) }),
       loading: entry.loading, status: statusOf(entry), localSaved: entry.localSaved && !entry.writing && !entryNotes(entry).some(owner => owner.saving),
       editSequence: value?.editSequence ?? 0, acknowledgedSequence: value?.acknowledgedSequence ?? 0,
       canUndo: entry.past.length > 0, canRedo: entry.future.length > 0, conflicts: value?.conflict?.conflicts ?? value?.localConflict?.conflicts ?? emptyConflicts,
@@ -538,6 +553,7 @@ export function createCanvasController(options: CanvasControllerOptions): Canvas
     if (entry.record !== undefined && value.cacheVersion < entry.record.cacheVersion) return
     if (value.head !== undefined && value.base !== undefined && value.pending === undefined && value.editSequence === value.acknowledgedSequence &&
       value.working !== value.base && sameJson(value.working, value.base)) value = { ...value, working: value.base }
+    const priorRecord = entry.record
     entry.durableRecord = value
     for (const digest of Object.keys(objects)) entry.durableObjects.add(digest)
     const noteProjection = adoptNotes(entry, value)
@@ -556,7 +572,8 @@ export function createCanvasController(options: CanvasControllerOptions): Canvas
     // Families exist before a roster/document publication can make new cards render.
     for (const instance of value.working.instances) createStableCells(entry, instance.instanceId)
     for (const [instanceId, owner] of entry.instanceRegistry) {
-      if (value.deleted || !value.working.instances.some(instance => instance.instanceId === instanceId)) {
+      if (priorRecord !== undefined && (canvasReadOnly(priorRecord) !== canvasReadOnly(value) || priorRecord.head?.generation !== value.head?.generation)) disposeOwner(owner)
+      if (!value.working.instances.some(instance => instance.instanceId === instanceId)) {
         disposeOwner(owner)
         entry.instanceRegistry.delete(instanceId)
       }
@@ -598,6 +615,10 @@ export function createCanvasController(options: CanvasControllerOptions): Canvas
     for (const node of candidate.working.nodes) if (node.kind === 'note') ensureNote(entry, node,
       candidate.pendingNoteDrafts?.find(draft => draft.nodeId === node.id))
     entry.record = projectNotes(entry, candidate)
+    if (canvasReadOnly(original) !== canvasReadOnly(candidate) || original.head?.generation !== candidate.head?.generation) {
+      for (const owner of entry.instanceRegistry.values()) disposeOwner(owner)
+      for (const owner of entryNotes(entry)) { if (owner.timer !== undefined) cancel(owner.timer); owner.timer = undefined }
+    }
     entry.objects = mergeObjectInventory(entry.objects, objects)
     publishDocument(entry)
     let previous = original
@@ -625,7 +646,12 @@ export function createCanvasController(options: CanvasControllerOptions): Canvas
             next = { ...next, working: unwrap(parseManifest({ ...next.working, createdAt: latest.working.createdAt })) }
           }
           const inventory = { ...await options.persistence.objects(entry.namespace, entry.id), ...entry.objects, ...objects }
-          const merged = await mergeCanvasGraphs(previous.working, next.working, latest.working, inventory, hash, now, id, limitsFor(entry.namespace))
+          const lifecycleOf = (value: LocalCanvasRecord): string => value.deleted ? 'deleted' : canvasArchived(value) ? 'archived' : 'active'
+          const lifetimeChanged = previous.head !== undefined && latest.head !== undefined && previous.head.generation !== latest.head.generation
+          const lifecycleConflict = lifecycleOf(previous) !== lifecycleOf(next) && lifecycleOf(previous) !== lifecycleOf(latest) && lifecycleOf(next) !== lifecycleOf(latest)
+          const merged = lifetimeChanged || lifecycleConflict ? { manifest: undefined, objects: inventory, conflicts: [{ path: '/lifecycle', kind: 'delete-modify' as const,
+            message: 'A different tab changed the lifecycle. Local edits are retained for export/copy, not rebased into the new lifetime.' }] }
+            : await mergeCanvasGraphs(previous.working, next.working, latest.working, inventory, hash, now, id, limitsFor(entry.namespace))
           if (merged.manifest === undefined) {
             const { pendingNoteDrafts: _peerDrafts, ...latestFields } = latest
             const conflicted: LocalCanvasRecord = { ...latestFields, working: next.working, editSequence: latest.editSequence + 1,
@@ -651,7 +677,9 @@ export function createCanvasController(options: CanvasControllerOptions): Canvas
             pendingNoteDrafts: [...new Map([...(latest.pendingNoteDrafts ?? []), ...(next.pendingNoteDrafts ?? [])].map(draft => [draft.nodeId, draft])).values()],
             ...(next.documentHistory === undefined ? {} : { documentHistory: next.documentHistory }),
             editSequence: latest.editSequence + 1, deleted: previous.deleted === next.deleted ? latest.deleted : next.deleted,
-            savedAt: now() }
+            ...(previous.archived === undefined && next.archived === undefined && latest.archived === undefined ? {} :
+              { archived: canvasArchived(previous) === canvasArchived(next) ? canvasArchived(latest) : canvasArchived(next) }),
+            ...(next.editingSessionId === undefined ? {} : { editingSessionId: next.editingSessionId }), savedAt: now() }
           const { error: permanentError, ...retained } = combined
           next = { ...retained, ...(latest.pending !== undefined && permanentError?.retryable === false ? { error: permanentError } : {}) }
           previous = latest
@@ -702,12 +730,12 @@ export function createCanvasController(options: CanvasControllerOptions): Canvas
     const digest = await hash(history)
     return { manifest: unwrap(parseManifest({ ...manifest, history: { kind: 'history', digest } })), objects: { ...objects, [digest]: history } }
   }
-  const requireRecord = (entry: DocumentEntry): LocalCanvasRecord => {
+  const requireRecord = (entry: DocumentEntry, writable = true): LocalCanvasRecord => {
     currentScope()
     const value = entry.record
     if (entry.namespace !== scope?.namespace) throw new Error('CANVAS_ACCOUNT_MISMATCH')
     if (value === undefined) throw new Error('CANVAS_NOT_OPEN')
-    if (value.deleted) throw new Error('CANVAS_DELETED')
+    if (writable && canvasReadOnly(value)) throw new Error(value.deleted || value.head?.deletedAt !== undefined ? 'CANVAS_DELETED' : 'CANVAS_ARCHIVED_READ_ONLY')
     return value
   }
   const mutate = async (
@@ -735,6 +763,7 @@ export function createCanvasController(options: CanvasControllerOptions): Canvas
     await commitLocal(entry, original, { ...retained,
       ...(original.pending !== undefined && oldError?.retryable === false ? { error: oldError } : {}),
       ...(patch === undefined ? {} : { documentHistory: { schemaVersion: 1, past: [...entry.past, patch], future: [] } }),
+      ...(history ? { editingSessionId: editingSession(entry) } : {}),
       working, editSequence: original.editSequence + 1, savedAt: now() }, objects)
     publishDocument(entry)
   })
@@ -748,7 +777,7 @@ export function createCanvasController(options: CanvasControllerOptions): Canvas
     if (owner === undefined) throw new Error('CANVAS_NOTE_MISSING')
     if (owner.entry.namespace !== current.namespace) throw new CanvasRequestError(401, 'CANVAS_ACCOUNT_CHANGED',
       'The previous account note draft is retained but cannot be edited by this account.', undefined, false)
-    if (owner.entry.record?.deleted) throw new Error('CANVAS_DELETED')
+    if (owner.entry.record !== undefined && canvasReadOnly(owner.entry.record)) throw new Error(owner.entry.record.deleted ? 'CANVAS_DELETED' : 'CANVAS_ARCHIVED_READ_ONLY')
     return owner
   }
   const resetFailedNoteHistory = (entry: DocumentEntry, working: CanvasManifest): CanvasManifest => {
@@ -805,7 +834,7 @@ export function createCanvasController(options: CanvasControllerOptions): Canvas
   const scheduleNote = (owner: NoteOwner): void => {
     if (owner.timer !== undefined) cancel(owner.timer)
     owner.timer = undefined
-    if (!owner.dirty || owner.conflict || disposed || paused || scope?.namespace !== owner.entry.namespace) return
+    if (!owner.dirty || owner.conflict || disposed || paused || scope?.namespace !== owner.entry.namespace || owner.entry.record !== undefined && canvasReadOnly(owner.entry.record)) return
     owner.timer = schedule(() => {
       owner.timer = undefined
       if (owner.error !== undefined || owner.conflict || disposed || paused || scope?.namespace !== owner.entry.namespace) return
@@ -847,7 +876,7 @@ export function createCanvasController(options: CanvasControllerOptions): Canvas
             note === owner ? { ...draftJson(note), baseBody: sent.body, baseFormat: sent.format } : draftJson(note))
           const { error: _error, pendingNoteDrafts: _drafts, ...retained } = current
           const saved = await commitLocal(entry, original, { ...retained, cacheVersion: original.cacheVersion,
-            working: recorded.manifest, editSequence: current.editSequence + 1, savedAt: now(),
+            working: recorded.manifest, editingSessionId: editingSession(entry), editSequence: current.editSequence + 1, savedAt: now(),
             documentHistory: { schemaVersion: 1, past: [...entry.past, patch], future: [] },
             ...(pending.length === 0 ? {} : { pendingNoteDrafts: pending }) }, noteObjects(entry, recorded.manifest, recorded.objects))
           if (saved.conflict !== undefined || saved.localConflict !== undefined) {
@@ -878,6 +907,7 @@ export function createCanvasController(options: CanvasControllerOptions): Canvas
     return settled
   }
   const flushEntryNotes = async (entry: DocumentEntry): Promise<void> => {
+    if (entry.record !== undefined && canvasReadOnly(entry.record)) { if (entry.noteCheckpoint !== undefined) await entry.noteCheckpoint; return }
     for (const owner of entryNotes(entry)) if (owner.dirty) await flushOwnedNote(owner)
     if (entry.noteCheckpoint !== undefined) await entry.noteCheckpoint
     if (!sameJson(entry.record?.pendingNoteDrafts, entry.durableRecord?.pendingNoteDrafts)) await checkpointNotes(entry)
@@ -896,7 +926,7 @@ export function createCanvasController(options: CanvasControllerOptions): Canvas
   const writeRuntimeState = (entry: DocumentEntry, instanceId: string, state: WorkbenchCommittedState, reason: string): Promise<void> =>
     enqueue(entry, async () => {
       const original = entry.record
-      if (original === undefined || original.deleted || !original.working.instances.some(instance => instance.instanceId === instanceId)) return
+      if (original === undefined || canvasReadOnly(original) || !original.working.instances.some(instance => instance.instanceId === instanceId)) return
       const stored = original.working.instances.find(instance => instance.instanceId === instanceId)!
       const current = createSceneObject(state.scene)
       const origin = createSceneObject(state.originScene ?? sceneObject(entry.objects, stored.originScene))
@@ -927,12 +957,14 @@ export function createCanvasController(options: CanvasControllerOptions): Canvas
       if (slot !== undefined) slot.persistedInstance = instance
       await commitLocal(entry, original, { ...retained,
         ...(original.pending !== undefined && oldError?.retryable === false ? { error: oldError } : {}),
+        ...(reason === 'commit' ? { editingSessionId: editingSession(entry) } : {}),
         working, editSequence: original.editSequence + 1, savedAt: now() }, objects)
     })
   const ensureOwner = (entry: DocumentEntry, instanceId: string): Promise<WorkbenchInstanceRuntime> => {
     const current = currentScope()
     if (entry.namespace !== current.namespace) return Promise.reject(new Error('CANVAS_ACCOUNT_MISMATCH'))
-    const stored = requireRecord(entry).working.instances.find(instance => instance.instanceId === instanceId)
+    const retainedRecord = requireRecord(entry, false)
+    const stored = retainedRecord.working.instances.find(instance => instance.instanceId === instanceId)
     if (stored === undefined) return Promise.reject(new Error('CANVAS_INSTANCE_REMOVED'))
     const slot = createStableCells(entry, instanceId)
     if (slot.runtime !== undefined) return Promise.resolve(slot.runtime)
@@ -948,7 +980,7 @@ export function createCanvasController(options: CanvasControllerOptions): Canvas
     }
     const runtimeOptions: CreateWorkbenchInstanceOptions = {
       instanceKey: slot.key, sceneId: String(restoredScene.id), scene: restoredScene, originScene: origin,
-      source: stored.source, buildMode: stored.buildMode, clock: stored.clock, instanceEditRevision: stored.instanceEditRevision,
+      source: stored.source, buildMode: stored.buildMode, clock: canvasReadOnly(retainedRecord) ? { ...stored.clock, running: false } : stored.clock, instanceEditRevision: stored.instanceEditRevision,
       ...(stored.templateId === undefined ? {} : { templateId: stored.templateId }),
       ...(state.history === undefined ? {} : { persistedHistory: state.history }),
       ...(state.draft === undefined ? {} : { persistedDraft: state.draft }), visible,
@@ -957,7 +989,7 @@ export function createCanvasController(options: CanvasControllerOptions): Canvas
     }
     slot.loading = options.createRuntime(runtimeOptions).then(runtime => {
       if (disposed || paused || scope?.namespace !== entry.namespace || slot.generation !== generation ||
-        entry.record?.deleted || !entry.record?.working.instances.some(instance => instance.instanceId === instanceId)) {
+        !entry.record?.working.instances.some(instance => instance.instanceId === instanceId)) {
         runtime.dispose()
         throw new Error('CANVAS_INSTANCE_REMOVED')
       }
@@ -985,7 +1017,7 @@ export function createCanvasController(options: CanvasControllerOptions): Canvas
     return slot.loading
   }
   const startOwners = (entry: DocumentEntry): void => {
-    if (!entry.loaded || paused || entry.record?.deleted || scope?.namespace !== entry.namespace) return
+    if (!entry.loaded || paused || scope?.namespace !== entry.namespace) return
     for (const instance of entry.record?.working.instances ?? []) {
       const slot = createStableCells(entry, instance.instanceId)
       if (slot.loading !== undefined && slot.persistedInstance !== undefined && !sameJson(slot.persistedInstance, instance)) {
@@ -1044,7 +1076,7 @@ export function createCanvasController(options: CanvasControllerOptions): Canvas
           const graph = await current.sync.loadGraph(entry.id, opened)
           const value: LocalCanvasRecord = { namespace: entry.namespace, id: entry.id, cacheVersion: 0,
             editSequence: 0, acknowledgedSequence: 0, working: opened.manifest, base: opened.manifest, head: opened.head,
-            deleted: opened.head.deletedAt !== undefined, savedAt: now() }
+            ...canvasLifecycleFields(undefined, opened.head), savedAt: now() }
           try { adoptRecord(entry, await options.persistence.save(value, graph.objects, 0), graph.objects) } catch (error) {
             if (!(error instanceof CanvasCacheConflict)) throw error
             await loadLocal(entry)
@@ -1317,6 +1349,13 @@ export function createCanvasController(options: CanvasControllerOptions): Canvas
       const cached = await options.persistence.getPreference(namespace, 'resource-policy')
       if (cached !== undefined) policies.set(namespace, readCanvasResourcePolicy(JSON.parse(cached)).limits)
       if (api !== undefined && online()) {
+        if (api.capabilities) {
+          try {
+            const capabilities = await api.capabilities()
+            if (scope.epoch !== activeEpoch || fingerprintOf(options.getAccount()) !== fingerprint) return
+            lifecycleCapabilities.set(namespace, capabilities)
+          } catch (error) { if (error instanceof CanvasRequestError && [401, 403].includes(error.status)) throw error; report(error) }
+        }
         try {
           const policy = await api.resourcePolicy()
           if (scope.epoch !== activeEpoch || fingerprintOf(options.getAccount()) !== fingerprint) return
@@ -1378,6 +1417,17 @@ export function createCanvasController(options: CanvasControllerOptions): Canvas
   }
   const listHeads = async (query: CanvasListQuery, current: ControllerScope): Promise<void> => {
     if (current.api === undefined || !online()) return
+    if (current.api.capabilities) {
+      try {
+        const capabilities = await current.api.capabilities()
+        if (currentScope().epoch !== current.epoch) throw new Error('CANVAS_ACCOUNT_MISMATCH')
+        lifecycleCapabilities.set(current.namespace, capabilities)
+      } catch (error) {
+        lifecycleCapabilities.delete(current.namespace)
+        if (error instanceof CanvasRequestError && [401, 403].includes(error.status)) throw error
+        report(error) // Unknown capability hides new write UI; it does not turn a valid list into an empty library.
+      }
+    }
     let cursor = query.cursor
     let known = heads.get(current.namespace)
     if (known === undefined) { known = new Map(); heads.set(current.namespace, known) }
@@ -1437,6 +1487,31 @@ export function createCanvasController(options: CanvasControllerOptions): Canvas
     const current = requireRecord(entry)
     if (current.editSequence !== expected.editSequence) throw new Error('CANVAS_ANNOTATIONS_STALE')
     if (expected.head !== undefined && (current.head?.version !== expected.head.version || current.head?.generation !== expected.head.generation || current.head?.manifestDigest !== expected.head.manifestDigest)) throw new Error('CANVAS_ANNOTATIONS_STALE')
+  }
+  const changeLifecycle = async (canvas: string, operation: 'archive' | 'unarchive' | 'delete' | 'restore'): Promise<void> => {
+    await activating
+    const current = currentScope()
+    if ((operation === 'archive' || operation === 'unarchive') && lifecycleCapabilities.get(current.namespace)?.archive !== true) throw new CanvasRequestError(409,
+      'LIFECYCLE_WRITES_DISABLED', '归档功能尚未开启，请刷新能力配置后重试。', undefined, false)
+    const entry = entryOf(canvas); await openEntry(entry)
+    await controller.flush(canvas)
+    // Drain a preceding save when possible; offline envelopes remain sealed and retain their original identity.
+    if (online() && current.sync !== undefined && entry.record?.conflict === undefined && entry.record?.localConflict === undefined) await current.sync.sync(canvas)
+    if (currentScope().epoch !== current.epoch) throw new Error('CANVAS_ACCOUNT_MISMATCH')
+    await enqueue(entry, async () => {
+      const original = entry.record
+      if (original === undefined) throw new Error('CANVAS_NOT_OPEN')
+      const valid = operation === 'delete' ? !original.deleted : operation === 'restore' ? original.deleted :
+        !original.deleted && (operation === 'archive' ? !canvasArchived(original) : canvasArchived(original))
+      if (!valid) throw new Error('CANVAS_LIFECYCLE_CONFLICT')
+      const { error: _error, conflict: _conflict, localConflict: _localConflict, ...retained } = original
+      const candidate = { ...retained, deleted: operation === 'delete' ? true : operation === 'restore' ? false : original.deleted,
+        ...(operation === 'archive' || operation === 'unarchive' ? { archived: operation === 'archive' } : {}),
+        editSequence: original.editSequence + 1, savedAt: now() }
+      await commitLocal(entry, original, candidate, {})
+    })
+    if (current.sync !== undefined && online()) await current.sync.sync(canvas)
+    startOwners(entry)
   }
   const controller: CanvasController = {
     startAssistant: async (canvas, input, expected, signal) => {
@@ -1526,6 +1601,10 @@ export function createCanvasController(options: CanvasControllerOptions): Canvas
       }, {}, false)
     },
     state: roster, getSnapshot: roster.getSnapshot, subscribe: roster.subscribe,
+    beginEditingSession: (canvas, presentationId) => {
+      text(canvas, '/canvasId', true); text(presentationId, '/presentationId', true)
+      editingSessions.set(keyOf(scope?.namespace ?? namespaceOf(options.getAccount()), canvas), presentationId)
+    },
     documentSource: canvas => entryOf(canvas, scope?.namespace ?? namespaceOf(options.getAccount())).source,
     instanceKey: (canvas, instanceId) => createStableCells(entryOf(canvas, scope?.namespace ?? namespaceOf(options.getAccount())), instanceId).key,
     instanceSource: key => {
@@ -1556,7 +1635,8 @@ export function createCanvasController(options: CanvasControllerOptions): Canvas
       } finally { rootLoading = false; publishRoster() }
       const search = query.search?.toLocaleLowerCase()
       const summaries = roster.getSnapshot().documents.filter(item => (search === undefined || item.title.toLocaleLowerCase().includes(search)) &&
-        (query.deleted === 'all' || (query.deleted === 'deleted' ? item.deleted : !item.deleted)))
+        ((query.state ?? query.deleted) === 'all' || ((query.state ?? query.deleted) === 'deleted' ? item.deleted :
+          !item.deleted && ((query.state ?? query.deleted) === 'archived' ? item.archived === true : item.archived !== true))))
       return [...summaries].sort(query.sort === 'title' ? (a, b) => a.title.localeCompare(b.title)
         : query.sort === 'created' ? (a, b) => b.createdAt.localeCompare(a.createdAt)
           : (a, b) => b.updatedAt.localeCompare(a.updatedAt))
@@ -1576,28 +1656,10 @@ export function createCanvasController(options: CanvasControllerOptions): Canvas
       currentScope()
       return createFromGraph(copied)
     },
-    remove: async canvas => {
-      await activating
-      const entry = entryOf(canvas); await openEntry(entry)
-      await controller.flush(canvas)
-      await enqueue(entry, async () => {
-        const original = entry.record
-        if (original === undefined || original.deleted) return
-        const { error: _error, ...retained } = original
-        await commitLocal(entry, original, { ...retained, deleted: true, editSequence: original.editSequence + 1, savedAt: now() }, {})
-      })
-    },
-    restore: async canvas => {
-      await activating
-      const entry = entryOf(canvas); await openEntry(entry)
-      await enqueue(entry, async () => {
-        const original = entry.record
-        if (original === undefined || !original.deleted) return
-        const { error: _error, conflict: _conflict, localConflict: _localConflict, ...retained } = original
-        await commitLocal(entry, original, { ...retained, deleted: false, editSequence: original.editSequence + 1, savedAt: now() }, {})
-        startOwners(entry)
-      })
-    },
+    remove: canvas => changeLifecycle(canvas, 'delete'),
+    restore: canvas => changeLifecycle(canvas, 'restore'),
+    archive: canvas => changeLifecycle(canvas, 'archive'),
+    unarchive: canvas => changeLifecycle(canvas, 'unarchive'),
     sync: canvas => syncScope(canvas),
     retry: async canvas => {
       await activating
@@ -1657,7 +1719,7 @@ export function createCanvasController(options: CanvasControllerOptions): Canvas
         await commitLocal(entry, original, { ...retained, working: remote?.manifest ?? localRemote!,
           pendingNoteDrafts: [],
           ...(remote === undefined ? (original.pending === undefined ? {} : { pending: original.pending })
-            : { base: remote.manifest, head: remote.head, deleted: remote.head.deletedAt !== undefined }),
+            : { base: remote.manifest, head: remote.head, ...canvasLifecycleFields(original, remote.head) }),
           editSequence: sequence, acknowledgedSequence: remote === undefined ? original.acknowledgedSequence : sequence,
           documentHistory: { schemaVersion: 1, past: [], future: [] }, savedAt: now() }, {})
         startOwners(entry); publishDocument(entry)
@@ -2181,7 +2243,7 @@ export function createCanvasController(options: CanvasControllerOptions): Canvas
       }
       // Persist newly discovered references for offline reopen and document export,
       // without adding an undoable layout/physics edit or changing the frozen capture.
-      if (history.length > 0 && !entry.record?.deleted) await mutate(entry, 'verification-discovery', manifest => ({
+      if (history.length > 0 && entry.record !== undefined && !canvasReadOnly(entry.record)) await mutate(entry, 'verification-discovery', manifest => ({
         ...manifest, snapshots: manifest.snapshots.map(item => {
           if (item.id !== aliasId || item.snapshot.digest !== alias.snapshot.digest) return item
           const existing = isJsonObject(item.metadata?.verificationReceiptsById) ? item.metadata.verificationReceiptsById : {}
@@ -2301,6 +2363,7 @@ export function createCanvasController(options: CanvasControllerOptions): Canvas
       const location = instanceLocations.get(key)
       if (location === undefined || location.entry.namespace !== currentScope().namespace) throw new Error('CANVAS_INSTANCE_MISSING')
       await openEntry(location.entry)
+      requireRecord(location.entry)
       const owner = await ensureOwner(location.entry, location.instanceId)
       const callback = owner.actions[action] as (...arguments_: CanvasInstanceActionArguments<K>) => CanvasInstanceActionResult<K>
       return callback(...args)

@@ -769,7 +769,7 @@ export function CanvasResults(props: CanvasNodeProps<'result'>) {
   return <ResultContent key={JSON.stringify([document.namespace, props.data.canvasId, node.id, alias.id, alias.snapshot.digest])}
     owner={props} node={node} alias={alias}
     snapshot={snapshot} scene={scene?.kind === 'scene' ? scene : undefined} datasets={resolveDatasets(document, snapshot)}
-    readOnly={document.status === 'deleted' || document.loading} />
+    readOnly={document.readOnly === true || document.status === 'deleted' || document.status === 'archived' || document.status === 'lifecycle-pending' || document.status === 'auth-required' || document.loading} />
 }
 
 function ComparisonConditions({ config, datasets, aliases, t }: {
@@ -833,7 +833,7 @@ function ComparisonContent({ owner, document, config }: {
   const { pending, run } = useCanvasOperation(owner)
   const [pages, setPages] = useState<Readonly<Record<string, number>>>({})
   const [addOpen, setAddOpen] = useState(false)
-  const readOnly = document.loading || document.status === 'deleted'
+  const readOnly = document.readOnly === true || document.loading || document.status === 'deleted' || document.status === 'archived' || document.status === 'lifecycle-pending' || document.status === 'auth-required'
   const selectCoordinate = (axis: AxisDescriptor, coordinate: number): void => {
     if (readOnly) return
     // Cursor writes use the owner's mutation queue without dropping input behind content actions.

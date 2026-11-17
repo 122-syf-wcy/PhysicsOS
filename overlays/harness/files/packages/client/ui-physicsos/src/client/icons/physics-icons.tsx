@@ -71,6 +71,14 @@ export const IconQuestionSheet = (props: PhysicsIconProps) => (
   </Glyph>
 )
 
+/** Courseware: a presentation screen with a slide and teacher pointer. */
+export const IconCourseware = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <path d="M3 4.5h18M4.5 4.5v11h15v-11M12 15.5V21M8.5 21l3.5-3 3.5 3" />
+    <path d="M8 8h5M8 11h3M15.5 11.5l2-2" />
+  </Glyph>
+)
+
 /** Announcement: a megaphone with two sound arcs. */
 export const IconAnnouncement = (props: PhysicsIconProps) => (
   <Glyph {...props}>

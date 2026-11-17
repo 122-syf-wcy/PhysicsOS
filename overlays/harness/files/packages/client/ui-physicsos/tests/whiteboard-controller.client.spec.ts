@@ -7,7 +7,7 @@ const source: SourceImage = { id: 'img-1', sha256: 'a'.repeat(64), mimeType: 'im
 const diagram: DrawingDiagram = { schemaVersion: 1, sourceImageId: source.id, sourceImageSha256: source.sha256, viewBox: source.viewBox,
   primitives: [{ id: 'surface', type: 'line', points: [[20, 300], [780, 300]] }], uncertainties: [] }
 const document: WhiteboardDocument = { schemaVersion: 1, id: 'board-1', title: 'Lesson', scene: { elements: [], appState: {} }, sourceImages: [source], appliedGenerationIds: [] }
-const record: WhiteboardRecord = { document, revision: 1, updatedAt: '2026-11-10T01:00:00Z' }
+const record: WhiteboardRecord = { document, revision: 1, generation: 1, updatedAt: '2026-11-10T01:00:00Z' }
 const job: WhiteboardGeneration = { id: 'job-1', whiteboardId: 'board-1', imageId: 'img-1', status: 'queued' }
 const deferred = <T>() => { let resolve!: (value: T) => void; let reject!: (error: unknown) => void; const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no }); return { promise, resolve, reject } }
 
@@ -20,7 +20,7 @@ function fixture(overrides: Partial<WhiteboardApi> = {}, scheduling: Pick<Whiteb
     list: async () => [{ id: 'board-1', title: remote.document.title, revision: remote.revision, updatedAt: remote.updatedAt }],
     create: async input => ({ ...record, document: { ...document, id: 'board-new', title: input.title } }),
     read: async () => remote,
-    save: async input => { if (input.expectedRevision !== remote.revision) throw Object.assign(new Error('Revision changed'), { status: 409 }); remote = { document: input.document, revision: remote.revision + 1, updatedAt: record.updatedAt }; return remote },
+    save: async input => { if (input.expectedRevision !== remote.revision) throw Object.assign(new Error('Revision changed'), { status: 409 }); remote = { document: input.document, generation: remote.generation ?? 1, revision: remote.revision + 1, updatedAt: record.updatedAt }; return remote },
     uploadImage: async () => source,
     readImage: async () => ({ source, blob: new Blob(['owned image bytes'], { type: 'image/png' }) }),
     startGeneration: async () => job,
@@ -259,7 +259,7 @@ describe('owned durable whiteboard editing', () => {
   it('preserves local work as conflict when replayed save receipt is older than the observed server head', async () => {
     const local = { ...document, title: 'Local draft' }
     const f = fixture({ read: async () => ({ ...record, revision: 3, document: { ...document, title: 'Other device' } }), save: async () => ({ ...record, revision: 2, document: local }) })
-    f.drafts.set('account-a:board-1', { record: { ...record, document: local }, dirty: true, pendingSave: { document: local, expectedRevision: 1, operationId: 'old-receipt' } })
+    f.drafts.set('account-a:board-1', { record: { ...record, document: local }, dirty: true, pendingSave: { document: local, expectedRevision: 1, expectedGeneration: 1, operationId: 'old-receipt' } })
     await f.controller.open('board-1')
     await expect(f.controller.save()).rejects.toMatchObject({ status: 409 })
     expect(f.controller.getSnapshot()).toMatchObject({ status: 'conflict', dirty: true, record: { document: { title: 'Local draft' } } })

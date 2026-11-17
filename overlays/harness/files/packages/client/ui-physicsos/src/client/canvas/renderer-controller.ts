@@ -105,8 +105,8 @@ export function createCanvasRendererController(controller: Pick<CanvasController
     const document = controller.documentSource(record.canvasId).getSnapshot()
     const instance = document.manifest?.instances.find(value => value.instanceId === record.instanceId)
     const current = instance === undefined ? undefined : document.objects[instance.currentScene.digest]
-    if (instance === undefined || current?.kind !== 'scene' || document.status === 'deleted' || document.status === 'auth-required') {
-      stopWork(record); record.source.set({ status: 'native', kind: 'native' }); return
+    if (instance === undefined || current?.kind !== 'scene' || document.readOnly === true || document.status === 'deleted' || document.status === 'archived' || document.status === 'lifecycle-pending' || document.status === 'auth-required') {
+      stopWork(record); record.signature = ''; record.source.set({ status: 'native', kind: 'native' }); return
     }
     const code = canvasCodeRef(instance.source.metadata?.questionCodeVisualization ?? questionCodeVisualizationOf(current.scene))
     const release = instance.rendererRelease ?? current.scene.metadata.experimentRelease ?? instance.source.release

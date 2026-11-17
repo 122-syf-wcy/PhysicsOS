@@ -22,6 +22,7 @@ import { draftToScene, starterDraft } from '../physics/circuit-builder.ts'
 import css from './CanvasWorkspace.module.css'
 import stageCss from './CanvasStage.module.css'
 import { WorkbenchFloatPanel } from '../WorkbenchFloatPanel.tsx'
+import { ActivityDisplayed } from '../ActivityDisplayed.tsx'
 import '@xyflow/react/dist/style.css'
 
 const sameViewport = (left: Viewport, right: Viewport): boolean => left.x === right.x && left.y === right.y && left.zoom === right.zoom
@@ -48,6 +49,11 @@ const rootSelection = (nodes: readonly CanvasNode[], selected: readonly string[]
 export function CanvasWorkspace(props: CanvasWorkbenchProps) {
   const { canvasId, t, canvasCommands, actions } = props
   const document = props.useCanvasDocument(canvasId)
+  const roster = props.useCanvasRoster(state => state)
+  const [lifecycleDialog, setLifecycleDialog] = useState<'archive' | 'unarchive' | 'delete' | 'restore'>()
+  const [lifecycleBusy, setLifecycleBusy] = useState(false)
+  const [lifecycleError, setLifecycleError] = useState<string>()
+  const [lifecycleNotice, setLifecycleNotice] = useState<'archive' | 'unarchive' | 'delete' | 'restore'>()
   const view = props.useStore(state => state)
   const Experiment = props.useFactorySlot('experiment', CanvasExperimentNode)
   const Result = props.useFactorySlot('result', CanvasResultNode)
@@ -79,6 +85,9 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
   const [suspendingPanKeys, setSuspendingPanKeys] = useState(false)
   const importInput = useRef<HTMLInputElement>(null)
   const manifest = document?.manifest
+  const presentation = useRef({ key: '', id: '' })
+  const presentationKey = `${document?.namespace ?? ''}:${canvasId}`
+  if (presentation.current.key !== presentationKey) presentation.current = { key: presentationKey, id: randomUUID() }
   useEffect(() => {
     if (window.matchMedia?.('(pointer: coarse)').matches || navigator.maxTouchPoints > 0) actions.setTool('hand')
   }, [canvasId, actions])
@@ -91,6 +100,7 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
     setShapeSuggestion(undefined)
     setResolving(false)
     setResolveError(undefined)
+    setLifecycleDialog(undefined); setLifecycleError(undefined); setLifecycleNotice(undefined)
   }, [canvasId, document?.namespace])
   const latest = useRef({ manifest, preview: view.transientLayouts, viewport: view.transientViewport, selected: view.selected })
   latest.current = { manifest, preview: view.transientLayouts, viewport: view.transientViewport, selected: view.selected }
@@ -104,9 +114,10 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
   }, [])
   useEffect(() => {
     actions.chooseCanvas(canvasId)
+    canvasCommands.beginEditingSession(canvasId, presentation.current.id)
     void canvasCommands.open(canvasId).catch(error => { actions.showToast('canvas.error.notFound', errorMessage(error, props), true) })
     return () => { gestureLayouts.current = {}; drag.current = undefined; actions.clearGesture() }
-  }, [canvasCommands, actions, canvasId])
+  }, [canvasCommands, actions, canvasId, document?.namespace])
   useEffect(() => {
     const blur = (): void => { setSpacePan(false) }
     window.addEventListener('blur', blur)
@@ -116,8 +127,22 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
     try { await operation(); if (success !== undefined) actions.showToast(success, undefined) }
     catch (error) { actions.showToast('canvas.error.generic', errorMessage(error, props), true) }
   }, [actions, props])
-  const editable = manifest !== undefined && document?.status !== 'deleted' && document?.status !== 'auth-required' && document?.loading !== true
-  const canSubmitLocal = editable && document?.status === 'conflict' && document.head?.deletedAt === undefined
+  const editable = manifest !== undefined && document?.readOnly !== true && document?.status !== 'deleted' && document?.status !== 'archived' && document?.status !== 'lifecycle-pending' && document?.status !== 'auth-required' && document?.loading !== true
+  const canSubmitLocal = editable && document?.status === 'conflict' && document.head?.deletedAt === undefined && document.head?.archivedAt === undefined && !document.conflicts.some(conflict => conflict.path === '/lifecycle')
+  const organize = async (): Promise<void> => {
+    if (!lifecycleDialog || lifecycleBusy) return
+    setLifecycleBusy(true); setLifecycleError(undefined)
+    const operation = lifecycleDialog
+    try {
+      if (operation === 'delete') await canvasCommands.remove(canvasId)
+      else await canvasCommands[operation](canvasId)
+      setLifecycleNotice(operation); setLifecycleDialog(undefined)
+    } catch (error) { setLifecycleError(errorMessage(error, props)) }
+    finally { if (mounted.current) setLifecycleBusy(false) }
+  }
+  const lifecycleTitle = lifecycleDialog === 'delete' ? t('canvas.deleteConfirm') : lifecycleDialog === 'archive' ? t('canvas.archiveConfirm') : lifecycleDialog === 'unarchive' ? t('canvas.unarchiveConfirm') : t('canvas.restoreConfirm')
+  const lifecycleAcknowledged = lifecycleNotice !== undefined && !document?.lifecyclePending && document?.head !== undefined &&
+    (lifecycleNotice === 'delete' ? document.head.deletedAt !== undefined : lifecycleNotice === 'restore' ? document.head.deletedAt === undefined : lifecycleNotice === 'archive' ? document.head.archivedAt !== undefined : document.head.archivedAt === undefined)
   const submitLocal = async (): Promise<void> => {
     const working = latest.current.manifest
     if (!canSubmitLocal || resolving || working === undefined) return
@@ -212,7 +237,7 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
   const positionsToWorld = (changes: readonly NodeChange<CanvasFlowNode>[]): void => {
     if (drag.current === undefined) return
     const current = latest.current.manifest
-    if (current === undefined || document?.status === 'deleted' || document?.loading === true) return
+    if (current === undefined || !editable) return
     const output: Record<string, CanvasLayout> = {}
     const lookup = new Map(current.nodes.map(node => [node.id, node]))
     const before = { ...latest.current.preview, ...gestureLayouts.current }
@@ -434,6 +459,9 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
     if (choice === 'ungroup') void run(() => canvasCommands.ungroup(canvasId, groups.map(group => group.id)))
     if (choice === 'front' || choice === 'back' || choice === 'forward' || choice === 'backward') void run(() => canvasCommands.layer(canvasId, view.selected, choice))
     if (choice === 'remove') void run(() => canvasCommands.removeNodes(canvasId, unlocked.map(node => node.id)), 'canvas.removed')
+    if (choice === 'archive-document' || choice === 'unarchive-document' || choice === 'delete-document' || choice === 'restore-document') {
+      setLifecycleError(undefined); setLifecycleDialog(choice.replace('-document', '') as 'archive' | 'unarchive' | 'delete' | 'restore')
+    }
     if (choice === 'export') void run(async () => { const graph = await canvasCommands.exportGraph(canvasId); downloadCanvasFile(JSON.stringify(graph, null, 2), `${graph.manifest.title}.physicsos-canvas.json`, 'application/json') }, 'canvas.exported')
     if (choice === 'import') importInput.current?.click()
   }
@@ -444,6 +472,7 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
     onFocusCapture={event => { setSuspendingPanKeys(inputTarget(event.target)) }}
     onBlurCapture={event => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) { setSpacePan(false); setSuspendingPanKeys(false) } }}
     onKeyUp={event => { if (event.code === 'Space') setSpacePan(false) }}>
+    {manifest && document?.namespace && !document.loading && !document.error && document.status !== 'auth-required' && document.status !== 'error' && document.status !== 'conflict' ? <ActivityDisplayed module="canvas" accountKey={document.namespace} entryId={presentation.current.id} /> : null}
     <header className={`${css.toolbar} ${stageCss.toolbar}`}>
       <div className={css.identity}>
         <div className={css.identityTitle}>
@@ -469,7 +498,7 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
               { id: 'compare', label: t('canvas.compare'), disabled: !editable || (manifest?.snapshots.length ?? 0) < 2 },
               { id: 'save', label: t('canvas.save'), disabled: !editable || document?.status === 'syncing' },
               { id: 'rename', label: t('canvas.rename'), disabled: !editable },
-              { id: 'copy', label: t('canvas.copy'), disabled: !editable },
+              { id: 'copy', label: t('canvas.copy'), disabled: manifest === undefined },
               { id: 'copy-selection', label: t('canvas.node.copySelection'), disabled: view.selected.length === 0 },
               { id: 'paste', label: t('canvas.node.paste'), disabled: !editable },
               { id: 'lock', label: t('canvas.node.lock'), disabled: !editable || view.selected.length === 0 },
@@ -483,10 +512,16 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
               { id: 'export', label: t('canvas.export'), disabled: manifest === undefined },
               { id: 'import', label: t('canvas.import') },
               { id: 'remove', label: t('canvas.node.delete'), danger: true, disabled: !editable || unlocked.length === 0 },
+              ...(document?.lifecycle !== 'deleted' && roster.capabilities?.archive ? [{ id: document?.lifecycle === 'archived' ? 'unarchive-document' : 'archive-document', label: t(document?.lifecycle === 'archived' ? 'canvas.unarchive' : 'canvas.archive'), disabled: !manifest || document?.lifecyclePending === true }] : []),
+              ...(document?.lifecycle === 'deleted' ? [{ id: 'restore-document', label: t('canvas.restore'), disabled: document?.lifecyclePending === true || roster.capabilities?.restore === false }] : [{ id: 'delete-document', label: t('canvas.delete'), danger: true, disabled: !manifest || document?.lifecyclePending === true || roster.capabilities?.delete === false }]),
             ]} onSelect={actionMenu} />
         </div>
       <Button size="sm" variant="toolbar" aria-pressed={agentOpen} aria-label={t('canvas.agent')} onClick={() => { setAgentOpen(!agentOpen) }}>{t('canvas.agent')}</Button>
     </header>
+    {document?.readOnly ? <div className={css.notice} role="status">{t('canvas.lifecycle.readonly')}</div> : null}
+    {lifecycleNotice ? <div className={css.notice} role="status"><span>{t(lifecycleAcknowledged ? 'canvas.lifecycle.ack' : 'canvas.lifecycle.pendingHint')}</span>
+      {lifecycleAcknowledged ? <Button size="sm" variant="ghost" disabled={lifecycleBusy || (lifecycleNotice === 'unarchive' || lifecycleNotice === 'archive') && !roster.capabilities?.archive} onClick={() => { setLifecycleDialog(lifecycleNotice === 'delete' ? 'restore' : lifecycleNotice === 'restore' ? 'delete' : lifecycleNotice === 'archive' ? 'unarchive' : 'archive') }}>{t('canvas.lifecycle.undo')}</Button> : <Button size="sm" variant="ghost" onClick={() => { void run(() => canvasCommands.retry(canvasId)) }}>{t('canvas.retry')}</Button>}
+    </div> : null}
     {document?.error === undefined ? null : <div className={css.notice} role="alert">{document.error.message}<Button size="sm" variant="ghost" onClick={() => { void run(() => canvasCommands.retry(canvasId)) }}>{t('canvas.retry')}</Button></div>}
     {document?.status === 'conflict' ? <div className={css.notice} role="alert">
       <strong>{t('canvas.conflict.title')}</strong><p>{t('canvas.conflict.hint')}</p>
@@ -595,6 +630,11 @@ export function CanvasWorkspace(props: CanvasWorkbenchProps) {
       const file = event.currentTarget.files?.[0]; event.currentTarget.value = ''; if (file === undefined) return
       void run(async () => { const input: unknown = JSON.parse(await file.text()); props.openCanvasView(await canvasCommands.importGraph(input)) }, 'canvas.imported')
     }} />
+    <Modal open={lifecycleDialog !== undefined} title={lifecycleTitle} closeLabel={t('canvas.close')} onClose={() => { if (!lifecycleBusy) setLifecycleDialog(undefined) }}
+      footer={<div className={css.actionRow}><Button variant="ghost" disabled={lifecycleBusy} onClick={() => { setLifecycleDialog(undefined) }}>{t('canvas.cancel')}</Button><Button variant="primary" disabled={lifecycleBusy} onClick={() => { void organize() }}>{t('canvas.confirm')}</Button></div>}>
+      <p>{t(lifecycleDialog === 'delete' ? 'canvas.deleteHint' : lifecycleDialog === 'restore' ? 'canvas.restoreHint' : 'canvas.archiveHint')}</p>
+      {lifecycleError ? <p role="alert">{lifecycleError}</p> : null}
+    </Modal>
     <Modal open={renameOpen} title={t('canvas.rename')} closeLabel={t('canvas.close')} onClose={() => { if (!renaming) setRenameOpen(false) }}
       footer={<div className={css.actionRow}><Button size="sm" disabled={renaming} onClick={() => { setRenameOpen(false) }}>{t('canvas.cancel')}</Button><Button size="sm" variant="primary" disabled={!editable || renaming || rename.trim().length === 0} onClick={() => { void saveName() }}>{t('canvas.confirm')}</Button></div>}>
       <Input data-modal-autofocus aria-label={t('canvas.name')} disabled={!editable || renaming} value={rename} onChange={event => { setRename(event.currentTarget.value) }} onKeyDown={event => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) { event.preventDefault(); void saveName() } }} />

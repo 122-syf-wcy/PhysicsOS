@@ -91,7 +91,7 @@ describe('owned saved-canvas assistant jobs', () => {
   })
   it('does not expose a ready candidate after the saved canvas head changes', async () => {
     const f = await fixture(); const body = await input(f); const job = await f.assistant.create(a, 'lesson', body); await settled(f.assistant, job.id)
-    await f.canvas.rename(a, 'lesson', { expectedVersion: body.expectedVersion, mutationId: 'rename', title: '新课堂' })
+    await f.canvas.rename(a, 'lesson', { expectedVersion: body.expectedVersion, expectedGeneration: body.expectedGeneration, mutationId: 'rename', title: '新课堂' })
     await expect(f.assistant.read(a, 'lesson', job.id)).rejects.toMatchObject({ status: 409, code: 'ASSISTANT_STALE' })
   })
   it('cancels a live request, ignores a late proposal and retains its received usage', async () => {

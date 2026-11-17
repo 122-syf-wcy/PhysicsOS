@@ -60,13 +60,18 @@ export function HomeHero({ t }: HomeHeroProps) {
  * @returns the examples and entry cards.
  */
 export function HomeBelow({
-  startQuestion, useRecentExperiments, openSurface, openCanvasView, newCanvas, requestSceneInCanvas, t,
+  startQuestion, useRecentExperiments, openSurface, openCanvasView, newCanvas, requestSceneInCanvas,
+  removeRecent, restoreRecent, archiveRecent, unarchiveRecent, t,
 }: HomeBelowProps) {
   return (
     <div className={css.below} data-physicsos-home-actions="">
       <HomeActions {...(startQuestion === undefined ? {} : { startQuestion })}
         useRecentExperiments={useRecentExperiments} openSurface={openSurface}
-        openCanvasView={openCanvasView} newCanvas={newCanvas} requestSceneInCanvas={requestSceneInCanvas} t={t} />
+        openCanvasView={openCanvasView} newCanvas={newCanvas} requestSceneInCanvas={requestSceneInCanvas}
+        removeRecent={removeRecent}
+        {...(restoreRecent === undefined ? {} : { restoreRecent })}
+        {...(archiveRecent === undefined ? {} : { archiveRecent })}
+        {...(unarchiveRecent === undefined ? {} : { unarchiveRecent })} t={t} />
     </div>
   )
 }

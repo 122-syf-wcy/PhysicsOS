@@ -109,10 +109,10 @@ end_marker = "# END PhysicsOS paper-preview location"
 lines = text.splitlines()
 kept, skipping = [], False
 for line in lines:
-    if line.strip() in {start_marker, "# BEGIN PhysicsOS experiment locations"}:
+    if line.strip() in {start_marker, "# BEGIN PhysicsOS experiment locations", "# BEGIN PhysicsOS courseware locations"}:
         skipping = True
         continue
-    if line.strip() in {end_marker, "# END PhysicsOS experiment locations"}:
+    if line.strip() in {end_marker, "# END PhysicsOS experiment locations", "# END PhysicsOS courseware locations"}:
         skipping = False
         continue
     if not skipping:
@@ -162,6 +162,37 @@ block = [
     '    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;',
     "}",
     "# END PhysicsOS experiment locations",
+    "# BEGIN PhysicsOS courseware locations",
+    "location ~ ^/physicsos/courseware/(?:embed|content)/[A-Za-z0-9_-]{43}$ {",
+    "    proxy_pass http://127.0.0.1:3080;",
+    "    proxy_http_version 1.1;",
+    "    proxy_set_header Host $host;",
+    "    proxy_set_header X-Forwarded-Proto $scheme;",
+    "    proxy_set_header Sec-Fetch-Dest $http_sec_fetch_dest;",
+    "    proxy_set_header Sec-Fetch-Mode $http_sec_fetch_mode;",
+    "    proxy_set_header Sec-Fetch-Site $http_sec_fetch_site;",
+    '    proxy_set_header Cookie "";',
+    '    proxy_set_header Authorization "";',
+    "    proxy_hide_header Set-Cookie;",
+    "    # Capability URLs must not enter the ordinary access log.",
+    "    access_log off;",
+    "    # Preserve exact upstream CSP/sandbox. No inherited DENY or extra CSP.",
+    f'    add_header Strict-Transport-Security "max-age={max_age}; includeSubDomains" always;',
+    '    add_header X-Content-Type-Options "nosniff" always;',
+    '    add_header Referrer-Policy "no-referrer" always;',
+    '    add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()" always;',
+    "    proxy_read_timeout 120s;",
+    "}",
+    "location /physicsos/courseware {",
+    "    client_max_body_size 32m;",
+    "    proxy_pass http://127.0.0.1:3080;",
+    "    proxy_http_version 1.1;",
+    "    proxy_set_header Host $host;",
+    "    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;",
+    "    proxy_set_header X-Forwarded-Proto $scheme;",
+    "    proxy_read_timeout 120s;",
+    "}",
+    "# END PhysicsOS courseware locations",
 ]
 
 # Insert as the last directive of the TLS server block. Walk forward, tracking

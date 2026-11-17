@@ -222,7 +222,7 @@ describe('real Loader composition - account-private Canvas HTTP', { timeout: CAN
     await failure(await fixture.raw('PUT', `${prefix}/graph-canvas/objects/${graph.manifest.digest}`, graph.manifest.bytes, account), 404, 'OBJECT_NOT_FOUND')
     await failure(await fixture.raw('PUT', `${prefix}/graph-canvas/objects/${graph.history.digest}`, graph.history.bytes, account), 404, 'OBJECT_NOT_FOUND')
     await failure(await fixture.call('POST', `${prefix}/graph-canvas/commit`, {
-      expectedVersion: 1, mutationId: 'commit-before-upload', manifestDigest: graph.manifest.digest,
+      expectedVersion: 1, expectedGeneration: 1, mutationId: 'commit-before-upload', manifestDigest: graph.manifest.digest,
     } satisfies CanvasCommitRequest, account), 404, 'OBJECT_NOT_FOUND')
     expect(await responseJson<CanvasOpenResponse>(await fixture.call('GET', `${prefix}/graph-canvas`, undefined, account))).toEqual({ head: created.head, manifest: created.manifest })
 
@@ -279,7 +279,7 @@ describe('real Loader composition - account-private Canvas HTTP', { timeout: CAN
     const descending = await responseJson<CanvasListResponse>(await fixture.call('GET', `${prefix}?sort=title&order=desc`, undefined, account))
     expect(descending.items.map(head => head.id)).toEqual(['beta', 'zulu', 'alpha-twin', 'alpha'])
 
-    const deleted = await responseJson<MutationResponse>(await fixture.call('DELETE', `${prefix}/beta`, { expectedVersion: beta.head.version, mutationId: 'delete-beta' } satisfies CanvasDeleteRequest, account))
+    const deleted = await responseJson<MutationResponse>(await fixture.call('DELETE', `${prefix}/beta`, { expectedVersion: beta.head.version, expectedGeneration: beta.head.generation, mutationId: 'delete-beta' } satisfies CanvasDeleteRequest, account))
     const live = await responseJson<CanvasListResponse>(await fixture.call('GET', `${prefix}?sort=title`, undefined, account))
     expect(live.items.map(head => head.id)).toEqual(['alpha', 'alpha-twin', 'zulu'])
     expect(await responseJson<CanvasListResponse>(await fixture.call('GET', `${prefix}?state=deleted&search=magnet`, undefined, account))).toEqual({ items: [deleted.head] })
@@ -309,7 +309,7 @@ describe('real Loader composition - account-private Canvas HTTP', { timeout: CAN
     const fixture = await loadCanvasFixture({ test })
     const account = await fixture.register('lifecycle-owner')
     const created = await create(fixture, account, 'lifecycle', 'Original title')
-    const renameRequest: CanvasRenameRequest = { expectedVersion: 1, mutationId: 'rename-title', title: 'Renamed title' }
+    const renameRequest: CanvasRenameRequest = { expectedVersion: 1, expectedGeneration: 1, mutationId: 'rename-title', title: 'Renamed title' }
     const renamed = await responseJson<MutationResponse>(await fixture.call('POST', `${prefix}/lifecycle/rename`, renameRequest, account))
     expect(renamed.head).toMatchObject({ title: renameRequest.title, version: 2, generation: 1, changeSeq: 2 })
     expect(renamed.manifest.title).toBe(renameRequest.title)
@@ -318,21 +318,21 @@ describe('real Loader composition - account-private Canvas HTTP', { timeout: CAN
     await download(fixture, account, 'lifecycle', encoded(created.manifest))
     expect((await failure(await fixture.call('POST', `${prefix}/lifecycle/rename`, { ...renameRequest, mutationId: 'stale-rename' }, account), 409, 'VERSION_CONFLICT')).currentHead).toEqual(renamed.head)
     await failure(await fixture.call('POST', `${prefix}/lifecycle/rename`, { ...renameRequest, title: 'Different retry content' }, account), 409, 'MUTATION_CONFLICT')
-    expect((await failure(await fixture.call('DELETE', `${prefix}/lifecycle`, { expectedVersion: 1, mutationId: 'stale-delete' }, account), 409, 'VERSION_CONFLICT')).currentHead).toEqual(renamed.head)
+    expect((await failure(await fixture.call('DELETE', `${prefix}/lifecycle`, { expectedVersion: 1, expectedGeneration: 1, mutationId: 'stale-delete' }, account), 409, 'VERSION_CONFLICT')).currentHead).toEqual(renamed.head)
 
-    const deleteRequest: CanvasDeleteRequest = { expectedVersion: renamed.head.version, mutationId: 'delete-lifecycle' }
+    const deleteRequest: CanvasDeleteRequest = { expectedVersion: renamed.head.version, expectedGeneration: renamed.head.generation, mutationId: 'delete-lifecycle' }
     const deleted = await responseJson<MutationResponse>(await fixture.call('DELETE', `${prefix}/lifecycle`, deleteRequest, account))
     expect(deleted.head).toMatchObject({ version: 3, generation: 2, changeSeq: 3, manifestDigest: renamed.head.manifestDigest })
     expect(deleted.head.deletedAt).toBeTypeOf('string')
     expect(deleted.manifest).toEqual(renamed.manifest)
     expect(await changes(fixture, account, renamed.head.changeSeq)).toEqual({ changes: [{ seq: 3, operation: 'delete', mutationId: deleteRequest.mutationId, head: deleted.head }], cursor: 3, hasMore: false })
     expect((await failure(await fixture.call('GET', `${prefix}/lifecycle`, undefined, account), 410, 'DELETED')).currentHead).toEqual(deleted.head)
-    await failure(await fixture.call('POST', `${prefix}/lifecycle/commit`, { expectedVersion: 2, mutationId: 'stale-save', manifestDigest: renamed.head.manifestDigest } satisfies CanvasCommitRequest, account), 410, 'DELETED')
+    await failure(await fixture.call('POST', `${prefix}/lifecycle/commit`, { expectedVersion: 2, expectedGeneration: 1, mutationId: 'stale-save', manifestDigest: renamed.head.manifestDigest } satisfies CanvasCommitRequest, account), 410, 'DELETED')
     await failure(await fixture.call('POST', prefix, { id: 'lifecycle', title: 'Reused id', mutationId: 'recreate-deleted' } satisfies CanvasCreateRequest, account), 409, 'ID_CONFLICT')
     await download(fixture, account, 'lifecycle', encoded(renamed.manifest))
 
     const restoreRequest: CanvasRestoreRequest = { expectedVersion: deleted.head.version, expectedGeneration: deleted.head.generation, mutationId: 'restore-lifecycle' }
-    expect((await failure(await fixture.call('POST', `${prefix}/lifecycle/restore`, { ...restoreRequest, expectedVersion: 2, mutationId: 'stale-restore-version' }, account), 409, 'VERSION_CONFLICT')).currentHead).toEqual(deleted.head)
+    expect((await failure(await fixture.call('POST', `${prefix}/lifecycle/restore`, { ...restoreRequest, expectedVersion: 2, expectedGeneration: 1, mutationId: 'stale-restore-version' }, account), 409, 'VERSION_CONFLICT')).currentHead).toEqual(deleted.head)
     expect((await failure(await fixture.call('POST', `${prefix}/lifecycle/restore`, { ...restoreRequest, expectedGeneration: 1, mutationId: 'stale-restore-generation' }, account), 409, 'VERSION_CONFLICT')).currentHead).toEqual(deleted.head)
     const restored = await responseJson<MutationResponse>(await fixture.call('POST', `${prefix}/lifecycle/restore`, restoreRequest, account))
     expect(restored.head).toMatchObject({ version: 4, generation: 3, changeSeq: 4, title: renamed.head.title, manifestDigest: renamed.head.manifestDigest })
@@ -426,7 +426,7 @@ describe('real Loader composition - account-private Canvas HTTP', { timeout: CAN
     expect(fixture.domain.table('objects').size).toBe(count)
     expect(await responseJson<CanvasOpenResponse>(await fixture.call('GET', `${prefix}/object-bytes`, undefined, account))).toEqual({ head: created.head, manifest: created.manifest })
     const committed = await responseJson<MutationResponse>(await fixture.call('POST', `${prefix}/object-bytes/commit`, {
-      expectedVersion: 1, mutationId: 'commit-exact-object', manifestDigest: object.digest,
+      expectedVersion: 1, expectedGeneration: 1, mutationId: 'commit-exact-object', manifestDigest: object.digest,
     } satisfies CanvasCommitRequest, account))
     expect(committed.head.version).toBe(2)
     expect(committed.manifest).toEqual(value)
@@ -445,7 +445,7 @@ describe('real Loader composition - account-private Canvas HTTP', { timeout: CAN
     const commitRequest: CanvasCommitRequest = { expectedVersion: 1, expectedGeneration: 1, mutationId: 'restart-commit', manifestDigest: graph.manifest.digest }
     const committed = await responseJson<MutationResponse>(await fixture.call('POST', `${prefix}/restart-canvas/commit`, commitRequest, account))
     const renamed = await responseJson<MutationResponse>(await fixture.call('POST', `${prefix}/restart-canvas/rename`, {
-      expectedVersion: committed.head.version, mutationId: 'restart-rename', title: 'Durable renamed Canvas',
+      expectedVersion: committed.head.version, expectedGeneration: committed.head.generation, mutationId: 'restart-rename', title: 'Durable renamed Canvas',
     } satisfies CanvasRenameRequest, account))
     const originalContext = fixture.context
     const facility = originalContext.storageDomain

@@ -10,6 +10,8 @@ import type { WhiteboardFactoryProps } from './contract.ts'
 import css from './Whiteboard.module.css'
 import stageCss from './WhiteboardScene.module.css'
 import { WorkbenchFloatPanel } from '../WorkbenchFloatPanel.tsx'
+import { ActivityDisplayed } from '../ActivityDisplayed.tsx'
+import type { WhiteboardLifecycleOperation } from './api.ts'
 function download(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob); const anchor = document.createElement('a')
   anchor.href = url; anchor.download = name; anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 1000)
@@ -20,12 +22,17 @@ export function WhiteboardWorkspace(props: WhiteboardFactoryProps) {
   const state = props.useWhiteboardState(value => value)
   const record = state.record?.document.id === whiteboardId ? state.record : undefined
   const recordReady = record !== undefined
+  const readOnly = state.readOnly === true || state.loading || state.lifecyclePending?.[whiteboardId] !== undefined
+  const presentation = useRef({ key: '', id: '' })
+  const presentationKey = `${state.namespace ?? ''}:${whiteboardId}`
+  if (presentation.current.key !== presentationKey) presentation.current = { key: presentationKey, id: randomUUID() }
   const root = useRef<HTMLElement>(null)
   const confirmation = useRef<HTMLDialogElement>(null)
   const file = useRef<HTMLInputElement>(null)
   const [fullscreen, setFullscreen] = useState(false)
   const [clearRequest, setClearRequest] = useState(0)
-  const [dialog, setDialog] = useState<'clear' | 'reload' | undefined>()
+  const [dialog, setDialog] = useState<'clear' | 'reload' | WhiteboardLifecycleOperation | undefined>()
+  const [lifecycleNotice, setLifecycleNotice] = useState<WhiteboardLifecycleOperation>()
   const [error, setError] = useState<string | undefined>()
   const [sourceVisible, setSourceVisible] = useState(false)
   const [imageId, setImageId] = useState<string | undefined>()
@@ -34,8 +41,9 @@ export function WhiteboardWorkspace(props: WhiteboardFactoryProps) {
   const [sourceLoading, setSourceLoading] = useState(false)
   const [localBusy, setLocalBusy] = useState(false)
   const mounted = useRef(true)
+  useEffect(() => { setLifecycleNotice(undefined); setDialog(undefined); setError(undefined) }, [whiteboardId, state.namespace])
   const perform = async (operation: () => Promise<unknown>) => { setError(undefined); try { await operation() } catch (reason) { if (mounted.current) setError(reason instanceof Error ? reason.message : t('whiteboard.error')) } }
-  useEffect(() => { mounted.current = true; void perform(() => controller.open(whiteboardId)); return () => { mounted.current = false } }, [controller, whiteboardId, state.namespace])
+  useEffect(() => { mounted.current = true; void perform(async () => { try { await controller.list() } catch { /* The owner-bound document read still decides offline/read-only authority. */ } await controller.open(whiteboardId) }); return () => { mounted.current = false } }, [controller, whiteboardId, state.namespace])
   useEffect(() => { const changed = () => setFullscreen(document.fullscreenElement === root.current); document.addEventListener('fullscreenchange', changed); return () => document.removeEventListener('fullscreenchange', changed) }, [])
   useEffect(() => { const online = () => { if (controller.getSnapshot().dirty) void perform(() => controller.save()); void perform(() => controller.poll()) }; window.addEventListener('online', online); return () => window.removeEventListener('online', online) }, [controller])
   useEffect(() => { const leave = (event: BeforeUnloadEvent) => { if (controller.getSnapshot().dirty) { event.preventDefault(); event.returnValue = '' } }; window.addEventListener('beforeunload', leave); return () => window.removeEventListener('beforeunload', leave) }, [controller])
@@ -77,11 +85,17 @@ export function WhiteboardWorkspace(props: WhiteboardFactoryProps) {
   }, [controller, whiteboardId, sourceIds, state.namespace])
   useEffect(() => { if (dialog !== undefined) confirmation.current?.showModal(); else confirmation.current?.close() }, [dialog])
   const selectedSource = record?.document.sourceImages.find(source => source.id === imageId)
-  const exportFile = async (format: 'json' | 'svg' | 'png') => {
+  const exportFile = async (format: 'json' | 'draft' | 'svg' | 'png') => {
     if (!record) return
     setLocalBusy(true)
     try {
       const title = record.document.title.replace(/[\\/:*?"<>|]/g, '_')
+      if (format === 'draft') {
+        const assets = await Promise.all(record.document.sourceImages.filter(source => originals[source.id]).map(async source => ({ source, dataUrl: await dataUrl(originals[source.id]!) })))
+        const unavailableOriginals = record.document.sourceImages.filter(source => !originals[source.id])
+        download(new Blob([JSON.stringify({ format: 'physicsos-whiteboard-draft', version: 1, document: record.document, assets, unavailableOriginals }, null, 2)], { type: 'application/json' }), `${title}.draft.physicsos-whiteboard.json`)
+        return
+      }
       if (format === 'json') {
         const assets = await Promise.all(record.document.sourceImages.map(async source => { const original = originals[source.id] ?? (await controller.readImage({ whiteboardId, imageId: source.id })).blob; return { source, dataUrl: await dataUrl(original) } }))
         download(new Blob([JSON.stringify({ format: 'physicsos-whiteboard', version: 1, document: record.document, assets }, null, 2)], { type: 'application/json' }), `${title}.physicsos-whiteboard.json`)
@@ -109,47 +123,73 @@ export function WhiteboardWorkspace(props: WhiteboardFactoryProps) {
       } finally { URL.revokeObjectURL(url) }
     } finally { if (mounted.current) setLocalBusy(false) }
   }
+  const lifecycleTitle = dialog === 'delete' ? t('whiteboard.deleteDocumentConfirm') : dialog === 'archive' ? t('whiteboard.archiveConfirm') : dialog === 'unarchive' ? t('whiteboard.unarchiveConfirm') : dialog === 'restore' ? t('whiteboard.restoreConfirm') : dialog === 'clear' ? t('whiteboard.clearConfirm') : t('whiteboard.reloadConfirm')
+  const lifecycleAcknowledged = lifecycleNotice !== undefined && !state.lifecyclePending?.[whiteboardId] && state.serverHead !== undefined &&
+    (lifecycleNotice === 'delete' ? state.serverHead.deletedAt !== undefined : lifecycleNotice === 'restore' ? state.serverHead.deletedAt === undefined : lifecycleNotice === 'archive' ? state.serverHead.archivedAt !== undefined : state.serverHead.archivedAt === undefined)
+  const inverseLifecycle = lifecycleNotice === 'delete' ? 'restore' : lifecycleNotice === 'restore' ? 'delete' : lifecycleNotice === 'archive' ? 'unarchive' : 'archive'
+  const confirmDialog = async () => {
+    const selected = dialog
+    if (selected === 'clear') { if (!readOnly) setClearRequest(value => value + 1) }
+    else if (selected === 'reload') await controller.reload()
+    else if (selected) {
+      setLifecycleNotice(selected)
+      if (selected === 'delete') await controller.remove(whiteboardId)
+      else await controller[selected](whiteboardId)
+    }
+    setDialog(undefined)
+  }
   const running = state.job && !['ready', 'error', 'cancelled'].includes(state.job.status)
   const toolbarExtras = <>
-    <button type="button" className={css.dockAction} disabled={!record || state.busy} aria-label={t('whiteboard.upload')} title={t('whiteboard.upload')} onClick={() => file.current?.click()}><span aria-hidden="true">↥</span><span className={css.actionText}>{t('whiteboard.dock.upload')}</span></button>
+    <button type="button" className={css.dockAction} disabled={!record || readOnly || state.busy} aria-label={t('whiteboard.upload')} title={t('whiteboard.upload')} onClick={() => file.current?.click()}><span aria-hidden="true">↥</span><span className={css.actionText}>{t('whiteboard.dock.upload')}</span></button>
     <button type="button" className={css.dockAction} aria-pressed={sourceVisible} aria-label={t('whiteboard.sourceToggle')} title={t('whiteboard.sourceToggle')} onClick={() => setSourceVisible(!sourceVisible)}><span aria-hidden="true">▧</span><span className={css.actionText}>{t('whiteboard.dock.compare')}{record?.document.sourceImages.length ? ` (${record.document.sourceImages.length})` : ''}</span></button>
-    {selectedSource ? <button type="button" className={css.dockAction} disabled={Boolean(running) || state.busy || state.status === 'conflict'} aria-label={state.job ? t('whiteboard.generateAgain') : t('whiteboard.generate')} title={state.job ? t('whiteboard.generateAgain') : t('whiteboard.generate')} onClick={() => { setSourceVisible(true); void perform(() => controller.generate(selectedSource.id)) }}><span aria-hidden="true">✦</span><span className={css.actionText}>{t('whiteboard.dock.generate')}</span></button> : null}
-    <button type="button" className={[css.dockAction, css.dockPrimary].filter(Boolean).join(' ')} disabled={!record || state.status === 'saving' || state.status === 'conflict'} aria-label={t('whiteboard.save')} title={t('whiteboard.save')} onClick={() => { void perform(() => controller.save()) }}><span aria-hidden="true">✓</span><span className={css.actionText}>{t('whiteboard.dock.save')}</span></button>
+    {selectedSource ? <button type="button" className={css.dockAction} disabled={readOnly || Boolean(running) || state.busy || state.status === 'conflict'} aria-label={state.job ? t('whiteboard.generateAgain') : t('whiteboard.generate')} title={state.job ? t('whiteboard.generateAgain') : t('whiteboard.generate')} onClick={() => { setSourceVisible(true); void perform(() => controller.generate(selectedSource.id)) }}><span aria-hidden="true">✦</span><span className={css.actionText}>{t('whiteboard.dock.generate')}</span></button> : null}
+    <button type="button" className={[css.dockAction, css.dockPrimary].filter(Boolean).join(' ')} disabled={!record || readOnly || state.status === 'saving' || state.status === 'conflict'} aria-label={t('whiteboard.save')} title={t('whiteboard.save')} onClick={() => { void perform(() => controller.save()) }}><span aria-hidden="true">✓</span><span className={css.actionText}>{t('whiteboard.dock.save')}</span></button>
     <button type="button" className={css.dockAction} aria-label={fullscreen ? t('whiteboard.exitFullscreen') : t('whiteboard.fullscreen')} title={fullscreen ? t('whiteboard.exitFullscreen') : t('whiteboard.fullscreen')} onClick={() => { void perform(async () => { if (document.fullscreenElement) await document.exitFullscreen(); else await root.current?.requestFullscreen() }) }}><span aria-hidden="true">⛶</span><span className={css.actionText}>{fullscreen ? t('whiteboard.dock.exitFullscreen') : t('whiteboard.dock.fullscreen')}</span></button>
     <details className={css.more}><summary aria-label={t('whiteboard.showTools')} title={t('whiteboard.showTools')}><span aria-hidden="true">···</span><span className={css.actionText}>{t('whiteboard.showTools')}</span></summary><div>
       <button type="button" disabled={!record} onClick={() => setDialog('reload')}>{t('whiteboard.reload')}</button>
-      <button type="button" disabled={!record} onClick={() => setDialog('clear')}>{t('whiteboard.clear')}</button>
+      <button type="button" disabled={!record || readOnly} onClick={() => setDialog('clear')}>{t('whiteboard.clear')}</button>
+      <button type="button" disabled={!record || state.busy} onClick={() => { void perform(async () => { const id = await controller.copy(); if (id) props.openWhiteboardView(id) }) }}>{t('whiteboard.saveCopy')}</button>
+      {!state.serverHead?.deletedAt && state.capabilities?.archive ? <button type="button" disabled={!record || state.busy || !!state.lifecyclePending?.[whiteboardId]} onClick={() => setDialog(state.serverHead?.archivedAt ? 'unarchive' : 'archive')}>{t(state.serverHead?.archivedAt ? 'whiteboard.unarchive' : 'whiteboard.archive')}</button> : null}
+      {state.serverHead?.deletedAt && state.capabilities?.restore ? <button type="button" disabled={state.busy || !!state.lifecyclePending?.[whiteboardId]} onClick={() => setDialog('restore')}>{t('whiteboard.restore')}</button> : !state.serverHead?.deletedAt && state.capabilities?.delete ? <button type="button" disabled={!record || state.busy || !!state.lifecyclePending?.[whiteboardId]} onClick={() => setDialog('delete')}>{t('whiteboard.deleteDocument')}</button> : null}
       <span className={css.menuDivider} aria-hidden="true" />
       <button type="button" disabled={!record || localBusy} onClick={() => { void perform(() => exportFile('json')) }}>{t('whiteboard.exportJson')}</button>
+      {state.dirty || state.blocked ? <button type="button" disabled={!record || localBusy} onClick={() => { void perform(() => exportFile('draft')) }}>{t('whiteboard.exportDraftJson')}</button> : null}
       <button type="button" disabled={!record || localBusy} onClick={() => { void perform(() => exportFile('svg')) }}>{t('whiteboard.exportSvg')}</button>
       <button type="button" disabled={!record || localBusy} onClick={() => { void perform(() => exportFile('png')) }}>{t('whiteboard.exportPng')}</button>
       {selectedSource ? <><span className={css.menuDivider} aria-hidden="true" />
         <button type="button" disabled={!originals[selectedSource.id]} onClick={() => { const original = originals[selectedSource.id]; if (original) download(original, `question-${selectedSource.id}.${selectedSource.mimeType.split('/')[1]}`) }}>{t('whiteboard.downloadSource')}</button>
-        <button type="button" disabled={!record} onClick={() => { if (record) controller.edit({ ...record.document.scene, elements: [...record.document.scene.elements, { id: randomUUID(), type: 'image', fileId: selectedSource.id, x: 0, y: 0, width: selectedSource.width, height: selectedSource.height }] }) }}>{t('whiteboard.insertSource')}</button>
+        <button type="button" disabled={!record || readOnly} onClick={() => { if (record) controller.edit({ ...record.document.scene, elements: [...record.document.scene.elements, { id: randomUUID(), type: 'image', fileId: selectedSource.id, x: 0, y: 0, width: selectedSource.width, height: selectedSource.height }] }) }}>{t('whiteboard.insertSource')}</button>
       </> : null}
     </div></details>
   </>
   return <main ref={root} className={`${css.workspace} ${stageCss.workspace}`} data-physicsos-whiteboard-workspace="true">
     <header className={`${css.header} ${stageCss.header}`}>
       <Button variant="ghost" onClick={() => { controller.close(); props.openWhiteboardView() }}>{t('whiteboard.back')}</Button>
-      <Input className={css.titleInput ?? ''} value={record?.document.title ?? ''} aria-label={t('whiteboard.name')} disabled={!record} onChange={event => controller.rename(event.target.value)} />
+      <Input className={css.titleInput ?? ''} value={record?.document.title ?? ''} aria-label={t('whiteboard.name')} disabled={!record || readOnly} onChange={event => controller.rename(event.target.value)} />
       <span className={css.sync} role="status">{t(`whiteboard.sync.${state.status}`)}</span>
       <div className={stageCss.headerActions}>{toolbarExtras}</div>
     </header>
     <input ref={file} hidden type="file" accept="image/png,image/jpeg,image/webp" aria-label={t('whiteboard.upload')} onChange={event => { const image = event.currentTarget.files?.[0]; event.currentTarget.value = ''; if (image) void perform(async () => { const id = await controller.upload(image); if (id) { setImageId(id); setSourceVisible(true) } }) }} />
-    {error || state.error ? <div className={css.notice} role="alert">{error ?? state.error}<button type="button" onClick={() => { void perform(async () => { await controller.save(); await controller.poll() }) }}>{t('whiteboard.retry')}</button></div> : null}
+    {readOnly && record ? <div className={css.notice} role="status">{t('whiteboard.lifecycle.readonly')}{state.dirty ? <span>{t('whiteboard.lifecycle.draftHint')}</span> : null}</div> : null}
+    {lifecycleNotice ? <div className={css.notice} role="status"><span>{t(lifecycleAcknowledged ? 'whiteboard.lifecycle.ack' : 'whiteboard.lifecycle.pending')}</span>
+      {lifecycleAcknowledged ? <Button variant="ghost" disabled={state.busy || (inverseLifecycle === 'archive' || inverseLifecycle === 'unarchive') && !state.capabilities?.archive || inverseLifecycle === 'delete' && !state.capabilities?.delete || inverseLifecycle === 'restore' && !state.capabilities?.restore} onClick={() => { setDialog(inverseLifecycle) }}>{t('whiteboard.lifecycle.undo')}</Button> : <Button variant="ghost" disabled={state.busy} onClick={() => { void perform(() => controller.retryLifecycle(whiteboardId)) }}>{t('whiteboard.retry')}</Button>}
+    </div> : null}
+    {error || state.error ? <div className={css.notice} role="alert">{error ?? state.error}<button type="button" onClick={() => { void perform(async () => { if (state.lifecyclePending?.[whiteboardId]) await controller.retryLifecycle(whiteboardId); else if (readOnly) await controller.reload(); else { await controller.save(); await controller.poll() } }) }}>{t('whiteboard.retry')}</button></div> : null}
     <WhiteboardGenerationStatus job={state.job} t={t} onCancel={() => { void perform(() => controller.cancelGeneration()) }} />
     <div className={`${css.body} ${stageCss.body}`}>
-      {record ? <NativeEditor key={`${state.namespace}:${whiteboardId}`} documentId={whiteboardId} scene={record.document.scene} history={record.document.history ?? { undo: [], redo: [] }} onUndo={controller.undo} onRedo={controller.redo} onChange={controller.edit} images={images} t={t} revealId={state.revealId} clearRequest={clearRequest} onSave={() => { void perform(() => controller.save()) }} /> : <LoadingState inline>{t('whiteboard.editorLoading')}</LoadingState>}
+      {record && !state.loading && !state.error && !state.blocked && state.namespace ? <ActivityDisplayed module="whiteboard" accountKey={state.namespace} entryId={presentation.current.id} /> : null}
+      {record ? <NativeEditor readOnly={readOnly} key={`${state.namespace}:${whiteboardId}`} documentId={whiteboardId} scene={record.document.scene} history={record.document.history ?? { undo: [], redo: [] }} onUndo={controller.undo} onRedo={controller.redo} onChange={controller.edit} images={images} t={t} revealId={state.revealId} clearRequest={clearRequest} onSave={() => { void perform(() => controller.save()) }} /> : <LoadingState inline>{t('whiteboard.editorLoading')}</LoadingState>}
       {sourceVisible ? <WorkbenchFloatPanel title={t('whiteboard.source')} closeLabel={t('whiteboard.close')} onClose={() => { setSourceVisible(false) }} placement="top-right" width={270} height={280} expanded desktopDefault={false}><aside className={`${css.sourcePanel} ${stageCss.sourcePanel}`}>
         {!selectedSource ? <p>{t('whiteboard.sourceEmpty')}</p> : <><select aria-label={t('whiteboard.source')} value={imageId} onChange={event => setImageId(event.target.value)}>{record?.document.sourceImages.map((source, index) => <option key={source.id} value={source.id}>{t('whiteboard.source')} {index + 1} · {source.width} × {source.height}</option>)}</select>
           {sourceLoading ? <LoadingState inline>{t('whiteboard.sourceLoading')}</LoadingState> : images[selectedSource.id] ? <a href={images[selectedSource.id]} target="_blank" rel="noreferrer"><img src={images[selectedSource.id]} alt={t('whiteboard.source')} width={selectedSource.width} height={selectedSource.height} /></a> : null}
         </>}
       </aside></WorkbenchFloatPanel> : null}
     </div>
-    <dialog ref={confirmation} className={css.confirmation} aria-label={dialog === 'clear' ? t('whiteboard.clearConfirm') : t('whiteboard.reloadConfirm')} onCancel={() => setDialog(undefined)}>
-      <h2>{dialog === 'clear' ? t('whiteboard.clearConfirm') : t('whiteboard.reloadConfirm')}</h2><p>{dialog === 'clear' ? t('whiteboard.clearHint') : t('whiteboard.reloadHint')}</p>
-      <div className={css.actions}><Button variant="ghost" onClick={() => setDialog(undefined)}>{t('whiteboard.cancel')}</Button><Button variant="primary" onClick={() => { if (dialog === 'clear') setClearRequest(value => value + 1); else void perform(() => controller.reload()); setDialog(undefined) }}>{t('whiteboard.confirm')}</Button></div>
+    <dialog ref={confirmation} className={css.confirmation} aria-label={lifecycleTitle} onCancel={() => { if (!state.busy) setDialog(undefined) }}>
+      <h2>{lifecycleTitle}</h2><p>{dialog === 'clear' ? t('whiteboard.clearHint') : dialog === 'reload' ? t('whiteboard.reloadHint') : t('whiteboard.lifecycle.hint')}</p>
+      {dialog && !['clear', 'reload'].includes(dialog) ? <p>{t('whiteboard.lifecycle.draftHint')}</p> : null}
+      <div className={css.actions}><Button variant="ghost" disabled={state.busy} onClick={() => setDialog(undefined)}>{t('whiteboard.cancel')}</Button><Button variant="primary" disabled={state.busy} onClick={() => { void perform(confirmDialog) }}>{t('whiteboard.confirm')}</Button></div>
+      {error ? <p role="alert">{error}</p> : null}
     </dialog>
   </main>
 }

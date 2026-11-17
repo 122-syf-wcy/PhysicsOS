@@ -90,6 +90,8 @@ import { QuestionCodeControls } from './experiments/QuestionCodeControls.tsx'
 import codeCss from './SceneChatCard.module.css'
 import { useExperimentSession } from './experiments/use-experiment-session.ts'
 import { CommunityWorkspaceCanvas } from './experiments/CommunityWorkspaceCanvas.tsx'
+import type { ExperimentSession } from './experiments/experiment-session.ts'
+import { useExperimentRunPresentation, useExperimentRunTracking } from './experiments/experiment-run-tracking.ts'
 
 type Translate = (key: PhysicsosKey) => string
 
@@ -189,6 +191,8 @@ export function PhysicsWorkspace({
   experimentMeta,
 }: PhysicsWorkspaceProps) {
   const { session, snapshot, commit, frameSource } = useExperimentSession(runtime, onSceneChange)
+  // Only catalog Lab workspaces, not question/candidate/Canvas renderers, attach the independent run source.
+  useExperimentRunTracking(session, questionCodeVisualization === undefined && !buildMode ? experimentId : undefined)
   const coverRef = useRef<HTMLDivElement | null>(null)
   const [selected, setSelected] = useState('scene')
   /* Time-varying experiments show their graph beside the apparatus from the
@@ -306,7 +310,7 @@ export function PhysicsWorkspace({
       const failedRun = snapshot.status === 'failed'
       if (event.key === ' ') {
         event.preventDefault()
-        if (!failedRun && clock.total > 0) commit(runtime.setRunning(!running))
+        if (!failedRun && clock.total > 0) session.setRunning(!running)
       } else if (event.key === 'ArrowRight') {
         event.preventDefault()
         if (!failedRun) commit(runtime.step(clock.total * STEP_FRACTION))
@@ -322,7 +326,7 @@ export function PhysicsWorkspace({
     return () => {
       document.removeEventListener('keydown', onKeyDown)
     }
-  }, [runtime, commit, running, snapshot.status, clock.total])
+  }, [runtime, session, commit, running, snapshot.status, clock.total])
 
   /* Schematic drag (circuit domain): the channel exists only when the runtime
      implements it. Preview frames ride the canvas channel only — a pointermove
@@ -596,7 +600,7 @@ export function PhysicsWorkspace({
         <div className={sceneCss.transportBand} data-workbench-chrome="bottom"><div className={clsx(codeCss.transport, sceneCss.questionTransport)} aria-label={t('lab.timeline')} data-running={running}>
           <button type="button" className={clsx(codeCss.control, codeCss.controlPrimary)} disabled={failed || clock.total <= 0}
             aria-label={ended ? t('lab.replay') : t('lab.playPause')} aria-pressed={running}
-            onClick={() => { commit(runtime.setRunning(!running)) }}>
+            onClick={() => { session.setRunning(!running) }}>
             {running ? <IconPauseOutlineMedium size={14} /> : <IconPlayOutlineMedium size={14} />}
           </button>
           <button type="button" className={codeCss.control} disabled={failed} aria-label={t('lab.stepBack')}
@@ -867,6 +871,7 @@ export function PhysicsWorkspace({
               {/* The canvas is the renderer: it subscribes to the frame source
                   directly, so animation frames re-render only this subtree (#123). */}
               {experimentId === undefined ? <CanvasFrame
+                session={session}
                 source={frameSource}
                 ariaLabel={snapshot.ariaLabel}
                 onSeekTime={seek}
@@ -874,7 +879,7 @@ export function PhysicsWorkspace({
                 {...(componentControl === undefined ? {} : { componentControl })}
                 {...(componentWiring === undefined ? {} : { componentWiring })}
               /> : <CommunityWorkspaceCanvas experimentId={experimentId} session={session}
-                fallback={<CanvasFrame source={frameSource} ariaLabel={snapshot.ariaLabel} onSeekTime={seek}
+                fallback={<CanvasFrame session={session} source={frameSource} ariaLabel={snapshot.ariaLabel} onSeekTime={seek}
                   {...(componentDrag === undefined ? {} : { componentDrag })}
                   {...(componentControl === undefined ? {} : { componentControl })}
                   {...(componentWiring === undefined ? {} : { componentWiring })} />} />}
@@ -892,7 +897,7 @@ export function PhysicsWorkspace({
                   aria-pressed={running}
                   disabled={failed}
                   onClick={() => {
-                    commit(runtime.setRunning(!running))
+                    session.setRunning(!running)
                   }}
                 >
                   {running ? (
@@ -1119,6 +1124,7 @@ function LiveClock({
 }
 
 function CanvasFrame({
+  session,
   source,
   ariaLabel,
   onSeekTime,
@@ -1126,6 +1132,7 @@ function CanvasFrame({
   componentControl,
   componentWiring,
 }: {
+  session: ExperimentSession
   source: FrameSource<WorkspaceSnapshot>
   ariaLabel: string
   onSeekTime: (time: number) => void
@@ -1133,6 +1140,7 @@ function CanvasFrame({
   componentControl?: ComponentControlChannel
   componentWiring?: ComponentWiringChannel
 }) {
+  useExperimentRunPresentation(session)
   const frame = useFrameSource(source)
   const effects = useEventEffects(frame.clock, frame.events, frame.view)
   return (

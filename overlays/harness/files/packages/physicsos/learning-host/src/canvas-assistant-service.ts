@@ -120,7 +120,7 @@ export class CanvasAssistantService {
   }
   private parse<T>(schema: z.ZodType<T>, value: unknown): T { const parsed = schema.safeParse(value); return parsed.success ? parsed.data : invalid() }
   private bindingMatches(head: CanvasHead, binding: CanvasAssistantBinding): void {
-    if (head.id !== binding.canvasId || head.version !== binding.head.version || head.generation !== binding.head.generation || head.manifestDigest !== binding.head.manifestDigest) stale(head)
+    if (head.archivedAt !== undefined || head.deletedAt !== undefined || head.id !== binding.canvasId || head.version !== binding.head.version || head.generation !== binding.head.generation || head.manifestDigest !== binding.head.manifestDigest) stale(head)
   }
   private async checkHead(actor: IdentityActor, binding: CanvasAssistantBinding): Promise<void> {
     this.bindingMatches((await this.canvas.open(actor, binding.canvasId)).head, binding)

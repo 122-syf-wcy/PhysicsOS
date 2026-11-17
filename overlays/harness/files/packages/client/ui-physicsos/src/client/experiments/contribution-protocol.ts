@@ -72,7 +72,7 @@ export function universalContributionSnapshot(
 }
 
 /** V3 uses current inspector IDs/options and only the runtime's declared bounds. */
-export function applyUniversalContributionIntent(session: ExperimentSession, value: unknown): boolean {
+export function applyUniversalContributionIntent(session: ExperimentSession, value: unknown, options: { readonly observeRun?: boolean } = {}): boolean {
   if (!isUniversalExperimentIntent(value)) return false
   const frame = session.getSnapshot()
   const runtime = session.runtime
@@ -106,7 +106,8 @@ export function applyUniversalContributionIntent(session: ExperimentSession, val
       return true
     case 'playback/running':
       if (frame.clock.total <= 0 || frame.status === 'failed') return false
-      session.commit(runtime.setRunning(value.running))
+      // This is only a bounded play intent. The host session observes the real first advance; an iframe cannot report success.
+      session.setRunning(value.running, options.observeRun !== false)
       return true
     case 'playback/rate':
       if (frame.clock.total <= 0 || !PLAYBACK_RATES.includes(value.rate)) return false

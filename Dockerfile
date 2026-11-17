@@ -169,6 +169,8 @@ RUN apt-get update \
 
 WORKDIR /app
 
+LABEL physicsos.teaching-tools.bridge="teaching-tools-bridge-v1"
+
 COPY --from=builder --chown=physicsos:physicsos /app/package.json ./package.json
 COPY --from=builder --chown=physicsos:physicsos /app/node_modules ./node_modules
 COPY --from=builder --chown=physicsos:physicsos /app/packages ./packages

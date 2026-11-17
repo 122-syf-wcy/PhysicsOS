@@ -34,7 +34,7 @@ export function CanvasAssistantPanel(props: CanvasAssistantPanelProps) {
   const saveReady = !!document?.namespace && document.namespace !== 'guest|local' && !!document.head && document.localSaved && document.editSequence === document.acknowledgedSequence && document?.status === 'saved' && !Object.values(document?.noteDrafts ?? {}).some(note => note.dirty || note.saving)
   const stale = !!job && (job.binding.canvasId !== props.canvasId || job.binding.namespace !== document?.namespace || job.binding.editSequence !== document?.editSequence
     || job.binding.head.version !== document?.head?.version || job.binding.head.generation !== document?.head?.generation || job.binding.head.manifestDigest !== document?.head?.manifestDigest
-    || document?.status === 'auth-required' || document?.status === 'deleted' || document?.status === 'conflict' || Object.values(document?.noteDrafts ?? {}).some(note => note.dirty || note.saving))
+    || document?.readOnly === true || document?.status === 'archived' || document?.status === 'lifecycle-pending' || document?.status === 'auth-required' || document?.status === 'deleted' || document?.status === 'conflict' || Object.values(document?.noteDrafts ?? {}).some(note => note.dirty || note.saving))
   const busy = requesting || cancelling || applying || (!!job && !terminal(job))
   useEffect(() => {
     mounted.current = true

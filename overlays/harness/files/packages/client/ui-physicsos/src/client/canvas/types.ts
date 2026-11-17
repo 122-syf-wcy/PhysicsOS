@@ -1,6 +1,6 @@
 import type { PhysicsScene } from '@physicsos/physics-scene'
 import type { CanvasAnnotationScene } from '@physicsos/physics-whiteboard'
-import type { CanvasHead } from '@physicsos/physics-workbench/protocol'
+import type { CanvasHead, WorkbenchLifecycleCapabilities, WorkbenchLifecycleState } from '@physicsos/physics-workbench/protocol'
 import type {
   AxisDescriptor, BuildMode, CanvasFile, CanvasGraph, CanvasLayout, CanvasManifest, CanvasNode,
   CanvasViewport, ComparisonConfig, InstanceSource, JsonObject, MergeConflict,
@@ -55,7 +55,7 @@ export const canvasComparisonAxisSignature = (axis: AxisDescriptor): string => J
     reference: axis.origin.reference, value: { value: axis.origin.value.value, unit: axis.origin.value.unit, dimension: axis.origin.value.dimension } } })
 export type CanvasSaveStatus =
   | 'loading' | 'unsaved' | 'saving-local' | 'local-saved' | 'syncing'
-  | 'saved' | 'conflict' | 'error' | 'auth-required' | 'deleted'
+  | 'saved' | 'conflict' | 'error' | 'auth-required' | 'deleted' | 'archived' | 'lifecycle-pending'
 
 export interface CanvasDocumentSummary {
   readonly id: string
@@ -63,6 +63,9 @@ export interface CanvasDocumentSummary {
   readonly createdAt: string
   readonly updatedAt: string
   readonly deleted: boolean
+  readonly archived?: boolean
+  readonly lifecycle?: WorkbenchLifecycleState
+  readonly lifecyclePending?: boolean
   readonly head?: CanvasHead
   readonly status: CanvasSaveStatus
   readonly projectId?: string
@@ -74,6 +77,7 @@ export interface CanvasRosterState {
   readonly loading: boolean
   readonly namespace?: string
   readonly authScope: 'anonymous' | 'authenticated' | 'paused'
+  readonly capabilities?: WorkbenchLifecycleCapabilities
   readonly error?: CanvasClientError
 }
 export interface CanvasDocumentState {
@@ -82,6 +86,9 @@ export interface CanvasDocumentState {
   readonly manifest?: CanvasManifest
   readonly objects: Readonly<Record<string, WorkbenchObject>>
   readonly head?: CanvasHead
+  readonly lifecycle?: WorkbenchLifecycleState
+  readonly lifecyclePending?: boolean
+  readonly readOnly?: boolean
   readonly loading: boolean
   readonly status: CanvasSaveStatus
   readonly localSaved: boolean
@@ -169,6 +176,8 @@ export interface CanvasController {
   readonly state: CanvasObservable<CanvasRosterState>
   getSnapshot(this: void): CanvasRosterState
   subscribe(this: void, listener: () => void): () => void
+  /** Called once per actual editor presentation, never by an autosave or renderer rerender. */
+  beginEditingSession(canvasId: string, presentationId: string): void
   documentSource(canvasId: string): CanvasObservable<CanvasDocumentState>
   instanceKey(canvasId: string, instanceId: string): string
   instanceSource(instanceKey: string): CanvasObservable<WorkbenchInstanceSummary | undefined>
@@ -182,6 +191,8 @@ export interface CanvasController {
   duplicate(canvasId: string, title?: string): Promise<string>
   remove(canvasId: string): Promise<void>
   restore(canvasId: string): Promise<void>
+  archive(canvasId: string): Promise<void>
+  unarchive(canvasId: string): Promise<void>
   sync(canvasId?: string): Promise<void>
   retry(canvasId?: string): Promise<void>
   resolveConflict(canvasId: string, manifest: CanvasManifest): Promise<void>

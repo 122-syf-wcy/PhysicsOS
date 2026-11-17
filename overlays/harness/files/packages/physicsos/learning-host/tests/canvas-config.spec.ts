@@ -5,6 +5,18 @@ import { resolveCanvasConfig, learningHostConfig } from '../src/canvas-config.ts
 const validate = (value: unknown) => learningHostConfig['~standard'].validate(value)
 
 describe('Canvas deployment configuration', () => {
+  it('defaults to the bridge and only enables lifecycle writes in the enabled teaching-tools mode', async () => {
+    const defaults = await validate({})
+    expect(defaults.issues).toBeUndefined()
+    if (defaults.issues !== undefined) throw new Error('Default learning configuration failed validation')
+    expect(defaults.value).toMatchObject({ teachingToolsMode: 'bridge', activityQueryCapacityVerified: false })
+    expect(resolveCanvasConfig().lifecycleWritesEnabled).toBe(false)
+    expect(resolveCanvasConfig({ teachingToolsMode: 'off' }).lifecycleWritesEnabled).toBe(false)
+    expect(resolveCanvasConfig({ teachingToolsMode: 'bridge' }).lifecycleWritesEnabled).toBe(false)
+    expect(resolveCanvasConfig({ teachingToolsMode: 'enabled' }).lifecycleWritesEnabled).toBe(true)
+    expect(() => resolveCanvasConfig({ teachingToolsMode: 'bridge', lifecycleWritesEnabled: true })).toThrow('contradicts')
+    expect(() => resolveCanvasConfig({ teachingToolsMode: 'enabled', lifecycleWritesEnabled: false })).toThrow('contradicts')
+  })
   it('resolves the existing explicit home without accessing or installing a local environment', () => {
     const config = resolveCanvasConfig({ canvasDshHome: '/var/lib/physicsos' })
     expect(config.root).toBe(join('/var/lib/physicsos', 'physicsos', 'canvases', 'v1'))

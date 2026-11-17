@@ -19,6 +19,8 @@ let context: Context | undefined
 let apiCalls: { method: string; payload: Record<string, unknown> }[] = []
 /** The fake registry's single workspace record, with its durable title. */
 let workspaceTitle: string | undefined
+let nativeWorkspace: { id: string; path: string; title: string; sessionIds: readonly string[]; setTitle(title: string): Promise<void> } | undefined
+let workspaceSerial = 0
 let workspaceView: {
   workspaceId: string
   path: string
@@ -32,6 +34,8 @@ afterEach(async () => {
   context = undefined
   apiCalls = []
   workspaceTitle = undefined
+  nativeWorkspace = undefined
+  workspaceSerial = 0
   workspaceView = undefined
   if (root !== undefined) await rm(root, { recursive: true, force: true })
   root = undefined
@@ -72,28 +76,23 @@ async function loadYaml(build: (root: string) => readonly string[]): Promise<Con
       name: 'test-api-proxy',
       apply(ctx: Context) {
         ctx.provide('workspaceRegistry', {
+          get(id: string) { return nativeWorkspace?.id === id ? nativeWorkspace : undefined },
+          list() { return nativeWorkspace === undefined ? [] : [nativeWorkspace] },
           async create(requestPath: string, title?: string) {
+            if (nativeWorkspace?.path === requestPath) return nativeWorkspace
+            workspaceSerial += 1
+            const id = workspaceSerial === 1 ? 'private-workspace' : `private-workspace-${workspaceSerial}`
             workspaceTitle = title ?? requestPath.split('/').filter(Boolean).at(-1) ?? 'private-workspace'
-            workspaceView = {
-              workspaceId: 'private-workspace',
-              path: requestPath,
-              sessionIds: [],
-              createdAt: new Date(0).toISOString(),
-              updatedAt: new Date(0).toISOString(),
-            }
-            return {
-              id: 'private-workspace',
-              path: requestPath,
-              title: workspaceTitle,
+            workspaceView = { workspaceId: id, path: requestPath, sessionIds: [], createdAt: new Date(0).toISOString(), updatedAt: new Date(0).toISOString() }
+            nativeWorkspace = {
+              id, path: requestPath, get title() { return workspaceTitle ?? '' }, sessionIds: [],
               async setTitle(nextTitle: string) {
-                apiCalls.push({
-                  method: 'workspace.rename',
-                  payload: { workspaceId: 'private-workspace', title: nextTitle },
-                })
+                apiCalls.push({ method: 'workspace.rename', payload: { workspaceId: id, title: nextTitle } })
                 workspaceTitle = nextTitle
                 if (workspaceView !== undefined) workspaceView.updatedAt = new Date(0).toISOString()
               },
             }
+            return nativeWorkspace
           },
         })
         ctx.inject(['connection'], (connectionCtx) => {
@@ -302,6 +301,26 @@ describe('real Loader composition', () => {
     expect(await foreignRename.json()).toMatchObject({
       result: { ok: false, error: { code: 'workspace-not-found' } },
     })
+
+    // A successful ensureWorkspace Promise is not a permanent cache entry.
+    // The original row/claim survives product deletion, but a new default must
+    // get another native identity/path; an explicit native removal is rechecked too.
+    const seam = loaded.get('physicsosPersonalWorkspaces') as {
+      get(actor: { userKey: string; schoolId: string; username: string; role: string }, id: string): unknown
+    }
+    expect(seam.get({ userKey: 'PHYSICSOS-OPEN:scope-other', schoolId: 'PHYSICSOS-OPEN', username: 'scope-other', role: 'SUPER_ADMIN' }, 'private-workspace')).toBeUndefined()
+    let deletedId = 'private-workspace'
+    loaded.provide('physicsosProductState', { nativeProjectSoftDelete: true,
+      projectDeleted: (_actor: unknown, id: string) => id === deletedId,
+      getProjectState: (_actor: unknown, id: string) => ({ state: id === deletedId ? 'deleted' : 'live' }),
+    })
+    const replacement = await post('/api/workspace.list', rpc('after-soft-delete', 'workspace.list', {}), cookie)
+    expect(await replacement.json()).toMatchObject({ result: { ok: true, value: { items: [expect.objectContaining({ workspaceId: 'private-workspace-2' })] } } })
+    expect(workspaceView?.workspaceId).toBe('private-workspace-2')
+    deletedId = ''
+    nativeWorkspace = undefined
+    const afterNativeRemoval = await post('/api/workspace.list', rpc('after-native-remove', 'workspace.list', {}), cookie)
+    expect(await afterNativeRemoval.json()).toMatchObject({ result: { ok: true, value: { items: [expect.objectContaining({ workspaceId: 'private-workspace-3' })] } } })
 
     // The hosted surface never browses the server filesystem, for any role,
     // unless the deployment opts in — the workspace is assigned server-side.

@@ -19,13 +19,20 @@ import {
 } from '../src/passwords.ts'
 import type { AuthDomain, School } from '../src/domain.ts'
 
-/* Map-backed stand-in for Domain<typeof authDomain> — the service only uses
-   table().get/put/entries/delete, so plain Maps satisfy it. */
+/* Map-backed stand-in for Domain<typeof authDomain>. Production uses the
+   domain write chain; concurrency cases additionally exercise the real domain. */
 const table = <T>() => {
   const map = new Map<string, T>()
   return {
     get: (id: string) => map.get(id),
     put: async (id: string, record: T) => { map.set(id, record) },
+    update: async (id: string, change: (current: T) => T) => {
+      const current = map.get(id)
+      if (current === undefined) throw new Error(`missing key: ${id}`)
+      const next = change(current)
+      map.set(id, next)
+      return next
+    },
     entries: () => map.entries(),
     delete: async (id: string) => map.delete(id),
   }

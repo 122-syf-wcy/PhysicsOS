@@ -456,10 +456,10 @@ describe('versioned manual moderation', () => {
     expect(service.detail(admin, id).status).toBe('banned')
     await auth.setUserStatus(admin, 's', 'student', { status: 'active' })
     const next = await capture(service, 'next')
-    const users = domain.table('users'); const writeUser = users.put.bind(users)
-    users.put = async () => { throw new Error('account write failed') }
+    const users = domain.table('users'); const writeUser = users.update.bind(users)
+    users.update = async () => { throw new Error('account write failed') }
     await expect(service.decide(admin, next, { version: service.detail(admin, next).version, decision: 'ban', reason: 'confirmed' })).rejects.toThrow('account write failed')
-    users.put = writeUser
+    users.update = writeUser
     expect(service.detail(admin, next).status).toBe('pending')
   })
   it('retries only the current undecided version and preserves evidence', async () => {

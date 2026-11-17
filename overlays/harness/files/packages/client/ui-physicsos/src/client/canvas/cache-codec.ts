@@ -15,14 +15,16 @@ import type { CanvasClientError } from './types.ts'
 
 export const readCanvasHead = (input: unknown, path = '/head'): CanvasHead => {
   const value = record(input, path)
-  exactKeys(value, ['id', 'title', 'version', 'generation', 'changeSeq', 'manifestDigest', 'createdAt', 'updatedAt', 'deletedAt'], path)
+  exactKeys(value, ['id', 'title', 'version', 'generation', 'changeSeq', 'manifestDigest', 'createdAt', 'updatedAt', 'deletedAt', 'archivedAt'], path)
   const deletedAt = optional(value.deletedAt, `${path}/deletedAt`, isoDate)
+  const archivedAt = optional(value.archivedAt, `${path}/archivedAt`, isoDate)
   return freezeData({
     id: text(value.id, `${path}/id`, true), title: text(value.title, `${path}/title`),
     version: integer(value.version, `${path}/version`, 1), generation: integer(value.generation, `${path}/generation`, 1),
     changeSeq: integer(value.changeSeq, `${path}/changeSeq`), manifestDigest: digest(value.manifestDigest, `${path}/manifestDigest`),
     createdAt: isoDate(value.createdAt, `${path}/createdAt`), updatedAt: isoDate(value.updatedAt, `${path}/updatedAt`),
     ...(deletedAt === undefined ? {} : { deletedAt }),
+    ...(archivedAt === undefined ? {} : { archivedAt }),
   })
 }
 export const readMergeConflict = (input: unknown, path = '/conflict'): MergeConflict => {
@@ -144,7 +146,7 @@ const readSeal = (input: Record<string, unknown>, request: unknown, path: string
 export const readPendingMutation = (input: unknown, id: string, path = '/pending'): PendingCanvasMutation => {
   const value = record(input, path)
   exactKeys(value, ['kind', 'request', 'manifest', 'body', 'bodyDigest', 'createdAt', 'editSequence'], path)
-  const kind = oneOf(value.kind, ['create', 'commit', 'delete', 'restore'], `${path}/kind`)
+  const kind = oneOf(value.kind, ['create', 'commit', 'delete', 'restore', 'archive', 'unarchive'], `${path}/kind`)
   const request = record(value.request, `${path}/request`)
   const mutationId = text(request.mutationId, `${path}/request/mutationId`, true)
   if (kind === 'create') {
@@ -155,23 +157,26 @@ export const readPendingMutation = (input: unknown, id: string, path = '/pending
     return freezeData({ kind, request: parsedRequest, ...readSeal(value, parsedRequest, path) })
   }
   const expectedVersion = integer(request.expectedVersion, `${path}/request/expectedVersion`, 1)
-  if (kind === 'delete') {
-    exactKeys(request, ['expectedVersion', 'mutationId'], `${path}/request`)
-    if (value.manifest !== undefined) fail(`${path}/manifest`, 'unknown-field', 'Delete mutation has no manifest payload.')
-    const parsedRequest = { expectedVersion, mutationId }
-    return freezeData({ kind, request: parsedRequest, ...readSeal(value, parsedRequest, path) })
-  }
   const expectedGeneration = optional(request.expectedGeneration, `${path}/request/expectedGeneration`, (entry, at) => integer(entry, at, 1))
   const versioned = { expectedVersion, mutationId, ...(expectedGeneration === undefined ? {} : { expectedGeneration }) }
-  if (kind === 'restore') {
+  if (kind === 'restore' || kind === 'delete') {
     exactKeys(request, ['expectedVersion', 'expectedGeneration', 'mutationId'], `${path}/request`)
-    if (value.manifest !== undefined) fail(`${path}/manifest`, 'unknown-field', 'Restore mutation has no manifest payload.')
+    if (value.manifest !== undefined) fail(`${path}/manifest`, 'unknown-field', 'Lifecycle mutation has no manifest payload.')
     return freezeData({ kind, request: versioned, ...readSeal(value, versioned, path) })
   }
-  exactKeys(request, ['expectedVersion', 'expectedGeneration', 'mutationId', 'manifestDigest'], `${path}/request`)
+  if (kind === 'archive' || kind === 'unarchive') {
+    exactKeys(request, ['expectedVersion', 'expectedGeneration', 'mutationId'], `${path}/request`)
+    if (expectedGeneration === undefined) fail(`${path}/request/expectedGeneration`, 'generation', 'Archive mutations require a generation fence.')
+    if (value.manifest !== undefined) fail(`${path}/manifest`, 'unknown-field', 'Lifecycle mutation has no manifest payload.')
+    const parsedRequest = { expectedVersion, expectedGeneration, mutationId }
+    return freezeData({ kind, request: parsedRequest, ...readSeal(value, parsedRequest, path) })
+  }
+  exactKeys(request, ['expectedVersion', 'expectedGeneration', 'mutationId', 'manifestDigest', 'editingSessionId'], `${path}/request`)
+  const editingSessionId = optional(request.editingSessionId, `${path}/request/editingSessionId`, (entry, at) => text(entry, at, true))
   const manifest = unwrap(parseManifest(value.manifest))
   if (manifest.id !== id) fail(`${path}/manifest/id`, 'identity', 'Commit manifest belongs to another document.')
-  const parsedRequest = { ...versioned, manifestDigest: digest(request.manifestDigest, `${path}/request/manifestDigest`) }
+  const parsedRequest = { ...versioned, manifestDigest: digest(request.manifestDigest, `${path}/request/manifestDigest`),
+    ...(editingSessionId === undefined ? {} : { editingSessionId }) }
   return freezeData({ kind, request: parsedRequest, manifest, ...readSeal(value, parsedRequest, path) })
 }
 
@@ -179,7 +184,7 @@ export const readPendingMutation = (input: unknown, id: string, path = '/pending
 export const readLocalCanvasRecord = (input: unknown, namespace: string): LocalCanvasRecord => {
   const value = record(input, '/document')
   exactKeys(value, ['namespace', 'id', 'cacheVersion', 'editSequence', 'acknowledgedSequence', 'working', 'base', 'head',
-    'pending', 'conflict', 'localConflict', 'documentHistory', 'pendingNoteDrafts', 'deleted', 'savedAt', 'error'], '/document')
+    'pending', 'conflict', 'localConflict', 'documentHistory', 'pendingNoteDrafts', 'deleted', 'archived', 'editingSessionId', 'savedAt', 'error'], '/document')
   if (value.namespace !== namespace) fail('/document/namespace', 'account', 'Cached document belongs to another account.')
   const id = text(value.id, '/document/id', true)
   const working = unwrap(parseManifest(value.working))
@@ -208,9 +213,12 @@ export const readLocalCanvasRecord = (input: unknown, namespace: string): LocalC
     return drafts
   })
   const error = optional(value.error, '/document/error', readCanvasError)
+  const archived = optional(value.archived, '/document/archived', boolean)
+  const editingSessionId = optional(value.editingSessionId, '/document/editingSessionId', (entry, at) => text(entry, at, true))
   return freezeData({ namespace, id, cacheVersion, editSequence, acknowledgedSequence, working,
     deleted: boolean(value.deleted, '/document/deleted'), savedAt: isoDate(value.savedAt, '/document/savedAt'),
     ...(base === undefined ? {} : { base }), ...(head === undefined ? {} : { head }),
+    ...(archived === undefined ? {} : { archived }), ...(editingSessionId === undefined ? {} : { editingSessionId }),
     ...(pending === undefined ? {} : { pending }), ...(conflict === undefined ? {} : { conflict }),
     ...(localConflict === undefined ? {} : { localConflict }), ...(documentHistory === undefined ? {} : { documentHistory }),
     ...(pendingNoteDrafts === undefined ? {} : { pendingNoteDrafts }),

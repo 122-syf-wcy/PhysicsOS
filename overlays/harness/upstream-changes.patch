@@ -14130,7 +14130,7 @@ index 138436b764..e5431bf8ce 100644
      const b = await bench()
      const header = b.runtime.slots.entries('conversation.session.header')[0]!
 diff --git a/packages/client/ui-layout/src/client/AppFrame.module.css b/packages/client/ui-layout/src/client/AppFrame.module.css
-index 4f450df3c9..b417d55183 100644
+index 4f450df..b1b00ab 100644
 --- a/packages/client/ui-layout/src/client/AppFrame.module.css
 +++ b/packages/client/ui-layout/src/client/AppFrame.module.css
 @@ -72,6 +72,11 @@
@@ -14145,53 +14145,97 @@ index 4f450df3c9..b417d55183 100644
  }
 
  /* macOS desktop: the frame goes transparent so window vibrancy reaches the
-@@ -266,3 +271,19 @@
+@@ -266,3 +271,35 @@
  .overlayLayer > * {
    pointer-events: auto;
  }
 +
-+/* Product shell reserves one header row, with no expanded sidebar track. */
-+.frame[data-product-shell] { box-sizing: border-box; padding-top: max(58px, var(--dsh-frame-top-clearance, 0px)); grid-template-rows: minmax(0, 1fr); }
++/* The rail, center clearance and JS column solve share one geometry contract.
++   Compactness is frame-width based (<=600), not a different window breakpoint. */
++.frame[data-product-shell] {
++  --physicsos-shell-header: max(58px, var(--dsh-frame-top-clearance, 0px));
++  --physicsos-shell-rail-left: 30px;
++  --physicsos-shell-rail-padding: 13px;
++  --physicsos-shell-rail-button: 48px;
++  --physicsos-shell-rail-border: 1px;
++  --physicsos-shell-rail-gap: 14px;
++  --physicsos-shell-rail-width: calc(var(--physicsos-shell-rail-button) + 2 * var(--physicsos-shell-rail-padding) + 2 * var(--physicsos-shell-rail-border));
++  --physicsos-shell-content-inset: calc(var(--physicsos-shell-rail-left) + var(--physicsos-shell-rail-width) + var(--physicsos-shell-rail-gap));
++  --physicsos-shell-bottom-inset: 0px;
++  box-sizing: border-box; padding-top: var(--physicsos-shell-header); grid-template-rows: minmax(0, 1fr);
++}
 +.frame[data-product-shell] .sidebarCol { position: absolute; inset: 0; z-index: 14; overflow: visible; border: 0; background: transparent; pointer-events: none; }
-+.frame[data-product-shell] .centerCol { grid-column: 2; margin-left: 82px; border: 0; background: transparent; }
-+.frame[data-product-shell] .rightbarCol { grid-column: 3; }
-+.frame[data-product-shell] .handle { top: 58px; }
-+@media (max-width: 600px) {
-+  .frame[data-product-shell] .centerCol { margin-left: 0; margin-bottom: 68px; }
++.frame[data-product-shell] .centerCol { grid-column: 2; min-width: 0; margin-left: var(--physicsos-shell-content-inset); margin-bottom: var(--physicsos-shell-bottom-inset); border: 0; background: transparent; }
++.frame[data-product-shell] .rightbarCol { grid-column: 3; margin-bottom: var(--physicsos-shell-bottom-inset); }
++.frame[data-product-shell] .handle { top: var(--physicsos-shell-header); }
++.frame[data-product-compact] {
++  --physicsos-shell-rail-padding: 8px;
++  --physicsos-shell-rail-button: 44px;
++  --physicsos-shell-content-inset: 0px;
++  --physicsos-shell-bottom-gap: max(9px, env(safe-area-inset-bottom, 0px));
++  --physicsos-shell-bottom-height: calc(var(--physicsos-shell-rail-button) + 12px);
++  --physicsos-shell-bottom-inset: calc(var(--physicsos-shell-bottom-gap) + var(--physicsos-shell-bottom-height) + 12px);
 +}
 +
 +.frame[data-product-shell] { background-image: radial-gradient(ellipse at 0% 40%,var(--physics-accent-soft),transparent 29%); }
 +.frame[data-product-shell]::after { content: ''; position: absolute; width: 480px; height: 900px; left: -420px; top: -100px; transform: rotate(-20deg); border: 1px solid var(--physics-glass-border-soft); border-radius: 50%; pointer-events: none; }
 +
-+:global(html[data-windows-titlebar]) .frame[data-product-shell] { padding-top: calc(var(--dsh-windows-titlebar-height) + 58px); }
-+:global(html[data-windows-titlebar]) .frame[data-product-shell] .handle { top: calc(var(--dsh-windows-titlebar-height) + 58px); }
++:global(html[data-windows-titlebar]) .frame[data-product-shell] { --physicsos-shell-header: calc(var(--dsh-windows-titlebar-height) + 58px); }
 diff --git a/packages/client/ui-layout/src/client/AppFrame.tsx b/packages/client/ui-layout/src/client/AppFrame.tsx
-index 841f9f72aa..61e6534cff 100644
+index 841f9f7..588d918 100644
 --- a/packages/client/ui-layout/src/client/AppFrame.tsx
 +++ b/packages/client/ui-layout/src/client/AppFrame.tsx
-@@ -157,6 +157,8 @@ export function AppFrame({
+@@ -33,7 +33,7 @@ export type AppFrameProps =
+
+ /** Center column grid item (session-body building block). */
+ function CenterColumn(props: { children?: ReactNode }) {
+-  return <div className={css.centerCol}>{props.children}</div>
++  return <div className={css.centerCol} data-shell-center>{props.children}</div>
+ }
+
+ /** Subscribe to the main key without subscribing the column frame to each panel id. */
+@@ -129,6 +129,16 @@ export function AppFrame({
+   const layoutInfo = useStore(state => state.layoutInfo)
+   const frameRef = useRef<HTMLDivElement | null>(null)
+   const viewport = layoutInfo.viewportWidth
++  const productShell = document.documentElement.hasAttribute('data-physicsos-ui')
++  const [productInset, setProductInset] = useState(0)
++  // Read the USED margin so calc()/theme tokens stay the single source of truth.
++  // Runs before paint after the frame's 600/601 compact attribute changes.
++  useLayoutEffect(() => {
++    const center = frameRef.current?.querySelector<HTMLElement>('[data-shell-center]')
++    const inset = productShell && center !== null && center !== undefined
++      ? Number.parseFloat(getComputedStyle(center).marginLeft) : 0
++    setProductInset(Number.isFinite(inset) ? Math.max(0, inset) : 0)
++  }, [viewport, productShell])
+
+   // Track the frame's own box (not the window): rAF-throttled ResizeObserver.
+   useLayoutEffect(() => {
+@@ -157,6 +167,7 @@ export function AppFrame({
      }
    }, [actions])
 
-+  const productShell = document.documentElement.hasAttribute('data-physicsos-ui')
-+  const productInset = productShell && viewport > 600 ? 82 : 0
++  const contentViewport = Math.max(0, viewport - productInset)
    const narrow = viewport < SIDEBAR_AUTO_COLLAPSE
    const sidebarCollapsed = narrow ? !layoutInfo.narrowExpanded : layoutInfo.sidebar === 0
    const sidebarPreference = sidebarCollapsed
-@@ -170,8 +172,8 @@ export function AppFrame({
+@@ -170,8 +181,8 @@ export function AppFrame({
      || document.documentElement.hasAttribute('data-windows-titlebar') ? 0 : SIDEBAR_COLLAPSED
    // Opening on a narrow frame collapses the left sidebar. Eligibility must
    // include that space before the occupant's first shown report arrives.
 -  const normal = computeColumns(viewport, !layoutInfo.rightbarShown && narrow ? 0 : sidebarPreference, rightbarPreference, collapsedWidth)
 -  const cols = computeColumns(viewport, sidebarPreference, layoutInfo.rightbarTrack ? rightbarPreference : 0, collapsedWidth)
-+  const normal = computeColumns(viewport - productInset, productShell ? 0 : !layoutInfo.rightbarShown && narrow ? 0 : sidebarPreference, rightbarPreference, productShell ? 0 : collapsedWidth)
-+  const cols = computeColumns(viewport - productInset, productShell ? 0 : sidebarPreference, layoutInfo.rightbarTrack ? rightbarPreference : 0, productShell ? 0 : collapsedWidth)
++  const normal = computeColumns(contentViewport, productShell ? 0 : !layoutInfo.rightbarShown && narrow ? 0 : sidebarPreference, rightbarPreference, productShell ? 0 : collapsedWidth)
++  const cols = computeColumns(contentViewport, productShell ? 0 : sidebarPreference, layoutInfo.rightbarTrack ? rightbarPreference : 0, productShell ? 0 : collapsedWidth)
    const colsRef = useRef(cols)
    colsRef.current = cols
    const rightbarWidth = useRef(normal.rightbar)
-@@ -240,9 +242,9 @@ export function AppFrame({
+@@ -238,11 +249,11 @@ export function AppFrame({
+   // it priced the squeeze itself, the centre column absorbed each width change
+   // whole and was corrected two frames later — visible jitter. cols keeps only
    // the discrete decisions (track present, collapse state) and the drag base.
-   const rightbarMax = cols.rightbar === 0 ? 0 : clampWidth(rightbarPreference, RIGHTBAR_MIN, viewport * RIGHTBAR_MAX_RATIO)
+-  const rightbarMax = cols.rightbar === 0 ? 0 : clampWidth(rightbarPreference, RIGHTBAR_MIN, viewport * RIGHTBAR_MAX_RATIO)
++  const rightbarMax = cols.rightbar === 0 ? 0 : clampWidth(rightbarPreference, RIGHTBAR_MIN, contentViewport * RIGHTBAR_MAX_RATIO)
    const sidebar = useMemo(() => renderSlot('sidebar', {
 -    collapsed: sidebarCollapsed,
 -    width: cols.sidebar,
@@ -14202,7 +14246,7 @@ index 841f9f72aa..61e6534cff 100644
    const main = useMemo(() => (
      <MainPanel usePanelInfo={usePanelInfo} renderSlot={renderSlot} />
    ), [usePanelInfo, renderSlot])
-@@ -253,19 +255,20 @@ export function AppFrame({
+@@ -253,19 +264,21 @@ export function AppFrame({
    // row (ui-sidebar). AppFrame.module.css publishes the matching
    // --dsh-frame-leading-clearance under the same collapsed condition.
    const leading = useMemo(() => renderSlot('shell.leading', {}), [renderSlot])
@@ -14214,19 +14258,20 @@ index 841f9f72aa..61e6534cff 100644
        ref={frameRef}
        className={css.frame}
 +      data-product-shell={productShell || undefined}
++      data-product-compact={(productShell && viewport <= 600) || undefined}
        style={{
          ...(document.documentElement.hasAttribute('data-windows-titlebar')
            ? { '--dsh-windows-sidebar-width': `${cols.sidebar}px` } : {}),
          gridTemplateColumns:
 -          `${cols.sidebar}px minmax(${cols.rightbar === 0 ? 0 : CENTER_MIN}px, 1fr) minmax(0px, ${rightbarMax}px)`,
-+          `${cols.sidebar}px minmax(${cols.rightbar === 0 ? 0 : CENTER_MIN + productInset}px, 1fr) minmax(0px, ${rightbarMax}px)`,
++          `${cols.sidebar}px minmax(${cols.rightbar === 0 ? '0px' : productShell ? `calc(${CENTER_MIN}px + var(--physicsos-shell-content-inset))` : `${CENTER_MIN}px`}, 1fr) minmax(0px, ${rightbarMax}px)`,
        }}
 -      data-sidebar-collapsed={sidebarCollapsed || undefined}
 +      data-sidebar-collapsed={(!productShell && sidebarCollapsed) || undefined}
        data-rightbar-collapsed={cols.rightbar === 0 || undefined}
        data-rightbar-fullscreen={layoutInfo.rightbarFullscreen || undefined}
        data-rightbar-instant={layoutInfo.rightbarInstant || undefined}
-@@ -295,7 +298,7 @@ export function AppFrame({
+@@ -295,7 +308,7 @@ export function AppFrame({
          </div>
        )}
        {/* The collapsed rail is fixed-width: no resize handle while closed. */}
@@ -15247,7 +15292,7 @@ index ac1116f04c..82d9207c1a 100644
    margin-left: 0;
    margin-right: 0;
    padding-left: 0;
-@@ -612,3 +656,23 @@
+@@ -612,3 +656,21 @@
      animation: none;
    }
  }
@@ -15257,20 +15302,18 @@ index ac1116f04c..82d9207c1a 100644
 +.historyButton { border: 0; border-radius: 8px; padding: 7px 10px; color: var(--dsw-alias-label-secondary); background: transparent; font: inherit; font-size: 12px; cursor: pointer; }
 +.historyButton:hover { background: var(--dsw-alias-interactive-bg-hover); }
 +.productHeaderActions { margin-left: auto; display: flex; align-items: center; gap: 12px; }
-+.productRail { position: absolute; left: 30px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; align-items: center; gap: 5px; max-height: calc(100% - 150px); overflow: auto; padding: 16px 13px; border: 1px solid var(--physics-glass-border); border-radius: 40px; background: var(--physics-glass-fill); box-shadow: var(--physics-glass-rim), var(--physics-glass-lift); backdrop-filter: var(--physics-glass-blur); pointer-events: auto; }
++.productRail { position: absolute; box-sizing: border-box; left: var(--physicsos-shell-rail-left); top: var(--physicsos-shell-header); bottom: 16px; margin-block: auto; height: max-content; max-height: max(0px, calc(100% - var(--physicsos-shell-header) - 32px)); width: var(--physicsos-shell-rail-width); min-height: 0; display: flex; flex-direction: column; align-items: center; gap: 5px; overflow: auto; overscroll-behavior: contain; scrollbar-width: none; padding: 16px var(--physicsos-shell-rail-padding); border: var(--physicsos-shell-rail-border) solid var(--physics-glass-border); border-radius: 40px; background: var(--physics-glass-fill); box-shadow: var(--physics-glass-rim), var(--physics-glass-lift); backdrop-filter: var(--physics-glass-blur); pointer-events: auto; }
 +.historyDrawer { position: absolute; right: 18px; top: max(68px, var(--dsh-frame-top-clearance, 0px)); bottom: 18px; width: min(380px, calc(100vw - 36px)); max-height: none; margin: 0; }
-+.productHistory { display: flex; flex-direction: column; height: calc(100dvh - 190px); min-height: 120px; overflow: auto; }
++.productHistory { display: flex; flex-direction: column; height: min(640px, max(0px, calc(100dvh - 160px))); min-height: 0; overflow: auto; overscroll-behavior: contain; }
 +:global(html[data-platform='darwin']) .productHeader { padding-left: 88px; }
 +:global(html[data-windows-titlebar]) .productHeader { top: var(--dsh-windows-titlebar-height); }
-+@media (max-width: 600px) {
-+ .productHeader { gap: 6px; padding: 0 14px; }
-+ .productRail { top: auto; bottom: 9px; left: 50%; transform: translateX(-50%); flex-direction: row; max-width: calc(100vw - 24px); max-height: 52px; padding: 5px 8px; border-radius: 24px; overflow: visible; }
-+ .historyButton { max-width: 130px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-+}
++:global([data-product-compact]) .productHeader { gap: 6px; padding: 0 14px; }
++:global([data-product-compact]) .productRail { top: auto; bottom: var(--physicsos-shell-bottom-gap); left: 50%; transform: translateX(-50%); margin: 0; flex-direction: row; width: max-content; max-width: calc(100% - 24px); height: var(--physicsos-shell-bottom-height); max-height: max(0px, calc(100% - var(--physicsos-shell-header) - var(--physicsos-shell-bottom-gap))); padding: 5px var(--physicsos-shell-rail-padding); border-radius: 24px; overflow: auto; }
++:global([data-product-compact]) .historyButton { max-width: 130px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 +
 +.historyButton { display: inline-flex; align-items: center; gap: 7px; }
 +.productHeaderActions { gap: 6px; }
-+@media(max-width:600px) { .productHeaderActions .historyButton span { display: none; } }
++:global([data-product-compact]) .productHeaderActions .historyButton span { display: none; }
 diff --git a/packages/client/ui-sidebar/src/client/SidebarRoot.tsx b/packages/client/ui-sidebar/src/client/SidebarRoot.tsx
 index fed580320c..f007eee8f8 100644
 --- a/packages/client/ui-sidebar/src/client/SidebarRoot.tsx
@@ -17716,7 +17759,7 @@ index 36dc0506d3..c716433cee 100644
        '@modelcontextprotocol/server':
          specifier: 2.0.0
          version: 2.0.0
-@@ -9831,34 +10074,551 @@ importers:
+@@ -9831,34 +10074,560 @@ importers:
        zod:
          specifier: ^4.4.3
          version: 4.4.3
@@ -17965,6 +18008,15 @@ index 36dc0506d3..c716433cee 100644
 +      '@physicsos/physics-workbench':
 +        specifier: link:../../../../../packages/physics-workbench
 +        version: link:../../../../../packages/physics-workbench
++      acorn:
++        specifier: 8.18.0
++        version: 8.18.0
++      css-tree:
++        specifier: 3.2.1
++        version: 3.2.1
++      parse5:
++        specifier: 8.0.1
++        version: 8.0.1
 +      zod:
 +        specifier: ^4.4.3
 +        version: 4.4.3
@@ -18870,6 +18922,18 @@ index 36dc0506d3..c716433cee 100644
    '@yao-pkg/pkg-fetch@3.6.4':
      resolution: {integrity: sha512-2JXvS9HbMudLlzEjSaJ7bLNnF/WlTv7iaTAJp2Tk8pBsgwCyL9p4rIN8cztHlyZF7qVzr1EaBjd7DQooFk0azQ==}
      hasBin: true
+@@ -17677,6 +18540,11 @@ packages:
+   acorn@8.17.0:
+     resolution: {integrity: sha512-xRQbDb9BnwDafYNn6Vwl839DYVjqXYb1XVGtWAZ1kcDc6iwAL4hg3B1dZlRiuENFeO2H53gFG3in621AdERVAg==}
+     engines: {node: '>=0.4.0'}
+     hasBin: true
+
++  acorn@8.18.0:
++    resolution: {integrity: sha512-lGq+9yr1/GuAWaVYIHRjvvySG5/4VfKIvC8EWxStPdcDh/Ka7FG3twP6v4d5BkravUilhIAsG4Qj83t02LWUPQ==}
++    engines: {node: '>=0.4.0'}
++    hasBin: true
++
+   agent-base@7.1.4:
 @@ -17924,9 +18778,9 @@ packages:
    brace-expansion@2.1.2:
      resolution: {integrity: sha512-w5JZcKgdhDOgOwm8H+KgbosopHMuGcl6qbulwjtz3SM7I7P3yW1eAjzMPLrIE+NQ9vjgANKHWeMHnrT0OXW1oA==}
@@ -19755,6 +19819,12 @@ index 36dc0506d3..c716433cee 100644
        tslib: 2.8.1
  
    abbrev@4.0.0: {}
+@@ -24834,3 +25867,5 @@ snapshots:
+   acorn@8.17.0: {}
+
++  acorn@8.18.0: {}
++
+   agent-base@7.1.4: {}
 @@ -24853,7 +25872,7 @@ snapshots:
    ajv@8.20.0:
      dependencies:

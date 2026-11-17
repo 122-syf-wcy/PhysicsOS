@@ -10,7 +10,21 @@ import type {
 
 export const CANVAS_PROTOCOL_VERSION = 1 as const
 
-/** Metadata head. version is the CAS token; generation fences delete/restore lifetimes. */
+/** Lifecycle metadata is additive within protocol/unit v1; absence means legacy active. */
+export type WorkbenchLifecycleState = 'active' | 'archived' | 'deleted'
+export interface WorkbenchLifecycleCapabilities {
+  readonly schemaVersion: 1
+  readonly lifecycleBridge: true
+  readonly lifecycleWritesEnabled: boolean
+  readonly archive: boolean
+  readonly delete: boolean
+  readonly restore: boolean
+  readonly generationRequired: true
+}
+export const workbenchLifecycleState = (head: { readonly deletedAt?: string; readonly archivedAt?: string }): WorkbenchLifecycleState =>
+  head.deletedAt !== undefined ? 'deleted' : head.archivedAt !== undefined ? 'archived' : 'active'
+
+/** Metadata head. version is the CAS token; generation fences every lifecycle transition. */
 export interface CanvasHead {
   readonly id: string
   readonly title: string
@@ -22,6 +36,8 @@ export interface CanvasHead {
   readonly createdAt: string
   readonly updatedAt: string
   readonly deletedAt?: string
+  /** Kept while deleted so restore returns to the original archived state. */
+  readonly archivedAt?: string
 }
 export interface CanvasCreateRequest {
   readonly id: string
@@ -31,6 +47,8 @@ export interface CanvasCreateRequest {
   readonly mutationId: string
 }
 export interface CanvasCommitRequest {
+  /** Stable across this editor session's autosaves; never a per-save telemetry event. */
+  readonly editingSessionId?: string
   readonly expectedVersion: number
   readonly expectedGeneration?: number
   readonly mutationId: string
@@ -38,6 +56,7 @@ export interface CanvasCommitRequest {
 }
 export interface CanvasRenameRequest {
   readonly expectedVersion: number
+  readonly expectedGeneration?: number
   readonly mutationId: string
   readonly title: string
   /** When omitted, the server creates the renamed manifest from the current head. */
@@ -45,6 +64,7 @@ export interface CanvasRenameRequest {
 }
 export interface CanvasDeleteRequest {
   readonly expectedVersion: number
+  readonly expectedGeneration?: number
   readonly mutationId: string
 }
 export interface CanvasRestoreRequest {
@@ -52,8 +72,15 @@ export interface CanvasRestoreRequest {
   readonly expectedGeneration?: number
   readonly mutationId: string
 }
+export interface CanvasArchiveRequest {
+  readonly expectedVersion: number
+  readonly expectedGeneration: number
+  readonly mutationId: string
+}
+export type CanvasUnarchiveRequest = CanvasArchiveRequest
 export interface CanvasCopyRequest {
   readonly expectedVersion: number
+  readonly expectedGeneration?: number
   readonly mutationId: string
   readonly id: string
   readonly title: string
@@ -85,7 +112,7 @@ export interface CanvasListResponse {
 }
 export interface CanvasChange {
   readonly seq: number
-  readonly operation: 'create' | 'commit' | 'rename' | 'delete' | 'restore' | 'copy'
+  readonly operation: 'create' | 'commit' | 'rename' | 'delete' | 'restore' | 'copy' | 'archive' | 'unarchive'
   readonly head: CanvasHead
   readonly mutationId: string
 }

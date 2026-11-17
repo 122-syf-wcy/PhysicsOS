@@ -28,8 +28,8 @@
       ],
       "entry": "packages/physicsos/auth-host/src/index.ts",
       "publisher": "PhysicsOS",
-      "sha256": "5c000f61e97350ffc3ae61d4f30ad2a7db52c93057f177d126adea703dcee9b7",
-      "signature": "ed25519:lO/yNEH0oOCwEXvG1Dgp8Jfn8kuDuSgEghAi1DqsY/6R6ohLhm4JbrHb53x1Q7kA/n3eJPzKSNH7mw2uvuKbDQ==",
+      "sha256": "50542dd9b668f61ea12acab2978d50991dbcac11685bd83ad9a2a7a5220e9b64",
+      "signature": "ed25519:96JH7rGi+Q3JFqx6K1OKv852/WRVABDoc7qZujEdNCIrB21n971G1RJqA9CHCRiBSie1q/YBJ0FGogSP3Gz7Bw==",
       "description": "School tenants, accounts, sessions, password reset, and audit ledger."
     },
     {
@@ -105,8 +105,8 @@
       ],
       "entry": "packages/physicsos/learning-host/src/index.ts",
       "publisher": "PhysicsOS",
-      "sha256": "ac2b18ac82985da8efda83d3e0ca0d1575d4719901db6f70073e446445e5fd81",
-      "signature": "ed25519:MBGsYpLpSf+zsuaGpWoiRHFfL8s5AAz9bmyyTnWiPvS6QlNX+5/AGaSde27BoQ2YzuZHiOB6ovZLdMRi6HRYAw==",
+      "sha256": "4a58775a3e265329e622f0a67375902637b8515e0150851d7d235dddd23a24e6",
+      "signature": "ed25519:MYHfz0B41nN4RnMLaZ/wYtJI1pA/hNOs/2B2TWhIJ+5ckRUDyjZZb5ynRHGbCmS1AasvrvzaWFCF85yuWHecBw==",
       "description": "Account-scoped attempts and saved-scene synchronization."
     },
     {

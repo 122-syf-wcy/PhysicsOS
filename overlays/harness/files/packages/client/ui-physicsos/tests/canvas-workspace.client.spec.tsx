@@ -88,6 +88,18 @@ function groupDocument(): CanvasDocumentState {
 afterEach(() => { cleanup(); observed.current = undefined; vi.restoreAllMocks() })
 
 describe('controlled experiment canvas workspace', () => {
+  it('keeps an archived workspace read-only while full export remains available and starts one session per presentation', () => {
+    const base = canvasTestDocument()
+    const fixture = rootFixture({ ...base, lifecycle: 'archived', readOnly: true, status: 'archived' })
+    const view = render(<CanvasWorkspace {...fixture.props} />)
+    expect(screen.getByRole('button', { name: fixture.props.t('canvas.save') })).toHaveProperty('disabled', true)
+    fireEvent.keyDown(view.container.querySelector('main')!, { key: 'Delete' })
+    expect(fixture.commands.removeNodes).not.toHaveBeenCalled()
+    expect(fixture.commands.beginEditingSession).toHaveBeenCalledOnce()
+    view.rerender(<CanvasWorkspace {...fixture.props} />)
+    expect(fixture.commands.beginEditingSession).toHaveBeenCalledOnce()
+    expect(screen.getByText(fixture.props.t('canvas.lifecycle.readonly'))).toBeTruthy()
+  })
   it('offers pen and bounded shape tools while keeping the Agent panel optional', () => {
     const fixture = rootFixture()
     render(<CanvasWorkspace {...fixture.props} />)

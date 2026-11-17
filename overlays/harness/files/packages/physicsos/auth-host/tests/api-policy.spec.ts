@@ -108,6 +108,8 @@ const makePolicy = (options: {
   store?: ApiPolicyStore & { claims: string[] }
   ensureWorkspace?: (actor: ApiPolicyActor, title?: string) => Promise<ApiPolicyWorkspace>
   hostFilesystemAccess?: 'deny' | 'admin'
+  projectDeleteAllowed?: (actor: ApiPolicyActor, workspaceId: string) => boolean
+  projectOpenAllowed?: (actor: ApiPolicyActor, workspaceId: string) => boolean
 } = {}) => {
   const store = options.store ?? makeStore()
   return {
@@ -117,6 +119,8 @@ const makePolicy = (options: {
       actorFromRequest: () => options.actor === undefined ? student : options.actor,
       store,
       ensureWorkspace: options.ensureWorkspace ?? (async () => workspace),
+      ...(options.projectDeleteAllowed === undefined ? {} : { projectDeleteAllowed: options.projectDeleteAllowed }),
+      ...(options.projectOpenAllowed === undefined ? {} : { projectOpenAllowed: options.projectOpenAllowed }),
       ...(options.hostFilesystemAccess === undefined
         ? {}
         : { hostFilesystemAccess: options.hostFilesystemAccess }),
@@ -217,6 +221,50 @@ describe('PhysicsOS shared /api policy', () => {
     const { policy } = makePolicy({ store })
     const result = await policy.wrapFetch(async () => { await store.release(student, 'workspace', 'owned'); return rpc({ deleted: true }) })(request('workspace.delete', { workspaceId: 'owned' }))
     expect(await rpcValueOf(result)).toEqual({ deleted: true })
+  })
+  it.each([student, admin])('keeps managed projects away from native hard-delete for $role', async actor => {
+    const store = makeStore({ workspace: ['owned'] })
+    const projectDeleteAllowed = vi.fn(() => false)
+    const { policy } = makePolicy({ actor, store, projectDeleteAllowed })
+    const next = vi.fn(async () => rpc({ deleted: true }))
+    const response = await policy.wrapFetch(next)(request('workspace.delete', { workspaceId: 'owned' }))
+    expect((await response.json()).result.error.code).toBe('workspace-soft-delete-required')
+    expect(projectDeleteAllowed).toHaveBeenCalledWith(actor, 'owned')
+    expect(next).not.toHaveBeenCalled()
+    expect(store.ownedIds(actor, 'workspace').has('owned')).toBe(true)
+  })
+  it.each(['session.create', 'workspace.rename', 'workspace.insertBefore', 'workspace.insertSessionBefore'])(
+    'refuses new work in a retained non-live project through %s', async method => {
+      const store = makeStore({ workspace: ['deleted'], session: ['retained-session'] })
+      const projectOpenAllowed = vi.fn(() => false)
+      const { policy } = makePolicy({ store, projectOpenAllowed })
+      const next = vi.fn(async () => rpc({}))
+      const response = await policy.wrapFetch(next)(request(method, { workspaceId: 'deleted', sessionId: 'retained-session', title: 'name' }))
+      expect((await response.json()).result.error.code).toBe('workspace-unavailable')
+      expect(next).not.toHaveBeenCalled()
+    },
+  )
+  it('keeps existing session history readable when its project is non-live', async () => {
+    const store = makeStore({ workspace: ['deleted'], session: ['retained-session'] })
+    const { policy } = makePolicy({ store, projectOpenAllowed: () => false })
+    const next = vi.fn(async () => rpc({ events: [] }))
+    await policy.wrapFetch(next)(request('session.page', { sessionId: 'retained-session' }))
+    expect(next).toHaveBeenCalledOnce()
+  })
+  it('does not disclose project lifecycle for an unowned native workspace', async () => {
+    const projectDeleteAllowed = vi.fn(() => false)
+    const { policy } = makePolicy({ projectDeleteAllowed })
+    const next = vi.fn(async () => rpc({ deleted: true }))
+    const response = await policy.wrapFetch(next)(request('workspace.delete', { workspaceId: 'foreign' }))
+    expect((await response.json()).result.ok).toBe(false)
+    expect(projectDeleteAllowed).not.toHaveBeenCalled()
+    expect(next).not.toHaveBeenCalled()
+  })
+  it('retains native hard-delete when the product lifecycle seam is explicitly off', async () => {
+    const { policy } = makePolicy({ store: makeStore({ workspace: ['owned'] }), projectDeleteAllowed: () => true })
+    const next = vi.fn(async () => rpc({ deleted: true }))
+    expect(await rpcValueOf(await policy.wrapFetch(next)(request('workspace.delete', { workspaceId: 'owned' })))).toEqual({ deleted: true })
+    expect(next).toHaveBeenCalledOnce()
   })
   it('refuses an anonymous request before dispatch', async () => {
     const next = vi.fn(async () => rpc({}))

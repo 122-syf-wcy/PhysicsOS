@@ -16,18 +16,22 @@ import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import { mountPhysicsOSChrome } from './chrome.ts'
 import { createAdminApi, createAuthApi } from './auth-api.ts'
-import { createLearningApi } from './learning-api.ts'
+import { collectLearningPages, createLearningApi } from './learning-api.ts'
 import { createUsageApi } from './usage-api.ts'
+import { createActivityApi } from './activity-api.ts'
+import { bufferActivityDisplays, startActivityTelemetry } from './activity-telemetry.ts'
 import { registerWhiteboard } from './whiteboard-entry.tsx'
+import { registerCourseware } from './courseware/entry.tsx'
 import { startUsageTelemetry } from './usage-telemetry.ts'
 import { createModelPoolApi } from './model-pool-api.ts'
 import { createNoticeApi } from './notice-api.ts'
 import { PlatformNoticeDialog, UpstreamOnboardingSink } from './PlatformNoticeDialog.tsx'
-import { createAuthController } from './auth-store.ts'
+import { createAuthController, namespacedStorage, readStoredAuthUser } from './auth-store.ts'
 import { AuthGate } from './AuthGate.tsx'
 import { HomeBelow, HomeHero } from './HomeHero.tsx'
 import { HomeBrandMark } from './HomeBrand.tsx'
 import { startExperimentNavigation } from './experiments/experiment-navigation.ts'
+import { installExperimentRunTracking } from './experiments/experiment-run-tracking.ts'
 import { createCanvasApi } from './canvas/api.ts'
 import { createCanvasController } from './canvas/controller.ts'
 import { createCanvasPersistence } from './canvas/persistence.ts'
@@ -172,12 +176,26 @@ export function apply(ctx: ClientContext): void {
   const authApi = createAuthApi()
   /* 账号同步通路: `/physicsos/learning` holds the signed-in student's own
      attempts and saved scenes, so two devices see the same record. */
-  const learningApi = createLearningApi()
+  const projectStateChanges = createSnapshotStore(0)
+  const learningApi = createLearningApi({ owner: () => {
+    const state = auth.store.getSnapshot(), user = state.user
+    return state.status === 'authed' && user !== undefined ? { schoolId: user.schoolId, username: user.username } : undefined
+  } })
   const usageApi = createUsageApi({ owner: () => {
     const user = auth.store.getSnapshot().user
     return user === undefined ? undefined : { schoolId: user.schoolId, username: user.username }
   } })
   const auth = createAuthController(authApi, globalThis.localStorage)
+  const mutateProjectState = learningApi.mutateProjectState
+  learningApi.mutateProjectState = async (...args) => {
+    const result = await mutateProjectState(...args)
+    projectStateChanges.set(projectStateChanges.getSnapshot() + 1)
+    return result
+  }
+  const activityApi = createActivityApi({ owner: () => {
+    const state = auth.store.getSnapshot(), user = state.user
+    return state.status === 'authed' && user !== undefined ? { schoolId: user.schoolId, username: user.username } : undefined
+  } })
   void auth.boot()
 
   /* 学习上报:每一次自测对错,按知识点各报一格。
@@ -197,7 +215,72 @@ export function apply(ctx: ClientContext): void {
 
   /* localStorage-backed so 最近空间 survives a reload with restorable scenes;
      under an account it lands in that user's namespace. */
-  const surface = createPhysicsSurfaceController(auth.userStorage, learningApi, surfacePanels)
+  const teachingCapabilities = createSnapshotStore({ enabled: false, available: false, resolved: false, accountKey: '' })
+  const accountKey = (): string | undefined => {
+    const state = auth.store.getSnapshot(), user = state.user
+    return state.status === 'authed' && user !== undefined ? JSON.stringify([user.schoolId, user.id]) : undefined
+  }
+  const personalEnabled = (): boolean => {
+    const state = teachingCapabilities.getSnapshot()
+    return state.enabled && state.accountKey === accountKey()
+  }
+  const personalReadable = (): boolean => {
+    const state = teachingCapabilities.getSnapshot()
+    return state.available && state.accountKey === accountKey()
+  }
+  const surface = createPhysicsSurfaceController(auth.userStorage, learningApi, surfacePanels, {
+    account: () => {
+      const state = auth.store.getSnapshot(), user = state.user
+      if (state.status !== 'authed' || user === undefined) return undefined
+      const hint = readStoredAuthUser(globalThis.localStorage)
+      if (hint?.id !== user.id || hint.schoolId !== user.schoolId) return undefined
+      return { key: JSON.stringify([user.schoolId, user.id]), storage: namespacedStorage(globalThis.localStorage, user.id) }
+    },
+    recentLifecycleEnabled: personalEnabled,
+    recentLifecycleReadable: personalReadable,
+    recentLifecycleReady: () => teachingCapabilities.getSnapshot().resolved && teachingCapabilities.getSnapshot().accountKey === accountKey(),
+  })
+  ctx.effect(() => {
+    let current: string | undefined, epoch = 0
+    let request: AbortController | undefined
+    const refresh = (force = false): void => {
+      const next = accountKey()
+      surface.refreshAccount()
+      if (next === current && !force) return
+      current = next; const generation = ++epoch
+      request?.abort()
+      teachingCapabilities.set({ enabled: false, available: false, resolved: false, accountKey: next ?? '' })
+      if (next === undefined) return
+      const user = auth.store.getSnapshot().user!
+      request = new AbortController()
+      void fetch('/physicsos/learning/capabilities', { credentials: 'same-origin', cache: 'no-store',
+        headers: { 'x-physicsos-canvas-owner': encodeURIComponent(JSON.stringify({ schoolId: user.schoolId, username: user.username })) },
+        signal: AbortSignal.any([request.signal, AbortSignal.timeout(15_000)]),
+      }).then(async response => {
+        if (!response.ok) return
+        const capability = await response.json() as { schemaVersion?: unknown; teachingToolsMode?: unknown; lifecycleBridge?: unknown; productStateEnabled?: unknown }
+        if (epoch !== generation || accountKey() !== next || capability.schemaVersion !== 1 || capability.lifecycleBridge !== true) return
+        teachingCapabilities.set({ enabled: capability.teachingToolsMode === 'enabled' && capability.productStateEnabled === true,
+          available: capability.teachingToolsMode === 'bridge' || capability.teachingToolsMode === 'enabled', resolved: true, accountKey: next })
+        surface.refreshAccount()
+        void surface.sync().catch(() => { /* A lifecycle read failure stays visible and cannot restore stale records. */ })
+      }).catch(() => { /* Unknown capability never admits new lifecycle writes. */ })
+    }
+    const stop = auth.store.subscribe(() => refresh())
+    const retryCapability = (): void => { if (!teachingCapabilities.getSnapshot().resolved) refresh(true) }
+    window.addEventListener('online', retryCapability)
+    window.addEventListener('focus', retryCapability)
+    refresh()
+    return () => { epoch++; stop(); request?.abort(); window.removeEventListener('online', retryCapability); window.removeEventListener('focus', retryCapability) }
+  }, 'ui-physicsos: personal lifecycle capability')
+  const projectState = {
+    api: learningApi, enabled: personalEnabled, readable: personalReadable, accountKey,
+    ready: () => teachingCapabilities.getSnapshot().resolved && teachingCapabilities.getSnapshot().accountKey === accountKey(),
+    subscribe: (listener: () => void): (() => void) => {
+      const stopAuth = auth.store.subscribe(listener), stopCapabilities = teachingCapabilities.subscribe(listener), stopChanges = projectStateChanges.subscribe(listener)
+      return () => { stopAuth(); stopCapabilities(); stopChanges() }
+    },
+  }
   const canvas = createCanvasController({
     api: createCanvasApi(),
     persistence: createCanvasPersistence(),
@@ -213,13 +296,43 @@ export function apply(ctx: ClientContext): void {
   const canvasEntry = registerCanvasViews(ctx, canvas, surface, auth, learningRecord)
   ctx.effect(() => startCanvasNavigation(surface, window), 'ui-physicsos: canvas navigation')
   registerWhiteboard(ctx, auth, surface)
+  registerCourseware(ctx, auth, surface)
+  ctx.effect(() => installExperimentRunTracking(auth.store), 'ui-physicsos: observed experiment runs')
   ctx.effect(() => startUsageTelemetry(auth, surface), 'ui-physicsos: usage telemetry')
+  ctx.effect(() => {
+    let account = '', epoch = 0
+    let request: AbortController | undefined
+    let telemetry: ReturnType<typeof startActivityTelemetry> | undefined
+    let displays: ReturnType<typeof bufferActivityDisplays> | undefined
+    const sync = (): void => {
+      const state = auth.store.getSnapshot(), user = state.user
+      const next = state.status === 'authed' && user !== undefined ? JSON.stringify([user.schoolId, user.id]) : ''
+      if (next === account) return
+      account = next; const current = ++epoch
+      request?.abort(); telemetry?.dispose(); telemetry = undefined
+      displays?.dispose(); displays = undefined
+      if (!next) return
+      const buffered = bufferActivityDisplays(auth)
+      displays = buffered
+      request = new AbortController()
+      void activityApi.capabilities({ signal: request.signal }).then(capabilities => {
+        if (epoch !== current || account !== next || capabilities.collectionEnabled !== true || capabilities.mode !== 'enabled') { buffered.dispose(); return }
+        telemetry = startActivityTelemetry(auth, { enabled: true })
+        buffered.flushInto(telemetry)
+        // The authenticated shell is mounted; successful display times survive capability latency.
+        telemetry.appDisplayed()
+      }).catch(() => { buffered.dispose(); /* Telemetry availability never blocks authenticated learning. */ })
+    }
+    const stop = auth.store.subscribe(sync)
+    sync()
+    return () => { epoch++; stop(); request?.abort(); displays?.dispose(); telemetry?.dispose() }
+  }, 'ui-physicsos: activity collection capability')
   ctx.effect(() => {
     let disposed = false
     let starting = false
     let stopNavigation: (() => void) | undefined
     const start = (): void => {
-      if (auth.store.getSnapshot().status !== 'authed' || starting) return
+      if (auth.store.getSnapshot().status !== 'authed' || starting || !teachingCapabilities.getSnapshot().resolved || teachingCapabilities.getSnapshot().accountKey !== accountKey()) return
       starting = true
       const initialState = surface.store.getSnapshot()
       const savedScenesReady = surface.sync().catch(() => {})
@@ -230,8 +343,9 @@ export function apply(ctx: ClientContext): void {
       })
     }
     const stopAuth = auth.store.subscribe(start)
+    const stopCapabilities = teachingCapabilities.subscribe(start)
     start()
-    return () => { disposed = true; stopAuth(); stopNavigation?.() }
+    return () => { disposed = true; stopAuth(); stopCapabilities(); stopNavigation?.() }
   }, 'ui-physicsos: independent experiment navigation')
   const paperApi = createPaperApi()
   /* 管理后台: same cookie session, `/physicsos/admin` prefix. The component
@@ -268,16 +382,22 @@ export function apply(ctx: ClientContext): void {
     if (current.status !== 'authed' || current.user === undefined) return []
     const api = createCanvasApi().forOwner(current.user)
     const result = new Map<string, ProjectBoard>()
+    const owner = JSON.stringify([current.user.schoolId, current.user.id])
+    const requireCurrent = (): void => { if (accountKey() !== owner) throw new Error('ACCOUNT_CHANGED') }
     if (navigator.onLine) {
-      const heads = await api.list({ limit: 100, deleted: 'live' })
-      for (let at = 0; at < heads.items.length; at += 4) {
-        const entries = await Promise.all(heads.items.slice(at, at + 4).map(head => api.open(head.id)))
-        const active = auth.store.getSnapshot()
-        if (active.status !== 'authed' || active.user === undefined || active.user.id !== current.user.id) return []
+      const heads = await collectLearningPages(async cursor => {
+        const page = await api.list({ limit: 100, deleted: 'live', ...(cursor === undefined ? {} : { cursor }) })
+        requireCurrent()
+        return { items: [...page.items], ...(page.nextCursor === undefined ? {} : { nextCursor: page.nextCursor }) }
+      })
+      for (let at = 0; at < heads.length; at += 4) {
+        const entries = await Promise.all(heads.slice(at, at + 4).map(head => api.open(head.id)))
+        requireCurrent()
         for (const value of entries) result.set(value.head.id, { id: value.head.id, title: value.head.title,
           ...(typeof value.manifest.metadata?.studyProjectId === 'string' ? { projectId: value.manifest.metadata.studyProjectId } : {}) })
       }
     }
+    requireCurrent()
     for (const value of canvas.getSnapshot().documents) if (!value.deleted && canvas.documentSource(value.id).getSnapshot().manifest !== undefined) {
       result.set(value.id, { id: value.id, title: value.title, ...(value.projectId === undefined ? {} : { projectId: value.projectId }) })
     }
@@ -297,9 +417,10 @@ export function apply(ctx: ClientContext): void {
         const result = await ctx.sessions.using(id, { source: 'workspaceOperation' }, reference => reference.binding.session.rename(title))
         if (!result.ok) throw new Error(result.error.message)
       },
-      addConversation: async (workspaceId: WorkspaceId, sessionId: SessionId) => { await ctx.workspaces.insertSessionBefore(workspaceId, sessionId) },
+      addConversation: async (_workspaceId: WorkspaceId, _sessionId: SessionId) => { throw new Error('请刷新后使用项目内的移动功能；原生排序不能移动对话。') },
+      projectState,
       listBoards: listProjectBoards,
-      assignBoard: async (id: string, projectId: string) => { assertProject(projectId); await canvas.assignProject(id, projectId) },
+      assignBoard: async (id: string, projectId: string | undefined) => { if (projectId !== undefined) assertProject(projectId); await canvas.assignProject(id, projectId) },
       newBoard: async (projectId: string, title: string) => { assertProject(projectId); const id = await canvas.create(title); await canvas.assignProject(id, projectId); surface.openCanvas(id) },
       openBoard: (id: string) => { surface.openCanvas(id) },
     }),
@@ -538,6 +659,7 @@ export function apply(ctx: ClientContext): void {
      is displaced on purpose — its add action is the route into the host
      directory picker, and no student should browse server folders. */
   const accountWorkspaceActions = {
+    projectState,
     createWorkspace: createAccountWorkspace,
     renameWorkspace: async (id: string, name: string): Promise<void> => {
       await ctx.workspaces.rename(id as WorkspaceId, name)
@@ -642,7 +764,10 @@ export function apply(ctx: ClientContext): void {
         id: Parameters<typeof surface.open>[0],
         sceneRef?: Parameters<typeof surface.open>[1],
       ) => { surface.open(id, sceneRef) },
-      removeRecent: (sceneId: string) => { surface.removeRecent(sceneId) },
+      removeRecent: (sceneId: string) => surface.removeRecent(sceneId),
+      restoreRecent: (sceneId: string) => surface.restoreRecent(sceneId),
+      archiveRecent: (sceneId: string) => surface.archiveRecent(sceneId),
+      unarchiveRecent: (sceneId: string) => surface.unarchiveRecent(sceneId),
       requestSceneInCanvas: canvasEntry.requestSceneInCanvas,
       /* 历史对话 rows reopen the Harness session itself — the same verb the
          workspace browser uses; conversation state lives server-side. */
@@ -667,6 +792,7 @@ export function apply(ctx: ClientContext): void {
       /* 管理后台 — the menu only shows this for admin roles. */
       openAdmin: () => { surface.open('admin') },
       logout: auth.logout,
+      setAvatar: auth.setAvatar,
     }),
   }, SidebarFooter))
 
@@ -692,6 +818,10 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     inject: () => ({
       hooks: { recentExperiments: surface.recent },
+      removeRecent: (sceneId: string) => surface.removeRecent(sceneId),
+      restoreRecent: (sceneId: string) => surface.restoreRecent(sceneId),
+      archiveRecent: (sceneId: string) => surface.archiveRecent(sceneId),
+      unarchiveRecent: (sceneId: string) => surface.unarchiveRecent(sceneId),
       startQuestion: () => { ctx.uiWorkspace.startSession() },
       openCanvasView: canvasEntry.openCanvasView,
       newCanvas: canvasEntry.newCanvas,
@@ -952,6 +1082,7 @@ export function apply(ctx: ClientContext): void {
         paperApi,
         adminApi,
         usageApi,
+        activityApi,
         noticeApi,
         modelPoolApi,
         openSurface: (

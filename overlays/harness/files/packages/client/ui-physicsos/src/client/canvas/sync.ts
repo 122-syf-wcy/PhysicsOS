@@ -3,7 +3,7 @@ import type { CanvasGraph, CanvasManifest, MergeConflict, WorkbenchObject } from
 import { canonicalStringify, fail, freezeData, unwrap, WorkbenchDataError } from '@physicsos/physics-workbench/json'
 import { parseManifest, refsOf } from '@physicsos/physics-workbench/codec'
 import { CanvasRequestError, type CanvasApi } from './api.ts'
-import { CanvasCacheConflict, type CanvasPersistence, type LocalCanvasRecord, type PendingCanvasMutation } from './persistence.ts'
+import { canvasArchived, canvasLifecycleFields, CanvasCacheConflict, type CanvasPersistence, type LocalCanvasRecord, type PendingCanvasMutation } from './persistence.ts'
 import { readPendingMutation } from './cache-codec.ts'
 import type { GraphLimits } from '@physicsos/physics-workbench/graph'
 import type { CanvasClientError } from './types.ts'
@@ -287,7 +287,8 @@ export function createCanvasSynchronizer(options: CanvasSyncOptions): CanvasSync
       if (current.head !== undefined && opened.head.version === current.head.version &&
         opened.head.generation === current.head.generation && opened.head.manifestDigest === current.head.manifestDigest) return undefined
       if (current.pending?.kind === 'commit' && current.pending.request.manifestDigest === opened.head.manifestDigest &&
-        opened.head.deletedAt === undefined) {
+        opened.head.deletedAt === undefined && opened.head.archivedAt === undefined &&
+        current.pending.request.expectedGeneration === opened.head.generation) {
         const { pending: _pending, error: _error, ...retained } = current
         return { ...retained, head: opened.head, base: opened.manifest,
           acknowledgedSequence: Math.max(current.acknowledgedSequence, current.pending.editSequence), savedAt: options.now() }
@@ -296,22 +297,26 @@ export function createCanvasSynchronizer(options: CanvasSyncOptions): CanvasSync
       const local = current.working
       const clean = current.pending === undefined && current.editSequence === current.acknowledgedSequence &&
         !(current.pendingNoteDrafts ?? []).some(draft => draft.body !== draft.baseBody || draft.format !== draft.baseFormat) &&
-        current.conflict === undefined && current.localConflict === undefined && current.deleted === (current.head?.deletedAt !== undefined)
+        current.conflict === undefined && current.localConflict === undefined && current.deleted === (current.head?.deletedAt !== undefined) &&
+        canvasArchived(current) === (current.head?.archivedAt !== undefined)
       if (clean) {
         const { error: _error, conflict: _conflict, ...retained } = current
         return { ...retained, head: opened.head, base: opened.manifest, working: opened.manifest,
-          deleted: opened.head.deletedAt !== undefined, savedAt: options.now() }
+          ...canvasLifecycleFields(current, opened.head), savedAt: options.now() }
+      }
+      const { pending: _pending, error: _error, conflict: _conflict, ...retained } = current
+      // Never rebase an old outbox/draft through archive/delete/restore, even if the latest head is active again.
+      if (opened.head.deletedAt !== undefined || opened.head.archivedAt !== undefined ||
+        current.head !== undefined && opened.head.generation !== current.head.generation) {
+        conflicted = true
+        const conflict: MergeConflict = { path: '/lifecycle', kind: 'delete-modify',
+          base: current.head?.generation ?? 0, local: current.head?.generation ?? 0, remote: opened.head.generation,
+          message: 'The canvas lifecycle changed. The local draft is retained for export/copy and will not be written into this lifetime.' }
+        return { ...retained, head: opened.head, base: opened.manifest, ...canvasLifecycleFields(current, opened.head), savedAt: options.now(),
+          conflict: { base, local, remote: opened, conflicts: [conflict] } }
       }
       const merged = await mergeCanvasGraphs(base, local, opened.manifest, inventory, options.hash, options.now, options.id, options.limits?.())
       Object.assign(inventory, merged.objects)
-      const { pending: _pending, error: _error, conflict: _conflict, ...retained } = current
-      if (opened.head.deletedAt !== undefined && !current.deleted) {
-        conflicted = true
-        const conflict: MergeConflict = { path: '/deleted', kind: 'delete-modify', base: false, local: false, remote: true,
-          message: 'This canvas was deleted remotely while a local draft was being edited.' }
-        return { ...retained, head: opened.head, base: opened.manifest, deleted: true, savedAt: options.now(),
-          conflict: { base, local, remote: opened, conflicts: [conflict] } }
-      }
       if (merged.manifest === undefined) {
         conflicted = true
         return { ...retained, head: opened.head, base: opened.manifest, savedAt: options.now(),
@@ -352,12 +357,15 @@ export function createCanvasSynchronizer(options: CanvasSyncOptions): CanvasSync
         body = { id, title: current.working.title, mutationId: options.id('mutation') }
       } else if (current.deleted && current.head.deletedAt === undefined) {
         kind = 'delete'
-        body = { expectedVersion: current.head.version, mutationId: options.id('mutation') }
+        body = { expectedVersion: current.head.version, expectedGeneration: current.head.generation, mutationId: options.id('mutation') }
       } else if (!current.deleted && current.head.deletedAt !== undefined) {
         kind = 'restore'
         body = { expectedVersion: current.head.version, expectedGeneration: current.head.generation, mutationId: options.id('mutation') }
+      } else if (!current.deleted && canvasArchived(current) !== (current.head.archivedAt !== undefined)) {
+        kind = canvasArchived(current) ? 'archive' : 'unarchive'
+        body = { expectedVersion: current.head.version, expectedGeneration: current.head.generation, mutationId: options.id('mutation') }
       } else {
-        if (current.deleted) return current
+        if (current.deleted || canvasArchived(current)) return current
         if (current.base !== undefined && canonicalStringify(current.working) === canonicalStringify(current.base)) {
           if (current.acknowledgedSequence !== current.editSequence || current.error !== undefined) {
             const { error: _error, ...retained } = current
@@ -371,7 +379,8 @@ export function createCanvasSynchronizer(options: CanvasSyncOptions): CanvasSync
         }
         kind = 'commit'
         body = { expectedVersion: current.head.version, expectedGeneration: current.head.generation,
-          mutationId: options.id('mutation'), manifestDigest: await options.hash(current.working) }
+          mutationId: options.id('mutation'), manifestDigest: await options.hash(current.working),
+          ...(current.editingSessionId === undefined ? {} : { editingSessionId: current.editingSessionId }) }
       }
       const pending = readPendingMutation({ kind, request: body, body: canonicalStringify(body), bodyDigest: await options.hash(body),
         createdAt: options.now(), editSequence: current.editSequence, ...(kind === 'commit' ? { manifest: current.working } : {}) }, id)
@@ -422,17 +431,32 @@ export function createCanvasSynchronizer(options: CanvasSyncOptions): CanvasSync
     if (head.id !== id || base.id !== id || await options.hash(base) !== head.manifestDigest) {
       throw new CanvasRequestError(502, 'CANVAS_ACK_INVALID', 'The canvas acknowledgement does not match its published manifest.', undefined, false)
     }
+    if (pending.kind !== 'create') {
+      const lifecycle = pending.kind !== 'commit'
+      const correctState = pending.kind === 'delete' ? head.deletedAt !== undefined : pending.kind === 'restore' ? head.deletedAt === undefined : pending.kind === 'archive' ? head.archivedAt !== undefined && head.deletedAt === undefined : head.deletedAt === undefined && head.archivedAt === undefined
+      if (!correctState || pending.request.expectedGeneration === undefined || head.version !== pending.request.expectedVersion + 1 || head.generation !== pending.request.expectedGeneration + (lifecycle ? 1 : 0)) throw new CanvasRequestError(502,
+        'CANVAS_ACK_INVALID', 'The lifecycle/version acknowledgement does not match its sealed request.', undefined, false)
+    }
     const saved = await updateCanvasRecord(options.persistence, options.namespace, id, current => {
       if (current.pending?.request.mutationId !== pending.request.mutationId) return undefined
       const { pending: _pending, error: _error, ...retained } = current
       const isNewer = current.head === undefined || head.generation > current.head.generation ||
         (head.generation === current.head.generation && head.version >= current.head.version)
+      if (!isNewer) return { ...retained, ...canvasLifecycleFields(current, current.head!), savedAt: options.now(),
+        conflict: { base: current.base ?? base, local: current.working, remote: { head: current.head!, manifest: current.base ?? base },
+          conflicts: [{ path: '/lifecycle', kind: 'delete-modify', message: 'The original request was acknowledged after a newer lifetime was observed. Reload or export/copy the retained draft.' }] } }
       const working = pending.kind === 'create'
         ? unwrap(parseManifest({ ...current.working, createdAt: base.createdAt,
           updatedAt: Date.parse(current.working.updatedAt) < Date.parse(base.updatedAt) ? base.updatedAt : current.working.updatedAt }))
         : current.working
-      const acknowledgesContent = pending.kind === 'commit' || pending.kind === 'delete' || pending.kind === 'restore'
+      const lifecycle = pending.kind !== 'create' && pending.kind !== 'commit'
+      const unchangedContent = canonicalStringify(working) === canonicalStringify(base)
+      const acknowledgesContent = pending.kind === 'commit' || lifecycle && unchangedContent
+      const draftConflict = lifecycle && !unchangedContent ? { base: current.base ?? base, local: working,
+        remote: { head, manifest: base }, conflicts: [{ path: '/lifecycle', kind: 'delete-modify' as const,
+          message: 'Lifecycle acknowledged; unsubmitted edits are retained for export/copy, not silently committed.' }] } : undefined
       return { ...retained, ...(isNewer ? { head, base } : {}), working,
+        ...(draftConflict === undefined ? {} : { conflict: draftConflict }),
         acknowledgedSequence: acknowledgesContent
           ? Math.max(current.acknowledgedSequence, pending.editSequence) : current.acknowledgedSequence,
         savedAt: options.now() }
@@ -447,10 +471,10 @@ export function createCanvasSynchronizer(options: CanvasSyncOptions): CanvasSync
       if (record === undefined || record.conflict !== undefined || record.localConflict !== undefined) return
       // A new authenticated scope may resume its retained envelope explicitly. A
       // paused scope still exits above, and rejected data or quotas remain stopped.
-      if (retry && record.error !== undefined && ([401, 403].includes(record.error.status ?? 0) || record.error.code === 'CANVAS_SYNC_PAUSED')) {
+      if (retry && record.error !== undefined && ([401, 403].includes(record.error.status ?? 0) || record.error.code === 'CANVAS_SYNC_PAUSED' || record.error.code === 'LIFECYCLE_WRITES_DISABLED')) {
         record = await updateCanvasRecord(options.persistence, options.namespace, id, current => {
           requireCurrent()
-          if (current.error === undefined || !([401, 403].includes(current.error.status ?? 0) || current.error.code === 'CANVAS_SYNC_PAUSED')) return undefined
+          if (current.error === undefined || !([401, 403].includes(current.error.status ?? 0) || current.error.code === 'CANVAS_SYNC_PAUSED' || current.error.code === 'LIFECYCLE_WRITES_DISABLED')) return undefined
           const { error: _error, ...retained } = current
           return { ...retained, savedAt: options.now() }
         })
@@ -474,9 +498,12 @@ export function createCanvasSynchronizer(options: CanvasSyncOptions): CanvasSync
           }
           await acknowledge(id, pending, committed.head, committed.manifest ?? pending.manifest)
         } else {
-          const head = pending.kind === 'delete'
-            ? await request(signal => options.api.remove(id, pending.request, signal))
-            : await request(signal => options.api.restore(id, pending.request, signal))
+          let head: CanvasHead
+          if (pending.kind === 'delete') head = await request(signal => options.api.remove(id, pending.request, signal))
+          else if (pending.kind === 'restore') head = await request(signal => options.api.restore(id, pending.request, signal))
+          else if (pending.kind === 'archive' && options.api.archive) head = await request(signal => options.api.archive!(id, pending.request, signal))
+          else if (pending.kind === 'unarchive' && options.api.unarchive) head = await request(signal => options.api.unarchive!(id, pending.request, signal))
+          else throw new CanvasRequestError(409, 'CLIENT_UPGRADE_REQUIRED', 'Refresh to use the lifecycle-capable Canvas client.', undefined, false)
           const base = record.base
           if (base === undefined) throw new WorkbenchDataError([{ path: '/base', code: 'base', message: 'A delete/restore acknowledgement has no retained base manifest.' }])
           await acknowledge(id, pending, head, base)
@@ -484,7 +511,9 @@ export function createCanvasSynchronizer(options: CanvasSyncOptions): CanvasSync
       }
     } catch (error) {
       const failure = canvasErrorOf(error)
-      if (error instanceof CanvasRequestError && error.status === 409 && options.isCurrent() && !paused) {
+      if (error instanceof CanvasRequestError && ['CLIENT_UPGRADE_REQUIRED', 'LIFECYCLE_WRITES_DISABLED'].includes(error.code)) {
+        await saveError(id, failure)
+      } else if (error instanceof CanvasRequestError && error.status === 409 && options.isCurrent() && !paused) {
         try {
           await refresh(id)
           const reconciled = await options.persistence.read(options.namespace, id)

@@ -8,6 +8,7 @@
  */
 
 import type { IncomingMessage } from 'node:http'
+import type { ActivityRoster } from './activity-types.ts'
 
 export const IDENTITY_SERVICE = 'physicsosIdentity'
 
@@ -24,6 +25,8 @@ export interface PhysicsosIdentity {
   actorOf(req: IncomingMessage): IdentityActor | null
   usageSessionOwner?(sessionId: string): { readonly schoolId: string; readonly userKey: string } | undefined
   usageOwnedSessions?(): readonly { readonly sessionId: string; readonly schoolId: string; readonly userKey: string }[]
+  /** Minimal internal roster; authorization and tenant scope are still checked by the activity service. */
+  activityRoster?(actor: IdentityActor): ActivityRoster
   record(
     actor: IdentityActor,
     action: string,
@@ -48,6 +51,13 @@ export const identityOf = (ctx: {
 }): PhysicsosIdentity | undefined => {
   const service = ctx.get(IDENTITY_SERVICE)
   return service === undefined ? undefined : (service as PhysicsosIdentity)
+}
+
+/** Product browser writes never elevate a read-scoped bearer token to session authority. */
+export const requireCookieActor = (identity: PhysicsosIdentity | undefined, req: IncomingMessage): IdentityActor => {
+  if (req.headers.authorization !== undefined) throw new LearningError(403, 'COOKIE_ONLY', '此功能只接受当前浏览器登录会话，不接受访问令牌。')
+  if (typeof req.headers.cookie !== 'string' || req.headers.cookie.trim() === '') throw new LearningError(401, 'UNAUTHENTICATED', '请先登录。')
+  return requireActor(identity, req)
 }
 
 export const requireActor = (

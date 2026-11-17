@@ -24,7 +24,7 @@ import {
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { isTeachingRole, type AuthState } from './auth-store.ts'
 import {
-  IconPhysicsLab, IconQuestionSheet,
+  IconPhysicsLab, IconCourseware,
 } from './icons/physics-icons.tsx'
 import type { PhysicsosKey } from './locales.ts'
 import type { SnapshotStore } from './runtime-compat.ts'
@@ -77,6 +77,8 @@ export function SidebarNav({ panels = [], selectPanel, openSurface, usePhysicsSu
   const [moreOpen, setMoreOpen] = useState(false)
   const iconSize = 20
   const moreItems = [
+    { id: 'whiteboard', label: t('whiteboard.title') },
+    ...(teaching ? [{ id: 'paper', label: t('nav.paper') }] : []),
     { id: 'notice', label: t('nav.notice') },
     { id: 'contribute', label: t('nav.contribute') },
     ...panels.map(panel => ({ id: `panel:${panel.id}`, label: panel.label })),
@@ -102,22 +104,21 @@ export function SidebarNav({ panels = [], selectPanel, openSurface, usePhysicsSu
   )
 
   return (
-    <nav className={clsx(css.root, css.rail)} aria-label={t('brand.name')}>
+    <nav className={clsx(css.root, css.rail)} aria-label={t('brand.name')} data-physicsos-navigation>
       {item('home', 'nav.home', <IconNewChatOutlineMedium size={iconSize} />)}
       {item('lab', 'nav.lab', <IconPhysicsLab size={iconSize} />)}
       {item('projects', 'nav.projects', <NavigationIcon name="projects" size={iconSize} />)}
       {item('canvas', 'nav.canvas', <NavigationIcon name="canvas" size={iconSize} />)}
-      {item('whiteboard', 'whiteboard.title', <NavigationIcon name="whiteboard" size={iconSize} />)}
-      {teaching && item('paper', 'nav.paper', <IconQuestionSheet size={iconSize} />)}
+      {item('courseware', 'nav.courseware', <IconCourseware size={iconSize} />)}
       <Menu open={moreOpen} items={moreItems} portal side="right" align="end"
         onClose={() => { setMoreOpen(false) }}
         onSelect={(id) => {
           setMoreOpen(false)
           const panel = panels.find(item => `panel:${item.id}` === id)
           if (panel !== undefined) selectPanel?.(panel.id)
-          else if (id === 'notice' || id === 'contribute') openSurface(id)
+          else if (id === 'notice' || id === 'contribute' || id === 'whiteboard' || (id === 'paper' && teaching)) openSurface(id)
         }}
-        anchor={<button type="button" className={css.item} aria-label={t('nav.more')} aria-haspopup="menu" aria-expanded={moreOpen} onClick={() => { setMoreOpen(value => !value) }}><span aria-hidden="true">···</span></button>} />
+        anchor={<button type="button" className={clsx(css.item, (surface === 'whiteboard' || surface === 'paper') && css.active)} aria-label={t('nav.more')} aria-current={surface === 'whiteboard' || surface === 'paper' ? 'page' : undefined} aria-haspopup="menu" aria-expanded={moreOpen} onClick={() => { setMoreOpen(value => !value) }}><span aria-hidden="true">···</span></button>} />
     </nav>
   )
 }
