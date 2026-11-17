@@ -17,6 +17,17 @@ describe('Canvas deployment configuration', () => {
     expect(() => resolveCanvasConfig({ teachingToolsMode: 'bridge', lifecycleWritesEnabled: true })).toThrow('contradicts')
     expect(() => resolveCanvasConfig({ teachingToolsMode: 'enabled', lifecycleWritesEnabled: false })).toThrow('contradicts')
   })
+  it('keeps the configured teaching mode a closed literal union', async () => {
+    for (const teachingToolsMode of ['off', 'bridge', 'enabled'] as const) {
+      const parsed = await validate({ teachingToolsMode })
+      expect(parsed.issues).toBeUndefined()
+      if (parsed.issues !== undefined) throw new Error('Declared teaching mode failed validation')
+      expect(parsed.value.teachingToolsMode).toBe(teachingToolsMode)
+    }
+    for (const teachingToolsMode of ['unknown', '', null, true, 1, {}, []]) {
+      expect((await validate({ teachingToolsMode })).issues).toBeDefined()
+    }
+  })
   it('resolves the existing explicit home without accessing or installing a local environment', () => {
     const config = resolveCanvasConfig({ canvasDshHome: '/var/lib/physicsos' })
     expect(config.root).toBe(join('/var/lib/physicsos', 'physicsos', 'canvases', 'v1'))

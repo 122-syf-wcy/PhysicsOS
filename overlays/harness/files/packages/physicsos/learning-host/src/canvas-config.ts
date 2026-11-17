@@ -106,7 +106,7 @@ const coursewareLimitSchema: z<Partial<CoursewareLimits>> = z.object({
 
 /** Cordis validates these fields before mounting the plugin. */
 export const learningHostConfig: z<LearningHostConfig> = z.object({
-  teachingToolsMode: z.enum(['off', 'bridge', 'enabled']).default('bridge'),
+  teachingToolsMode: z.union(['off', 'bridge', 'enabled']).default('bridge'),
   activityQueryCapacityVerified: z.boolean().default(false),
   canvasDshHome: z.string(),
   canvasLimits: limitSchema,

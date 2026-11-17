@@ -212,7 +212,9 @@ export async function apply(ctx: Context, config: Config = {}): Promise<() => Pr
           activityQueryCapacityVerified: capacityVerified,
           minimumRollbackCapability: mode === 'enabled' ? 'teaching-tools-bridge-v1' : null })
       } catch (error) {
-        const status = error instanceof LearningError || error instanceof Error && 'status' in error && typeof error.status === 'number' ? error.status : 503
+        let status = 503
+        if (error instanceof LearningError) status = error.status
+        else if (error instanceof Error && 'status' in error && typeof error.status === 'number') status = error.status
         canvasSend(res, status, { error: '学习能力状态暂不可读取。' })
       }
       return Promise.resolve()

@@ -106,13 +106,13 @@ export class WhiteboardService {
     if (head.archivedAt !== undefined) throw new WhiteboardError(409, 'WHITEBOARD_ARCHIVED_READ_ONLY', '画板已归档，只能查看或导出；取消归档后才能编辑。', summaryOf(head))
     return head
   }
-  private checkFence(head: WhiteboardHead, input: { readonly expectedRevision?: number; readonly expectedGeneration?: number }): void {
+  private checkFence(head: WhiteboardHead, input: { readonly expectedRevision?: number | undefined; readonly expectedGeneration?: number | undefined }): void {
     if (input.expectedGeneration === undefined || input.expectedRevision === undefined) throw new WhiteboardError(409, 'CLIENT_UPGRADE_REQUIRED', '请刷新并升级画板客户端后重试；旧客户端缺少生命周期代际保护，未执行写入。', summaryOf(head))
     if (input.expectedRevision !== head.revision || input.expectedGeneration !== generationOf(head)) throw new WhiteboardError(409, 'WHITEBOARD_CONFLICT', '画板版本或生命周期已变化。草稿已保留，请导出或复制后重新载入。', summaryOf(head))
   }
   private jobEligible(account: WhiteboardAccount, job: WhiteboardJob): boolean {
     const head = account.boards[job.boardId]
-    return head !== undefined && workbenchLifecycleState(head) === 'active' && generationOf(head) === (job.generation ?? 1)
+    return head !== undefined && workbenchLifecycleState(summaryOf(head)) === 'active' && generationOf(head) === (job.generation ?? 1)
   }
   private receipt(account: WhiteboardAccount, operationId: string, kind: WhiteboardAccount['receipts'][string]['kind'], boardId: string, body: unknown) {
     const receipt = account.receipts[hash(operationId)]
@@ -223,7 +223,7 @@ export class WhiteboardService {
   async list(actor: IdentityActor, state: WhiteboardListState | string = 'active'): Promise<readonly WhiteboardSummary[]> {
     if (!['active', 'archived', 'deleted', 'all'].includes(state)) throw new LearningError(400, 'WHITEBOARD_BAD_REQUEST', '画板列表状态无效。')
     return this.queue(actor, async account => Object.values(account.boards)
-      .filter(head => state === 'all' || workbenchLifecycleState(head) === state)
+      .filter(head => state === 'all' || workbenchLifecycleState(summaryOf(head)) === state)
       .map(summaryOf).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.id.localeCompare(b.id)))
   }
   create(actor: IdentityActor, input: unknown): Promise<WhiteboardRecord> {
@@ -289,7 +289,7 @@ export class WhiteboardService {
       const current = this.head(account, boardId, true)
       this.checkFence(current, body)
       if (this.options.lifecycleWritesEnabled !== true) throw new WhiteboardError(409, 'LIFECYCLE_WRITES_DISABLED', '整理画板功能尚未开启；已有生命周期与旧任务保护仍然有效。', summaryOf(current))
-      const state = workbenchLifecycleState(current)
+      const state = workbenchLifecycleState(summaryOf(current))
       const valid = operation === 'delete' ? state !== 'deleted' : operation === 'restore' ? state === 'deleted' : operation === 'archive' ? state === 'active' : state === 'archived'
       if (!valid) throw new WhiteboardError(state === 'deleted' ? 410 : 409, 'WHITEBOARD_LIFECYCLE_CONFLICT', '画板状态已变化，请刷新列表后重试。', summaryOf(current))
       const at = this.now().toISOString()

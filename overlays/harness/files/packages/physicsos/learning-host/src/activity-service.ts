@@ -90,8 +90,8 @@ export class ActivityService implements ActivitySink {
   private readonly requests = new Set<Promise<unknown>>()
   private closing = false
   private disposal?: Promise<void>
-  private recovery?: Promise<void>
-  private timer?: ReturnType<typeof setInterval>
+  private recovery: Promise<void> | undefined
+  private timer: ReturnType<typeof setInterval> | undefined
   private minute = -1
   private globalRate = 0
   private writeMinute = -1
@@ -312,7 +312,7 @@ export class ActivityService implements ActivitySink {
   private async deliver(key: string, row: ActivityReceiptRecord): Promise<'recorded' | 'duplicate'> {
     this.originalTime(row.occurredAt)
     const status = await this.admit(this.eventFromReceipt(row))
-    if (row.state !== 'applied') await this.update(this.receipts, key, current => ({ ...current, state: 'applied' }))
+    if (row.state !== 'applied') await this.update(this.receipts, key, current => ({ ...current, state: 'applied' as const }))
     return status
   }
   /** Nonthrowing success hook. Original business capsule is required to recover the crash-before-hook gap. */
@@ -374,7 +374,7 @@ export class ActivityService implements ActivitySink {
               this.note(error.code, row.schoolId)
               // Warning first, terminal receipt second. A failure of either keeps the durable pending fact.
               await this.persistWarnings()
-              await this.update(this.receipts, key, current => ({ ...current, state: 'expired', expiredAt: this.now().toISOString() }))
+              await this.update(this.receipts, key, current => ({ ...current, state: 'expired' as const, expiredAt: this.now().toISOString() }))
             }
           }
         }
@@ -488,7 +488,16 @@ export class ActivityService implements ActivitySink {
     if (!parsed.success) throw new LearningError(503, 'ACTIVITY_ROSTER_INVALID', '统计仅接受不含敏感字段的最小账号目录。')
     const roster = parsed.data
     if (new Set(roster.schools.map(row => row.id)).size !== roster.schools.length || new Set(roster.users.map(row => digest([row.schoolId, row.userKey]))).size !== roster.users.length || new Set(roster.users.map(row => digest([row.schoolId, row.username]))).size !== roster.users.length) throw new LearningError(503, 'ACTIVITY_ROSTER_CONFLICT', '账号目录存在重复归属。')
-    return roster
+    return {
+      version: roster.version,
+      schools: roster.schools.map(row => ({ id: row.id, name: row.name, status: row.status,
+        ...(row.mergedInto === undefined ? {} : { mergedInto: row.mergedInto }),
+        ...(row.rosterAliasOf === undefined ? {} : { rosterAliasOf: row.rosterAliasOf }),
+        ...(row.archivedAt === undefined ? {} : { archivedAt: row.archivedAt }),
+        ...(row.reviewState === undefined ? {} : { reviewState: row.reviewState }) })),
+      users: roster.users.map(row => ({ schoolId: row.schoolId, userKey: row.userKey, username: row.username, status: row.status, role: row.role,
+        ...(row.avatarUrl === undefined ? {} : { avatarUrl: row.avatarUrl }) })),
+    }
   }
   private avatarSnapshot(users: readonly ActivityRosterUser[], at: string): ActivityAvatarSnapshot {
     const distribution = this.avatars.map(avatar => ({ ...avatar, users: 0 })), byPath = new Map(distribution.map(value => [value.path, value]))
@@ -587,7 +596,7 @@ export class ActivityService implements ActivitySink {
     }
   }
   userDetail(actor: IdentityActor, target: { readonly schoolId: string; readonly username: string }, query: ActivityDateQuery = {}): Promise<ActivityUserDetail> {
-    return this.request(async () => {
+    return this.request<ActivityUserDetail>(async () => {
       const parsed = targetWire.safeParse(target)
       if (!parsed.success) throw new LearningError(400, 'BAD_REQUEST', '目标用户筛选无效。')
       const schoolId = this.admin(actor, parsed.data.schoolId), group = await this.grouped(actor, schoolId, this.window(query))
@@ -598,7 +607,7 @@ export class ActivityService implements ActivitySink {
     }).catch(error => { if (!(error instanceof LearningError) || error.status >= 500) this.alertFailure(error, actor.role === 'SCHOOL_ADMIN' ? actor.schoolId : undefined); throw error })
   }
   schoolRanking(actor: IdentityActor, query: ActivityRankQuery = {}): Promise<ActivitySchoolRanking> {
-    return this.request(async () => {
+    return this.request<ActivitySchoolRanking>(async () => {
       const parsed = rankQueryWire.safeParse(query)
       if (!parsed.success) throw new LearningError(400, 'BAD_REQUEST', '学校排行筛选无效。')
       const body = parsed.data, schoolId = this.admin(actor, body.schoolId), group = await this.grouped(actor, schoolId, this.window({ ...(body.days === undefined ? {} : { days: body.days }), ...(body.to === undefined ? {} : { to: body.to }) }))
