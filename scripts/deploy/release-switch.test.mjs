@@ -720,6 +720,65 @@ test('paired release captures once, Engine-creates worker with nonce proof, then
   }
 })
 
+test('a stale Compose image label is accepted only for the bound legacy CID and immutable Config.Image', async t => {
+  const f = await fixture(t, { withWorker: true })
+  f.state.workerLabels = { 'com.docker.compose.image': `sha256:${'a'.repeat(64)}` }
+  const createWorker = f.dependencies.createWorker
+  f.dependencies.createWorker = async options => {
+    const result = await createWorker(options)
+    f.state.workerLabels = undefined
+    return result
+  }
+  const result = await f.releaseSwitch(f.workerPlan, f.dependencies)
+  assert.equal(result.deployed, true)
+  assert.equal(f.state.workerImage, WORKER_NEW)
+  assert.equal(f.state.creates[0].body.Labels['com.docker.compose.image'], WORKER_NEW)
+})
+
+for (const [name, override] of [
+  ['mutable Config.Image', { workerRuntimeImageRef: 'physicsos-validation:previous' }],
+  ['malformed legacy image label', { workerLabels: { 'com.docker.compose.image': 'legacy' } }],
+]) {
+  test(`a stale Compose image label rejects ${name} before downtime`, async t => {
+    const f = await fixture(t, { withWorker: true })
+    f.state.workerLabels = { 'com.docker.compose.image': `sha256:${'a'.repeat(64)}` }
+    Object.assign(f.state, override)
+    await assert.rejects(f.releaseSwitch(f.workerPlan, f.dependencies), error => error.phase === 'preflight-validation-worker')
+    assert.equal(f.state.events.includes('stop'), false)
+    assert.equal(f.state.creates.length, 0)
+  })
+}
+
+test('a new worker cannot reuse the legacy Compose image label exception', async t => {
+  const f = await fixture(t, { withWorker: true }), createWorker = f.dependencies.createWorker
+  f.dependencies.createWorker = async options => {
+    const result = await createWorker(options)
+    if (options.body.Image === WORKER_NEW) f.state.workerLabels = { 'com.docker.compose.image': WORKER_OLD }
+    else f.state.workerLabels = undefined
+    return result
+  }
+  await assert.rejects(f.releaseSwitch(f.workerPlan, f.dependencies), error => error.phase === 'validation-worker-cutover' && error.rollbackHealthy === false)
+  assert.equal(f.state.events.includes('candidate'), false)
+  assert.equal(f.state.creates.length, 1)
+  assert.equal(f.state.app, false)
+})
+
+test('worker source digest label is tied to the publication source', async t => {
+  const f = await fixture(t, { withWorker: true })
+  f.newWorkerImage.Config.Labels['io.physicsos.worker.source-digest'] = DIGEST
+  const result = await f.releaseSwitch(f.workerPlan, f.dependencies)
+  assert.equal(result.deployed, true)
+  assert.equal(f.state.creates[0].body.Labels['io.physicsos.worker.source-digest'], DIGEST)
+})
+
+test('worker source digest label rejects a different source before downtime', async t => {
+  const f = await fixture(t, { withWorker: true })
+  f.newWorkerImage.Config.Labels['io.physicsos.worker.source-digest'] = 'a'.repeat(64)
+  await assert.rejects(f.releaseSwitch(f.workerPlan, f.dependencies), error => error.phase === 'preflight-validation-worker')
+  assert.equal(f.state.events.includes('stop'), false)
+  assert.equal(f.state.creates.length, 0)
+})
+
 test('an old container tag spelling is proven image-only while up and rollback still use full IDs', async t => {
   const f = await fixture(t, { withWorker: true })
   f.state.workerRuntimeImageRef = 'physicsos-validation:previous'

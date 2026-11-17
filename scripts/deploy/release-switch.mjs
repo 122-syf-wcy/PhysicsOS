@@ -242,7 +242,15 @@ function guardWorkerContainer(plan, source, container, expectedImage) {
     container.Config?.User !== 'pwuser' || container.HostConfig?.ReadonlyRootfs !== true || container.HostConfig.Privileged === true || container.HostConfig.AutoRemove === true ||
     !Array.isArray(container.Mounts) || container.Mounts.some(mount => !['bind', 'tmpfs'].includes(mount.Type) || (mount.Type === 'bind' && mount.RW !== false)))
     throw new Error('Validation worker role, image, user, read-only configuration or mounts changed')
-  if (Object.hasOwn(labels, 'com.docker.compose.image') && labels['com.docker.compose.image'] !== expectedImage) throw new Error('Worker image label differs from the exact image')
+  // An explicitly bound legacy CID can retain a stale Compose image label from
+  // an earlier import. Its daemon Image and immutable Config.Image must agree;
+  // effective Compose settings are still checked before any stop. New CIDs
+  // must always carry the exact image label requested by this release.
+  const boundLegacyImage = container.Id === plan.validationWorker.expectedOldContainerId
+    && expectedImage === plan.validationWorker.expectedOldImage && container.Config.Image === expectedImage
+    && imageId.test(labels['com.docker.compose.image'] ?? '')
+  if (Object.hasOwn(labels, 'com.docker.compose.image') && labels['com.docker.compose.image'] !== expectedImage && !boundLegacyImage)
+    throw new Error('Worker image label differs from the exact image')
   const hashes = source.validationWorker?.configHashes
   if (hashes && !(expectedImage === plan.validationWorker.candidateImage ? [hashes.new] : [hashes.old, hashes.rollback]).includes(labels['com.docker.compose.config-hash']))
     throw new Error('Validation worker Compose configuration hash changed')
@@ -380,7 +388,10 @@ async function inspectValidationWorker(plan, source, docker) {
   const labels = candidate?.Config?.Labels ?? {}, oldConfig = structuredClone(oldImage?.Config), newConfig = structuredClone(candidate?.Config)
   if (!oldConfig || !newConfig) throw new Error('Worker image configuration is missing')
   const oldLabels = structuredClone(oldConfig.Labels ?? {}), newLabels = structuredClone(newConfig.Labels ?? {})
-  for (const field of ['org.opencontainers.image.revision', 'io.physicsos.worker.inputs']) { delete oldLabels[field]; delete newLabels[field] }
+  const sourceDigestLabel = 'io.physicsos.worker.source-digest'
+  if (Object.hasOwn(labels, sourceDigestLabel) && labels[sourceDigestLabel] !== plan.sourceDigest)
+    throw new Error('Worker source digest differs from the frozen source')
+  for (const field of ['org.opencontainers.image.revision', 'io.physicsos.worker.inputs', sourceDigestLabel]) { delete oldLabels[field]; delete newLabels[field] }
   if (!isDeepStrictEqual(oldLabels, newLabels) || [WORKER_OPERATION_LABEL, WORKER_CREATE_LABEL].some(field => Object.hasOwn(labels, field)))
     throw new Error('Worker image contains unreviewed or runtime-only label changes')
   delete oldConfig.Labels
@@ -408,7 +419,7 @@ async function inspectValidationWorker(plan, source, docker) {
     files.push({ file, mode: stat.mode & 0o7777, uid: stat.uid, gid: stat.gid, sha256: await sha256(file) })
   }
   source.images[WORKER_SERVICE] = { id: oldImage.Id, digest: oldImage.RepoDigests?.[0] ?? null, labels: oldImage.Config.Labels ?? {} }
-  return { container, env, files, configHashes: source.workerConfigHashes, autoHostname: automaticWorkerHostname(source, container),
+  return { container, env, files, configHashes: source.workerConfigHashes, sourceDigest: labels[sourceDigestLabel], autoHostname: automaticWorkerHostname(source, container),
     networking: workerNetworking(source, container), template: workerRequestFromContainer(source, container) }
 }
 
@@ -666,6 +677,7 @@ export async function releaseSwitch(input, dependencies = {}) {
     if (expected === plan.validationWorker.candidateImage) {
       body.Labels['org.opencontainers.image.revision'] = plan.revision
       body.Labels['io.physicsos.worker.inputs'] = plan.validationWorker.inputsSha256
+      if (source.validationWorker.sourceDigest !== undefined) body.Labels['io.physicsos.worker.source-digest'] = source.validationWorker.sourceDigest
     }
     body.Labels[WORKER_OPERATION_LABEL] = workerState.operationNonce
     body.Labels[WORKER_CREATE_LABEL] = nonce
