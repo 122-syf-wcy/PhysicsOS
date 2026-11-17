@@ -385,10 +385,42 @@ def validate_registry_sources(source, baseline, base, before_policies, candidate
     return paths
 
 
+def baseline_registry_reachable(lock):
+    """Exact locked nodes reachable from existing importers, not arbitrary installed/orphan store entries."""
+    graph = lock.get('graph', {})
+    snapshots, packages = graph.get('snapshots', {}), graph.get('packages', {})
+    if not isinstance(snapshots, dict) or not isinstance(packages, dict):
+        raise ValueError('Baseline registry graph is absent')
+    pending = []
+    for importer in lock.get('importers', {}).values():
+        for kind in ['dependencies', 'devDependencies', 'optionalDependencies']:
+            for name, ref in importer.get(kind, {}).items():
+                version = ref.get('version') if isinstance(ref, dict) else None
+                if isinstance(version, str) and name + '@' + version in snapshots:
+                    pending.append(name + '@' + version)
+    seen = set()
+    while pending:
+        key = pending.pop()
+        if key in seen:
+            continue
+        if len(seen) >= 200_000:
+            raise ValueError('Baseline registry graph exceeds the traversal budget')
+        seen.add(key)
+        node = snapshots.get(key)
+        if not isinstance(node, dict):
+            raise ValueError('Baseline locked snapshot is invalid')
+        for kind in ['dependencies', 'optionalDependencies']:
+            for name, version in node.get(kind, {}).items():
+                if isinstance(version, str) and name + '@' + version in snapshots:
+                    pending.append(name + '@' + version)
+    return seen
+
+
 def validate_registry_lock(candidate, before, additions, workspace_paths):
     if not isinstance(candidate.get('graph'), dict) or candidate['graph'] != before.get('graph') or not candidate['graph'].get('packages') or not candidate['graph'].get('snapshots'):
         raise ValueError('External registry lock graph/resolution/integrity/policy changed; a full runtime build is required')
     new, old = candidate.get('importers', {}), before.get('importers', {})
+    reachable = baseline_registry_reachable(before)
     expected = {(row['from'].removeprefix(HARNESS + '/'), row['name']): row for row in additions}
     for importer in sorted(set(new) | set(old)):
         a, b = old.get(importer, {}), new.get(importer, {})
@@ -414,8 +446,13 @@ def validate_registry_lock(candidate, before, additions, workspace_paths):
                 version = current.get('version', '')
                 if not isinstance(version, str) or version.split('(', 1)[0] != row['resolved']['version'] or name + '@' + version not in candidate['graph']['snapshots'] or name + '@' + version.split('(', 1)[0] not in candidate['graph']['packages']:
                     raise ValueError('New importer resolved version/snapshot differs from the installed artifact')
-                if not any(isinstance(ref, dict) and ref.get('version') == version for package in old.values() for kind in ['dependencies', 'devDependencies', 'optionalDependencies'] for dep, ref in package.get(kind, {}).items() if dep == name):
-                    raise ValueError('New bare dependency has no existing baseline locked reference')
+                package = before['graph']['packages'][name + '@' + version.split('(', 1)[0]]
+                resolution = package.get('resolution') if isinstance(package, dict) else None
+                if name + '@' + version not in reachable or not isinstance(resolution, dict) or not isinstance(resolution.get('integrity'), str) or not resolution['integrity']:
+                    raise ValueError('New bare dependency has no reachable baseline integrity-locked reference')
+                # A transitive -> direct link is admissible only within the SAME lock graph.
+                # collect_registry_reuse also compares full physical closures/ABI/entry bytes
+                # in the exact base and candidate. Store existence alone never grants reuse.
     for (importer, name), row in expected.items():
         ref = next((new.get(importer, {}).get(field, {}).get(name) for field in ['dependencies', 'optionalDependencies'] if name in new.get(importer, {}).get(field, {})), None)
         if not isinstance(ref, dict) or ref.get('specifier') != row['specifier'] or ref.get('version', '').split('(', 1)[0] != row['resolved']['version']:

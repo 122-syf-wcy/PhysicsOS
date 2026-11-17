@@ -53,7 +53,7 @@
     "@deepseek-ai/dsh-agent": "workspace:^",
     "@deepseek-ai/dsh-attachment": "workspace:^",
     "parse5": "8.0.1",
-    "acorn": "8.18.0",
+    "acorn": "8.17.0",
     "css-tree": "3.2.1"
   },
   "peerDependencies": {

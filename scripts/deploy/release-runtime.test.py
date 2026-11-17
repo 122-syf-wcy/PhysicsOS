@@ -476,6 +476,29 @@ class RegistryReuseTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Existing/new external lock importer changed without an audited Node addition'):
             runtime.validate_registry_lock(after, no_reference, additions, {})
 
+    def test_registry_lock_accepts_reachable_transitive_promotion_without_changing_the_graph(self):
+        candidate, base = self.inventories()
+        additions = runtime.registry_additions(candidate, base, {})
+        graph = {'packages': {'fixture-native@1.0.0': {'resolution': {'integrity': 'sha512-locked'}}, 'fixture-parent@2.0.0': {'resolution': {'integrity': 'sha512-parent'}}},
+                 'snapshots': {'fixture-native@1.0.0': {}, 'fixture-parent@2.0.0': {'dependencies': {'fixture-native': '1.0.0'}}}}
+        before = {'graph': graph, 'importers': {'packages/parent': {'dependencies': {'fixture-parent': {'specifier': '2.0.0', 'version': '2.0.0'}}},
+                                              'packages/physicsos/fixture': {'dependencies': {'zod': {'specifier': '4.4.3', 'version': '4.4.3'}}}}}
+        after = copy.deepcopy(before)
+        after['importers']['packages/physicsos/fixture']['dependencies']['fixture-native'] = {'specifier': '1.0.0', 'version': '1.0.0'}
+        runtime.validate_registry_lock(after, before, additions, {})
+        for mutate in [lambda d: d['graph']['snapshots']['fixture-parent@2.0.0'].update(dependencies={}),
+                       lambda d: d['graph']['packages']['fixture-native@1.0.0'].update(resolution={}),
+                       lambda d: d['importers'].pop('packages/parent')]:
+            old = copy.deepcopy(before); mutate(old)
+            new = copy.deepcopy(after); new['graph'] = copy.deepcopy(old['graph'])
+            if 'packages/parent' not in old['importers']: new['importers'].pop('packages/parent')
+            with self.subTest(mutate=mutate), self.assertRaisesRegex(ValueError, 'reachable baseline'):
+                runtime.validate_registry_lock(new, old, additions, {})
+        changed = copy.deepcopy(after)
+        changed['graph']['packages']['fixture-native@1.0.0']['resolution']['integrity'] = 'sha512-changed'
+        with self.assertRaisesRegex(ValueError, 'graph/resolution/integrity'):
+            runtime.validate_registry_lock(changed, before, additions, {})
+
     def test_registry_policies_pin_absent_root_metadata_to_exact_base_source_attestation(self):
         lock = runtime.HARNESS + '/pnpm-lock.yaml'
         workspace = runtime.HARNESS + '/pnpm-workspace.yaml'
