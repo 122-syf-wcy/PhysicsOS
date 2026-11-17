@@ -1,0 +1,621 @@
+{
+  "schemaVersion": 1,
+  "catalogVersion": "guizhou-v1",
+  "model": "@provider-3/gpt-image-2.6-sunburst",
+  "referenceSha256": "a6573c4f52bf301ec33aa9897d01d1b4da450ef283327334a5d86991b2b66665",
+  "promptManifestSha256": "d1c09ef36b861cf8f2f5f4655d1d1bf8a007c3e61f00b0c0d1fbeedd10bef282",
+  "pipeline": "Pillow Lanczos; common antialiased circular alpha; no portrait pixel redraw",
+  "sizes": [
+    96,
+    192,
+    384
+  ],
+  "avatars": [
+    {
+      "id": "silver-greeting",
+      "label": "银饰迎新",
+      "source": {
+        "path": "overlays/harness/files/apps/web/design-assets/avatars-guizhou-v1/silver-greeting.png",
+        "bytes": 2052985,
+        "sha256": "a66cdc9c0d8106004e3a38723b9b92205fa08c9d9c5512a6579c48e993f2be97",
+        "size": [
+          1024,
+          1024
+        ]
+      },
+      "outputs": [
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/silver-greeting-96.webp",
+          "bytes": 4954,
+          "sha256": "dabd3d52ad58557f6d30421343a24207a2a03883d0c90aad422fe5bbb7618145"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/silver-greeting-96.avif",
+          "bytes": 5865,
+          "sha256": "78f4c3f2fca13599ebeba7d39e81a1a125cbb4d9de88d86da3d7db345fa0111e"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/silver-greeting-192.webp",
+          "bytes": 14660,
+          "sha256": "7385a756a1134020654a2e8cb9c4b4baad2484f5b2adec933731a31254a236db"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/silver-greeting-192.avif",
+          "bytes": 16785,
+          "sha256": "54b53da4085df8d5d1797b33551e5b22823411160b4bcf77a7c5f93427525187"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/silver-greeting-192.png",
+          "bytes": 79624,
+          "sha256": "0e4c4691996925e783d047d6ef2bcd91c3a2946afc434d4de328941dcd1111e4"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/silver-greeting-384.webp",
+          "bytes": 46508,
+          "sha256": "03f63d937ea0fda8baede533352cd5e8afca47388ef2a2e51840a815c5353859"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/silver-greeting-384.avif",
+          "bytes": 51770,
+          "sha256": "fc881de624a0d4d9e5794e09e3ab4a040b2bd038ad7a94e18e05a160d138a61e"
+        }
+      ]
+    },
+    {
+      "id": "indigo-reader",
+      "label": "靛蓝读书",
+      "source": {
+        "path": "overlays/harness/files/apps/web/design-assets/avatars-guizhou-v1/indigo-reader.png",
+        "bytes": 1740694,
+        "sha256": "2103b8ae302514c5f183d43124a0a493f6ce505f884cc5645d8cda7404f77411",
+        "size": [
+          1024,
+          1024
+        ]
+      },
+      "outputs": [
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/indigo-reader-96.webp",
+          "bytes": 5324,
+          "sha256": "402b50b19917f34464a26b8fdd8dcf517c2ffa6b93b9f417098613a73b629bcd"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/indigo-reader-96.avif",
+          "bytes": 5964,
+          "sha256": "c0a663c66eb071435a59f1ff60288e16261f2eb1f4ec45f3211ce5c1b13f176a"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/indigo-reader-192.webp",
+          "bytes": 16234,
+          "sha256": "d1b91c2aa24f3f303a032da48a0e64806f4dec7830647bda2e30ef543315e685"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/indigo-reader-192.avif",
+          "bytes": 17322,
+          "sha256": "7d46b504f8a366179f8db4964972e17b27b151fc3057db9e59ee27a964970999"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/indigo-reader-192.png",
+          "bytes": 82501,
+          "sha256": "848b7d348602a75cd4c9ad1d582828b1aaa9fcdf001d0597531751bcc70cd68e"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/indigo-reader-384.webp",
+          "bytes": 48904,
+          "sha256": "4d19448be5fff26ff4ee38f00dd5f6e24c72b30c0e83d5efb1864c36d9e6a605"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/indigo-reader-384.avif",
+          "bytes": 53126,
+          "sha256": "3963e50ad10aaebb2100639ee1bed45b8d467832199de907bb530d6bd9d65c7f"
+        }
+      ]
+    },
+    {
+      "id": "butterfly-light",
+      "label": "蝶光绣纹",
+      "source": {
+        "path": "overlays/harness/files/apps/web/design-assets/avatars-guizhou-v1/butterfly-light.png",
+        "bytes": 1732505,
+        "sha256": "ebeadcdb24f7170f83d1bc9f952daf6da4063eb361bead44aefa7fd019f50f6b",
+        "size": [
+          1024,
+          1024
+        ]
+      },
+      "outputs": [
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/butterfly-light-96.webp",
+          "bytes": 4648,
+          "sha256": "d21d3affce3b8c7a7c9b104fe6de9da9ea9942ebd1ca1c5973d359832d4cab1e"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/butterfly-light-96.avif",
+          "bytes": 5622,
+          "sha256": "289072c46906bd8b203ad775e2b334d2aa95972afe6267b9dd037ac4a3d2c899"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/butterfly-light-192.webp",
+          "bytes": 13412,
+          "sha256": "c59e0f8a41f255ae5841cb3f1b12647d0691551dc82ee361d55f166893490e5d"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/butterfly-light-192.avif",
+          "bytes": 15987,
+          "sha256": "ce6b571b829aebeccab3ff905fb5880f2eaede1d15765a53a4ab0fee80e58e28"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/butterfly-light-192.png",
+          "bytes": 76908,
+          "sha256": "e738f17c65f0ced5a05670539b7ab384b3d096e3fa95d1a1733ee2ab5321ac93"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/butterfly-light-384.webp",
+          "bytes": 42146,
+          "sha256": "af67ae65847294c48a9e3e35e5da3aa1bd18fb2919d08d809aa39a88a3c487a5"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/butterfly-light-384.avif",
+          "bytes": 47839,
+          "sha256": "0131bbfb196932d046f80bc752d4d1c16e682132812dcbd29b8e10e23cbd1634"
+        }
+      ]
+    },
+    {
+      "id": "pendulum",
+      "label": "摆球探索",
+      "source": {
+        "path": "overlays/harness/files/apps/web/design-assets/avatars-guizhou-v1/pendulum.png",
+        "bytes": 1845968,
+        "sha256": "10edf897dcf42c6c7288ee32348c02739171f1953cdef77b7f1b11ed6c91e450",
+        "size": [
+          1024,
+          1024
+        ]
+      },
+      "outputs": [
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/pendulum-96.webp",
+          "bytes": 5336,
+          "sha256": "3d432730603e6e39f4610b04f4bf3fdff32ab0f74f5c46ab61652966b587a4d2"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/pendulum-96.avif",
+          "bytes": 6329,
+          "sha256": "9db34545c87c1a24a994c146318c431033d90baffec190460ff90811392418fc"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/pendulum-192.webp",
+          "bytes": 15718,
+          "sha256": "cd57c1302ba88d7ee3952c40e1e53d8198d47eee8c76c2d238958de0d95891a8"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/pendulum-192.avif",
+          "bytes": 18115,
+          "sha256": "9371b628351fef8224cbbe5d7aec8ebb28503edf4e774fe23ff71fc9db8a7393"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/pendulum-192.png",
+          "bytes": 82114,
+          "sha256": "73491090a1c1da0660e04d7a115480747cb9ed25cc9c39af00857fe53e2fcd31"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/pendulum-384.webp",
+          "bytes": 49738,
+          "sha256": "ef69db10bd818fa78e58d049aef8f1ea374e1eaa67932996dfbc72611355550c"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/pendulum-384.avif",
+          "bytes": 54569,
+          "sha256": "a06a17d90fa9107819f24b81e832959d6819c4a5160bf2a599409e545f3431a9"
+        }
+      ]
+    },
+    {
+      "id": "batik-star",
+      "label": "蜡染星图",
+      "source": {
+        "path": "overlays/harness/files/apps/web/design-assets/avatars-guizhou-v1/batik-star.png",
+        "bytes": 2078856,
+        "sha256": "6570ede46eb2af9b709419e32a895bf682ed977a08aaa23c2abab4e13f5af993",
+        "size": [
+          1024,
+          1024
+        ]
+      },
+      "outputs": [
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/batik-star-96.webp",
+          "bytes": 5532,
+          "sha256": "3719e1ad984da85a16f1256b1f675d7172d098945285afdee4fba9a1a2d27546"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/batik-star-96.avif",
+          "bytes": 6354,
+          "sha256": "cbb341c6a0ade190a41602ae49af900e78a268587481b9733f6a0469278a63b2"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/batik-star-192.webp",
+          "bytes": 17370,
+          "sha256": "0d12693971bf2039cc0b90feb53d4052f8060bbee076ec1ad44e396c591bba2e"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/batik-star-192.avif",
+          "bytes": 19116,
+          "sha256": "844bf61d827fc5cb669e4464b6bf559b68d41b37c3f381963b31c81e693b8726"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/batik-star-192.png",
+          "bytes": 85961,
+          "sha256": "d28b51e603cebdddfb312d230b63404ba56a2507f08d0896b3a2eaf95ffa7f8f"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/batik-star-384.webp",
+          "bytes": 54760,
+          "sha256": "9b3b3818a7da7d706edef765dd4f19cc24398ac1c3b6b553048b76a370373692"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/batik-star-384.avif",
+          "bytes": 58464,
+          "sha256": "81e0d18af1ec870246ed34d2e1726c34604e2a61277076fa84e1b44bb348867d"
+        }
+      ]
+    },
+    {
+      "id": "mountain-sound",
+      "label": "山水听音",
+      "source": {
+        "path": "overlays/harness/files/apps/web/design-assets/avatars-guizhou-v1/mountain-sound.png",
+        "bytes": 1894409,
+        "sha256": "fa57306823ea795b47ff7a460c8b752a9629ac80b513a3302fe60ceb4e9a807e",
+        "size": [
+          1024,
+          1024
+        ]
+      },
+      "outputs": [
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/mountain-sound-96.webp",
+          "bytes": 5250,
+          "sha256": "01cfb53614d18dce68be3f9103efd6a47d06614c5aca72ef3aafaeb8a5332158"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/mountain-sound-96.avif",
+          "bytes": 6157,
+          "sha256": "3f3ed1df0f796e0651884138d38f0cfc50cefc1028eb916c5a18d5aeaed6f665"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/mountain-sound-192.webp",
+          "bytes": 15390,
+          "sha256": "9a3987d274b394cfee0ee6e5b64a0750c3301e026fb1836ca00a70da75324411"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/mountain-sound-192.avif",
+          "bytes": 17711,
+          "sha256": "18538417ef27df36c1b557a7a4fbc3989e23d235ee0ad438cb9f3bfc723c5a07"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/mountain-sound-192.png",
+          "bytes": 81659,
+          "sha256": "ddeb197b3eeec2668a10f5c54e50b920ada3e53a54a2bef5039629cec0f7c7e4"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/mountain-sound-384.webp",
+          "bytes": 47590,
+          "sha256": "06ac693ebbae5323c0f017f286e697f747fef9a527eab8a40f0f663a6fbc922f"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/mountain-sound-384.avif",
+          "bytes": 53611,
+          "sha256": "5cd8784b0a13c653e5dc9f0d19107fd770c36449f64c73646ae0c05922119c08"
+        }
+      ]
+    },
+    {
+      "id": "lens-maker",
+      "label": "透镜小匠",
+      "source": {
+        "path": "overlays/harness/files/apps/web/design-assets/avatars-guizhou-v1/lens-maker.png",
+        "bytes": 2108183,
+        "sha256": "799e93977fc95830427cd7ae807bf23d85322a0a0bb8fdce74c82d77c8ee2153",
+        "size": [
+          1024,
+          1024
+        ]
+      },
+      "outputs": [
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/lens-maker-96.webp",
+          "bytes": 5282,
+          "sha256": "c69ef114ee94c5162e3ac19804b2924a68f4f6dd3e0b2bd3a49cdc419ee50104"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/lens-maker-96.avif",
+          "bytes": 6140,
+          "sha256": "09f20b643a27ef3711241aebddf2581f278682a25741ee334d118ac4a3f723ff"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/lens-maker-192.webp",
+          "bytes": 15804,
+          "sha256": "e33ff63fa21b5f17225d071e16b9a815d6cc28f066bc0d5d213b8341f7d03b59"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/lens-maker-192.avif",
+          "bytes": 18251,
+          "sha256": "429b9c328fb94f1578da14d084e18f07b8058dc35f0f1f38ca8a793dd41e1272"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/lens-maker-192.png",
+          "bytes": 83341,
+          "sha256": "8331fe8c53ec39fdc5322edc7cab36fc0584bfc02ced1611c8a036fac86d99d1"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/lens-maker-384.webp",
+          "bytes": 52104,
+          "sha256": "8f0793f853a72cdeac18678cf8b0a072400a8eeafd99669c1fd7c5af08a4b8af"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/lens-maker-384.avif",
+          "bytes": 58298,
+          "sha256": "0541849df1bbfec6ee9cc97309342d034947a013909f9d138d24b011d9fb533c"
+        }
+      ]
+    },
+    {
+      "id": "copper-drum",
+      "label": "铜鼓节律",
+      "source": {
+        "path": "overlays/harness/files/apps/web/design-assets/avatars-guizhou-v1/copper-drum.png",
+        "bytes": 1978471,
+        "sha256": "a2e75a35b9fd334428f9a74ee238ddf80a5a2f33e32636e3631fb579d8756a93",
+        "size": [
+          1024,
+          1024
+        ]
+      },
+      "outputs": [
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/copper-drum-96.webp",
+          "bytes": 5130,
+          "sha256": "476abce2c04927dbd8071279d95d08e9859138683858e475e75c72ca66684d2d"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/copper-drum-96.avif",
+          "bytes": 5919,
+          "sha256": "9c32f68aae2411a3d05ca56e3f46ec2dc337708587fec541b1706afb1da2d300"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/copper-drum-192.webp",
+          "bytes": 15188,
+          "sha256": "55784a05568fdb78bf820e7c96a6b8bd37a4e00265aaaedfeeb7a0390e07ba97"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/copper-drum-192.avif",
+          "bytes": 17253,
+          "sha256": "cf479dffb2d9bf3eede8567bb27952e9c324acb6950b0f5fc874f80e41dfaf58"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/copper-drum-192.png",
+          "bytes": 79336,
+          "sha256": "fcf9f10e84bfc94f218a674e9b9decdc5150a41a4b31deecfbd3c0465a6394e3"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/copper-drum-384.webp",
+          "bytes": 48068,
+          "sha256": "1703eee47971b6b8c41fbceafcc2672c68f0d200e9fdcc59b27b38fa4fad3f9d"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/copper-drum-384.avif",
+          "bytes": 53001,
+          "sha256": "3cb113b14a533eb882896d7e44a0e7ccb60f9c8f5c9c42f7ff99cd8ddf44fc8d"
+        }
+      ]
+    },
+    {
+      "id": "green-wave",
+      "label": "青绿涟漪",
+      "source": {
+        "path": "overlays/harness/files/apps/web/design-assets/avatars-guizhou-v1/green-wave.png",
+        "bytes": 2060627,
+        "sha256": "973d6b7706861c33daa52e834eadac3a0b5ce83d6b3840a88037454e9fe4fd13",
+        "size": [
+          1024,
+          1024
+        ]
+      },
+      "outputs": [
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/green-wave-96.webp",
+          "bytes": 5180,
+          "sha256": "f934390c4d8c4ee4d93cfbdcdd2e14f1b7e499627b39214a2c174f66e1456959"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/green-wave-96.avif",
+          "bytes": 5988,
+          "sha256": "aeb3d92392caac15e77d1009624ec47cf20fe5572882d7ba34566474b51c4dc0"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/green-wave-192.webp",
+          "bytes": 15474,
+          "sha256": "d75d431c3a4dc22db6049310bb9a1fd29b8d74e365a91edb2277d13461663ddd"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/green-wave-192.avif",
+          "bytes": 17453,
+          "sha256": "877c18d68d0370ce6de621d9f4036f168ea59ba4d47a210a8f2141808629bc46"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/green-wave-192.png",
+          "bytes": 82164,
+          "sha256": "3bbb6a99ed2aab3e1f65ded1e9d41dc99901e7b84b9f49818b50d9b5e289fe69"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/green-wave-384.webp",
+          "bytes": 48402,
+          "sha256": "3e94a6e9606a45e3d486d226736c38f7c2147b87f3129225e3c845030030a376"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/green-wave-384.avif",
+          "bytes": 53827,
+          "sha256": "25175294114648c025cb1f0f4e86626ab7646b1441c30e4808de0af1c4f41382"
+        }
+      ]
+    },
+    {
+      "id": "red-embroidery",
+      "label": "绛红绣纹",
+      "source": {
+        "path": "overlays/harness/files/apps/web/design-assets/avatars-guizhou-v1/red-embroidery.png",
+        "bytes": 1844662,
+        "sha256": "de46f2a5d45347aade0a84ebb3ca1fa7df3f0b22e9ff60b936064197bcdbbe1d",
+        "size": [
+          1024,
+          1024
+        ]
+      },
+      "outputs": [
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/red-embroidery-96.webp",
+          "bytes": 5166,
+          "sha256": "6e71bbf5fe717a1fe7f9f4a0580744825a90d97ee0ba365304c1b2714b5ba8f4"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/red-embroidery-96.avif",
+          "bytes": 6089,
+          "sha256": "ac139adfba9f4c26ff86c5f1c03521408f3bcd7030b998c9022d3d3eb126accb"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/red-embroidery-192.webp",
+          "bytes": 15180,
+          "sha256": "5e026dff1691b2dfb031b7691be068bf0f608ae5584f7bb697ccaea6f273a464"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/red-embroidery-192.avif",
+          "bytes": 17417,
+          "sha256": "6c09df168697c253783f00d43f16ef34ec1fef96fe04a823755d7ddd1dd1e972"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/red-embroidery-192.png",
+          "bytes": 80546,
+          "sha256": "acf790a4a6a36bd3f526d49e89b999ab70a2bcaebdac0d8a8c485722b12ede0d"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/red-embroidery-384.webp",
+          "bytes": 48592,
+          "sha256": "0dc390aea8b67898c348dea304abd500b7241ede56090c3f440c500febe60c51"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/red-embroidery-384.avif",
+          "bytes": 53610,
+          "sha256": "e4cc2fbc2e2ffb8a21d5abab994188a02db566f96ecc90f44cf229d07973f5c6"
+        }
+      ]
+    },
+    {
+      "id": "silver-moon",
+      "label": "银月静思",
+      "source": {
+        "path": "overlays/harness/files/apps/web/design-assets/avatars-guizhou-v1/silver-moon.png",
+        "bytes": 1788960,
+        "sha256": "a243e2e57cadd74a0c9beb4c85e24917db0da1cc2f80c0bc98a44baf798ec6be",
+        "size": [
+          1024,
+          1024
+        ]
+      },
+      "outputs": [
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/silver-moon-96.webp",
+          "bytes": 5022,
+          "sha256": "9a45beffadd30eb63608375fa847019cf39c91302fc2f1000b26c5fff50020bd"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/silver-moon-96.avif",
+          "bytes": 5878,
+          "sha256": "369d97f70d44f57df1145a1d1971852cc4d719a3a5de4612858b61c9b713e6c4"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/silver-moon-192.webp",
+          "bytes": 14650,
+          "sha256": "86bd13a1bdb595ba4e4692f977396110b9de13464a0e79760a8e20adb12aa536"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/silver-moon-192.avif",
+          "bytes": 16594,
+          "sha256": "1682b19f50af6c55466dc75534d6d7caf49b5c2b2a94b15928681cbd2fd84f4f"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/silver-moon-192.png",
+          "bytes": 79642,
+          "sha256": "260a45ec366ae1b5c9b72578be68ec028ec15535d62bdeb37fc45d9cee7036fc"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/silver-moon-384.webp",
+          "bytes": 45502,
+          "sha256": "39ef19bff8f7a35ace517ac84c8aedab2966620facafe88bdddc4c284c807030"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/silver-moon-384.avif",
+          "bytes": 50641,
+          "sha256": "b804c0d6da4d8eb5b4265cd7032a04f665863c92b62e3eb602b43cf486c595ec"
+        }
+      ]
+    },
+    {
+      "id": "discovery",
+      "label": "灵感发现",
+      "source": {
+        "path": "overlays/harness/files/apps/web/design-assets/avatars-guizhou-v1/discovery.png",
+        "bytes": 2054012,
+        "sha256": "919f6faf6ee3a923ee84f4475a65f1c30c09360e288e1316611aec9eac6d9e69",
+        "size": [
+          1024,
+          1024
+        ]
+      },
+      "outputs": [
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/discovery-96.webp",
+          "bytes": 4994,
+          "sha256": "80ebe478b18947c8be96aaa844f766965be70bc0889105d3d81f0b1b80cb5487"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/discovery-96.avif",
+          "bytes": 5947,
+          "sha256": "3d8271bfe047f93921a9b53bc6fde46192bdbc18159da526d68d05d86e80295d"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/discovery-192.webp",
+          "bytes": 14616,
+          "sha256": "2e8869860850aceda4d5bf6000577d2cb016cc42e6547b29ee762e62bb655771"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/discovery-192.avif",
+          "bytes": 16928,
+          "sha256": "add0ea650dba06945da3a6c5ce7b323cff889cfe53efa51cf99dde3bf39c3f2e"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/discovery-192.png",
+          "bytes": 79801,
+          "sha256": "335019296b6ea17fb8a8439c5822067b637019140a15ac82ea11d85dd99f80d9"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/discovery-384.webp",
+          "bytes": 46366,
+          "sha256": "9344006e4256b0094b64b2d2bcba014ff1851724bdc01ddaf7520272465bf4e3"
+        },
+        {
+          "path": "overlays/harness/files/apps/web/public/physicsos/avatars/guizhou-v1/discovery-384.avif",
+          "bytes": 52189,
+          "sha256": "80b32f6855da977a24abfca21e26edb42a8640197312d8e5821ac554214155f0"
+        }
+      ]
+    }
+  ],
+  "reviewSheet": {
+    "path": "overlays/harness/files/apps/web/design-assets/avatars-guizhou-v1/review-sheet.png",
+    "bytes": 443171,
+    "sha256": "ece32efd7966f3fc78f027dc049b48441c871e5bb6827d2626533363447c81c5"
+  },
+  "runtimeBytes": 2719920
+}

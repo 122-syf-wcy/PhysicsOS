@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "model": "@provider-3/gpt-image-2.6-sunburst",
+  "reference": "../mascot-guizhou-v1/wave.png",
+  "aspectRatio": "1:1",
+  "background": "opaque",
+  "generatedSize": [1024, 1024],
+  "avatars": [
+    {
+      "id": "silver-greeting", "label": "银饰迎新", "quality": "high",
+      "prompt": "Create one finished square USER AVATAR for PhysicsOS using the attached existing brand character as the strict identity reference. Keep exactly the same cheerful young adult female mascot: distinctive long dark brown curls, warm brown eyes, soft round face, tasteful watercolor and hand-painted editorial illustration. This is a new head-and-shoulders portrait, NOT a shrunken full body and NOT a grid/contact sheet. Face large and extremely legible at 32–48 pixels; centered head and both shoulders fully inside a circular crop safe area with 12% outer breathing room. Contemporary clothing inspired respectfully by Guizhou Miao embroidery and silver jewelry: indigo collar with fine original embroidered geometric trim, a modest silver hair comb, small silver earrings and a simple silver necklace. Theme SILVER GREETING: smiling front view, tiny waving hand beside shoulder but not obscuring face. Soft warm ivory background with a very faint sage watercolor wash, no border. Consistent sophisticated restrained colors, no cat, no headdress exaggeration, no logos, no writing, no watermark. Match reference identity and painting technique closely. Single avatar only."
+    },
+    {
+      "id": "indigo-reader", "label": "靛蓝读书", "quality": "high",
+      "prompt": "Create one square PhysicsOS USER AVATAR, a single centered head-and-shoulders portrait, using the attached mascot as strict identity reference: same young adult female, long dark brown curly hair, warm brown eyes, watercolor illustration and gentle round face. NO full body, no collage. Large face readable at 32 pixels, head/shoulders within circular crop, 12% safe padding. Theme INDIGO READER: thoughtful friendly expression, looking slightly to viewer left, holding the top edge of an open little book below chest without covering face. Contemporary indigo vest and ivory blouse with original Guizhou Miao embroidery-inspired trim, small silver comb and fine silver earrings, understated silver necklace. Warm ivory and soft muted blue watercolor background, refined cohesive brand style, no cat, no labels, no text, no logo, no watermark. Keep exact reference face and curls; subtle well-crafted portrait for profile selection."
+    },
+    {
+      "id": "butterfly-light", "label": "蝶光绣纹", "quality": "high",
+      "prompt": "One finished square user profile avatar for PhysicsOS. Use attached existing watercolor curly-haired female mascot as strict face/identity/style reference: same large warm brown eyes, long dark brown curls, round face and young adult identity. Head and shoulders close-up, big face legible at 32–48px, circular crop safe area and 12% margin. Theme BUTTERFLY LIGHT: peaceful happy smile, slight three-quarter turn right; original butterfly-inspired silver hair ornament, little silver drop earrings, dusky plum and indigo blouse with restrained contemporary Guizhou embroidery-inspired detailing. A tiny softly glowing light prism near lower shoulder, no complex scene. Ivory background with faint dusty lilac watercolor wash. Not a literal ceremonial costume or official cultural endorsement. Elegant hand-painted texture, natural gentle expression. No full body, no cat, no words, no logo, no watermark, no grid."
+    },
+    {
+      "id": "pendulum", "label": "摆球探索", "quality": "high",
+      "prompt": "Single square PhysicsOS profile avatar. Match the attached existing mascot's identity and watercolor style exactly: cheerful young adult woman with long dark brown curls, warm brown eyes, soft round face. Large head-and-shoulders portrait readable at 32px, important facial parts within a circle with safe margin. Theme PENDULUM: inquisitive smile, indigo and ochre embroidered collar inspired by contemporary Guizhou Miao craft, modest silver earrings, comb and necklace. Hold a tiny brass pendulum bob near the lower shoulder without obscuring face. Warm cream and honey watercolor background. No full body, cat, words, logo, watermark, grid, exaggerated ceremonial headdress. One polished portrait only."
+    },
+    {
+      "id": "batik-star", "label": "蜡染星图", "quality": "medium",
+      "prompt": "One square PhysicsOS avatar. Attached image is strict character reference: same friendly young adult female mascot, long dark brown curls, big warm brown eyes and watercolor texture. Close-up head and shoulders, large clear face in circular safe crop, gentle smile. Indigo vest with original white wax-resist-inspired star/cloud trim, small silver hair clip and silver earrings. Theme batik star. Warm ivory and misty indigo wash background. Single portrait only; no full body, no text, logo, cat, watermark or grid. Keep the same face and curls, simplify details for 32px display."
+    },
+    {
+      "id": "mountain-sound", "label": "山水听音", "quality": "medium",
+      "prompt": "One square PhysicsOS user avatar using attached female mascot as strict face identity and watercolor style reference. Same young adult woman, dark brown curls and warm brown eyes. Head and shoulders close-up readable at 32px within safe circular crop. Friendly listening expression and slight head tilt. Muted teal blouse with original Guizhou embroidery-inspired indigo trim, silver comb/earrings and a small tuning fork near lower shoulder. Warm ivory sage watercolor background with faint distant mountain silhouette. No full body, words, logo, cat, watermark, grid. Keep face consistent and portrait uncluttered."
+    },
+    {
+      "id": "lens-maker", "label": "透镜小匠", "quality": "high",
+      "prompt": "A single finished square profile avatar for PhysicsOS. Maintain the attached mascot's exact face, long dark brown curly hair, brown eyes, warm young adult identity and watercolor illustration. Large head and shoulders, circle-safe framing and generous 12 percent margin, clear at tiny 32px. Theme LENS MAKER: bright curious expression, holding a small brass-rimmed convex lens below and to side of face, lens does not distort or cover eyes. Ivory blouse and indigo embroidered vest inspired by contemporary Guizhou Miao embroidery, modest silver comb/earrings/necklace. Pale warm ivory background with subtle blue-green watercolor light. Beautiful delicate hand-painted texture, no full body, cat, text, logo, watermark or collage."
+    },
+    {
+      "id": "copper-drum", "label": "铜鼓节律", "quality": "medium",
+      "prompt": "One square PhysicsOS avatar, close-up head and shoulders, based on the attached curly-haired female mascot. Keep identical warm brown eyes, face, long dark brown curls, young adult identity and watercolor style. Cheerful calm expression. Theme COPPER DRUM: contemporary muted terracotta and indigo embroidered blouse inspired by Guizhou craft, modest silver comb/earrings, hold the upper edge of a small bronze drum low at chest. Simple pale peach ivory background, circle-safe composition, large readable face at 32px. No full body, cat, text, logo, watermark, collage, or ceremonial exaggeration."
+    },
+    {
+      "id": "green-wave", "label": "青绿涟漪", "quality": "medium",
+      "prompt": "A single square USER AVATAR for PhysicsOS, matching the attached watercolor female mascot identity exactly: warm brown eyes, friendly round face, long dark brown curls. Close-up head and shoulders, happy serene smile, face large for small 32px circular display. Theme GREEN WAVE: soft jade/teal jacket with original indigo water ripple embroidery at collar, simple silver hair clip, silver drop earrings and necklace. Faint circular water-ripple watercolor wash in ivory/sage background, no elaborate scenery or objects. Safe margin for round crop. No full body, writing, logo, cat, watermark or grid."
+    },
+    {
+      "id": "red-embroidery", "label": "绛红绣纹", "quality": "medium",
+      "prompt": "One square PhysicsOS profile avatar. Use attached brand mascot as strict identity reference: same young adult girl/woman with dark brown long curls, warm brown eyes, cheerful round face, refined watercolor painting. Head and shoulders only, large face with circular crop safe margin. Theme RED EMBROIDERY: warm confident smile, dusky brick red contemporary jacket with original colorful Guizhou Miao embroidery-inspired neckline over indigo, modest silver comb, earrings, layered necklace. Very pale warm rose/ivory watercolor background. Keep facial identity, high tiny-size readability. No full body, cat, text, logos, watermarks, collage, or elaborate ritual headdress."
+    },
+    {
+      "id": "silver-moon", "label": "银月静思", "quality": "medium",
+      "prompt": "One square PhysicsOS user avatar, based strictly on attached mascot identity: same young adult female with long dark brown curls, warm brown eyes, friendly round face and watercolor painting. Head-and-shoulders closeup with circular crop safety, big readable face for 32px. Theme SILVER MOON: tranquil closed-mouth smile, contemporary slate blue/indigo embroidered blouse, a delicate small crescent silver hair clip and fine silver earrings, modest necklace. Soft ivory background with pale moon-blue watercolor halo, not a night scene. No full body, cat, writing, logo, watermark, grid or exaggerated headdress. Keep visual identity consistent."
+    },
+    {
+      "id": "discovery", "label": "灵感发现", "quality": "medium",
+      "prompt": "Create one square finished PhysicsOS avatar matching attached mascot's face and watercolor style exactly: same friendly young adult woman with long dark brown curls and large warm brown eyes. Clear centered head and shoulders, face readable at 32px in a circle, generous safe margin. Theme DISCOVERY: delighted thoughtful smile, one finger gently raised beside shoulder as if an idea arrived; jade/indigo contemporary Guizhou embroidery-inspired collar, restrained silver comb/earrings/necklace. Warm ivory background with faint pale gold light wash. Uncluttered, fine watercolor paper texture. No actual text or equations, no cartoon bulb, no full body, cat, logo, watermark, grid or collage."
+    }
+  ],
+  "retainedFailures": [
+    {"id": "pendulum", "firstAttempt": "No answer in time", "resolution": "Retried with a shorter prompt; successful source retained."},
+    {"id": "batik-star", "firstAttempt": "No answer in time", "resolution": "Retried with medium quality and shorter prompt; successful source retained."},
+    {"id": "mountain-sound", "firstAttempt": "Connection reset by peer", "resolution": "Retried with medium quality and shorter prompt; successful source retained."}
+  ]
+}
