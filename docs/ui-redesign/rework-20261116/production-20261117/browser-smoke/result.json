@@ -1,0 +1,786 @@
+{
+  "origin": "https://physics.dongsiwei.com",
+  "ok": true,
+  "scope": "Directed production browser smoke; no full-site or 76-experiment retest",
+  "startedAt": "2026-11-17T05:05:11.136Z",
+  "finishedAt": "2026-11-17T05:57:34.749Z",
+  "release": {
+    "providedImages": {
+      "appImageId": "eddf40d1307b644db51edd995c98f731ecec8ee4cb668f7237447bbbba765bdc",
+      "workerImageId": "e888ca49106c262defbe416bbbcc58ab8bd729a00d78ff8fe0a7a800d7d1f940",
+      "experimentPublishFinishedAt": "2026-11-17T04:35:38Z",
+      "expectedExperimentVersion": "2.3.0",
+      "note": "Image identities and publication time provided by coordinator; this script does not redeploy or inspect Docker."
+    },
+    "experiment": {
+      "id": "magnetic-circular",
+      "label": "磁场中的带电粒子运动",
+      "before": {
+        "status": 200,
+        "observedAt": "2026-11-17T05:57:31.332Z",
+        "active": {
+          "id": "exp_9400e2846aef5aa6b33cb69bfe5f3ea1",
+          "experimentId": "magnetic-circular",
+          "version": "2.3.0",
+          "sha256": "8346f4fbc8b7fbcd71d498f1c473f68d10de1bd1b4b19e4716e814ae39a3f0ca",
+          "status": "approved",
+          "protocolVersion": 3,
+          "publishedAt": "2026-11-17T04:35:12.820Z",
+          "entryPath": "/[redacted]/experiment-assets/embed/releases/exp_9400e2846aef5aa6b33cb69bfe5f3ea1/8346f4fbc8b7fbcd71d498f1c473f68d10de1bd1b4b19e4716e814ae39a3f0ca/dist/index.html"
+        }
+      },
+      "loaded": {
+        "observedAt": "2026-11-17T05:57:34.128Z",
+        "releaseId": "exp_9400e2846aef5aa6b33cb69bfe5f3ea1",
+        "frameStatus": "ready",
+        "snapshot": {
+          "experimentId": "magnetic-circular",
+          "revision": 0,
+          "parameters": [
+            {
+              "id": "q",
+              "label": "粒子电荷",
+              "value": 1.6e-19,
+              "unit": "C"
+            },
+            {
+              "id": "m",
+              "label": "粒子质量",
+              "value": 1.67e-27,
+              "unit": "kg"
+            },
+            {
+              "id": "v0",
+              "label": "初速度",
+              "value": 2000000,
+              "unit": "m/s"
+            },
+            {
+              "id": "B",
+              "label": "磁感应强度",
+              "value": 0.5,
+              "unit": "T"
+            }
+          ],
+          "derived": [
+            {
+              "id": "R",
+              "label": "轨道半径",
+              "value": "4.18",
+              "unit": "cm"
+            },
+            {
+              "id": "T",
+              "label": "周期",
+              "value": "1.31e-7",
+              "unit": "s"
+            },
+            {
+              "id": "omega",
+              "label": "角速度",
+              "value": "4.79e+7",
+              "unit": "rad/s"
+            },
+            {
+              "id": "F",
+              "label": "洛伦兹力",
+              "value": "1.60e-13",
+              "unit": "N"
+            }
+          ],
+          "clock": {
+            "time": 0,
+            "running": false,
+            "total": 1.3116149328737388e-07,
+            "rate": 1
+          },
+          "verificationSummary": {
+            "total": 199,
+            "passed": 199,
+            "nonPassed": []
+          }
+        }
+      },
+      "after": {
+        "status": 200,
+        "observedAt": "2026-11-17T05:57:34.726Z",
+        "active": {
+          "id": "exp_9400e2846aef5aa6b33cb69bfe5f3ea1",
+          "experimentId": "magnetic-circular",
+          "version": "2.3.0",
+          "sha256": "8346f4fbc8b7fbcd71d498f1c473f68d10de1bd1b4b19e4716e814ae39a3f0ca",
+          "status": "approved",
+          "protocolVersion": 3,
+          "publishedAt": "2026-11-17T04:35:12.820Z",
+          "entryPath": "/[redacted]/experiment-assets/embed/releases/exp_9400e2846aef5aa6b33cb69bfe5f3ea1/8346f4fbc8b7fbcd71d498f1c473f68d10de1bd1b4b19e4716e814ae39a3f0ca/dist/index.html"
+        }
+      },
+      "changedDuringSmoke": false
+    }
+  },
+  "checks": [
+    {
+      "name": "login-page-new-ui",
+      "status": "passed",
+      "durationMs": 80,
+      "evidence": {
+        "authGate": true,
+        "title": "欢迎回到 PhysicsOS",
+        "buildStamp": "0.1.0 · 2026-11-16",
+        "viewportWidth": 1360,
+        "scrollWidth": 1360,
+        "usernameEmpty": true,
+        "passwordEmpty": true
+      },
+      "evidenceSource": "result-initial-selector-failure.json"
+    },
+    {
+      "name": "canonical-super-login",
+      "status": "passed",
+      "evidence": {
+        "httpStatus": 200,
+        "role": "SUPER_ADMIN"
+      },
+      "evidenceSource": "result-initial-selector-failure.json"
+    },
+    {
+      "name": "post-release-experiment-package",
+      "status": "passed",
+      "durationMs": 168,
+      "evidence": {
+        "experimentId": "magnetic-circular",
+        "release": {
+          "status": 200,
+          "observedAt": "2026-11-17T05:05:27.133Z",
+          "active": {
+            "id": "exp_9400e2846aef5aa6b33cb69bfe5f3ea1",
+            "experimentId": "magnetic-circular",
+            "version": "2.3.0",
+            "sha256": "8346f4fbc8b7fbcd71d498f1c473f68d10de1bd1b4b19e4716e814ae39a3f0ca",
+            "status": "approved",
+            "protocolVersion": 3,
+            "publishedAt": "2026-11-17T04:35:12.820Z",
+            "entryPath": "/[redacted]/experiment-assets/embed/releases/exp_9400e2846aef5aa6b33cb69bfe5f3ea1/8346f4fbc8b7fbcd71d498f1c473f68d10de1bd1b4b19e4716e814ae39a3f0ca/dist/index.html"
+          }
+        }
+      },
+      "evidenceSource": "result-initial-selector-failure.json"
+    },
+    {
+      "name": "open-real-magnetic-experiment",
+      "status": "passed",
+      "durationMs": 3514,
+      "evidence": {
+        "observedAt": "2026-11-17T05:05:30.418Z",
+        "releaseId": "exp_9400e2846aef5aa6b33cb69bfe5f3ea1",
+        "frameStatus": "ready",
+        "snapshot": {
+          "experimentId": "magnetic-circular",
+          "revision": 0,
+          "parameters": [
+            {
+              "id": "q",
+              "label": "粒子电荷",
+              "value": 1.6e-19,
+              "unit": "C"
+            },
+            {
+              "id": "m",
+              "label": "粒子质量",
+              "value": 1.67e-27,
+              "unit": "kg"
+            },
+            {
+              "id": "v0",
+              "label": "初速度",
+              "value": 2000000,
+              "unit": "m/s"
+            },
+            {
+              "id": "B",
+              "label": "磁感应强度",
+              "value": 0.5,
+              "unit": "T"
+            }
+          ],
+          "derived": [
+            {
+              "id": "R",
+              "label": "轨道半径",
+              "value": "4.18",
+              "unit": "cm"
+            },
+            {
+              "id": "T",
+              "label": "周期",
+              "value": "1.31e-7",
+              "unit": "s"
+            },
+            {
+              "id": "omega",
+              "label": "角速度",
+              "value": "4.79e+7",
+              "unit": "rad/s"
+            },
+            {
+              "id": "F",
+              "label": "洛伦兹力",
+              "value": "1.60e-13",
+              "unit": "N"
+            }
+          ],
+          "clock": {
+            "time": 0,
+            "running": false,
+            "total": 1.3116149328737388e-07,
+            "rate": 1
+          },
+          "verificationSummary": {
+            "total": 199,
+            "passed": 199,
+            "nonPassed": []
+          }
+        }
+      },
+      "evidenceSource": "result-initial-selector-failure.json"
+    },
+    {
+      "name": "play-and-pause-real-experiment",
+      "status": "passed",
+      "durationMs": 306,
+      "evidence": {
+        "initialRunning": false,
+        "beforeTime": 0,
+        "runningTime": 4.380793875798241e-10,
+        "pausedTime": 1.3142381627394723e-09,
+        "paused": true
+      },
+      "evidenceSource": "result-initial-selector-failure.json"
+    },
+    {
+      "name": "physical-parameter-roundtrip-and-restore",
+      "status": "passed",
+      "durationMs": 522,
+      "evidence": {
+        "id": "B",
+        "label": "磁感应强度",
+        "original": 0.5,
+        "originalText": "0.5",
+        "edited": 0.55,
+        "restored": true,
+        "changedSnapshot": {
+          "experimentId": "magnetic-circular",
+          "revision": 1,
+          "parameters": [
+            {
+              "id": "q",
+              "label": "粒子电荷",
+              "value": 1.6e-19,
+              "unit": "C"
+            },
+            {
+              "id": "m",
+              "label": "粒子质量",
+              "value": 1.67e-27,
+              "unit": "kg"
+            },
+            {
+              "id": "v0",
+              "label": "初速度",
+              "value": 2000000,
+              "unit": "m/s"
+            },
+            {
+              "id": "B",
+              "label": "磁感应强度",
+              "value": 0.55,
+              "unit": "T"
+            }
+          ],
+          "derived": [
+            {
+              "id": "R",
+              "label": "轨道半径",
+              "value": "3.80",
+              "unit": "cm"
+            },
+            {
+              "id": "T",
+              "label": "周期",
+              "value": "1.19e-7",
+              "unit": "s"
+            },
+            {
+              "id": "omega",
+              "label": "角速度",
+              "value": "5.27e+7",
+              "unit": "rad/s"
+            },
+            {
+              "id": "F",
+              "label": "洛伦兹力",
+              "value": "1.76e-13",
+              "unit": "N"
+            }
+          ],
+          "clock": {
+            "time": 0,
+            "running": false,
+            "total": 1.192377211703399e-07,
+            "rate": 1
+          },
+          "verificationSummary": {
+            "total": 199,
+            "passed": 199,
+            "nonPassed": []
+          }
+        },
+        "restoredSnapshot": {
+          "experimentId": "magnetic-circular",
+          "revision": 2,
+          "parameters": [
+            {
+              "id": "q",
+              "label": "粒子电荷",
+              "value": 1.6e-19,
+              "unit": "C"
+            },
+            {
+              "id": "m",
+              "label": "粒子质量",
+              "value": 1.67e-27,
+              "unit": "kg"
+            },
+            {
+              "id": "v0",
+              "label": "初速度",
+              "value": 2000000,
+              "unit": "m/s"
+            },
+            {
+              "id": "B",
+              "label": "磁感应强度",
+              "value": 0.5,
+              "unit": "T"
+            }
+          ],
+          "derived": [
+            {
+              "id": "R",
+              "label": "轨道半径",
+              "value": "4.18",
+              "unit": "cm"
+            },
+            {
+              "id": "T",
+              "label": "周期",
+              "value": "1.31e-7",
+              "unit": "s"
+            },
+            {
+              "id": "omega",
+              "label": "角速度",
+              "value": "4.79e+7",
+              "unit": "rad/s"
+            },
+            {
+              "id": "F",
+              "label": "洛伦兹力",
+              "value": "1.60e-13",
+              "unit": "N"
+            }
+          ],
+          "clock": {
+            "time": 0,
+            "running": false,
+            "total": 1.3116149328737388e-07,
+            "rate": 1
+          },
+          "verificationSummary": {
+            "total": 199,
+            "passed": 199,
+            "nonPassed": []
+          }
+        },
+        "factSource": "observed platform-engine MessagePort render snapshots; UI edit through native inspector"
+      },
+      "evidenceSource": "parameter-retry.json"
+    },
+    {
+      "name": "assistant-single-shell-focus-and-escape",
+      "status": "passed",
+      "durationMs": 265,
+      "evidence": {
+        "shells": 1,
+        "headers": 1,
+        "closeReceivedFocus": true,
+        "escapeClosed": true,
+        "focusReturned": true,
+        "messagesSent": 0
+      },
+      "evidenceSource": "result-initial-selector-failure.json"
+    },
+    {
+      "name": "experiment-version-after-interactions",
+      "status": "passed",
+      "durationMs": 66,
+      "evidence": {
+        "status": 200,
+        "observedAt": "2026-11-17T05:05:47.310Z",
+        "active": {
+          "id": "exp_9400e2846aef5aa6b33cb69bfe5f3ea1",
+          "experimentId": "magnetic-circular",
+          "version": "2.3.0",
+          "sha256": "8346f4fbc8b7fbcd71d498f1c473f68d10de1bd1b4b19e4716e814ae39a3f0ca",
+          "status": "approved",
+          "protocolVersion": 3,
+          "publishedAt": "2026-11-17T04:35:12.820Z",
+          "entryPath": "/[redacted]/experiment-assets/embed/releases/exp_9400e2846aef5aa6b33cb69bfe5f3ea1/8346f4fbc8b7fbcd71d498f1c473f68d10de1bd1b4b19e4716e814ae39a3f0ca/dist/index.html"
+        }
+      },
+      "evidenceSource": "result-initial-selector-failure.json"
+    },
+    {
+      "name": "paper-workbench-390px-no-horizontal-overflow",
+      "status": "passed",
+      "durationMs": 570,
+      "evidence": {
+        "innerWidth": 390,
+        "documentClientWidth": 390,
+        "documentScrollWidth": 390,
+        "bodyScrollWidth": 390,
+        "paperClientWidth": 390,
+        "paperScrollWidth": 390,
+        "paperRect": {
+          "x": 0,
+          "right": 390,
+          "width": 390
+        },
+        "headingVisible": true
+      },
+      "evidenceSource": "result-initial-selector-failure.json"
+    },
+    {
+      "name": "admin-website-entry-and-readonly-get",
+      "status": "passed",
+      "durationMs": 1659,
+      "evidence": {
+        "entryTabVisible": true,
+        "uiGetStatus": 200,
+        "directReadonlyGet": {
+          "status": 200,
+          "contentPresent": true,
+          "version": 0,
+          "testimonialsCount": 0,
+          "contributorsCount": 0
+        },
+        "writesPerformed": 0
+      },
+      "evidenceSource": "result-initial-selector-failure.json"
+    },
+    {
+      "name": "anonymous-admin-api-denied",
+      "status": "passed",
+      "durationMs": 504,
+      "evidence": [
+        {
+          "path": "/[redacted]/admin/users",
+          "status": 401
+        },
+        {
+          "path": "/[redacted]/admin/dashboard",
+          "status": 401
+        },
+        {
+          "path": "/[redacted]/notice/website",
+          "status": 401
+        },
+        {
+          "path": "/[redacted]/model-pool/state",
+          "status": 401
+        },
+        {
+          "path": "/[redacted]/admin/moderation/cases",
+          "status": 401
+        }
+      ],
+      "evidenceSource": "result-initial-selector-failure.json"
+    }
+  ],
+  "parameter": {
+    "id": "B",
+    "label": "磁感应强度",
+    "original": 0.5,
+    "originalText": "0.5",
+    "edited": 0.55,
+    "restored": true,
+    "changedSnapshot": {
+      "experimentId": "magnetic-circular",
+      "revision": 1,
+      "parameters": [
+        {
+          "id": "q",
+          "label": "粒子电荷",
+          "value": 1.6e-19,
+          "unit": "C"
+        },
+        {
+          "id": "m",
+          "label": "粒子质量",
+          "value": 1.67e-27,
+          "unit": "kg"
+        },
+        {
+          "id": "v0",
+          "label": "初速度",
+          "value": 2000000,
+          "unit": "m/s"
+        },
+        {
+          "id": "B",
+          "label": "磁感应强度",
+          "value": 0.55,
+          "unit": "T"
+        }
+      ],
+      "derived": [
+        {
+          "id": "R",
+          "label": "轨道半径",
+          "value": "3.80",
+          "unit": "cm"
+        },
+        {
+          "id": "T",
+          "label": "周期",
+          "value": "1.19e-7",
+          "unit": "s"
+        },
+        {
+          "id": "omega",
+          "label": "角速度",
+          "value": "5.27e+7",
+          "unit": "rad/s"
+        },
+        {
+          "id": "F",
+          "label": "洛伦兹力",
+          "value": "1.76e-13",
+          "unit": "N"
+        }
+      ],
+      "clock": {
+        "time": 0,
+        "running": false,
+        "total": 1.192377211703399e-07,
+        "rate": 1
+      },
+      "verificationSummary": {
+        "total": 199,
+        "passed": 199,
+        "nonPassed": []
+      }
+    },
+    "restoredSnapshot": {
+      "experimentId": "magnetic-circular",
+      "revision": 2,
+      "parameters": [
+        {
+          "id": "q",
+          "label": "粒子电荷",
+          "value": 1.6e-19,
+          "unit": "C"
+        },
+        {
+          "id": "m",
+          "label": "粒子质量",
+          "value": 1.67e-27,
+          "unit": "kg"
+        },
+        {
+          "id": "v0",
+          "label": "初速度",
+          "value": 2000000,
+          "unit": "m/s"
+        },
+        {
+          "id": "B",
+          "label": "磁感应强度",
+          "value": 0.5,
+          "unit": "T"
+        }
+      ],
+      "derived": [
+        {
+          "id": "R",
+          "label": "轨道半径",
+          "value": "4.18",
+          "unit": "cm"
+        },
+        {
+          "id": "T",
+          "label": "周期",
+          "value": "1.31e-7",
+          "unit": "s"
+        },
+        {
+          "id": "omega",
+          "label": "角速度",
+          "value": "4.79e+7",
+          "unit": "rad/s"
+        },
+        {
+          "id": "F",
+          "label": "洛伦兹力",
+          "value": "1.60e-13",
+          "unit": "N"
+        }
+      ],
+      "clock": {
+        "time": 0,
+        "running": false,
+        "total": 1.3116149328737388e-07,
+        "rate": 1
+      },
+      "verificationSummary": {
+        "total": 199,
+        "passed": 199,
+        "nonPassed": []
+      }
+    }
+  },
+  "parameterLocatorDiagnostics": [
+    {
+      "type": "range",
+      "ariaLabel": "时间轴",
+      "labels": [],
+      "placeholder": null,
+      "visible": true,
+      "insideLab": true
+    },
+    {
+      "type": "text",
+      "ariaLabel": "磁感应强度",
+      "labels": [
+        "磁感应强度BBBT"
+      ],
+      "placeholder": null,
+      "visible": true,
+      "insideLab": false,
+      "floatLabel": "快捷参数"
+    },
+    {
+      "type": "text",
+      "ariaLabel": "初速度",
+      "labels": [
+        "初速度v0v_{0}v0​m/s"
+      ],
+      "placeholder": null,
+      "visible": true,
+      "insideLab": false,
+      "floatLabel": "快捷参数"
+    }
+  ],
+  "diagnosis": [
+    {
+      "classification": "fixture",
+      "result": "Prior candidate teacher credentials returned expected production 401; not used for these runs; preserved original result unchanged."
+    },
+    {
+      "classification": "script-selector",
+      "result": "Initial and first retry scoped field lookup under lab. Actual visible quick-parameter input is in page portal outside lab. Page-wide native UI input succeeded; failed attempts retained."
+    },
+    {
+      "classification": "test-harness-noise",
+      "result": "Initial run recorded two sandbox serviceWorker-property exceptions caused by Playwright serviceWorkers:block injection; not product faults. Narrow retry excludes that known harness exception and records zero page errors."
+    }
+  ],
+  "safety": {
+    "credentialSource": "Canonical production files read by SSH directly into process memory; no credential or Cookie values persisted.",
+    "modelRequestsAttempted": 0,
+    "modelRequestsExecuted": 0,
+    "productionBusinessWritesExecuted": 0,
+    "authenticationOnlyWrite": true,
+    "businessWriteInterception": "All non-read HTTP operations blocked except normal auth/login. Usage events, scene persistence and background session creation were blocked.",
+    "parametersRestored": true,
+    "allOriginalParameterValuesRestored": true,
+    "sourceChanged": false,
+    "gitCommandsExecuted": false,
+    "deploymentPerformed": false,
+    "browserCloseCalled": false,
+    "ownedContextsCreated": 4,
+    "ownedContextsClosed": 4,
+    "browserBefore": {
+      "contexts": 1,
+      "pages": 2
+    },
+    "browserAfter": {
+      "contexts": 1,
+      "pages": 2,
+      "connected": true
+    }
+  },
+  "limitations": {
+    "schoolAdmin": "Not re-tested in production because no corresponding production fixture exists; same-image candidate acceptance remains separate evidence.",
+    "search": "No standalone no-model browser search endpoint identified within this directed scope. Not executed by this browser agent. Coordinator separately reports production app namespace query: 33 results / 22 relevant.",
+    "images": "Image IDs and Docker health are coordinator-provided; browser script verified served UI and selected experiment version, not Docker state.",
+    "businessPersistence": "Interaction validated against real engine/render snapshots with business writes blocked; server-side learning/session persistence was intentionally outside scope."
+  },
+  "screenshots": [
+    {
+      "path": "/private/tmp/physicsos-production-smoke-super-f6e7fb71-20261117/01-login-new-ui.png",
+      "sha256": "dd97ffeee736f09d9d91772c8096796160e8e6140d6e7e1a04b18c924ba0eeb0",
+      "identityMasked": true,
+      "visuallyInspected": true
+    },
+    {
+      "path": "/private/tmp/physicsos-production-smoke-super-f6e7fb71-20261117/02-magnetic-experiment-ready.png",
+      "sha256": "23d0cb1000454797780ac932aec2ccb511c863743b13354d304da1a585d03f0e",
+      "identityMasked": true,
+      "visuallyInspected": true
+    },
+    {
+      "path": "/private/tmp/physicsos-production-smoke-super-f6e7fb71-20261117/03-magnetic-paused.png",
+      "sha256": "c8545bcfbbdc1d955ff8c69734a7f145b80fdebf27560ef52f1089680beb837a",
+      "identityMasked": true,
+      "visuallyInspected": true
+    },
+    {
+      "path": "/private/tmp/physicsos-production-smoke-super-f6e7fb71-20261117/06-assistant-single-shell.png",
+      "sha256": "05cb94ce0c32d5a63c9f8a57521a2e03466c877a5e8dcde29994889dc1d3569c",
+      "identityMasked": true,
+      "visuallyInspected": true
+    },
+    {
+      "path": "/private/tmp/physicsos-production-smoke-super-f6e7fb71-20261117/07-paper-390px.png",
+      "sha256": "0e6fb67c9397afff4fd8f67dcdeaa4f054ff300ee6e4ea9bd25e72bc8f74ca14",
+      "identityMasked": true,
+      "visuallyInspected": true
+    },
+    {
+      "path": "/private/tmp/physicsos-production-smoke-super-f6e7fb71-20261117/08-admin-website-readonly.png",
+      "sha256": "e1759d91467c101932d6a573bc7ce66053e5888b0199fe8afa1b1121be6b5a19",
+      "identityMasked": true,
+      "visuallyInspected": true
+    },
+    {
+      "path": "/private/tmp/physicsos-production-smoke-super-f6e7fb71-20261117/retry-04-magnetic-parameter-changed.png",
+      "sha256": "cb7f60d8b0e895ae903659d2a9cd5fc2254559441ab216d08cf3bb03cce0b22d",
+      "identityMasked": true,
+      "visuallyInspected": true
+    },
+    {
+      "path": "/private/tmp/physicsos-production-smoke-super-f6e7fb71-20261117/retry-05-magnetic-parameter-restored.png",
+      "sha256": "9ae1467f18036a756f8b736850fd99a49c276ead2266cb650efbeee447fad9ab",
+      "identityMasked": true,
+      "visuallyInspected": true
+    }
+  ],
+  "evidenceFiles": [
+    "/private/tmp/physicsos-production-smoke-super-f6e7fb71-20261117/result-initial-selector-failure.json",
+    "/private/tmp/physicsos-production-smoke-super-f6e7fb71-20261117/parameter-retry-first.json",
+    "/private/tmp/physicsos-production-smoke-super-f6e7fb71-20261117/parameter-retry.json"
+  ],
+  "originalFixtureFailure": "/private/tmp/physicsos-production-core-smoke-f6e7fb71-20261117/result.json",
+  "driver": "/private/tmp/physicsos-production-smoke-super-f6e7fb71-20261117.cjs"
+}

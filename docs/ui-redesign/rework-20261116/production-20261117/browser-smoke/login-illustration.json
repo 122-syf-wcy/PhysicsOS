@@ -1,0 +1,190 @@
+{
+  "origin": "https://physics.dongsiwei.com",
+  "scope": "Public login illustration only; anonymous; no model or business writes",
+  "startedAt": "2026-11-17T06:14:33.824Z",
+  "deadlineMs": 90000,
+  "requests": [
+    {
+      "url": "https://physics.dongsiwei.com/physicsos/splash/splash-1920.webp",
+      "status": 200,
+      "resourceType": "image"
+    },
+    {
+      "url": "https://physics.dongsiwei.com/physicsos/navigation/projects.png",
+      "status": 200,
+      "resourceType": "image"
+    },
+    {
+      "url": "https://physics.dongsiwei.com/physicsos/navigation/canvas.png",
+      "status": 200,
+      "resourceType": "image"
+    },
+    {
+      "url": "https://physics.dongsiwei.com/physicsos/navigation/whiteboard.png",
+      "status": 200,
+      "resourceType": "image"
+    },
+    {
+      "url": "https://physics.dongsiwei.com/physicsos/brand/physicsos-mark-128.png",
+      "status": 200,
+      "resourceType": "image"
+    },
+    {
+      "url": "https://physics.dongsiwei.com/physicsos/lab-empty-hero.jpg",
+      "status": 200,
+      "resourceType": "image"
+    },
+    {
+      "url": "https://physics.dongsiwei.com/physicsos/mascot/guizhou/v1/mascot-wave-320.avif",
+      "status": 200,
+      "resourceType": "image"
+    },
+    {
+      "url": "https://physics.dongsiwei.com/physicsos/auth-heritage/welcome-880.avif",
+      "status": 200,
+      "resourceType": "image"
+    }
+  ],
+  "failedRequests": [
+    {
+      "url": "https://physics.dongsiwei.com/api/dynamicCordisRunner/syncInspectManifest",
+      "resourceType": "fetch",
+      "error": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+    },
+    {
+      "url": "https://physics.dongsiwei.com/api/dynamicCordisRunner/inventory",
+      "resourceType": "fetch",
+      "error": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+    },
+    {
+      "url": "https://physics.dongsiwei.com/api/session/modelCatalog",
+      "resourceType": "fetch",
+      "error": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+    },
+    {
+      "url": "https://physics.dongsiwei.com/api/dynamicCordisRunner/inventory",
+      "resourceType": "fetch",
+      "error": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+    }
+  ],
+  "pageErrors": [],
+  "blockedWrites": 4,
+  "modelRequestsBlocked": 0,
+  "contextsCreated": 1,
+  "contextsClosed": 1,
+  "browserCloseCalled": false,
+  "previousEvidenceOverwritten": false,
+  "browserBefore": {
+    "contexts": 1,
+    "pages": 2
+  },
+  "gateAtMs": 6138,
+  "images": [
+    {
+      "src": "https://physics.dongsiwei.com/physicsos/brand/physicsos-mark-128.png",
+      "srcAttribute": "/physicsos/brand/physicsos-mark-128.png",
+      "alt": "",
+      "loading": "auto",
+      "complete": true,
+      "naturalWidth": 128,
+      "naturalHeight": 128,
+      "decoded": true,
+      "decodeWaitMs": 67,
+      "rect": {
+        "x": 41,
+        "y": 29.625,
+        "width": 34,
+        "height": 34
+      },
+      "display": "block",
+      "visibility": "visible",
+      "opacity": "1"
+    },
+    {
+      "src": "https://physics.dongsiwei.com/physicsos/mascot/guizhou/v1/mascot-wave-320.avif",
+      "srcAttribute": "/physicsos/mascot/guizhou/v1/mascot-wave-320.png",
+      "alt": "",
+      "loading": "auto",
+      "complete": true,
+      "naturalWidth": 173,
+      "naturalHeight": 217,
+      "decoded": true,
+      "decodeWaitMs": 193,
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0
+      },
+      "display": "block",
+      "visibility": "visible",
+      "opacity": "1"
+    },
+    {
+      "src": "https://physics.dongsiwei.com/physicsos/auth-heritage/welcome-880.avif",
+      "srcAttribute": "/physicsos/auth-heritage/welcome-880.webp",
+      "alt": "原创卷发女生佩戴贵州银饰文化灵感首饰，身着靛蓝绣纹衣裙，在物理工坊里拿着书介绍摆球与透镜。",
+      "loading": "lazy",
+      "complete": true,
+      "naturalWidth": 500,
+      "naturalHeight": 672,
+      "decoded": true,
+      "decodeWaitMs": 287,
+      "rect": {
+        "x": 777.46875,
+        "y": 100.25,
+        "width": 488.53125,
+        "height": 657.984375
+      },
+      "display": "block",
+      "visibility": "visible",
+      "opacity": "1"
+    }
+  ],
+  "illustration": {
+    "src": "https://physics.dongsiwei.com/physicsos/auth-heritage/welcome-880.avif",
+    "srcAttribute": "/physicsos/auth-heritage/welcome-880.webp",
+    "alt": "原创卷发女生佩戴贵州银饰文化灵感首饰，身着靛蓝绣纹衣裙，在物理工坊里拿着书介绍摆球与透镜。",
+    "loading": "lazy",
+    "complete": true,
+    "naturalWidth": 500,
+    "naturalHeight": 672,
+    "decoded": true,
+    "decodeWaitMs": 287,
+    "rect": {
+      "x": 777.46875,
+      "y": 100.25,
+      "width": 488.53125,
+      "height": 657.984375
+    },
+    "display": "block",
+    "visibility": "visible",
+    "opacity": "1"
+  },
+  "screenshot": "/private/tmp/physicsos-production-smoke-super-f6e7fb71-20261117/login-illustration.png",
+  "screenshotAtMs": 6984,
+  "ok": true,
+  "httpEvidence": [
+    {
+      "url": "https://physics.dongsiwei.com/physicsos/auth-heritage/welcome-880.avif",
+      "status": 200,
+      "resourceType": "image"
+    }
+  ],
+  "comparison": {
+    "initialScreenshot": "01-login-new-ui.png",
+    "initialRoutePolicy": "all non-production-origin URLs aborted",
+    "currentRoutePolicy": "allow public GET assets from their actual origins; all mutations and model routes blocked",
+    "note": "Initial smoke screenshot taken immediately after login gate visible. Standalone result waits for actual img.decode and resource response.",
+    "conclusion": "Real illustration served from the production origin with HTTP 200 and decoded successfully. Original blank area is consistent with capture before lazy image fetch/decode finished; no evidence of external-origin blocking or product asset failure.",
+    "evidence": "Actual currentSrc is same-origin welcome-880.avif, loading=lazy, decode completed 287ms after gate inspection. Initial capture occurred about 80ms after gate visible and did not await decode.",
+    "screenshotVisuallyInspected": true
+  },
+  "browserAfter": {
+    "contexts": 1,
+    "pages": 2,
+    "connected": true
+  },
+  "finishedAt": "2026-11-17T06:14:40.816Z",
+  "elapsedSeconds": 7
+}

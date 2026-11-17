@@ -32,6 +32,18 @@
 
 f6 host/tool 批次保留两项问题：jobs 测试 fixture 重复声明，以及共享图用例实际 1,636 ms 未达到原 1,500 ms 门槛。fixture-only 提交 e575 后 jobs 59/59 通过；当时整文件仍有一次 1,881 ms 的耗时失败。见 [runtime-gates-retained-failures.json](runtime-gates-retained-failures.json) 与 [jobs-recheck-retained-timing-failure.json](jobs-recheck-retained-timing-failure.json)。最终在服务器 Docker 独立执行原共享图用例，未改源码、断言或门槛，exit 0、1/1 通过（其余 86 项按名称筛选未运行），见 [shared-graph-isolated.json](shared-graph-isolated.json)。这补足该单例的独立证据，不覆盖或抹除前两次失败，也不宣称受限服务器并发负载下稳定达到相同耗时。
 
+## 正式浏览器交互
+
+正式站定向检查汇总为 11/11，通过项来自首轮的 10 项与最后一次参数专项的 1 项，属于合并回执，不是同一次整批运行全绿。原始文件按字节保留，文件大小、SHA 和来源映射见 [归档清单](browser-smoke/archive-manifest.json)，安全汇总见 [result.json](browser-smoke/result.json)。
+
+- 正式验收账号正常登录为 SUPER_ADMIN；登录页 DOM / 布局、已发布磁场实验加载与版本、真实播放 / 暂停、助教单壳层及内部焦点 Escape、390px 组卷无横向溢出、官网管理入口与只读 GET 均通过。五个匿名管理员 API 均返回 401。登录检查没有等待插画 decode，不能单凭此项证明插画加载。
+- 磁场实验通过原生参数输入实际修改并恢复：B 为 0.5 → 0.55 → 0.5 T，轨道半径为 4.18 → 3.80 → 4.18 cm。MessagePort 中真实 `platform-engine` 快照 revision 为 0 → 1 → 2，各快照 199/199 verification passed；完整参数向量和完整 derived 向量均恢复，实验 active ID / 原 ZIP SHA 未变。见 [参数专项](browser-smoke/parameter-retry.json)。
+- 两次参数定位失败均保留：[首轮失败](browser-smoke/result-initial-selector-failure.json)、[第一次参数重试失败](browser-smoke/parameter-retry-first.json)。原因是快捷参数浮窗通过 portal 挂载于 lab DOM 外；最终从页面实际输入框定位，未修改产品、物理断言或验收门槛。
+- 首轮记录的两条 service worker 异常来自 Playwright 禁用 service worker 时对 sandbox iframe 的注入；最终参数轮仅过滤该具体已知异常。原失败和原始噪声仍在原回执中，不宣称原始运行无异常。
+- 本组核心检查模型请求尝试 / 执行均为 0，业务持久化写入执行为 0；仅正常认证写入与只读 RPC 获准。三轮共创建并关闭 4 个自有 context，原 Chrome 保持连接、原有 1 个 context / 2 个页面保留。参数往返不代表又验了服务端 learning / session 持久化，也未重跑全站或全部 76 个实验。
+
+登录插画另做匿名公开页专项，见 [login-illustration.json](browser-smoke/login-illustration.json) 与 [加载完成后的截图](browser-smoke/login-illustration.png)。实际 `currentSrc` 为同源 `/physicsos/auth-heritage/welcome-880.avif`，HTTP 200、自然尺寸 500 × 672、`img.decode()` 成功，目检女生 IP、银饰与绣纹完整显示。原截图约在登录 gate 可见后 80 ms 拍摄，未等 decode；专项观察到懒加载解码等待 287 ms，原空白与拍摄早于加载完成一致，没有发现外域拦截或产品资源故障。原图与核心汇总均未覆盖。该专项无登录、模型或业务写入，另建 1 个匿名 context 并关闭，原 Chrome 仍保留 1 个 context / 2 个页面；连同核心三轮共 5 个自有 context 全部关闭。
+
 ## 76 套原始实验包
 
 - 冻结实验源码 `0766d29dc6fb1d7dfba7baac365ab0e739652bf0`，sourceDigest `94518a8669f753f3062920e25fb2314260a7da9768635b25b278881aa47f6347`。
@@ -49,8 +61,10 @@ f6 host/tool 批次保留两项问题：jobs 测试 fixture 重复声明，以�
 
 新 paired 恢复点的 PostgreSQL / 应用数据 / Redis / 原配置 / 10 份密钥恢复副本均核对摘要，两个 tar.gz 的全部成员可读，`pg_restore --list` 可读。旧应用 `93cb03…` 与旧 worker `b179e7…` 的完整镜像和回滚 tag 保留，见 [recovery-check.json](recovery-check.json)。没有在正式库执行恢复或回灌旧业务数据；这不是一次破坏性全量恢复演练。历史表的旧镜像兼容结论针对实际 PostgreSQL，不能外推到旧 JSON single writer。
 
+切换后于 `2026-11-17T05:30:38Z` 再次只读核对正式 app、validation-worker、PostgreSQL 与 Redis：四者均为 healthy，重启次数均为 0；app / worker 完整镜像 SHA 与本次发布一致，公网入口 HTTP 200。见 [final-health.json](final-health.json)。
+
 ## 空间与范围
 
 入库实际保存原 ZIP 176,093,433 B 与 dist 81,809,007 B。执行前保留 128 MiB 余量及文件分配开销，未降低容量门槛。仅对确认无使用者且属于本任务的编译缓存与 a397 构建副本做无损归档，压缩前、解码后及删除展开副本前均逐文件核对 SHA；完整恢复命令和回执见 [compile-cache-preserved.json](compile-cache-preserved.json)、[old-context-preserved.json](old-context-preserved.json)。生产数据、已交互候选、旧镜像及恢复点未清理。归档后曾实测剩余约 166 MiB，磁盘容量仍有限。
 
-未声称 62 个设计状态逐一人工批准、原生 BFCache、全部真机 GPU 性能或本次正式站全部角色账户重新验收。第一次正式浏览器脚本误用了候选专用教师账号，401 回执保留为 [production-fixture-login-retained-failure.json](production-fixture-login-retained-failure.json)；正式检查使用正式验收账号，不同步候选用户。正式页面交互结果将与最终安全回执一起保存。
+未声称 62 个设计状态逐一人工批准、原生 BFCache、全部真机 GPU 性能或本次正式站全部角色账户重新验收。第一次正式浏览器脚本误用了候选专用教师账号，401 回执保留为 [production-fixture-login-retained-failure.json](production-fixture-login-retained-failure.json)；正式检查使用正式验收账号，不同步候选用户。正式页面交互、安全回执、原失败与加载完成后的插画截图均已保存于 [browser-smoke](browser-smoke/)，逐文件摘要见其归档清单。

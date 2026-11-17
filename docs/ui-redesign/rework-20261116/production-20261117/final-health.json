@@ -1,0 +1,51 @@
+{
+  "checkedAt": "2026-11-17T05:30:38.836014+00:00",
+  "containers": [
+    {
+      "name": "physicsos-app-1",
+      "containerId": "f8d97362d4019495acba2630537087d83687377332e995364621444ded83ff49",
+      "image": "sha256:eddf40d1307b644db51edd995c98f731ecec8ee4cb668f7237447bbbba765bdc",
+      "running": true,
+      "health": "healthy",
+      "restartCount": 0,
+      "imageMatchesRelease": true
+    },
+    {
+      "name": "physicsos-validation-worker-1",
+      "containerId": "9b236e3956d5a311e90f49516831eae09098a79741bf603470ff83bf887e6c5c",
+      "image": "sha256:e888ca49106c262defbe416bbbcc58ab8bd729a00d78ff8fe0a7a800d7d1f940",
+      "running": true,
+      "health": "healthy",
+      "restartCount": 0,
+      "imageMatchesRelease": true
+    },
+    {
+      "name": "physicsos-postgres-1",
+      "containerId": "6354596c85b5af643c88c283c1d49b1ccf26231b509fb1c292e32dd3fa57772b",
+      "image": "sha256:858bb5e98eed02eb8cafbcdc007f9a65d1b613972028944a8ec2133ccaf80d27",
+      "running": true,
+      "health": "healthy",
+      "restartCount": 0,
+      "imageMatchesRelease": null
+    },
+    {
+      "name": "physicsos-redis-1",
+      "containerId": "4e6d8d0773411a961f4bc3d1efff604dabd39769e4f6fa29610c2a34b06b9827",
+      "image": "sha256:bd28fff4b665fdf1b73e8b5b73ec05d2f858f4fa3c8ea0d7c9bc09f7f6bf7039",
+      "running": true,
+      "health": "healthy",
+      "restartCount": 0,
+      "imageMatchesRelease": null
+    }
+  ],
+  "public": {
+    "status": 200,
+    "finalUrl": "https://physics.dongsiwei.com",
+    "contentType": "text/html; charset=utf-8",
+    "hasDocument": true
+  },
+  "checkoutRevision": "7382a9501c5df15c7683ab1b4f86de2e16a4151d",
+  "trackedTreeClean": true,
+  "freeBytes": 173977600,
+  "ok": true
+}

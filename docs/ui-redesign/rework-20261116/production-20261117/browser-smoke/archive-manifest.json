@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "verifiedAt": "2026-11-17T06:12:34.557426+00:00",
+  "origin": "https://physics.dongsiwei.com",
+  "scope": "Directed production browser smoke; no full-site or 76-experiment retest",
+  "summaryFile": "result.json",
+  "sourceDirectory": "/private/tmp/physicsos-production-smoke-super-f6e7fb71-20261117",
+  "copiedWithoutModification": true,
+  "files": [
+    {
+      "file": "result.json",
+      "size": 23567,
+      "sha256": "b566fbebdf3c3694398f23b2fe366963a100273be2af313eaa3f4c59bd9d5f36"
+    },
+    {
+      "file": "result-initial-selector-failure.json",
+      "size": 69525,
+      "sha256": "1de6eedfafe7ba00633776a89cfe79d4b54e67906ce37317effe8639ac683ea0"
+    },
+    {
+      "file": "parameter-retry-first.json",
+      "size": 62922,
+      "sha256": "977a2c501d420847b3751cf0af45546c8b9c3312c1fe76b3881d381b34069b2a"
+    },
+    {
+      "file": "parameter-retry.json",
+      "size": 157299,
+      "sha256": "457a7e20eeb4f186783e3d60587b4e3ddd88bac86ecab580b44b9abd8341f7cd"
+    },
+    {
+      "file": "01-login-new-ui.png",
+      "size": 77137,
+      "sha256": "dd97ffeee736f09d9d91772c8096796160e8e6140d6e7e1a04b18c924ba0eeb0"
+    },
+    {
+      "file": "02-magnetic-experiment-ready.png",
+      "size": 447261,
+      "sha256": "23d0cb1000454797780ac932aec2ccb511c863743b13354d304da1a585d03f0e"
+    },
+    {
+      "file": "03-magnetic-paused.png",
+      "size": 446631,
+      "sha256": "c8545bcfbbdc1d955ff8c69734a7f145b80fdebf27560ef52f1089680beb837a"
+    },
+    {
+      "file": "06-assistant-single-shell.png",
+      "size": 469393,
+      "sha256": "05cb94ce0c32d5a63c9f8a57521a2e03466c877a5e8dcde29994889dc1d3569c"
+    },
+    {
+      "file": "07-paper-390px.png",
+      "size": 52978,
+      "sha256": "0e6fb67c9397afff4fd8f67dcdeaa4f054ff300ee6e4ea9bd25e72bc8f74ca14"
+    },
+    {
+      "file": "08-admin-website-readonly.png",
+      "size": 73293,
+      "sha256": "e1759d91467c101932d6a573bc7ce66053e5888b0199fe8afa1b1121be6b5a19"
+    },
+    {
+      "file": "retry-04-magnetic-parameter-changed.png",
+      "size": 447389,
+      "sha256": "cb7f60d8b0e895ae903659d2a9cd5fc2254559441ab216d08cf3bb03cce0b22d"
+    },
+    {
+      "file": "retry-05-magnetic-parameter-restored.png",
+      "size": 447234,
+      "sha256": "9ae1467f18036a756f8b736850fd99a49c276ead2266cb650efbeee447fad9ab"
+    },
+    {
+      "file": "login-illustration.json",
+      "size": 6193,
+      "sha256": "159b3359af5260527de2b40be6b87fefbb420a6ddf7583eb96472cbaf0398c33"
+    },
+    {
+      "file": "login-illustration.png",
+      "size": 536093,
+      "sha256": "dbc27ef08ff560517afa11085e796c9870be97aa4eaff93044dd4413fcdc0878"
+    }
+  ],
+  "merge": {
+    "base": "result-initial-selector-failure.json",
+    "basePassedChecks": 10,
+    "replacementCheck": "physical-parameter-roundtrip-and-restore",
+    "replacementSource": "parameter-retry.json",
+    "passedChecks": 11,
+    "singleRunAllChecks": false,
+    "retainedFailedRuns": [
+      "result-initial-selector-failure.json",
+      "parameter-retry-first.json"
+    ]
+  },
+  "verified": {
+    "sourceCheckStatuses": true,
+    "completeParameterVectorRestored": true,
+    "completeDerivedVectorRestored": true,
+    "revisions": [
+      0,
+      1,
+      2
+    ],
+    "releaseUnchanged": true,
+    "screenshotHashes": true,
+    "credentialPatternScan": true
+  },
+  "illustrationFollowUp": {
+    "file": "login-illustration.json",
+    "finishedAt": "2026-11-17T06:14:40.816Z",
+    "httpStatus": 200,
+    "decoded": true,
+    "naturalSize": [500, 672],
+    "anonymousContextCreatedAndClosed": 1,
+    "coreAndFollowUpOwnedContextsClosed": 5,
+    "originalCoreEvidenceUnchanged": true
+  },
+  "notes": [
+    "Original JSON paths remain intact; each JSON and screenshot basename is copied next to this manifest.",
+    "The initial login screenshot was captured before the illustration-specific follow-up; it is not evidence of illustration decode.",
+    "Driver remains in the original private temporary directory and is not committed.",
+    "The earlier production fixture 401 is retained separately in ../production-fixture-login-retained-failure.json."
+  ]
+}

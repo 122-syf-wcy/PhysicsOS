@@ -1,0 +1,2234 @@
+{
+  "origin": "https://physics.dongsiwei.com",
+  "startedAt": "2026-11-17T05:25:38.265Z",
+  "deadlineMs": 120000,
+  "releaseProvided": {
+    "appImageId": "eddf40d1307b644db51edd995c98f731ecec8ee4cb668f7237447bbbba765bdc",
+    "workerImageId": "e888ca49106c262defbe416bbbcc58ab8bd729a00d78ff8fe0a7a800d7d1f940",
+    "experimentPublishFinishedAt": "2026-11-17T04:35:38Z",
+    "expectedExperimentVersion": "2.3.0",
+    "note": "Image identities and publication time provided by coordinator; this script does not redeploy or inspect Docker."
+  },
+  "checks": [
+    {
+      "name": "canonical-super-login",
+      "status": "passed",
+      "evidence": {
+        "httpStatus": 200,
+        "role": "SUPER_ADMIN"
+      }
+    },
+    {
+      "name": "post-release-experiment-package",
+      "status": "passed",
+      "durationMs": 162,
+      "evidence": {
+        "experimentId": "magnetic-circular",
+        "release": {
+          "status": 200,
+          "observedAt": "2026-11-17T05:25:53.635Z",
+          "active": {
+            "id": "exp_9400e2846aef5aa6b33cb69bfe5f3ea1",
+            "experimentId": "magnetic-circular",
+            "version": "2.3.0",
+            "sha256": "8346f4fbc8b7fbcd71d498f1c473f68d10de1bd1b4b19e4716e814ae39a3f0ca",
+            "status": "approved",
+            "protocolVersion": 3,
+            "publishedAt": "2026-11-17T04:35:12.820Z",
+            "entryPath": "/[redacted]/experiment-assets/embed/releases/exp_9400e2846aef5aa6b33cb69bfe5f3ea1/8346f4fbc8b7fbcd71d498f1c473f68d10de1bd1b4b19e4716e814ae39a3f0ca/dist/index.html"
+          }
+        }
+      }
+    },
+    {
+      "name": "open-real-magnetic-experiment",
+      "status": "passed",
+      "durationMs": 3565,
+      "evidence": {
+        "observedAt": "2026-11-17T05:25:56.957Z",
+        "releaseId": "exp_9400e2846aef5aa6b33cb69bfe5f3ea1",
+        "frameStatus": "ready",
+        "snapshot": {
+          "experimentId": "magnetic-circular",
+          "revision": 0,
+          "parameters": [
+            {
+              "id": "q",
+              "label": "粒子电荷",
+              "value": 1.6e-19,
+              "unit": "C"
+            },
+            {
+              "id": "m",
+              "label": "粒子质量",
+              "value": 1.67e-27,
+              "unit": "kg"
+            },
+            {
+              "id": "v0",
+              "label": "初速度",
+              "value": 2000000,
+              "unit": "m/s"
+            },
+            {
+              "id": "B",
+              "label": "磁感应强度",
+              "value": 0.5,
+              "unit": "T"
+            }
+          ],
+          "derived": [
+            {
+              "id": "R",
+              "label": "轨道半径",
+              "value": "4.18",
+              "unit": "cm"
+            },
+            {
+              "id": "T",
+              "label": "周期",
+              "value": "1.31e-7",
+              "unit": "s"
+            },
+            {
+              "id": "omega",
+              "label": "角速度",
+              "value": "4.79e+7",
+              "unit": "rad/s"
+            },
+            {
+              "id": "F",
+              "label": "洛伦兹力",
+              "value": "1.60e-13",
+              "unit": "N"
+            }
+          ],
+          "clock": {
+            "time": 0,
+            "running": false,
+            "total": 1.3116149328737388e-7,
+            "rate": 1
+          },
+          "verification": [
+            {
+              "id": "all_finite",
+              "status": "passed"
+            },
+            {
+              "id": "scene_schema_version",
+              "status": "passed"
+            },
+            {
+              "id": "scene_revision_valid",
+              "status": "passed"
+            },
+            {
+              "id": "scene_object_ids_unique",
+              "status": "passed"
+            },
+            {
+              "id": "observable_ids_unique",
+              "status": "passed"
+            },
+            {
+              "id": "particle_units_known:particle-1",
+              "status": "passed"
+            },
+            {
+              "id": "particle_dimensions_valid:particle-1",
+              "status": "passed"
+            },
+            {
+              "id": "particle_mass_positive:particle-1",
+              "status": "passed"
+            },
+            {
+              "id": "particle_position_finite:particle-1",
+              "status": "passed"
+            },
+            {
+              "id": "particle_velocity_finite:particle-1",
+              "status": "passed"
+            },
+            {
+              "id": "field_dimensions_valid:field-1",
+              "status": "passed"
+            },
+            {
+              "id": "field_finite:field-1",
+              "status": "passed"
+            },
+            {
+              "id": "observable_target_exists:observable-velocity",
+              "status": "passed"
+            },
+            {
+              "id": "observable_target_exists:observable-force",
+              "status": "passed"
+            },
+            {
+              "id": "observable_target_exists:observable-trajectory",
+              "status": "passed"
+            },
+            {
+              "id": "observable_target_exists:observable-center",
+              "status": "passed"
+            },
+            {
+              "id": "observable_target_exists:observable-radius",
+              "status": "passed"
+            },
+            {
+              "id": "coordinate_axes_valid",
+              "status": "passed"
+            },
+            {
+              "id": "timeline_playback_rate_valid",
+              "status": "passed"
+            },
+            {
+              "id": "timeline_dimensions_valid",
+              "status": "passed"
+            },
+            {
+              "id": "scene_revision_validity",
+              "status": "passed"
+            },
+            {
+              "id": "result_schema_version",
+              "status": "passed"
+            },
+            {
+              "id": "result_scene_id_match",
+              "status": "passed"
+            },
+            {
+              "id": "result_scene_revision_match",
+              "status": "passed"
+            },
+            {
+              "id": "request_scene_result_identity",
+              "status": "passed"
+            },
+            {
+              "id": "result_trace_scene_match",
+              "status": "passed"
+            },
+            {
+              "id": "magnetic_model_preconditions",
+              "status": "passed"
+            },
+            {
+              "id": "model_assumptions",
+              "status": "passed"
+            },
+            {
+              "id": "assumption:uniform magnetic field",
+              "status": "passed"
+            },
+            {
+              "id": "assumption:velocity perpendicular B",
+              "status": "passed"
+            },
+            {
+              "id": "assumption:magnetic force only",
+              "status": "passed"
+            },
+            {
+              "id": "assumption:ignore electric field",
+              "status": "passed"
+            },
+            {
+              "id": "assumption:ignore gravity",
+              "status": "passed"
+            },
+            {
+              "id": "radius_unit",
+              "status": "passed"
+            },
+            {
+              "id": "period_unit",
+              "status": "passed"
+            },
+            {
+              "id": "angular_velocity_unit",
+              "status": "passed"
+            },
+            {
+              "id": "force_unit",
+              "status": "passed"
+            },
+            {
+              "id": "orbit_center_unit",
+              "status": "passed"
+            },
+            {
+              "id": "rotation_direction_unit",
+              "status": "passed"
+            },
+            {
+              "id": "force_vector_unit",
+              "status": "passed"
+            },
+            {
+              "id": "radius_consistency",
+              "status": "passed"
+            },
+            {
+              "id": "period_consistency",
+              "status": "passed"
+            },
+            {
+              "id": "angular_velocity_consistency",
+              "status": "passed"
+            },
+            {
+              "id": "force_magnitude_consistency",
+              "status": "passed"
+            },
+            {
+              "id": "orbit_center_consistency",
+              "status": "passed"
+            },
+            {
+              "id": "rotation_direction_consistency",
+              "status": "passed"
+            },
+            {
+              "id": "trajectory_radius_consistency",
+              "status": "passed"
+            },
+            {
+              "id": "lorentz_force_vector_consistency",
+              "status": "passed"
+            },
+            {
+              "id": "requested_window_valid",
+              "status": "passed"
+            },
+            {
+              "id": "requested_window_samples",
+              "status": "passed"
+            },
+            {
+              "id": "requested_window_endpoints",
+              "status": "passed"
+            },
+            {
+              "id": "requested_window_analytic_states",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_t0",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_tQuarter",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_tHalf",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_tThreeQuarter",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_tPeriod",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample0",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample1",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample2",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample3",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample4",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample5",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample6",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample7",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample8",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample9",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample10",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample11",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample12",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample13",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample14",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample15",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample16",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample17",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample18",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample19",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample20",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample21",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample22",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample23",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample24",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample25",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample26",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample27",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample28",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample29",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample30",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample31",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample32",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample33",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample34",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample35",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample36",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample37",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample38",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample39",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample40",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample41",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample42",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample43",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample44",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample45",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample46",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample47",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample48",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample49",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample50",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample51",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample52",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample53",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample54",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample55",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample56",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample57",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample58",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample59",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample60",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample61",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample62",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample63",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation_sample64",
+              "status": "passed"
+            },
+            {
+              "id": "speed_conservation",
+              "status": "passed"
+            },
+            {
+              "id": "force_state_representations",
+              "status": "passed"
+            },
+            {
+              "id": "lorentz_force_vector_samples",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_t0",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_tQuarter",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_tHalf",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_tThreeQuarter",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_tPeriod",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample0",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample1",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample2",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample3",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample4",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample5",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample6",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample7",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample8",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample9",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample10",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample11",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample12",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample13",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample14",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample15",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample16",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample17",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample18",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample19",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample20",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample21",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample22",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample23",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample24",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample25",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample26",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample27",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample28",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample29",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample30",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample31",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample32",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample33",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample34",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample35",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample36",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample37",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample38",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample39",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample40",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample41",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample42",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample43",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample44",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample45",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample46",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample47",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample48",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample49",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample50",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample51",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample52",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample53",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample54",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample55",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample56",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample57",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample58",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample59",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample60",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample61",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample62",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample63",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality_sample64",
+              "status": "passed"
+            },
+            {
+              "id": "force_velocity_orthogonality",
+              "status": "passed"
+            },
+            {
+              "id": "force_magnitude_samples",
+              "status": "passed"
+            },
+            {
+              "id": "initial_state_matches_scene",
+              "status": "passed"
+            },
+            {
+              "id": "state_at_period_matches_initial",
+              "status": "passed"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "physical-parameter-roundtrip-and-restore",
+      "status": "failed",
+      "classification": "product-physics-roundtrip",
+      "durationMs": 16008,
+      "error": "locator.waitFor: Timeout 16000ms exceeded.\nCall log:\n  - waiting for locator('[data-[redacted]-surface=\"lab\"][data-[redacted]-domain=\"magnetic\"]').locator('input[aria-label=\"磁感应强度\"]').first() to be visible\n"
+    },
+    {
+      "name": "experiment-version-after-interactions",
+      "status": "passed",
+      "durationMs": 74,
+      "evidence": {
+        "status": 200,
+        "observedAt": "2026-11-17T05:26:13.291Z",
+        "active": {
+          "id": "exp_9400e2846aef5aa6b33cb69bfe5f3ea1",
+          "experimentId": "magnetic-circular",
+          "version": "2.3.0",
+          "sha256": "8346f4fbc8b7fbcd71d498f1c473f68d10de1bd1b4b19e4716e814ae39a3f0ca",
+          "status": "approved",
+          "protocolVersion": 3,
+          "publishedAt": "2026-11-17T04:35:12.820Z",
+          "entryPath": "/[redacted]/experiment-assets/embed/releases/exp_9400e2846aef5aa6b33cb69bfe5f3ea1/8346f4fbc8b7fbcd71d498f1c473f68d10de1bd1b4b19e4716e814ae39a3f0ca/dist/index.html"
+        }
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "name": "02-magnetic-experiment-ready",
+      "path": "/private/tmp/[redacted]-production-smoke-super-f6e7fb71-20261117/02-magnetic-experiment-ready.png",
+      "capturedAt": "2026-11-17T05:25:57.204Z",
+      "identityMasked": true
+    }
+  ],
+  "pageErrors": [],
+  "failedRequests": [
+    {
+      "context": "super",
+      "path": "/api/dynamicCordisRunner/syncInspectManifest",
+      "error": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+    },
+    {
+      "context": "super",
+      "path": "/api/dynamicCordisRunner/inventory",
+      "error": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+    },
+    {
+      "context": "super",
+      "path": "/api/session/modelCatalog",
+      "error": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+    },
+    {
+      "context": "super",
+      "path": "/api/dynamicCordisRunner/inventory",
+      "error": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+    },
+    {
+      "context": "super",
+      "path": "/api/dynamicCordisRunner/syncInspectManifest",
+      "error": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+    },
+    {
+      "context": "super",
+      "path": "/api/dynamicCordisRunner/inventory",
+      "error": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+    },
+    {
+      "context": "super",
+      "path": "/api/session/modelCatalog",
+      "error": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+    },
+    {
+      "context": "super",
+      "path": "/api/dynamicCordisRunner/syncInspectManifest",
+      "error": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+    },
+    {
+      "context": "super",
+      "path": "/api/dynamicCordisRunner/inventory",
+      "error": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+    },
+    {
+      "context": "super",
+      "path": "/api/session/modelCatalog",
+      "error": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+    },
+    {
+      "context": "super",
+      "path": "/[redacted]/usage/events",
+      "error": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+    },
+    {
+      "context": "super",
+      "path": "/[redacted]/usage/events",
+      "error": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+    },
+    {
+      "context": "super",
+      "path": "/api/permissionPresets/catalog",
+      "error": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+    },
+    {
+      "context": "super",
+      "path": "/api/dynamicCordisRunner/inventory",
+      "error": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+    },
+    {
+      "context": "super",
+      "path": "/api/session/modelCatalog",
+      "error": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+    },
+    {
+      "context": "super",
+      "path": "/api/dynamicCordisRunner/syncInspectManifest",
+      "error": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+    },
+    {
+      "context": "super",
+      "path": "/api/session/create",
+      "error": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+    },
+    {
+      "context": "super",
+      "path": "/api/dynamicCordisRunner/inventory",
+      "error": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+    },
+    {
+      "context": "super",
+      "path": "/[redacted]/usage/events",
+      "error": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+    },
+    {
+      "context": "super",
+      "path": "/[redacted]/usage/events",
+      "error": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+    },
+    {
+      "context": "super",
+      "path": "/[redacted]/usage/events",
+      "error": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+    },
+    {
+      "context": "super",
+      "path": "/[redacted]/usage/events",
+      "error": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+    },
+    {
+      "context": "super",
+      "path": "/[redacted]/usage/events",
+      "error": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+    },
+    {
+      "context": "super",
+      "path": "/[redacted]/usage/events",
+      "error": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+    },
+    {
+      "context": "super",
+      "path": "/[redacted]/learning/scenes/magnetic-circular-mwk91i44-0",
+      "error": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+    },
+    {
+      "context": "super",
+      "path": "/[redacted]/usage/events",
+      "error": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+    },
+    {
+      "context": "super",
+      "path": "/[redacted]/usage/events",
+      "error": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+    },
+    {
+      "context": "super",
+      "path": "/[redacted]/usage/events",
+      "error": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+    },
+    {
+      "context": "super",
+      "path": "/[redacted]/learning/scenes/magnetic-circular-mwk91i44-0",
+      "error": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+    },
+    {
+      "context": "super",
+      "path": "/[redacted]/usage/events",
+      "error": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+    },
+    {
+      "context": "super",
+      "path": "/[redacted]/usage/events",
+      "error": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+    },
+    {
+      "context": "super",
+      "path": "/[redacted]/usage/events",
+      "error": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+    }
+  ],
+  "modelRequestsBlocked": 0,
+  "businessWritesBlocked": [
+    {
+      "context": "super",
+      "method": "POST",
+      "path": "/api/dynamicCordisRunner/syncInspectManifest"
+    },
+    {
+      "context": "super",
+      "method": "POST",
+      "path": "/api/dynamicCordisRunner/inventory"
+    },
+    {
+      "context": "super",
+      "method": "POST",
+      "path": "/api/session/modelCatalog"
+    },
+    {
+      "context": "super",
+      "method": "POST",
+      "path": "/api/dynamicCordisRunner/inventory"
+    },
+    {
+      "context": "super",
+      "method": "POST",
+      "path": "/api/dynamicCordisRunner/syncInspectManifest"
+    },
+    {
+      "context": "super",
+      "method": "POST",
+      "path": "/api/dynamicCordisRunner/inventory"
+    },
+    {
+      "context": "super",
+      "method": "POST",
+      "path": "/api/session/modelCatalog"
+    },
+    {
+      "context": "super",
+      "method": "POST",
+      "path": "/api/dynamicCordisRunner/syncInspectManifest"
+    },
+    {
+      "context": "super",
+      "method": "POST",
+      "path": "/api/dynamicCordisRunner/inventory"
+    },
+    {
+      "context": "super",
+      "method": "POST",
+      "path": "/api/session/modelCatalog"
+    },
+    {
+      "context": "super",
+      "method": "POST",
+      "path": "/[redacted]/usage/events"
+    },
+    {
+      "context": "super",
+      "method": "POST",
+      "path": "/[redacted]/usage/events"
+    },
+    {
+      "context": "super",
+      "method": "POST",
+      "path": "/api/permissionPresets/catalog"
+    },
+    {
+      "context": "super",
+      "method": "POST",
+      "path": "/api/dynamicCordisRunner/inventory"
+    },
+    {
+      "context": "super",
+      "method": "POST",
+      "path": "/api/session/modelCatalog"
+    },
+    {
+      "context": "super",
+      "method": "POST",
+      "path": "/api/dynamicCordisRunner/syncInspectManifest"
+    },
+    {
+      "context": "super",
+      "method": "POST",
+      "path": "/api/session/create"
+    },
+    {
+      "context": "super",
+      "method": "POST",
+      "path": "/api/dynamicCordisRunner/inventory"
+    },
+    {
+      "context": "super",
+      "method": "POST",
+      "path": "/[redacted]/usage/events"
+    },
+    {
+      "context": "super",
+      "method": "POST",
+      "path": "/[redacted]/usage/events"
+    },
+    {
+      "context": "super",
+      "method": "POST",
+      "path": "/[redacted]/usage/events"
+    },
+    {
+      "context": "super",
+      "method": "POST",
+      "path": "/[redacted]/usage/events"
+    },
+    {
+      "context": "super",
+      "method": "POST",
+      "path": "/[redacted]/usage/events"
+    },
+    {
+      "context": "super",
+      "method": "POST",
+      "path": "/[redacted]/usage/events"
+    },
+    {
+      "context": "super",
+      "method": "PUT",
+      "path": "/[redacted]/learning/scenes/magnetic-circular-mwk91i44-0"
+    },
+    {
+      "context": "super",
+      "method": "POST",
+      "path": "/[redacted]/usage/events"
+    },
+    {
+      "context": "super",
+      "method": "POST",
+      "path": "/[redacted]/usage/events"
+    },
+    {
+      "context": "super",
+      "method": "POST",
+      "path": "/[redacted]/usage/events"
+    },
+    {
+      "context": "super",
+      "method": "PUT",
+      "path": "/[redacted]/learning/scenes/magnetic-circular-mwk91i44-0"
+    },
+    {
+      "context": "super",
+      "method": "POST",
+      "path": "/[redacted]/usage/events"
+    },
+    {
+      "context": "super",
+      "method": "POST",
+      "path": "/[redacted]/usage/events"
+    },
+    {
+      "context": "super",
+      "method": "POST",
+      "path": "/[redacted]/usage/events"
+    }
+  ],
+  "allowedPostRequests": [
+    {
+      "context": "super",
+      "path": "/[redacted]/auth/login",
+      "purpose": "authentication"
+    },
+    {
+      "context": "super",
+      "path": "/api/session/list",
+      "purpose": "read-only-rpc"
+    },
+    {
+      "context": "super",
+      "path": "/api/agentPresets/list",
+      "purpose": "read-only-rpc"
+    },
+    {
+      "context": "super",
+      "path": "/api/agentPresets/list",
+      "purpose": "read-only-rpc"
+    }
+  ],
+  "limitations": [
+    "Production SCHOOL_ADMIN boundary not repeated: no corresponding production fixture. Same-image candidate result is separate evidence.",
+    "No model calls, message submission, experiment generation, account editing, content editing, or deployment.",
+    "Search implementation located in host research service; no standalone browser read-only no-model search endpoint identified in scoped route/client inspection. Search execution is outside this smoke.",
+    "Earlier candidate-credential production 401 result is preserved at /private/tmp/[redacted]-production-core-smoke-f6e7fb71-20261117/result.json."
+  ],
+  "cleanup": {
+    "onlyOwnedContexts": true,
+    "browserCloseCalled": false,
+    "ownedContextsCreated": 1,
+    "ownedContextsClosed": 1,
+    "finishedAt": "2026-11-17T05:26:13.323Z"
+  },
+  "step": "close-owned-contexts",
+  "updatedAt": "2026-11-17T05:26:13.299Z",
+  "browserBefore": {
+    "contexts": 1,
+    "pages": 2
+  },
+  "authentication": {
+    "status": 200,
+    "role": "SUPER_ADMIN",
+    "method": "normal auth/login with explicit school scope; credential values retained only in memory"
+  },
+  "experiment": {
+    "id": "magnetic-circular",
+    "label": "磁场中的带电粒子运动",
+    "before": {
+      "status": 200,
+      "observedAt": "2026-11-17T05:25:53.635Z",
+      "active": {
+        "id": "exp_9400e2846aef5aa6b33cb69bfe5f3ea1",
+        "experimentId": "magnetic-circular",
+        "version": "2.3.0",
+        "sha256": "8346f4fbc8b7fbcd71d498f1c473f68d10de1bd1b4b19e4716e814ae39a3f0ca",
+        "status": "approved",
+        "protocolVersion": 3,
+        "publishedAt": "2026-11-17T04:35:12.820Z",
+        "entryPath": "/[redacted]/experiment-assets/embed/releases/exp_9400e2846aef5aa6b33cb69bfe5f3ea1/8346f4fbc8b7fbcd71d498f1c473f68d10de1bd1b4b19e4716e814ae39a3f0ca/dist/index.html"
+      }
+    },
+    "loaded": {
+      "observedAt": "2026-11-17T05:25:56.957Z",
+      "releaseId": "exp_9400e2846aef5aa6b33cb69bfe5f3ea1",
+      "frameStatus": "ready",
+      "snapshot": {
+        "experimentId": "magnetic-circular",
+        "revision": 0,
+        "parameters": [
+          {
+            "id": "q",
+            "label": "粒子电荷",
+            "value": 1.6e-19,
+            "unit": "C"
+          },
+          {
+            "id": "m",
+            "label": "粒子质量",
+            "value": 1.67e-27,
+            "unit": "kg"
+          },
+          {
+            "id": "v0",
+            "label": "初速度",
+            "value": 2000000,
+            "unit": "m/s"
+          },
+          {
+            "id": "B",
+            "label": "磁感应强度",
+            "value": 0.5,
+            "unit": "T"
+          }
+        ],
+        "derived": [
+          {
+            "id": "R",
+            "label": "轨道半径",
+            "value": "4.18",
+            "unit": "cm"
+          },
+          {
+            "id": "T",
+            "label": "周期",
+            "value": "1.31e-7",
+            "unit": "s"
+          },
+          {
+            "id": "omega",
+            "label": "角速度",
+            "value": "4.79e+7",
+            "unit": "rad/s"
+          },
+          {
+            "id": "F",
+            "label": "洛伦兹力",
+            "value": "1.60e-13",
+            "unit": "N"
+          }
+        ],
+        "clock": {
+          "time": 0,
+          "running": false,
+          "total": 1.3116149328737388e-7,
+          "rate": 1
+        },
+        "verification": [
+          {
+            "id": "all_finite",
+            "status": "passed"
+          },
+          {
+            "id": "scene_schema_version",
+            "status": "passed"
+          },
+          {
+            "id": "scene_revision_valid",
+            "status": "passed"
+          },
+          {
+            "id": "scene_object_ids_unique",
+            "status": "passed"
+          },
+          {
+            "id": "observable_ids_unique",
+            "status": "passed"
+          },
+          {
+            "id": "particle_units_known:particle-1",
+            "status": "passed"
+          },
+          {
+            "id": "particle_dimensions_valid:particle-1",
+            "status": "passed"
+          },
+          {
+            "id": "particle_mass_positive:particle-1",
+            "status": "passed"
+          },
+          {
+            "id": "particle_position_finite:particle-1",
+            "status": "passed"
+          },
+          {
+            "id": "particle_velocity_finite:particle-1",
+            "status": "passed"
+          },
+          {
+            "id": "field_dimensions_valid:field-1",
+            "status": "passed"
+          },
+          {
+            "id": "field_finite:field-1",
+            "status": "passed"
+          },
+          {
+            "id": "observable_target_exists:observable-velocity",
+            "status": "passed"
+          },
+          {
+            "id": "observable_target_exists:observable-force",
+            "status": "passed"
+          },
+          {
+            "id": "observable_target_exists:observable-trajectory",
+            "status": "passed"
+          },
+          {
+            "id": "observable_target_exists:observable-center",
+            "status": "passed"
+          },
+          {
+            "id": "observable_target_exists:observable-radius",
+            "status": "passed"
+          },
+          {
+            "id": "coordinate_axes_valid",
+            "status": "passed"
+          },
+          {
+            "id": "timeline_playback_rate_valid",
+            "status": "passed"
+          },
+          {
+            "id": "timeline_dimensions_valid",
+            "status": "passed"
+          },
+          {
+            "id": "scene_revision_validity",
+            "status": "passed"
+          },
+          {
+            "id": "result_schema_version",
+            "status": "passed"
+          },
+          {
+            "id": "result_scene_id_match",
+            "status": "passed"
+          },
+          {
+            "id": "result_scene_revision_match",
+            "status": "passed"
+          },
+          {
+            "id": "request_scene_result_identity",
+            "status": "passed"
+          },
+          {
+            "id": "result_trace_scene_match",
+            "status": "passed"
+          },
+          {
+            "id": "magnetic_model_preconditions",
+            "status": "passed"
+          },
+          {
+            "id": "model_assumptions",
+            "status": "passed"
+          },
+          {
+            "id": "assumption:uniform magnetic field",
+            "status": "passed"
+          },
+          {
+            "id": "assumption:velocity perpendicular B",
+            "status": "passed"
+          },
+          {
+            "id": "assumption:magnetic force only",
+            "status": "passed"
+          },
+          {
+            "id": "assumption:ignore electric field",
+            "status": "passed"
+          },
+          {
+            "id": "assumption:ignore gravity",
+            "status": "passed"
+          },
+          {
+            "id": "radius_unit",
+            "status": "passed"
+          },
+          {
+            "id": "period_unit",
+            "status": "passed"
+          },
+          {
+            "id": "angular_velocity_unit",
+            "status": "passed"
+          },
+          {
+            "id": "force_unit",
+            "status": "passed"
+          },
+          {
+            "id": "orbit_center_unit",
+            "status": "passed"
+          },
+          {
+            "id": "rotation_direction_unit",
+            "status": "passed"
+          },
+          {
+            "id": "force_vector_unit",
+            "status": "passed"
+          },
+          {
+            "id": "radius_consistency",
+            "status": "passed"
+          },
+          {
+            "id": "period_consistency",
+            "status": "passed"
+          },
+          {
+            "id": "angular_velocity_consistency",
+            "status": "passed"
+          },
+          {
+            "id": "force_magnitude_consistency",
+            "status": "passed"
+          },
+          {
+            "id": "orbit_center_consistency",
+            "status": "passed"
+          },
+          {
+            "id": "rotation_direction_consistency",
+            "status": "passed"
+          },
+          {
+            "id": "trajectory_radius_consistency",
+            "status": "passed"
+          },
+          {
+            "id": "lorentz_force_vector_consistency",
+            "status": "passed"
+          },
+          {
+            "id": "requested_window_valid",
+            "status": "passed"
+          },
+          {
+            "id": "requested_window_samples",
+            "status": "passed"
+          },
+          {
+            "id": "requested_window_endpoints",
+            "status": "passed"
+          },
+          {
+            "id": "requested_window_analytic_states",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_t0",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_tQuarter",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_tHalf",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_tThreeQuarter",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_tPeriod",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample0",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample1",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample2",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample3",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample4",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample5",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample6",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample7",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample8",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample9",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample10",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample11",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample12",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample13",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample14",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample15",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample16",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample17",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample18",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample19",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample20",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample21",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample22",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample23",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample24",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample25",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample26",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample27",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample28",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample29",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample30",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample31",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample32",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample33",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample34",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample35",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample36",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample37",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample38",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample39",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample40",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample41",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample42",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample43",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample44",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample45",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample46",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample47",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample48",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample49",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample50",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample51",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample52",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample53",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample54",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample55",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample56",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample57",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample58",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample59",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample60",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample61",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample62",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample63",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation_sample64",
+            "status": "passed"
+          },
+          {
+            "id": "speed_conservation",
+            "status": "passed"
+          },
+          {
+            "id": "force_state_representations",
+            "status": "passed"
+          },
+          {
+            "id": "lorentz_force_vector_samples",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_t0",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_tQuarter",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_tHalf",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_tThreeQuarter",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_tPeriod",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample0",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample1",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample2",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample3",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample4",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample5",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample6",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample7",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample8",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample9",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample10",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample11",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample12",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample13",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample14",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample15",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample16",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample17",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample18",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample19",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample20",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample21",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample22",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample23",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample24",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample25",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample26",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample27",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample28",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample29",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample30",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample31",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample32",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample33",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample34",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample35",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample36",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample37",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample38",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample39",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample40",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample41",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample42",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample43",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample44",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample45",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample46",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample47",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample48",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample49",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample50",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample51",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample52",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample53",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample54",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample55",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample56",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample57",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample58",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample59",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample60",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample61",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample62",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample63",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality_sample64",
+            "status": "passed"
+          },
+          {
+            "id": "force_velocity_orthogonality",
+            "status": "passed"
+          },
+          {
+            "id": "force_magnitude_samples",
+            "status": "passed"
+          },
+          {
+            "id": "initial_state_matches_scene",
+            "status": "passed"
+          },
+          {
+            "id": "state_at_period_matches_initial",
+            "status": "passed"
+          }
+        ]
+      }
+    },
+    "after": {
+      "status": 200,
+      "observedAt": "2026-11-17T05:26:13.291Z",
+      "active": {
+        "id": "exp_9400e2846aef5aa6b33cb69bfe5f3ea1",
+        "experimentId": "magnetic-circular",
+        "version": "2.3.0",
+        "sha256": "8346f4fbc8b7fbcd71d498f1c473f68d10de1bd1b4b19e4716e814ae39a3f0ca",
+        "status": "approved",
+        "protocolVersion": 3,
+        "publishedAt": "2026-11-17T04:35:12.820Z",
+        "entryPath": "/[redacted]/experiment-assets/embed/releases/exp_9400e2846aef5aa6b33cb69bfe5f3ea1/8346f4fbc8b7fbcd71d498f1c473f68d10de1bd1b4b19e4716e814ae39a3f0ca/dist/index.html"
+      }
+    },
+    "changedDuringSmoke": false
+  },
+  "search": {
+    "status": "not-executed",
+    "reason": "No existing standalone no-model read-only browser search API identified in scoped host routes and browser clients; no model was called to test search."
+  },
+  "schoolAdmin": {
+    "status": "not-retested-in-production",
+    "reason": "No corresponding production fixture; same-image candidate evidence belongs to separate acceptance."
+  },
+  "browserAfter": {
+    "contexts": 1,
+    "pages": 2,
+    "connected": true
+  },
+  "finishedAt": "2026-11-17T05:26:13.323Z",
+  "elapsedSeconds": 35,
+  "ok": false
+}

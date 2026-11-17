@@ -45,7 +45,9 @@
 8. 生产 / 候选号池密封配置一致，仅计数与时间不同；不覆盖生产动态计数。正式 SearXNG HTTP 200，33 条结果、22 条与单摆科学主题相关。
 9. 首次正式切换在停服前因旧 worker 的遗留 Compose image 标签拒绝，生产未停。发布工具修复后服务器 124 项回归通过，v2 获取新恢复点并串行切换成功；官网、登录、账户范围及 protected GET 验收通过。
 10. 76 原 ZIP 在独立 tmpfs 恢复并逐个核对后，通过原封不动官方 publisher 发布，76/76 approved，active ID / SHA 通过。首次 before 指针表、逐包回执和原归档保留，助手及内存凭据副本清理。
+11. 正式切换后再次核对 app / worker / PostgreSQL / Redis，四者 healthy、重启次数均为 0，运行镜像与回执一致；公网入口 HTTP 200。见 [最终健康检查](production-20261117/final-health.json)。
+12. 正式浏览器核心检查合并为 11/11：首轮 10 项加最后参数专项 1 项。磁场 B 为 0.5 → 0.55 → 0.5 T，半径为 4.18 → 3.80 → 4.18 cm，真实引擎 revision 0 → 1 → 2，完整参数 / derived 向量恢复，发布包未变。两次 portal 定位失败和原 sandbox service worker 注入异常保留，不冒充一次整批全绿。模型尝试 / 执行与业务持久化写入均为 0；本组自建 4 个 context 全关闭，原 Chrome 未关闭。见 [安全汇总](production-20261117/browser-smoke/result.json) 与 [原始证据归档清单](production-20261117/browser-smoke/archive-manifest.json)。
 
 仅归档本任务明确归属且已结束的编译缓存和旧 a397 构建副本；压缩前、解码后、删除展开副本前逐文件 SHA 核对，恢复命令和回执保留。没有清理生产数据、旧镜像、恢复点、交互过的候选或未知缓存。
 
-正式页面交互最终回执及收尾文档与上述记录一起提交；全真机 GPU、原生 BFCache 和全部设计状态的人工批准不在本次已验证范围内。
+正式页面交互回执、原失败轨迹、截图及逐文件 SHA 已归档。另完成公开登录插画专项：同源 AVIF HTTP 200、500 × 672 自然尺寸、decode 成功，女生 IP、银饰与绣纹完整显示；原空白截图与拍摄早于懒加载完成一致，保留原图与新图。专项另建并关闭 1 个匿名 context，连同核心三轮共 5 个自有 context 全部关闭，原 Chrome 未关闭。见 [插画专项](production-20261117/browser-smoke/login-illustration.json)。全真机 GPU、原生 BFCache 和全部设计状态的人工批准不在本次已验证范围内。
