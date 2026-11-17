@@ -307,10 +307,10 @@ describe('question-code jobs', () => {
     expect(legacyJobSchema.safeParse(finished).success).toBe(false)
     expect(legacyJobSchema.safeParse(raw).success).toBe(true)
     await close?.(); close = undefined
-    const old = await domainStore(legacyDomain)
+    const legacyStore = await domainStore(legacyDomain)
     expect(Object.keys(legacyDomain.tables)).toEqual(['artifacts', 'jobs'])
-    expect(old.table('jobs').get(rejected.id)).toEqual(raw)
-    expect(old.table('jobs').get(rejected.id)).not.toHaveProperty('validationHistory')
+    expect(legacyStore.table('jobs').get(rejected.id)).toEqual(raw)
+    expect(legacyStore.table('jobs').get(rejected.id)).not.toHaveProperty('validationHistory')
     await close?.(); close = undefined
     const reopened = await store()
     expect(reopened.get(rejected.id, submit.ownerKey)).toEqual(finished)
