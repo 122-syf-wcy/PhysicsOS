@@ -14,8 +14,12 @@ export function coursewareSamples(event: InkPointer, bounds: CoursewareStageBoun
   return events.map(point => ({ ...coursewarePoint(point, bounds, stage), pressure: point.pressure, time: point.timeStamp }))
 }
 export function fitCoursewareStage(width: number, height: number, logicalWidth = 1920, logicalHeight = 1080): CoursewareStage {
-  const scale = Math.max(0.0001, Math.min(width / logicalWidth, height / logicalHeight))
-  return { width: logicalWidth, height: logicalHeight, scale, rect: { x: (width - logicalWidth * scale) / 2, y: (height - logicalHeight * scale) / 2, width: logicalWidth * scale, height: logicalHeight * scale } }
+  const widthScale = width / logicalWidth; const heightScale = height / logicalHeight
+  const scale = Math.max(0.0001, Math.min(widthScale, heightScale))
+  // Keep the limiting CSS dimension exact; a round trip through scale can overshoot it.
+  const fittedWidth = scale === widthScale ? width : logicalWidth * scale
+  const fittedHeight = scale === heightScale ? height : logicalHeight * scale
+  return { width: logicalWidth, height: logicalHeight, scale, rect: { x: (width - fittedWidth) / 2, y: (height - fittedHeight) / 2, width: fittedWidth, height: fittedHeight } }
 }
 export function coursewareShape(tool: CoursewareTool, samples: readonly InkSample[], id: string, color: string, width: number): CanvasAnnotationPrimitive | undefined {
   const a = samples[0]; const b = samples.at(-1); if (!a || !b) return undefined

@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer'
 import { describe, expect, it, vi } from 'vitest'
 import { loadSoundPropertiesSample, SOUND_PROPERTIES_SAMPLE } from '../src/client/courseware/sample-client.ts'
 
@@ -6,12 +7,14 @@ describe('explicit courseware sample import', () => {
   it('fetches exact original bytes as inert text only and verifies their digest before producing an import Blob', async () => {
     const bytes = new Uint8Array(SOUND_PROPERTIES_SAMPLE.bytes).fill(65)
     const transport = vi.fn(async () => response(bytes))
-    const digest = vi.fn(async () => SOUND_PROPERTIES_SAMPLE.sha256)
+    const digest = vi.fn(async (_bytes: Uint8Array) => SOUND_PROPERTIES_SAMPLE.sha256)
     const result = await loadSoundPropertiesSample({ signal: new AbortController().signal, fetch: transport, digest })
     expect(transport).toHaveBeenCalledWith(SOUND_PROPERTIES_SAMPLE.path, expect.objectContaining({ credentials: 'omit', redirect: 'error', cache: 'no-store' }))
     expect(digest).toHaveBeenCalledOnce()
+    expect(Buffer.from(digest.mock.calls[0]![0]).equals(bytes)).toBe(true)
     expect(result.size).toBe(SOUND_PROPERTIES_SAMPLE.bytes)
-    expect(new Uint8Array(await result.arrayBuffer())).toEqual(bytes)
+    // Exact full-byte comparison, without millions of recursive assertion-framework property checks.
+    expect(Buffer.from(await result.arrayBuffer()).equals(bytes)).toBe(true)
   })
   it('refuses HTML content type so the source is never treated as a same-origin rendered lesson', async () => {
     const digest = vi.fn()

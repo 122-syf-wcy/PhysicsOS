@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { activityDomain, activityClientWire } from '../src/activity-domain.ts'
+import { activityBucketWire, activityDomain, activityClientWire } from '../src/activity-domain.ts'
 import { usageDomain, usageEventWire } from '../src/usage-domain.ts'
 import { ACTIVITY_AVATARS, activityDayOf } from '../src/activity-service.ts'
 import type { ActivityRoster } from '../src/activity-types.ts'
@@ -62,6 +62,54 @@ describe('activity v1 on real persistent KV', () => {
     await expect(f.service.recordClientEvent(alice, visit)).rejects.toMatchObject({ code: 'ACTIVITY_REPLAY_EXPIRED' })
     expect(await f.service.userDetail(admin, target(), { days: 1 })).toMatchObject({ uses: 0, visits: 0 })
     expect(activityDayOf(new Date('2026-11-16T16:00:00Z'))).toBe('2026-11-17')
+  })
+  it('retains the exact seven-day boundary and the whole Shanghai boundary date before sealing counts-only buckets', async () => {
+    const f = await activityFixture(), original = f.now, value = capsule('bounded-dedup', original), visit = clientEvent('visit', original)
+    await f.service.success(value); await f.service.recordClientEvent(alice, visit)
+    f.setNow('2026-11-23T00:00:00.000Z'); await f.service.recover()
+    expect(await f.service.success(value)).toMatchObject({ status: 'duplicate' }) // exactly seven 24h periods is still admitted
+    expect(await f.service.recordClientEvent(alice, visit)).toMatchObject({ status: 'duplicate' })
+    expect([...f.domain.table('buckets').entries()].every(([, row]) => row.sealedAt === undefined)).toBe(true)
+    expect(f.domain.table('receipts').size).toBe(1)
+    f.setNow('2026-11-23T00:00:00.001Z'); await f.service.recover()
+    expect(await f.service.success(value)).toMatchObject({ status: 'rejected', code: 'ACTIVITY_REPLAY_EXPIRED' })
+    await expect(f.service.recordClientEvent(alice, visit)).rejects.toMatchObject({ code: 'ACTIVITY_REPLAY_EXPIRED' })
+    expect([...f.domain.table('buckets').entries()].every(([, row]) => row.sealedAt === undefined)).toBe(true) // still Shanghai Nov 23, keep all of Nov 16
+    expect(f.domain.table('receipts').size).toBe(1)
+    const before = storedTotals(f), beforeBytes = f.service.diagnostics().storedBytes
+    f.setNow('2026-11-23T16:00:00.000Z'); await f.service.recover() // Shanghai Nov 24: Nov 16 is now fully outside replay
+    expect(storedTotals(f)).toEqual({ ...before, ids: 0 })
+    expect([...f.domain.table('buckets').entries()].every(([, row]) => row.sealedAt === f.now && Object.keys(row.dedup).length === 0)).toBe(true)
+    expect(f.domain.table('receipts').size).toBe(0)
+    expect(f.service.diagnostics().storedBytes).toBeLessThan(beforeBytes)
+    expect(await f.service.schoolRanking(admin, { days: 30 })).toMatchObject({ overview: { visits: 1, uses: 1, activeUsers: 1 } })
+    expect(await f.service.userDetail(admin, target(), { days: 30 })).toMatchObject({ visits: 1, uses: 1, lastUseAt: original })
+  })
+  it('reopens sealed buckets without proof hashes, refuses late replay even after a server-clock rollback, and keeps ninety-day counts', async () => {
+    const f = await activityFixture(), original = f.now, value = capsule('sealed-restart', original), visit = clientEvent('visit', original)
+    await f.service.success(value); await f.service.recordClientEvent(alice, visit)
+    f.setNow('2026-11-24T00:00:00.000Z'); await f.service.recover(); await f.restart()
+    expect(storedTotals(f)).toEqual({ visits: 1, opens: 0, uses: 1, ids: 0 })
+    expect(f.domain.table('receipts').size).toBe(0)
+    expect(f.domain.table('state').get('v1')?.replayFloorAt).toBe('2026-11-17T00:00:00.000Z')
+    expect(await f.service.success(value)).toMatchObject({ status: 'rejected', code: 'ACTIVITY_REPLAY_EXPIRED' })
+    await expect(f.service.recordClientEvent(alice, visit)).rejects.toMatchObject({ code: 'ACTIVITY_REPLAY_EXPIRED' })
+    f.setNow('2026-11-22T00:00:00.000Z'); await f.restart() // apparent age six days must NOT re-enable discarded proof
+    expect(await f.service.success(value)).toMatchObject({ status: 'rejected', code: 'ACTIVITY_REPLAY_EXPIRED' })
+    await expect(f.service.recordClientEvent(alice, visit)).rejects.toMatchObject({ code: 'ACTIVITY_REPLAY_EXPIRED' })
+    expect(storedTotals(f).uses).toBe(1)
+    f.setNow(new Date(Date.parse(original) + 89 * 86_400_000).toISOString()); await f.service.recover(); await f.restart()
+    expect(await f.service.userDetail(admin, target(), { days: 90 })).toMatchObject({ visits: 1, uses: 1 })
+    f.setNow(new Date(Date.parse(original) + 90 * 86_400_000).toISOString()); await f.service.recover()
+    expect(f.domain.table('buckets').size).toBe(0)
+  })
+  it('rejects malformed sealed snapshots and cannot seal a bucket before all instants in its date expire', async () => {
+    const f = await activityFixture(); await f.service.success(capsule('schema-seal', f.now))
+    const row = [...f.domain.table('buckets').entries()][0]![1]
+    expect(activityBucketWire.safeParse({ ...row, dedup: {}, sealedAt: '2026-11-23T15:59:59.999Z' }).success).toBe(false)
+    expect(activityBucketWire.safeParse({ ...row, dedup: {}, sealedAt: '2026-11-23T16:00:00.000Z' }).success).toBe(true)
+    expect(activityBucketWire.safeParse({ ...row, sealedAt: '2026-11-24T00:00:00.000Z' }).success).toBe(false) // sealed cannot retain live proof map
+    expect(activityBucketWire.safeParse({ ...row, dedup: {} }).success).toBe(false) // open cannot lose proof while keeping counts
   })
   it('does not backfill pre-collection events or invent history outside the 90-day window', async () => {
     const f = await activityFixture()
@@ -216,6 +264,44 @@ describe('activity v1 on real persistent KV', () => {
     expect([...f.domain.table('receipts').entries()].map(([, row]) => row.state)).toEqual(['expired'])
     expect(await f.service.userDetail(admin, target(), { days: 1 })).toMatchObject({ uses: 0 })
     expect((await f.service.schoolRanking(root, { days: 30 })).integrity.codes).toEqual(expect.arrayContaining(['ACTIVITY_REPLAY_EXPIRED', 'ACTIVITY_REPLAY_GAP']))
+  })
+  it('persists an original-day plus discovery-day warning before expiring an over-age pending receipt, and preserves that checkpoint on restart', async () => {
+    const f = await activityFixture(), original = f.now, value = capsule('expired-audit', original)
+    f.faults.before = write => { if (write.table === 'buckets') throw new Error('bucket unavailable') }
+    expect(await f.service.success(value)).toMatchObject({ status: 'pending' })
+    f.faults.before = undefined; f.setNow('2026-11-24T00:00:00.000Z'); await f.restart()
+    const writes: { table: string; value: unknown }[] = []
+    f.faults.before = write => { writes.push({ table: write.table, value: write.value }) }
+    await f.service.recover()
+    const warningIndex = writes.findIndex(write => write.table === 'state' && (write.value as { warnings: { code: string }[] }).warnings.some(row => row.code === 'ACTIVITY_REPLAY_EXPIRED'))
+    const terminalIndex = writes.findIndex(write => write.table === 'receipts' && (write.value as { state: string }).state === 'expired')
+    expect(warningIndex).toBeGreaterThanOrEqual(0); expect(terminalIndex).toBeGreaterThan(warningIndex)
+    expect([...f.domain.table('receipts').entries()].map(([, row]) => ({ state: row.state, expiredAt: row.expiredAt }))).toEqual([{ state: 'expired', expiredAt: f.now }])
+    expect(f.domain.table('state').get('v1')?.warnings).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'ACTIVITY_REPLAY_EXPIRED', schoolId: alice.schoolId, fromDay: '2026-11-16', toDay: '2026-11-24' })]))
+    f.faults.before = undefined; await f.restart(); await f.service.recover()
+    expect([...f.domain.table('receipts').entries()].map(([, row]) => row.state)).toEqual(['expired'])
+    expect((await f.service.schoolRanking(admin, { days: 30 })).integrity.codes).toContain('ACTIVITY_REPLAY_EXPIRED')
+    expect(storedTotals(f).uses).toBe(0)
+  })
+  it('never silently deletes pending facts when warning persistence fails or a bounded replay pass has not reached them', async () => {
+    const f = await activityFixture({ limits: { maxReplayBatch: 1 } })
+    const first = capsule('pending-first', f.now), second = capsule('pending-second', f.now)
+    f.faults.before = write => { if (write.table === 'buckets') throw new Error('counts down') }
+    expect(await f.service.success(first)).toMatchObject({ status: 'pending' })
+    f.faults.before = undefined; await f.restart()
+    f.faults.before = write => { if (write.table === 'buckets') throw new Error('counts still down') }
+    expect(await f.service.success(second)).toMatchObject({ status: 'pending' })
+    f.faults.before = undefined; f.setNow('2027-02-15T00:00:00.000Z'); await f.restart()
+    f.faults.before = write => { if (write.table === 'state' && (write.value as { warnings: { code: string }[] }).warnings.some(row => row.code === 'ACTIVITY_REPLAY_EXPIRED')) throw new Error('warning medium down') }
+    await f.service.recover()
+    expect([...f.domain.table('receipts').entries()].map(([, row]) => row.state)).toEqual(['pending', 'pending'])
+    f.faults.before = undefined; await f.restart(); await f.service.recover()
+    const remaining = [...f.domain.table('receipts').entries()].map(([, row]) => row.state)
+    expect(remaining).toEqual(['pending']) // one terminal audit can age out only AFTER its warning is durable; untouched pending stays
+    expect(f.domain.table('state').get('v1')?.warnings).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'ACTIVITY_REPLAY_EXPIRED', toDay: '2027-02-15' })]))
+    await f.service.recover()
+    expect(f.domain.table('receipts').size).toBe(0)
+    expect((await f.service.schoolRanking(admin, { days: 1 })).integrity.codes).toContain('ACTIVITY_REPLAY_EXPIRED')
   })
   it('refuses a cold reopen above the global scan budget rather than pretending UI pagination is an index', async () => {
     const f = await activityFixture(); await f.service.success(capsule('durable', f.now))

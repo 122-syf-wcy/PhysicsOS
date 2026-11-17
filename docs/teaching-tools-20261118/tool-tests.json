@@ -1,0 +1,26 @@
+[
+  {
+    "suite": "release-switch",
+    "startedAt": "2026-11-17T16:27:29.666963+00:00",
+    "finishedAt": "2026-11-17T16:27:58.454458+00:00",
+    "exitCode": 0,
+    "log": "/opt/physicsos/.physicsos-release/teaching-tools-20261118-validation/release-switch.log",
+    "serverDockerImage": "sha256:a3297acd1b938ac9e364367e46282e4e3dfd73c134366f38857e54d1faa9d572"
+  },
+  {
+    "suite": "release-runtime",
+    "startedAt": "2026-11-17T16:27:58.455171+00:00",
+    "finishedAt": "2026-11-17T16:28:33.101852+00:00",
+    "exitCode": 0,
+    "log": "/opt/physicsos/.physicsos-release/teaching-tools-20261118-validation/release-runtime.log",
+    "serverDockerImage": "sha256:a3297acd1b938ac9e364367e46282e4e3dfd73c134366f38857e54d1faa9d572"
+  },
+  {
+    "suite": "courseware-proxy",
+    "startedAt": "2026-11-17T16:28:33.103181+00:00",
+    "finishedAt": "2026-11-17T16:28:34.295760+00:00",
+    "exitCode": 0,
+    "log": "/opt/physicsos/.physicsos-release/teaching-tools-20261118-validation/courseware-proxy.log",
+    "serverDockerImage": "sha256:a3297acd1b938ac9e364367e46282e4e3dfd73c134366f38857e54d1faa9d572"
+  }
+]

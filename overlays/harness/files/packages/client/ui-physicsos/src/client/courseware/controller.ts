@@ -1,7 +1,7 @@
 import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import { parseCanvasAnnotations, type CanvasAnnotationPrimitive, type CanvasAnnotationScene } from '@physicsos/physics-whiteboard'
 import { CoursewareApiError, coursewareAccessFailure, coursewareOfflineFailure, type CoursewareApi } from './api.ts'
-import { annotationDelta, applyAnnotationDelta } from './annotation-history.ts'
+import { annotationDelta, applyAnnotationDelta, rebaseAnnotationDelta } from './annotation-history.ts'
 import { coursewareDraftKey, readCoursewareDraft, type CoursewareDraftCache } from './persistence.ts'
 import type { AnnotationDelta, CoursewareAnnotationHead, CoursewareDraft, CoursewarePageState, CoursewarePendingOperation, CoursewarePlayerState, CoursewareSaveStatus, CoursewareState, CoursewareTool } from './types.ts'
 
@@ -175,7 +175,7 @@ export function createCoursewareController(options: CoursewareControllerOptions)
     if (previous) {
       // Cache recovery + first authority read are one singleflight. Reentry cannot expose a blank ready
       // model before its old offline operations have been merged.
-      if (previous.initializing) { await previous.initializing; display(previous); return }
+      if (previous.initializing) { display(previous); await previous.initializing; display(previous); return }
       const load = ++previous.loadSequence
       const loading = (): boolean => usable(previous) && previous.loadSequence === load
       const was = previous.status
@@ -386,9 +386,31 @@ export function createCoursewareController(options: CoursewareControllerOptions)
       const model = active(); if (!model || model.status !== 'conflict' || !canWrite()) return
       try {
         const remote = await api.readAnnotation({ deckId: model.deckId, lessonId: model.lessonId, slideId: model.slideId, signal: abort.signal }); if (!usable(model)) return
-        const scene = model.pending.reduce((scene, op) => applyAnnotationDelta(scene, op.delta, false, true), remote.scene)
-        // New content needs new ids. Never mutate the payload of an already-issued operation id.
-        model.pending = model.pending.map(op => ({ id: id(), delta: op.delta })); model.base = remote; model.scene = scene; model.status = 'ready'; model.message = undefined
+        let scene = remote.scene
+        const historyPositions = new Map<string, number>()
+        const positionKey = (primitive: CanvasAnnotationPrimitive, index: number | undefined): string => JSON.stringify([primitive, index])
+        const pending = model.pending.map(op => {
+          const delta = rebaseAnnotationDelta(scene, op.delta)
+          scene = applyAnnotationDelta(scene, delta, false, true)
+          delta.changes.forEach((change, index) => {
+            const original = op.delta.changes[index]!
+            if (!original.before && original.after && change.afterIndex !== original.afterIndex) historyPositions.set(positionKey(original.after, original.afterIndex), change.afterIndex!)
+          })
+          return { delta }
+        })
+        // Only the newly replayed additions moved. Keep their history references at that exact position
+        // so redo cannot insert them underneath the remote head; other recorded indices stay untouched.
+        const rebaseHistory = (entries: AnnotationDelta[]): AnnotationDelta[] => {
+          if (!historyPositions.size) return entries
+          return entries.map(entry => ({ changes: entry.changes.map(change => {
+            const beforeIndex = change.before ? historyPositions.get(positionKey(change.before, change.beforeIndex)) : undefined
+            const afterIndex = change.after ? historyPositions.get(positionKey(change.after, change.afterIndex)) : undefined
+            return { ...change, ...(beforeIndex === undefined ? {} : { beforeIndex }), ...(afterIndex === undefined ? {} : { afterIndex }) }
+          }) }))
+        }
+        // Validate every delta before changing the model. New content needs new ids and exact new requests.
+        model.pending = pending.map(op => ({ id: id(), delta: op.delta })); model.undo = rebaseHistory(model.undo); model.redo = rebaseHistory(model.redo)
+        model.base = remote; model.scene = scene; model.status = 'ready'; model.message = undefined
         display(model); await persist(model); await saveModel(model)
       } catch (error) { failModel(model, error); throw error }
     },

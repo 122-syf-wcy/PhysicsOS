@@ -20797,3 +20797,19 @@ index bbdbf3cac5..08b18e108d 100644
      { "path": "./packages/feedback/message-feedback" },
      { "path": "./packages/workspace/workspace" },
      { "path": "./packages/session/session-title" },
+diff --git a/packages/client/ui-primitives/src/useModalLayer.ts b/packages/client/ui-primitives/src/useModalLayer.ts
+--- a/packages/client/ui-primitives/src/useModalLayer.ts
++++ b/packages/client/ui-primitives/src/useModalLayer.ts
+@@ -72,6 +72,12 @@ export function useModalLayer(dialog: RefObject<HTMLElement | null>, open: boolean,
+       if (document.activeElement?.closest('[role="menu"]')) return
+       const items = [...element.querySelectorAll<HTMLElement>(focusable)]
+         .filter(item => !item.closest('[inert], [hidden]'))
++        .sort((left, right) => {
++          const position = left.compareDocumentPosition(right)
++          if (position & Node.DOCUMENT_POSITION_FOLLOWING) return -1
++          if (position & Node.DOCUMENT_POSITION_PRECEDING) return 1
++          return 0
++        })
+       const first = items[0] ?? element
+       const last = items.at(-1) ?? element
+       const atEdge = event.shiftKey ? document.activeElement === first : document.activeElement === last

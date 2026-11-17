@@ -1,7 +1,7 @@
 /** Independent bounded activity unit. Do not extend/upgrade physicsos_usage v0. */
 import { z } from 'zod'
 import { defineDomain, domainTable, type Domain } from '@deepseek-ai/dsh-storage-domain'
-import { ACTIVITY_MODULES, ACTIVITY_SHARDS, ACTIVITY_SOURCES } from './activity-types.ts'
+import { ACTIVITY_DEDUP_RETENTION_DAYS, ACTIVITY_MODULES, ACTIVITY_SHARDS, ACTIVITY_SOURCES } from './activity-types.ts'
 
 const at = z.iso.datetime({ offset: true })
 const digest = z.string().regex(/^[a-f0-9]{64}$/)
@@ -21,10 +21,15 @@ const moduleCounts = z.strictObject({ module: z.enum(ACTIVITY_MODULES), visits: 
 export const activityBucketWire = z.strictObject({
   ...owner, day, shard: z.number().int().min(0).max(ACTIVITY_SHARDS - 1),
   visits: count, opens: count, uses: count, modules: z.array(moduleCounts).max(ACTIVITY_MODULES.length),
-  /** Incremented counters and this hash map MUST be replaced by the same KvTable.update. */
+  /** Open bucket increments and this hash map MUST be replaced by the same KvTable.update. */
   dedup: z.record(digest, digest).refine(value => Object.keys(value).length <= 256),
+  /** A terminal count-only bucket: the entire Shanghai date has passed the replay window. */
+  sealedAt: at.optional(),
 }).refine(row => new Set(row.modules.map(value => value.module)).size === row.modules.length
-  && row.visits + row.opens + row.uses === Object.keys(row.dedup).length
+  && row.visits + row.opens + row.uses <= 256
+  && (row.sealedAt === undefined
+    ? row.visits + row.opens + row.uses === Object.keys(row.dedup).length
+    : Object.keys(row.dedup).length === 0 && Date.parse(row.sealedAt) >= Date.parse(`${row.day}T00:00:00+08:00`) + ACTIVITY_DEDUP_RETENTION_DAYS * 86_400_000)
   && row.modules.reduce((n, value) => n + value.visits, 0) === row.visits
   && row.modules.reduce((n, value) => n + value.opens, 0) === row.opens
   && row.modules.reduce((n, value) => n + value.uses, 0) === row.uses
@@ -32,12 +37,19 @@ export const activityBucketWire = z.strictObject({
 export const activityReceiptWire = z.strictObject({
   ...owner, source: z.enum(ACTIVITY_SOURCES), operationHash: digest, requestHash: digest,
   occurredAt: at, state: z.enum(['pending', 'applied', 'expired']),
+  /** Terminal audit/checkpoint after the original-day integrity warning is durable. */
+  expiredAt: at.optional(),
 })
 const warning = z.strictObject({
   code: z.string().regex(/^ACTIVITY_[A-Z_]+$/).max(80), schoolId: owner.schoolId.optional(),
   fromDay: day, toDay: day, occurrences: count,
 })
-const state = z.strictObject({ version: z.literal(1), collectionStartedAt: at, warnings: z.array(warning).max(32), sourceCheckpoints: z.array(z.strictObject({ source: z.enum(ACTIVITY_SOURCES), throughAt: at })).max(ACTIVITY_SOURCES.length) })
+const state = z.strictObject({
+  version: z.literal(1), collectionStartedAt: at, warnings: z.array(warning).max(32),
+  sourceCheckpoints: z.array(z.strictObject({ source: z.enum(ACTIVITY_SOURCES), throughAt: at })).max(ACTIVITY_SOURCES.length),
+  /** Monotonic original-time rejection floor, durably advanced BEFORE clearing any dedup/journal. */
+  replayFloorAt: at.optional(),
+})
 export type ActivityBucketRecord = z.infer<typeof activityBucketWire>
 export type ActivityReceiptRecord = z.infer<typeof activityReceiptWire>
 export type ActivityStateRecord = z.infer<typeof state>

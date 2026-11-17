@@ -9,6 +9,11 @@ export const ACTIVITY_SOURCE_MODULE: Readonly<Record<ActivitySource, ActivityMod
 }
 /** Fixed, versioned routing; never create an overflow shard when a bucket fills. */
 export const ACTIVITY_SHARDS = 4
+export const ACTIVITY_RETENTION_DAYS = 90
+export const ACTIVITY_REPLAY_DAYS = 7
+export const ACTIVITY_REPLAY_MS = ACTIVITY_REPLAY_DAYS * 86_400_000
+/** Keep the boundary date as well: seven exact 24h intervals can span eight Shanghai dates. */
+export const ACTIVITY_DEDUP_RETENTION_DAYS = ACTIVITY_REPLAY_DAYS + 1
 /** Timestamp-bearing immutable ids bind client retries to the ORIGINAL day, not receipt time. */
 export interface ActivityClientEvent {
   readonly kind: 'visit' | 'open'

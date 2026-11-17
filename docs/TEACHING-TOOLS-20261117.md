@@ -50,3 +50,30 @@
 3. 执行新功能单元／HTTP／真实 PostgreSQL、90 日／10 倍统计容量、真实页面及 31 页课件交互／安全验收。
 4. 先发布关闭新状态写入的桥接镜像，验证读写保护与新资源；再启用功能候选。启用后回滚底线是已验收桥接镜像，不是 f6；回退仅切镜像／配置，不回灌旧业务数据。
 5. 每次发布前核对最新 main、服务器、运行镜像并获取配对恢复点，串行切换。正式入口、学校权限、76 实验、官网管理、教师预览及 sandbox 保留。
+
+## 教学 mode 的私有候选适配（源码，尚未运行）
+
+`release-candidate.py` 新增可选顶层 `teachingToolsMode`，只接受 `"bridge"` / `"enabled"`。未指定时不注入或改写该 Env，保留旧候选行为；新应用自身默认 `bridge`。显式配置必须是当前操作者拥有的 0400 / 0600 普通文件，并要求 task-owned 独立数据库、数据目录和网络。显式 mode 的未知顶层字段（包括 `environment` / `env`）、`off`、对象、空值均拒绝；没有开放通用 Env、挂载或安全参数覆盖。
+
+主代理应在服务器私有目录分别准备两份完整候选配置，不能把同一数据范围从 bridge 改成 enabled。以下只是无密钥的命名／端口示例，实际端口须先确认空闲，其余必填数据库身份与既有密码文件路径由主代理私有配置，不提交配置文件：
+
+| 字段 | bridge 配置 | enabled 配置 |
+| --- | --- | --- |
+| `teachingToolsMode` | `bridge` | `enabled` |
+| `task` / `databaseOwner` | `teaching-20261117-bridge` | `teaching-20261117-enabled` |
+| `schema` | `teaching_20261117_bridge` | `teaching_20261117_enabled` |
+| `root`（其 `home` 是 appdata） | `/opt/physicsos/.physicsos-release/teaching-20261117-bridge` | `/opt/physicsos/.physicsos-release/teaching-20261117-enabled` |
+| `databaseDataRoot` | 上述 bridge root 的 `database-data` 子目录 | 上述 enabled root 的 `database-data` 子目录 |
+| `databaseContainer` | `physicsos-teaching-20261117-bridge-pg` | `physicsos-teaching-20261117-enabled-pg` |
+| `network` | `physicsos-teaching-20261117-bridge` | `physicsos-teaching-20261117-enabled` |
+| `httpPort` / `modelPoolPort` | `23188` / `23982` | `24188` / `24982` |
+
+两份配置均须 `requireIsolatedNetwork: true`。已有 `validationWorker` / `searchCompanion` 如确需使用，仍走原来的闭集验证与私有资源要求；本适配不改变 worker token、sandbox、seccomp、学校鉴权或生产配置。保留已有 `ui-candidate20261115` 交互候选，不为它追加 mode、刷新、回收或复用其目录／数据库／网络／端口。
+
+适配在继承生产 Env 的过滤、私有路由重写后，仅设置真实 `PHYSICSOS_TEACHING_TOOLS_MODE`。因此即使插件配置来自 PostgreSQL，mode 也由实际进程 Env 优先生效；不是依赖修改 profile 或手写标签。新镜像须通过既有 `release-runtime.py` 的冷校验，绑定实际 revision、source/code digest、两份 runtime manifest 的字节 SHA、纳入代码清单的 capability marker SHA 及插件签名。仅给 f6 或任意镜像手加 capability label 不会通过。
+
+新候选的完整启动 intent（含 Env、mode、资源与镜像来源绑定）进入 SHA256 指纹；随机 instance、指纹与 mode 同时绑定容器标签及私有回执。完整 daemon CID 必须先落盘，再 start；create、guard、check、refresh 与回收均检查真实 `Container.Config.Env`，在内存中完整比较并拒绝 mode 缺失、重复、额外 Env 或其它漂移。错误只返回稳定 code，不打印 Env、Docker argv 或密钥。检查还须通过已认证 `/physicsos/learning/capabilities`，核对真实 mode、生命周期写开关、个人状态开关与回滚能力，而非只看健康或 label。
+
+新候选刷新使用同一脚本的 `refresh --config <私有配置> --image <已验证镜像>`：持有同一生命周期锁，先复核旧 CID / nonce / mode / 指纹／独立资源及新镜像，再按全 CID 删除旧候选容器，复用同一 `start_owned` 创建路径；保留 home、数据库、配置、密钥与恢复点。mode 不同或旧候选无绑定回执会拒绝。仓库未发现独立 `candidate-refresh` helper；服务器私有旧 helper 尚未审阅，不得直接用于这两个新候选。若必须保留外部 helper，必须调用 `guard_teaching_tools` / `candidate_fingerprint` 并保留全 CID 回执协议，不可复制 labels-only ownership 逻辑。
+
+新增 fixture 测试源码覆盖两种 mode、独立 scope、非法值／额外字段、生产目录与端口拒绝、真实 Env 与来源／指纹漂移、创建失败归属回收、同构 refresh、认证前 guard、capability、生产 Env／私有材料保留以及旧配置行为。此次只做源码和 whitespace 静态核对；**未运行本机测试、构建、服务器测试或部署**。主代理在服务器既有 Docker 测试环境运行 `python3 -B scripts/deploy/release-candidate.test.py` 并记录真实结果后，才能提升验收结论。此记录不表示生产已切换，也不替代桥接／启用候选的真实浏览器和安全验收。

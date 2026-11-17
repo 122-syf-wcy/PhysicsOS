@@ -21,7 +21,7 @@ describe.skipIf(database === undefined)('activity real PostgreSQL durability and
     let context: Context | undefined, backend: PostgresStorageBackend | undefined, domain: ActivityDomain | undefined, service: ActivityService | undefined
     const close = async () => { await service?.dispose(); await domain?.close(); await backend?.close(); await context?.fiber.dispose(); service = undefined; domain = undefined; backend = undefined; context = undefined }
     onTestFinished(async () => { await close(); try { await pool.query(`DROP SCHEMA IF EXISTS ${quoteIdentifier(schema)} CASCADE`) } finally { await pool.end() } }, 60_000)
-    const now = new Date('2026-11-16T00:00:00.000Z')
+    let now = new Date('2026-11-16T00:00:00.000Z')
     const open = async () => {
       context = new Context(); await context.plugin(Storage)
       backend = new PostgresStorageBackend({ connectionString: database, schema, maxConnections: 2 })
@@ -44,5 +44,17 @@ describe.skipIf(database === undefined)('activity real PostgreSQL durability and
     expect(await reopened.success(success)).toMatchObject({ status: 'duplicate' })
     expect(await reopened.userDetail(admin, { schoolId: alice.schoolId, username: alice.username })).toMatchObject({ visits: 1, uses: 1 })
     expect(await reopened.schoolRanking(root)).toMatchObject({ overview: { visits: 1, uses: 1, activeUsers: 1 } })
+    now = new Date('2026-11-24T00:00:00.000Z'); await reopened.recover()
+    const sealedStored = await pool.query<{ value: string }>(`SELECT value FROM ${bucketTable}`)
+    const sealed = sealedStored.rows.map(row => JSON.parse(row.value) as { visits: number; uses: number; sealedAt?: string; dedup: Record<string, string> })
+    expect(sealed.every(row => row.sealedAt !== undefined && Object.keys(row.dedup).length === 0)).toBe(true)
+    expect(sealed.reduce((n, row) => n + row.visits, 0)).toBe(1); expect(sealed.reduce((n, row) => n + row.uses, 0)).toBe(1)
+    const receiptTable = qualifiedTable(schema, recordTableName('physicsos_activity_v1', 'receipts'))
+    expect((await pool.query(`SELECT value FROM ${receiptTable}`)).rows).toHaveLength(0)
+    await close(); now = new Date('2026-11-22T00:00:00.000Z') // even a clock rollback cannot reopen discarded proof
+    const sealedReopen = await open()
+    expect(await sealedReopen.success(success)).toMatchObject({ status: 'rejected', code: 'ACTIVITY_REPLAY_EXPIRED' })
+    await expect(sealedReopen.recordClientEvent(alice, visit)).rejects.toMatchObject({ code: 'ACTIVITY_REPLAY_EXPIRED' })
+    expect(await sealedReopen.schoolRanking(root, { days: 30 })).toMatchObject({ overview: { visits: 1, uses: 1, activeUsers: 1 } })
   }, 120_000)
 })

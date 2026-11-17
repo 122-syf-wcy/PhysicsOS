@@ -7,12 +7,21 @@ vi.mock('../src/client/courseware/CoursewarePlayer.tsx', async () => {
   const React = await import('react')
   return { CoursewarePlayer: React.forwardRef((_props, ref) => { React.useImperativeHandle(ref, () => ({ command: async () => {} })); return <iframe title="protocol boundary only" /> }) }
 })
+let restoreDialogs: (() => void) | undefined
 beforeEach(() => {
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} unobserve() {} })
-  vi.spyOn(HTMLDialogElement.prototype, 'showModal').mockImplementation(function (this: HTMLDialogElement) { this.open = true })
-  vi.spyOn(HTMLDialogElement.prototype, 'close').mockImplementation(function (this: HTMLDialogElement) { this.open = false })
+  const prototype = HTMLDialogElement.prototype
+  const originals = (['showModal', 'close'] as const).map(name => [name, Object.getOwnPropertyDescriptor(prototype, name)] as const)
+  // jsdom may omit both methods. This fixture models open/close only, not the browser top layer or focus.
+  Object.defineProperties(prototype, {
+    showModal: { configurable: true, writable: true, value: function (this: HTMLDialogElement) { this.open = true } },
+    close: { configurable: true, writable: true, value: function (this: HTMLDialogElement) { this.open = false } },
+  })
+  restoreDialogs = () => { for (const [name, descriptor] of originals) { if (descriptor) Object.defineProperty(prototype, name, descriptor); else Reflect.deleteProperty(prototype, name) } }
 })
-afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
+afterEach(() => {
+  try { cleanup() } finally { vi.restoreAllMocks(); restoreDialogs?.(); restoreDialogs = undefined; vi.unstubAllGlobals() }
+})
 describe('courseware management and classroom surface contract (not browser CSS evidence)', () => {
   it('offers the complete classroom tools, clear confirmation, draft export and a real lesson selector', async () => {
     const f = coursewareClientFixture()
@@ -26,7 +35,10 @@ describe('courseware management and classroom surface contract (not browser CSS 
     expect(screen.getByRole('button', { name: '版本与来源', exact: true })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '草稿', exact: true }))
     expect(screen.getByRole('textbox', { name: '完整课件批注草稿 JSON' })).toBeTruthy()
+    const dialog = screen.getByRole('dialog', { name: '导出本页草稿', exact: true }) as HTMLDialogElement
+    expect(dialog.open).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: '关闭对话框', exact: true }))
+    expect(dialog.open).toBe(false); expect(screen.queryByRole('dialog')).toBeNull()
     view.unmount(); f.controller.dispose()
   })
   it('does not expose import/write tools as enabled in bridge mode and scopes library search/status controls', async () => {

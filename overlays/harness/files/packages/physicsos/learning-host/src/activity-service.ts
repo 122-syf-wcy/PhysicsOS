@@ -4,12 +4,10 @@ import { performance } from 'node:perf_hooks'
 import { z } from 'zod'
 import { activitySuccessCapsuleSchema, type ActivityDelivery, type ActivityOwner, type ActivityReplaySource, type ActivitySink, type ActivitySource, type ActivitySuccessCapsule } from './activity-contract.ts'
 import { activityBucketWire, activityClientWire, type ActivityDomain, type ActivityReceiptRecord, type ActivityStateRecord, type ActivityWarningRecord } from './activity-domain.ts'
-import { ACTIVITY_MODULES, ACTIVITY_SHARDS, ACTIVITY_SOURCES, ACTIVITY_SOURCE_MODULE, DEFAULT_ACTIVITY_LIMITS, type ActivityAvatar, type ActivityAvatarSnapshot, type ActivityCounts, type ActivityDateQuery, type ActivityEventAck, type ActivityIntegrity, type ActivityLimits, type ActivityModule, type ActivityModuleCounts, type ActivityRankQuery, type ActivityRoster, type ActivityRosterUser, type ActivitySchoolRanking, type ActivitySchoolRow, type ActivityUserDetail } from './activity-types.ts'
+import { ACTIVITY_MODULES, ACTIVITY_REPLAY_MS, ACTIVITY_RETENTION_DAYS, ACTIVITY_SHARDS, ACTIVITY_SOURCES, ACTIVITY_SOURCE_MODULE, DEFAULT_ACTIVITY_LIMITS, type ActivityAvatar, type ActivityAvatarSnapshot, type ActivityCounts, type ActivityDateQuery, type ActivityEventAck, type ActivityIntegrity, type ActivityLimits, type ActivityModule, type ActivityModuleCounts, type ActivityRankQuery, type ActivityRoster, type ActivityRosterUser, type ActivitySchoolRanking, type ActivitySchoolRow, type ActivityUserDetail } from './activity-types.ts'
 import { LearningError, type IdentityActor } from './identity.ts'
 
 const DAY = 86_400_000
-const REPLAY_MS = 7 * DAY
-const RETENTION_DAYS = 90
 const digest = (value: unknown): string => createHash('sha256').update(JSON.stringify(value)).digest('hex')
 const bytes = (key: string, value: unknown): number => Buffer.byteLength(key, 'utf8') + Buffer.byteLength(JSON.stringify(value), 'utf8')
 const sameOwner = (left: ActivityOwner, right: ActivityOwner): boolean => left.schoolId === right.schoolId && left.userKey === right.userKey
@@ -23,6 +21,8 @@ const add = (left: ActivityCounts, right: ActivityCounts): ActivityCounts => {
 }
 export const activityDayOf = (instant: Date): string => new Date(instant.getTime() + 8 * 3_600_000).toISOString().slice(0, 10)
 const offsetDay = (day: string, offset: number): string => new Date(Date.parse(`${day}T00:00:00Z`) + offset * DAY).toISOString().slice(0, 10)
+/** Only dates STRICTLY before this date may discard dedup/applied journals; the boundary date stays whole. */
+export const activityReplayOldestDay = (instant: Date): string => activityDayOf(new Date(instant.getTime() - ACTIVITY_REPLAY_MS))
 const dayWire = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
   const time = Date.parse(`${value}T00:00:00Z`)
   return Number.isFinite(time) && new Date(time).toISOString().slice(0, 10) === value
@@ -228,10 +228,13 @@ export class ActivityService implements ActivitySink {
   private collection(): void {
     if (this.mode !== 'enabled') throw new LearningError(409, 'ACTIVITY_COLLECTION_DISABLED', '当前版本仅保留统计读取，尚未开启新采集。')
   }
+  private replayCutoff(): number {
+    return Math.max(this.now().getTime() - ACTIVITY_REPLAY_MS, this.state?.replayFloorAt === undefined ? -Infinity : Date.parse(this.state.replayFloorAt))
+  }
   private originalTime(at: string): void {
     const time = Date.parse(at), now = this.now().getTime()
     if (!Number.isFinite(time) || time > now + 30_000) throw new LearningError(400, 'ACTIVITY_TIME_INVALID', '统计原操作时间无效或晚于服务器。')
-    if (time < now - REPLAY_MS) throw new LearningError(410, 'ACTIVITY_REPLAY_EXPIRED', '统计回执已超过原操作时间起七日的受控重放窗口。')
+    if (time < this.replayCutoff()) throw new LearningError(410, 'ACTIVITY_REPLAY_EXPIRED', '统计回执已超过原操作时间起七日的受控重放窗口。')
     if (this.state === undefined || time < Date.parse(this.state.collectionStartedAt)) throw new LearningError(410, 'ACTIVITY_BEFORE_COLLECTION', '不补造新采集起点之前的历史。')
   }
   private limitedInput(input: unknown): void {
@@ -258,6 +261,7 @@ export class ActivityService implements ActivitySink {
   }
   /** Empty bucket creation carries no count. Count + id/hash always land in ONE atomic update. */
   private async admit(event: AdmittedEvent): Promise<'recorded' | 'duplicate'> {
+    this.originalTime(event.occurredAt)
     if (this.duplicate(event)) return 'duplicate'
     const location = this.eventLocation(event)
     if (this.buckets.get(location.key) === undefined) {
@@ -267,6 +271,9 @@ export class ActivityService implements ActivitySink {
       await this.put(this.buckets, location.key, empty)
     }
     await this.update(this.buckets, location.key, current => {
+      // Recheck at the atomic slot: a backend/queue delay may cross the exact seven-day boundary.
+      this.originalTime(event.occurredAt)
+      if (current.sealedAt !== undefined) throw new LearningError(410, 'ACTIVITY_BUCKET_SEALED', '统计日桶已封存，不能重新接收事件或重建去重键。')
       if (!sameOwner(current, event) || current.day !== location.day || current.shard !== location.shard) throw new LearningError(409, 'ACTIVITY_BUCKET_CONFLICT', '统计日桶归属冲突。')
       if (current.dedup[event.id] !== undefined) {
         if (current.dedup[event.id] !== event.requestHash) throw new LearningError(409, 'ACTIVITY_ID_CONFLICT', '统计操作哈希冲突。')
@@ -362,7 +369,13 @@ export class ActivityService implements ActivitySink {
           this.note('ACTIVITY_RECOVERY_REPLAY', row.schoolId, activityDayOf(new Date(row.occurredAt)))
           try { await this.deliver(key, row) } catch (error) {
             this.note(error instanceof LearningError ? error.code : 'ACTIVITY_STORAGE_WRITE', row.schoolId, activityDayOf(new Date(row.occurredAt)))
-            if (error instanceof LearningError && error.status === 410) await this.update(this.receipts, key, current => ({ ...current, state: 'expired' }))
+            if (error instanceof LearningError && error.status === 410) {
+              // Preserve both original scope and discovery day; even a >90-day backlog must raise a current alarm.
+              this.note(error.code, row.schoolId)
+              // Warning first, terminal receipt second. A failure of either keeps the durable pending fact.
+              await this.persistWarnings()
+              await this.update(this.receipts, key, current => ({ ...current, state: 'expired', expiredAt: this.now().toISOString() }))
+            }
           }
         }
         await this.prune(); await this.persistWarnings()
@@ -371,7 +384,7 @@ export class ActivityService implements ActivitySink {
         if (this.closing) break
         let progress = this.progress.get(source.source)
         if (progress === undefined || progress.caughtUp) {
-          const oldest = this.now().getTime() - REPLAY_MS
+          const oldest = this.replayCutoff()
           const checkpoint = this.state?.sourceCheckpoints.find(item => item.source === source.source)?.throughAt ?? this.state?.collectionStartedAt
           if (checkpoint !== undefined && Date.parse(checkpoint) < oldest) {
             this.note('ACTIVITY_REPLAY_GAP', undefined, activityDayOf(new Date(checkpoint)))
@@ -420,10 +433,35 @@ export class ActivityService implements ActivitySink {
     return () => { if (this.timer !== undefined) clearInterval(this.timer); this.timer = undefined }
   }
   private async prune(): Promise<void> {
-    const oldest = offsetDay(activityDayOf(this.now()), -(RETENTION_DAYS - 1))
-    let removed = 0
-    for (const [key, row] of this.buckets.entries()) if (row.day < oldest && removed < this.limits.maxPrunePerPass) { await this.remove(this.buckets, key); removed += 1 }
-    for (const [key, row] of this.receipts.entries()) if (activityDayOf(new Date(row.occurredAt)) < oldest && removed < this.limits.maxPrunePerPass) { await this.remove(this.receipts, key); removed += 1 }
+    // Commit the irreversible rejection floor before discarding any proof, including across restart/clock rollback.
+    const floor = new Date(this.replayCutoff()).toISOString()
+    if (this.state !== undefined && (this.state.replayFloorAt === undefined || Date.parse(floor) > Date.parse(this.state.replayFloorAt))) {
+      const next = { ...this.state, replayFloorAt: floor, warnings: this.warnings.slice() }
+      await this.put(this.states, 'v1', next); this.state = next
+    }
+    const retentionNow = new Date(Date.parse(floor) + ACTIVITY_REPLAY_MS)
+    const replayOldest = activityReplayOldestDay(retentionNow), oldest = offsetDay(activityDayOf(retentionNow), -(ACTIVITY_RETENTION_DAYS - 1))
+    let changed = 0
+    for (const [key, row] of this.buckets.entries()) {
+      if (changed >= this.limits.maxPrunePerPass) break
+      if (row.day < oldest) { await this.remove(this.buckets, key); changed += 1 }
+      else if (row.day < replayOldest && row.sealedAt === undefined) {
+        await this.update(this.buckets, key, current => activityBucketWire.parse({ ...current, dedup: {}, sealedAt: retentionNow.toISOString() }))
+        changed += 1
+      }
+    }
+    for (const [key, row] of this.receipts.entries()) {
+      if (changed >= this.limits.maxPrunePerPass) break
+      const originalDay = activityDayOf(new Date(row.occurredAt))
+      if (row.state === 'applied' && originalDay < replayOldest) { await this.remove(this.receipts, key); changed += 1 }
+      else if (row.state === 'expired' && originalDay < oldest) {
+        // An expired terminal row is a 90-day audit checkpoint, not a success. Never directly prune pending.
+        this.note('ACTIVITY_REPLAY_EXPIRED', row.schoolId, originalDay)
+        this.note('ACTIVITY_REPLAY_EXPIRED', row.schoolId, activityDayOf(new Date(row.expiredAt ?? this.now().toISOString())))
+        await this.persistWarnings()
+        await this.remove(this.receipts, key); changed += 1
+      }
+    }
     this.warnings = this.warnings.filter(value => value.toDay >= oldest)
   }
   private admin(actor: IdentityActor, schoolId?: string): string | undefined {
@@ -436,7 +474,7 @@ export class ActivityService implements ActivitySink {
     const parsed = dateQueryWire.safeParse(input)
     if (!parsed.success) throw new LearningError(400, 'BAD_REQUEST', '统计时间筛选无效。')
     const today = activityDayOf(this.now()), to = parsed.data.to ?? today, from = offsetDay(to, -((parsed.data.days ?? 7) - 1))
-    if (to > today || from < offsetDay(today, -(RETENTION_DAYS - 1))) throw new LearningError(400, 'ACTIVITY_DATE_RANGE', '仅支持最近九十个上海自然日的在线查询。')
+    if (to > today || from < offsetDay(today, -(ACTIVITY_RETENTION_DAYS - 1))) throw new LearningError(400, 'ACTIVITY_DATE_RANGE', '仅支持最近九十个上海自然日的在线查询。')
     return { from, to }
   }
   private readBudget(): void {

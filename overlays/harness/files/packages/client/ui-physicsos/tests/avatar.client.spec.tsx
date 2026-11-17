@@ -278,7 +278,8 @@ describe('AvatarPicker and sidebar self-account entry', () => {
   })
 
   it('contains keyboard focus and restores it on Escape without submitting a preview', async () => {
-    const auth = await controller()
+    const setAvatar = vi.fn<AuthApi['setAvatar']>(async id => ({ user: selected(id) }))
+    const auth = await controller({ setAvatar })
     render(footer(auth))
     const trigger = screen.getByRole('button', { name: '更换头像' })
     trigger.focus()
@@ -295,6 +296,62 @@ describe('AvatarPicker and sidebar self-account entry', () => {
     await waitFor(() => { expect(screen.queryByRole('dialog')).toBeNull() })
     expect(document.activeElement).toBe(trigger)
     expect(auth.store.getSnapshot().user).toEqual(USER)
+    expect(setAvatar).not.toHaveBeenCalled()
+    expect(fireEvent.keyDown(trigger, { key: 'Tab' })).toBe(true)
+  })
+
+  it('keeps native radio keyboard handling and DOM order from close through the footer', async () => {
+    const setAvatar = vi.fn<AuthApi['setAvatar']>(async id => ({ user: selected(id) }))
+    const auth = await controller({ setAvatar, me: async () => ({ user: selected('discovery') }) })
+    render(footer(auth))
+    fireEvent.click(screen.getByRole('button', { name: '更换头像' }))
+    const dialog = screen.getByRole('dialog', { name: '选择头像' })
+    const close = within(dialog).getByRole('button', { name: '关闭头像选择' })
+    const cancel = within(dialog).getByRole('button', { name: '取消' })
+    const save = within(dialog).getByRole('button', { name: '保存头像' }) as HTMLButtonElement
+    const radios = within(dialog).getAllByRole('radio') as HTMLInputElement[]
+    const current = within(dialog).getByRole('radio', { name: '灵感发现' })
+    // One selector preserves tree order even when a selector-list union is grouped.
+    const controls = [...dialog.querySelectorAll<HTMLElement>('*')]
+      .filter(element => element.matches('button') || element.matches('input'))
+    expect(controls).toEqual([close, ...radios, cancel, save])
+    expect(save.form).toBe(dialog.querySelector('form'))
+    expect(new Set(radios.map(input => input.name)).size).toBe(1)
+    expect(radios.every(input => input.getAttribute('tabindex') === null)).toBe(true)
+    expect(document.activeElement).toBe(current)
+    // jsdom does not perform native arrow/Space defaults; they must remain uncancelled.
+    for (const key of ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ']) {
+      expect(fireEvent.keyDown(current, { key })).toBe(true)
+    }
+    // The last radio is not the dialog's last Tab stop: the footer follows it.
+    expect(fireEvent.keyDown(document, { key: 'Tab' })).toBe(true)
+    expect(setAvatar).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    { state: 'current catalog avatar', user: selected('discovery') },
+    { state: 'unchecked legacy avatar', user: { ...USER, avatarUrl: 'https://legacy.example.test/a.jpg' } },
+  ])('wraps to cancel instead of a disabled save with $state', async ({ user }) => {
+    const setAvatar = vi.fn<AuthApi['setAvatar']>(async id => ({ user: selected(id) }))
+    const auth = await controller({ setAvatar, me: async () => ({ user }) })
+    render(footer(auth))
+    const trigger = screen.getByRole('button', { name: '更换头像' })
+    trigger.focus()
+    fireEvent.click(trigger)
+    const close = screen.getByRole('button', { name: '关闭头像选择' })
+    const cancel = screen.getByRole('button', { name: '取消' })
+    const save = screen.getByRole('button', { name: '保存头像' }) as HTMLButtonElement
+    expect(save.disabled).toBe(true)
+    close.focus()
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true })
+    expect(document.activeElement).toBe(cancel)
+    fireEvent.keyDown(document, { key: 'Tab' })
+    expect(document.activeElement).toBe(close)
+    fireEvent.keyDown(document, { key: 'Escape' })
+    await waitFor(() => { expect(screen.queryByRole('dialog')).toBeNull() })
+    expect(document.activeElement).toBe(trigger)
+    expect(auth.store.getSnapshot().user).toEqual(user)
+    expect(setAvatar).not.toHaveBeenCalled()
   })
 
   it('opens the same self-avatar picker from the account menu without removing logout', async () => {
@@ -318,7 +375,17 @@ describe('AvatarPicker and sidebar self-account entry', () => {
     expect(setAvatar).toHaveBeenCalledWith('discovery', owner(USER))
     expect((screen.getByRole('button', { name: '正在保存…' }) as HTMLButtonElement).disabled).toBe(true)
     expect((screen.getByRole('button', { name: '取消' }) as HTMLButtonElement).disabled).toBe(true)
-    fireEvent.click(screen.getByRole('button', { name: '关闭头像选择' }))
+    const radios = screen.getAllByRole('radio') as HTMLInputElement[]
+    expect(radios.every(input => !input.disabled && input.matches(':disabled'))).toBe(true)
+    const close = screen.getByRole('button', { name: '关闭头像选择' })
+    close.focus()
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true })
+    expect(document.activeElement).toBe(close)
+    fireEvent.keyDown(document, { key: 'Tab' })
+    expect(document.activeElement).toBe(close)
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.getByRole('dialog')).toBeTruthy()
+    fireEvent.click(close)
     expect(screen.getByRole('dialog')).toBeTruthy()
     expect(auth.store.getSnapshot().user).toEqual(USER)
     await act(async () => { pending.resolve({ user: selected('discovery') }); await pending.promise })

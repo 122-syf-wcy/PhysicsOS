@@ -48,7 +48,8 @@ auth-host 已提供 `service.activityRoster(actor)` / `identity.activityRoster(a
 - 服务端成功胶囊使用 `SHA256([owner,source,operationId])` 的全局稳定键；独立 journal 持久保存原时间及内容 hash。相同 operationId 换原时间/内容为 409 冲突，不能跨日换桶再计一次。
 - journal 状态 pending → 日桶原子更新 → applied。第二步成功、第三步失败或丢响应，重启再次投递仍由日桶 hash 去重。
 - 后端拒绝 ACK 也可能已完成物理落盘。遇到非业务校验类的存储异常，当前 ActivityService 标记 `ACTIVITY_STORAGE_UNCERTAIN` 并停止后续持久化，避免用尚未更新的内存快照覆盖已落盘计数；业务 sink 仍返回 pending。必须重新打开该统计单元（正常重启/受控重挂载）后重放 durable 胶囊。不要清除标志继续写旧内存。存储不可写时告警通过固定 code 的宿主 logger 输出；不能虚称告警已落盘。
-- 七日重放窗口严格绑定**原操作时间**；超过七日返回 `ACTIVITY_REPLAY_EXPIRED`，不改成今天。在线桶与 journal 保留 90 日，以原日清理；每次恢复最多清理 1,000 行。
+- 七日重放窗口严格绑定**原操作时间**；超过七日返回 `ACTIVITY_REPLAY_EXPIRED`，不改成今天。在线计数日桶保留 90 个上海自然日；完整去重键与 applied journal 保留整个七日边界日期，因此最多覆盖八个自然日。边界日期之外的桶仅移除去重哈希，保留全部计数、功能分项与最近使用时间，并写入 `sealedAt`，不能重新接收事件。
+- 清除任何去重键／journal 前，先持久化单调递增的 `replayFloorAt`；重启或服务器时钟回退也不能重新接收已丢弃证明的旧操作。pending journal 不直接删除：先持久化原日期与发现日期的完整性告警，再转为带 `expiredAt` 的终态；该审计检查点保留至原日期超出 90 日。每次恢复最多清理或封存 1,000 行。
 - `state.sourceCheckpoints` 持久保存各业务源追平边界。超过七日停机/追平中断产生 `ACTIVITY_REPLAY_GAP`，不能仅因最近窗口为空就宣称完整。
 
 ### 业务成功合同
@@ -115,7 +116,7 @@ KV `DomainFacility.open` 仍会先整表 `loadAll`，`entries()` 仍会复制整
 - 20 次无缓存全范围归组 p95 ≤2秒、增量查询 heap ≤128 MiB；每次仅一次 buckets.entries 和一次 receipts.entries，不能按学校增加扫描次数。
 - 缓存项/字节全局不越界，十倍负载不通过时明确失败，不偷偷只测前一页或只提高 timeout。
 
-`activity-capacity.spec.ts` 为显式 opt-in 服务器隔离 PostgreSQL lane：要求 `PHYSICSOS_ACTIVITY_RUN_CAPACITY=1`、仅测试库 `PHYSICSOS_TEST_POSTGRES_URL`、明确 `PHYSICSOS_ACTIVITY_BASE_DAILY_USERS`、`PHYSICSOS_ACTIVITY_EVENTS_PER_USER_DAY`，以及可测 GC 的隔离进程。它不读取通用 DATABASE_URL、不生成线上数字；无显式输入则跳过/拒绝，不据此声称通过。
+`activity-capacity.spec.ts` 为显式 opt-in 服务器隔离 PostgreSQL lane：要求 `PHYSICSOS_ACTIVITY_RUN_CAPACITY=1`、仅测试库 `PHYSICSOS_TEST_POSTGRES_URL`、明确 `PHYSICSOS_ACTIVITY_BASE_DAILY_USERS`、`PHYSICSOS_ACTIVITY_EVENTS_PER_USER_DAY`、`PHYSICSOS_ACTIVITY_BASE_ROSTER_USERS`、`PHYSICSOS_ACTIVITY_BASE_SCHOOLS`，以及可测 GC 的隔离进程。日桶负载按 DAU 生成，查询同时包含完整注册用户及学校目录，再将四项输入整体放大十倍；不能只查单校或把注册目录缩成 DAU。它不读取通用 DATABASE_URL、不生成线上数字；无显式输入则跳过/拒绝，不据此声称通过。
 
 ## 接线（入口由主代理集成）
 

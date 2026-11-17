@@ -235,7 +235,7 @@ export function attachExperimentRunTracking(session: ExperimentSession, experime
     if (!valid || binding === undefined || caps === undefined || owner === undefined || binding.api === undefined) return
     for (const token of gate.ready) {
       const account = accountGeneration(binding)
-      if (token.accountGeneration === account && token.reportedFor !== account && typeof window !== 'undefined') {
+      if (account !== undefined && token.accountGeneration === account && token.reportedFor !== account && typeof window !== 'undefined') {
         token.reportedFor = account
         reportActivityDisplayed('lab', token.presentationId, JSON.stringify([owner.schoolId, owner.username]))
       }

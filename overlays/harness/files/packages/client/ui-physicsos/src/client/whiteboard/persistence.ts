@@ -3,7 +3,7 @@ import { boolean, exactKeys, integer, isoDate, list, oneOf, optional, record, te
 import { readLifecycleCapabilities } from '../canvas/api.ts'
 import { workbenchLifecycleState } from '@physicsos/physics-workbench/protocol'
 import { whiteboardGenerationOf, whiteboardSummaryOf, WhiteboardRequestError, type PendingWhiteboardLifecycle, type WhiteboardApi, type WhiteboardGeneration, type WhiteboardRecord, type WhiteboardSummary } from './api.ts'
-import type { WhiteboardDraft, WhiteboardDraftCache } from './controller.ts'
+import type { WhiteboardDraft, WhiteboardDraftBlock, WhiteboardDraftCache } from './controller.ts'
 
 const status = (value: unknown, at: string) => oneOf(value, ['queued', 'reading', 'drawing', 'validating', 'ready', 'error', 'cancelled'], at)
 const lifecycleMetadata = (value: Record<string, unknown>, path: string) => {
@@ -65,7 +65,7 @@ export const readWhiteboardDraft = (input: unknown, id: string): WhiteboardDraft
   })
   const job = optional(value.job, '/draft/job', readGeneration)
   const editingSessionId = optional(value.editingSessionId, '/draft/editingSessionId', (input, at) => text(input, at, true))
-  const blocked = optional(value.blocked, '/draft/blocked', (input, at) => oneOf(input, ['conflict', 'deleted', 'archived', 'unavailable', 'auth-required', 'upgrade-required'], at)) ??
+  const blocked: WhiteboardDraftBlock | undefined = optional(value.blocked, '/draft/blocked', (input, at) => oneOf(input, ['conflict', 'deleted', 'archived', 'unavailable', 'auth-required', 'upgrade-required'] as const, at)) ??
     (value.dirty === true && record(value.record, '/draft/record').generation === undefined ? 'upgrade-required' : undefined)
   const serverHead = optional(value.serverHead, '/draft/serverHead', readWhiteboardSummary)
   if (job !== undefined && job.whiteboardId !== id || serverHead !== undefined && serverHead.id !== id) throw new Error('Cached whiteboard binding mismatch')

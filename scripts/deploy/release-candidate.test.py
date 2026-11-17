@@ -851,4 +851,328 @@ class CandidateSearchCompanion(unittest.TestCase):
             self.assertEqual(run.call_count, count)
 
 
+class CandidateTeachingTools(unittest.TestCase):
+    @contextlib.contextmanager
+    def fixture(self, mode='bridge', existing=True):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp).resolve(); root = base / ('teaching-' + mode)
+            for name in ['home', 'state', 'tools', 'secrets', 'database-data']:
+                (root / name).mkdir(parents=True, mode=0o700)
+                (root / name / 'retained').write_text('owned fixture data')
+            config = CandidateSafety().config(root)
+            config.update({'task': 'teaching-' + mode, 'teachingToolsMode': mode, 'requireIsolatedNetwork': True,
+                           'network': 'physicsos-teaching-' + mode, 'databaseOwner': 'teaching-' + mode,
+                           'databaseContainer': 'physicsos-teaching-' + mode + '-pg', 'schema': 'teaching_' + mode,
+                           'databaseDataRoot': str(root / 'database-data')})
+            if mode == 'enabled': config.update(httpPort=14188, modelPoolPort=14982)
+            (root / 'owner').write_text(config['task'])
+            password = base / 'fixture-password'; password.write_text('fake-private-db-material')
+            config['databasePasswordFile'] = str(password)
+            image = {'Id': 'sha256:' + 'd' * 64, 'Config': {'Env': ['PATH=/usr/bin'], 'Entrypoint': [], 'Labels': {
+                'physicsos.manifest.digest': 'e' * 64, 'physicsos.teaching-tools.bridge': candidate.TEACHING_TOOLS_CAPABILITY}}}
+            binding = {'image': image['Id'], 'revision': 'a' * 40, 'sourceDigest': 'b' * 64, 'codeDigest': 'c' * 64,
+                       'manifestSha256': 'e' * 64, 'capabilitySha256': 'f' * 64, 'capability': candidate.TEACHING_TOOLS_CAPABILITY}
+            image['Config']['Labels'].update({'org.opencontainers.image.revision': binding['revision'],
+                                               'physicsos.source.digest': binding['sourceDigest'], 'physicsos.code.digest': binding['codeDigest']})
+            details = {'task': config['task'], 'container': 'physicsos-validation-' + config['task'], 'image': image['Id'],
+                       'port': config['httpPort'], 'schema': config['schema'], 'root': str(root), 'home': str(root / 'home'),
+                       'username': config['username'], 'network': config['network'], 'networkId': '5' * 64,
+                       'isolatedNetwork': True, 'teachingToolsMode': mode, 'teachingToolsImage': binding,
+                       'candidateInstance': '6' * 32, 'databaseContainerId': '8' * 64,
+                       **{key: config[key] for key in ['modelPoolPort', 'databaseContainer', 'databaseDataRoot', 'databaseName', 'databaseUser']}}
+            environment = {'PATH': '/usr/bin', candidate.TEACHING_TOOLS_ENV: mode,
+                           'PHYSICSOS_MODEL_POOL_PORT': str(config['modelPoolPort']),
+                           'DEEPSEEK_BASE_URL': f"http://127.0.0.1:{config['modelPoolPort']}/v1",
+                           'DATABASE_URL_FILE': '/run/secrets/database_url', 'PRESERVED_FILE': '/run/secrets/fixture'}
+            spec = {'metadata': details, 'environment': environment, 'network': config['network'],
+                    'command': ['node', 'scripts/docker-entrypoint.mjs', 'node', 'vendor/deepseek-harness/apps/cli/lib/bin.js', '--port', str(config['httpPort'])],
+                    'mounts': [{'Source': str(root / 'home'), 'Destination': '/var/lib/physicsos', 'ReadOnly': False}]}
+            details['fingerprint'] = candidate.candidate_fingerprint(spec)
+            if existing: details['containerId'] = '7' * 64
+            container = {'Id': '7' * 64, 'Name': '/' + details['container'], 'Image': image['Id'], 'State': {'Running': True},
+                         'Config': {'Image': image['Id'], 'Env': [key + '=' + value for key, value in environment.items()],
+                                    'Cmd': list(spec['command']), 'Entrypoint': [], 'Labels': {
+                                        'io.physicsos.task': config['task'], 'io.physicsos.role': 'validation',
+                                        'io.physicsos.teaching-tools.mode': mode, 'io.physicsos.candidate.instance': details['candidateInstance'],
+                                        'io.physicsos.candidate.fingerprint': details['fingerprint']}},
+                         'Mounts': [{'Source': str(root / 'home'), 'Destination': '/var/lib/physicsos', 'RW': True}],
+                         'HostConfig': {'NetworkMode': config['network'], 'PortBindings': {
+                             str(config['httpPort']) + '/tcp': [{'HostIp': '127.0.0.1', 'HostPort': str(config['httpPort'])}]}},
+                         'NetworkSettings': {'Networks': {config['network']: {'NetworkID': '5' * 64, 'IPAddress': '172.30.0.3'}},
+                                             'Ports': {str(config['httpPort']) + '/tcp': [{'HostIp': '127.0.0.1', 'HostPort': str(config['httpPort'])}]}}}
+            production = []
+            for i, role in enumerate(['app', 'postgres', 'redis']):
+                directory = base / 'production' / role; directory.mkdir(parents=True)
+                (directory / 'retained').write_text('protected production fixture')
+                production.append({'Id': str(i + 1) * 64, 'Name': '/physicsos-' + role + '-1', 'Image': 'sha256:' + str(i + 1) * 64,
+                                   'State': {'Running': True}, 'Config': {'Env': [], 'Labels': {}},
+                                   'Mounts': [{'Source': str(directory), 'Destination': '/var/lib/physicsos' if role == 'app' else '/data', 'RW': True}],
+                                   'NetworkSettings': {'Networks': {'physicsos_default': {'NetworkID': '0' * 64}}, 'Ports': {}}})
+            source = base / 'production/app/profiles/web'; source.mkdir(parents=True)
+            (source / 'cordis.patch.yml').write_text('plugins-from-postgres: true\n')
+            production[0]['Config'].update({'Cmd': [*spec['command'][:-2], '--port', '3080', '--patch', '/production.patch.yml'],
+                                           'Env': ['PATH=/usr/bin', 'DEEPSEEK_BASE_URL=http://127.0.0.1:3972/v1',
+                                                   'PHYSICSOS_MODEL_POOL_PORT=3972', 'UNAPPROVED_SECRET=fake-production-material']})
+            pg = {'Id': '8' * 64, 'State': {'Running': True}, 'Config': {'Labels': {'io.physicsos.task': config['task']}},
+                  'Mounts': [{'Source': str(root / 'database-data'), 'Destination': '/var/lib/postgresql/data', 'RW': True}],
+                  'NetworkSettings': {'Networks': {config['network']: {'NetworkID': '5' * 64, 'IPAddress': '172.30.0.2'}}}}
+            network = {'Id': '5' * 64, 'IPAM': {'Config': []}}
+            f = SimpleNamespace(config=config, root=root, image=image, binding=binding, spec=spec, container=container,
+                                current=container if existing else None, production=production, pg=pg, network=network, password=password)
+            if existing: self.persist(f)
+            def inspect(kind, name):
+                if kind == 'image': return image if name in {image['Id'], 'candidate-image'} else None
+                if name == config['databaseContainer']: return pg
+                if f.current is not None and name in {f.current['Id'], details['container']}: return f.current
+                return next((p for p in production if name in {p['Id'], p['Name'].lstrip('/')}), None)
+            with patch.object(candidate, 'metadata', side_effect=inspect), \
+                    patch.object(candidate, 'verify_teaching_tools_image', return_value=binding), \
+                    patch.object(candidate, 'lifecycle', return_value=contextlib.nullcontext()), \
+                    patch.object(candidate, 'settle_mutations', side_effect=lambda: contextlib.nullcontext([False])):
+                yield f
+
+    def persist(self, f):
+        candidate.private_json(f.root / 'metadata.json', f.spec['metadata'])
+        candidate.private_json(f.root / 'state/launch-spec.json', f.spec)
+
+    def docker(self, f, failure=None):
+        def run(args, **kwargs):
+            if args[:2] == ['docker', 'create']:
+                f.current = copy.deepcopy(f.container); f.current['State']['Running'] = False
+                f.current['Config']['Labels'] = dict(args[i + 1].split('=', 1) for i, arg in enumerate(args) if arg == '--label')
+                f.current['Config']['Env'] = [args[i + 1] for i, arg in enumerate(args) if arg == '--env']
+                if failure == 'foreign': f.current['Config']['Labels']['io.physicsos.candidate.instance'] = '9' * 32
+                if failure in {'create', 'foreign'}:
+                    raise candidate.subprocess.CalledProcessError(1, args, output='fake-private-output', stderr='fake-private-output')
+                return candidate.subprocess.CompletedProcess(args, 0, stdout=f.current['Id'] + '\n')
+            if args[:2] == ['docker', 'start']:
+                self.assertEqual(args[2], f.current['Id'])
+                self.assertEqual(json.loads((f.root / 'metadata.json').read_text())['containerId'], f.current['Id'])
+                if failure == 'start': raise candidate.subprocess.CalledProcessError(1, args, stderr='fake-private-output')
+                f.current['State']['Running'] = True
+                return candidate.subprocess.CompletedProcess(args, 0)
+            if args[:3] == ['docker', 'rm', '-f']:
+                self.assertEqual(args[3], f.current['Id']); f.current = None
+                return candidate.subprocess.CompletedProcess(args, 0)
+            raise AssertionError('Unexpected Docker mutation')
+        return run
+
+    def test_only_two_modes_private_config_and_no_extra_environment_fields(self):
+        for mode in ['bridge', 'enabled']:
+            with self.subTest(mode=mode), self.fixture(mode) as f:
+                file = f.root / 'config.json'; candidate.private_json(file, f.config)
+                self.assertEqual(candidate.load(file)['teachingToolsMode'], mode)
+                for invalid in [None, False, {}, [], '', 'off', 'Enabled', 'enabled\n', 'bridge --env X=1']:
+                    with self.subTest(invalid=invalid), self.assertRaises(candidate.CandidateError):
+                        candidate.teaching_tools_mode({**f.config, 'teachingToolsMode': invalid})
+                for extra in ['environment', 'env', 'mounts', 'image', 'activityQueryCapacityVerified', 'unknown']:
+                    with self.subTest(extra=extra), self.assertRaisesRegex(candidate.CandidateError, 'FIELDS_INVALID'):
+                        candidate.teaching_tools_mode({**f.config, extra: {candidate.TEACHING_TOOLS_ENV: mode}})
+                file.chmod(0o644)
+                with self.assertRaisesRegex(candidate.CandidateError, 'CONFIG_PRIVATE'): candidate.load(file)
+
+    def test_bridge_and_enabled_use_independent_schema_appdata_network_database_and_ports(self):
+        with self.fixture('bridge') as bridge, self.fixture('enabled') as enabled:
+            for key in ['task', 'root', 'schema', 'network', 'databaseContainer', 'databaseDataRoot', 'httpPort', 'modelPoolPort']:
+                self.assertNotEqual(bridge.config[key], enabled.config[key])
+            self.assertFalse(candidate.same_data({'Source': bridge.config['root']}, {'Source': enabled.config['root']}))
+
+    def test_legacy_unspecified_mode_does_not_inject_or_read_arbitrary_environment(self):
+        config = CandidateSafety().config(Path('/unused-legacy'))
+        config['environment'] = {candidate.TEACHING_TOOLS_ENV: 'enabled', 'SECRET': 'unapproved'}
+        for inherited in [{}, {candidate.TEACHING_TOOLS_ENV: 'bridge', 'EXISTING_FILE': '/run/secrets/retained'}]:
+            environment = dict(inherited)
+            candidate.apply_teaching_tools_mode(config, environment)
+            self.assertEqual(environment, inherited)
+        with patch.object(candidate, 'verify_teaching_tools_image') as verify:
+            candidate.guard_teaching_tools(config, {'Config': {'Env': ['LEGACY=value', 'LEGACY=duplicate']}})
+            verify.assert_not_called()
+
+    def test_explicit_mode_changes_only_the_public_mode_key_not_other_env_or_secret_routes(self):
+        for mode in ['bridge', 'enabled']:
+            with self.subTest(mode=mode), self.fixture(mode) as f:
+                environment = {candidate.TEACHING_TOOLS_ENV: 'enabled' if mode == 'bridge' else 'bridge',
+                               'UNCHANGED_SECRET': 'fake-private-material', 'UNCHANGED_KEY_FILE': '/run/secrets/fixture',
+                               'PHYSICSOS_VALIDATION_URL': 'http://127.0.0.1:13187'}
+                before = dict(environment)
+                candidate.apply_teaching_tools_mode(f.config, environment)
+                self.assertEqual(environment.pop(candidate.TEACHING_TOOLS_ENV), mode)
+                before.pop(candidate.TEACHING_TOOLS_ENV)
+                self.assertEqual(environment, before)
+
+    def test_mode_requires_new_private_data_scope_and_refuses_production(self):
+        with self.fixture() as f:
+            for changed in [{'requireIsolatedNetwork': False}, {'network': ''}, {'databaseOwner': 'other'},
+                            {'databaseDataRoot': ''}, {'schema': 'physicsos'}, {'databaseContainer': 'physicsos-postgres-1'}]:
+                with self.subTest(changed=changed), self.assertRaisesRegex(candidate.CandidateError, 'ISOLATION_REQUIRED'):
+                    candidate.teaching_tools_mode({**f.config, **changed})
+            # An old interactive candidate receipt cannot acquire a mode in place.
+            old = copy.deepcopy(f.spec); old['metadata'].pop('teachingToolsMode')
+            with self.assertRaises(candidate.CandidateError): candidate.validate_teaching_tools_spec(f.config, old['metadata'], old)
+            legacy_config = {k: v for k, v in f.config.items() if k != 'teachingToolsMode'}
+            with self.assertRaisesRegex(candidate.CandidateError, 'MODE_REQUIRED'): candidate.remove_owned(legacy_config)
+
+    def test_prepare_injects_mode_in_real_env_without_mutating_production_secrets_or_profiles(self):
+        for mode in ['bridge', 'enabled']:
+            with self.subTest(mode=mode), self.fixture(mode, existing=False) as f:
+                before = copy.deepcopy(f.production), f.password.read_bytes(), f.password.stat().st_ino
+                source = Path(f.production[0]['Mounts'][0]['Source']) / 'profiles/web/cordis.patch.yml'
+                original_profile = source.read_bytes(), source.stat().st_ino
+                # Even a persisted profile setting cannot select the opposite mode.
+                source.write_text('teachingToolsMode: ' + ('enabled' if mode == 'bridge' else 'bridge') + '\n')
+                opposite_profile = source.read_bytes()
+                with patch.object(candidate, 'check_isolated_resources', return_value=(f.network, f.pg)), \
+                        patch.object(candidate.os, 'chown'), patch.object(candidate.subprocess, 'check_output', return_value='# health fixture\n'), \
+                        patch.object(candidate.subprocess, 'run') as run:
+                    _, spec, _ = candidate.prepare(f.config, 'candidate-image')
+                    run.assert_not_called()
+                self.assertEqual(spec['environment'][candidate.TEACHING_TOOLS_ENV], mode)
+                self.assertNotIn('UNAPPROVED_SECRET', spec['environment'])
+                self.assertEqual(spec['metadata']['teachingToolsMode'], mode)
+                self.assertEqual(spec['metadata']['teachingToolsImage'], f.binding)
+                self.assertEqual(spec['metadata']['fingerprint'], candidate.candidate_fingerprint(spec))
+                self.assertEqual(before, (f.production, f.password.read_bytes(), f.password.stat().st_ino))
+                self.assertEqual(source.read_bytes(), opposite_profile)
+                self.assertEqual(source.stat().st_ino, original_profile[1])
+                self.assertEqual((f.root / 'home/retained').read_text(), 'owned fixture data')
+
+    def test_production_port_and_root_are_refused_before_any_write_or_docker_mutation(self):
+        for changed in [{'httpPort': 3080}, {'modelPoolPort': 3972}]:
+            with self.subTest(changed=changed), self.fixture(existing=False) as f, \
+                    patch.object(candidate.subprocess, 'run') as run, patch.object(candidate, 'private_json') as write:
+                with self.assertRaisesRegex(candidate.CandidateError, 'PRODUCTION_PORT'):
+                    candidate.prepare({**f.config, **changed}, 'candidate-image')
+                run.assert_not_called(); write.assert_not_called()
+        with self.fixture(existing=False) as f, patch.object(candidate.subprocess, 'run') as run:
+            with self.assertRaisesRegex(RuntimeError, 'overlaps production'):
+                candidate.prepare({**f.config, 'root': f.production[0]['Mounts'][0]['Source']}, 'candidate-image')
+            run.assert_not_called()
+
+    def test_guard_checks_actual_config_env_and_all_provenance_bindings_in_memory(self):
+        changes = [lambda f: f.current['Config']['Env'].append(candidate.TEACHING_TOOLS_ENV + '=enabled'),
+                   lambda f: f.current['Config'].update(Env=[entry.replace(candidate.TEACHING_TOOLS_ENV + '=bridge', candidate.TEACHING_TOOLS_ENV + '=enabled') for entry in f.current['Config']['Env']]),
+                   lambda f: f.current['Config']['Env'].remove(candidate.TEACHING_TOOLS_ENV + '=bridge'),
+                   lambda f: f.current['Config']['Env'].append('UNAPPROVED_SECRET=do-not-print-this'),
+                   lambda f: f.current['Config']['Labels'].update({'io.physicsos.teaching-tools.mode': 'enabled'}),
+                   lambda f: f.current.update(Id='9' * 64), lambda f: f.current.update(Name='/physicsos-app-1'),
+                   lambda f: f.current['Mounts'][0].update(Source='/production/home'),
+                   lambda f: f.current['HostConfig'].update(NetworkMode='physicsos_default'),
+                   lambda f: f.current['Config']['Cmd'].append('--different'),
+                   lambda f: f.spec['metadata']['teachingToolsImage'].update(sourceDigest='0' * 64)]
+        with self.fixture() as f: candidate.guard_teaching_tools(f.config, f.current)
+        for i, change in enumerate(changes):
+            with self.subTest(case=i), self.fixture() as f, patch.object(candidate.subprocess, 'run') as run:
+                change(f); self.persist(f)
+                with self.assertRaises(candidate.CandidateError) as raised: candidate.guard_teaching_tools(f.config, f.current)
+                self.assertRegex(str(raised.exception), '^CANDIDATE_[A-Z_]+$')
+                self.assertNotIn('do-not-print-this', str(raised.exception)); run.assert_not_called()
+        with self.fixture('enabled') as f: candidate.guard_teaching_tools(f.config, f.current)
+
+    def test_fingerprint_binds_mode_environment_source_code_and_manifests(self):
+        with self.fixture() as f:
+            initial = candidate.candidate_fingerprint(f.spec)
+            for key in ['sourceDigest', 'codeDigest', 'manifestSha256', 'capabilitySha256']:
+                spec = copy.deepcopy(f.spec); spec['metadata']['teachingToolsImage'][key] = '0' * 64
+                self.assertNotEqual(candidate.candidate_fingerprint(spec), initial)
+            for mutate in [lambda s: s['metadata'].update(teachingToolsMode='enabled'),
+                           lambda s: s['environment'].update({candidate.TEACHING_TOOLS_ENV: 'enabled'}),
+                           lambda s: s['environment'].update(PRESERVED_FILE='/different'),
+                           lambda s: s['metadata'].update(databaseContainerId='0' * 64)]:
+                spec = copy.deepcopy(f.spec); mutate(spec)
+                self.assertNotEqual(candidate.candidate_fingerprint(spec), initial)
+            spec = copy.deepcopy(f.spec); spec['metadata'].pop('containerId')
+            self.assertEqual(candidate.candidate_fingerprint(spec), initial)
+
+    def test_start_both_modes_persists_full_id_before_start_and_preserves_nonmode_env(self):
+        for mode in ['bridge', 'enabled']:
+            with self.subTest(mode=mode), self.fixture(mode, existing=False) as f, \
+                    patch.object(candidate, 'prepare', return_value=({}, f.spec, [])), \
+                    patch.object(candidate, 'check_isolated_resources'), \
+                    patch.object(candidate.subprocess, 'run', side_effect=self.docker(f)) as run:
+                result = candidate.start(f.config, 'candidate-image')
+                self.assertEqual(result['teachingToolsMode'], mode)
+                self.assertEqual(result['containerId'], '7' * 64)
+                create = run.call_args_list[0].args[0]
+                self.assertIn(candidate.TEACHING_TOOLS_ENV + '=' + mode, create)
+                self.assertIn('PRESERVED_FILE=/run/secrets/fixture', create)
+                self.assertEqual(run.call_args_list[1].args[0], ['docker', 'start', '7' * 64])
+                candidate.guard_teaching_tools(f.config, f.current)
+
+    def test_failed_create_or_start_removes_only_exact_owned_id_without_secret_diagnostics(self):
+        for failure in ['create', 'start']:
+            with self.subTest(failure=failure), self.fixture(existing=False) as f, \
+                    patch.object(candidate, 'prepare', return_value=({}, f.spec, [])), \
+                    patch.object(candidate.subprocess, 'run', side_effect=self.docker(f, failure)) as run:
+                with self.assertRaisesRegex(candidate.CandidateError, '^CANDIDATE_TEACHING_OPERATION_FAILED$') as raised:
+                    candidate.start(f.config, 'candidate-image')
+                diagnostics = ''.join(traceback.format_exception(type(raised.exception), raised.exception, raised.exception.__traceback__))
+                self.assertNotIn('fake-private-output', diagnostics); self.assertNotIn('PRESERVED_FILE=', diagnostics)
+                self.assertEqual(run.call_args.args[0], ['docker', 'rm', '-f', '7' * 64])
+                self.assertEqual((f.root / 'home/retained').read_text(), 'owned fixture data')
+        with self.fixture(existing=False) as f, patch.object(candidate, 'prepare', return_value=({}, f.spec, [])), \
+                patch.object(candidate.subprocess, 'run', side_effect=self.docker(f, 'foreign')) as run:
+            with self.assertRaises(candidate.CandidateError): candidate.start(f.config, 'candidate-image')
+            self.assertEqual(len(run.call_args_list), 1, 'Do not remove a raced foreign nonce, even with the same name/image')
+
+    def test_refresh_uses_same_guard_mode_fingerprint_and_exact_id_cleanup(self):
+        for mode in ['bridge', 'enabled']:
+            with self.subTest(mode=mode), self.fixture(mode) as f, patch.object(candidate, 'check_isolated_resources'), \
+                    patch.object(candidate, 'start_owned', return_value={'refreshed': True}) as start, \
+                    patch.object(candidate.subprocess, 'run', side_effect=self.docker(f)) as run:
+                before = copy.deepcopy(f.production), f.password.read_bytes()
+                self.assertEqual(candidate.refresh(f.config, 'candidate-image'), {'refreshed': True})
+                self.assertEqual(run.call_args.args[0], ['docker', 'rm', '-f', '7' * 64])
+                start.assert_called_once_with(f.config, f.image['Id'])
+                self.assertEqual(before, (f.production, f.password.read_bytes()))
+        for changed in [{'teachingToolsMode': 'enabled'}, {'httpPort': 14188}, {'schema': 'another_schema'}]:
+            with self.subTest(changed=changed), self.fixture() as f, patch.object(candidate.subprocess, 'run') as run:
+                with self.assertRaises(candidate.CandidateError): candidate.refresh({**f.config, **changed}, 'candidate-image')
+                run.assert_not_called()
+
+    def test_guard_refuses_before_http_authentication_and_stop_refuses_mode_drift(self):
+        with self.fixture() as f, patch.object(candidate, 'check_owned') as auth, patch.object(candidate.subprocess, 'run') as run:
+            f.current['Config']['Env'].append(candidate.TEACHING_TOOLS_ENV + '=enabled')
+            with self.assertRaises(candidate.CandidateError): candidate.check(f.config)
+            with self.assertRaises(candidate.CandidateError): candidate.stop(f.config)
+            auth.assert_not_called(); run.assert_not_called()
+
+    def test_authenticated_capabilities_must_match_real_runtime_mode(self):
+        for mode in ['bridge', 'enabled']:
+            with self.subTest(mode=mode), self.fixture(mode) as f:
+                capabilities = {'schemaVersion': 1, 'teachingToolsMode': mode, 'lifecycleBridge': True,
+                                'lifecycleWritesEnabled': mode == 'enabled', 'productStateEnabled': mode == 'enabled',
+                                'minimumRollbackCapability': candidate.TEACHING_TOOLS_CAPABILITY if mode == 'enabled' else None}
+                candidate.check_teaching_tools_capabilities(f.config, capabilities)
+                for key, wrong in [('teachingToolsMode', 'off'), ('lifecycleBridge', False),
+                                   ('lifecycleWritesEnabled', mode != 'enabled'), ('productStateEnabled', mode != 'enabled')]:
+                    with self.subTest(key=key), self.assertRaisesRegex(candidate.CandidateError, 'CAPABILITY_CHANGED'):
+                        candidate.check_teaching_tools_capabilities(f.config, {**capabilities, key: wrong})
+
+    def test_image_binding_reuses_cold_verifier_and_rejects_handmade_labels(self):
+        with self.fixture() as f:
+            marker = 'packages/teaching-tools-capabilities.json'
+            manifest = {'originSchema': 2, 'files': {marker: f.binding['capabilitySha256']},
+                        'teachingToolsBridge': candidate.TEACHING_TOOLS_CAPABILITY,
+                        **{key: f.binding[key] for key in ['revision', 'sourceDigest', 'codeDigest']}}
+            runtime = SimpleNamespace(TEACHING_TOOLS_MARKER=marker, TEACHING_TOOLS_LABEL='physicsos.teaching-tools.bridge',
+                                      verify_image=lambda image: {'verified': True, **f.binding}, read_base_manifest=lambda image: manifest,
+                                      node_operation=lambda *args: {'schemaVersion': 1, 'defaultMode': 'bridge',
+                                          'capability': candidate.TEACHING_TOOLS_CAPABILITY, 'rollbackPolicy': 'image-and-config-only-no-data-restore'})
+            loader = SimpleNamespace(loader=SimpleNamespace(exec_module=lambda module: None))
+            # Bypass this fixture's verifier stub to exercise the real function.
+            real_spec = importlib.util.spec_from_file_location('candidate_image_proof', Path(__file__).with_name('release-candidate.py'))
+            real = importlib.util.module_from_spec(real_spec); real_spec.loader.exec_module(real)
+            with patch.object(real.importlib.util, 'spec_from_file_location', return_value=loader), \
+                    patch.object(real.importlib.util, 'module_from_spec', return_value=runtime):
+                self.assertEqual(real.verify_teaching_tools_image(f.image), f.binding)
+                for changed in [{'files': {}}, {'sourceDigest': '0' * 64}, {'teachingToolsBridge': ''}]:
+                    before = dict(manifest); manifest.update(changed)
+                    with self.subTest(changed=changed), self.assertRaisesRegex(real.CandidateError, '^CANDIDATE_TEACHING_IMAGE_UNVERIFIED$'):
+                        real.verify_teaching_tools_image(f.image)
+                    manifest.clear(); manifest.update(before)
+                runtime.verify_image = lambda image: {'verified': False, **f.binding}
+                with self.assertRaisesRegex(real.CandidateError, '^CANDIDATE_TEACHING_IMAGE_UNVERIFIED$'):
+                    real.verify_teaching_tools_image(f.image)
+
+
 if __name__ == '__main__': unittest.main()

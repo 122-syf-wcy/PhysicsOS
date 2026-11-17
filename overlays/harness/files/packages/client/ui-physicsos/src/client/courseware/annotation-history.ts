@@ -27,6 +27,17 @@ export function applyAnnotationDelta(scene: CanvasAnnotationScene, delta: Annota
   for (const insert of inserts.sort((a, b) => a.at - b.at)) primitives.splice(Math.max(0, Math.min(insert.at, primitives.length)), 0, insert.p)
   return parseCanvasAnnotations({ schemaVersion: 1, primitives })
 }
+/** CAS replay keeps the latest head's order and appends only genuinely absent additions.
+ * Normal undo/redo still uses its recorded absolute indices in applyAnnotationDelta. */
+export function rebaseAnnotationDelta(scene: CanvasAnnotationScene, delta: AnnotationDelta): AnnotationDelta {
+  const existing = new Set(scene.primitives.map(p => p.id))
+  const removed = new Set(delta.changes.filter(change => !change.after).map(change => change.id))
+  const end = scene.primitives.filter(p => !removed.has(p.id)).length
+  const additions = delta.changes.filter(change => !change.before && change.after && !existing.has(change.id))
+    .sort((a, b) => (a.afterIndex ?? end) - (b.afterIndex ?? end))
+  const indices = new Map(additions.map((change, index) => [change.id, end + index]))
+  return { changes: delta.changes.map(change => indices.has(change.id) ? { ...change, afterIndex: indices.get(change.id)! } : change) }
+}
 export function readAnnotationDelta(raw: unknown): AnnotationDelta {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw) || Object.keys(raw).some(key => key !== 'changes') || !('changes' in raw) || !Array.isArray(raw.changes) || raw.changes.length > 2000) throw new Error('批注草稿历史无效。')
   const ids = new Set<string>()

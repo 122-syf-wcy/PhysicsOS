@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "scope": "Candidate deployment safety fixture regression; not real app/candidate/browser acceptance",
+  "completedAt": "2026-11-17T17:21:41.998164242Z",
+  "sourceState": "Uncommitted working-tree snapshot after 8e4b912f, bound by the exact file hashes below",
+  "server": "107.151.246.59",
+  "sourceRoot": "/dev/shm/physicsos-teaching-unit-resume-20261118-01",
+  "toolsImage": "sha256:a3297acd1b938ac9e364367e46282e4e3dfd73c134366f38857e54d1faa9d572",
+  "sourceSha256": {
+    "release-candidate.py": "a3fc4fb64d5db8bfc137eedcce5177aea12a450f06f9389982c554476bf0aa7e",
+    "release-candidate.test.py": "3299d1e1005ae02fb35035aed1d7294d54975bd1a166dce6d352504de1e1d840",
+    "release-runtime.py": "6ea2ca134ba35ec0304ba250bd17972307a1d598cf4a48a13a982eb9e86a3788",
+    "runtime_transport.py": "da4bbf2fff6d510b02c343d94681411dc7daf967b24003d22ed5e0f9d542d47d"
+  },
+  "test": {
+    "entry": "python3 -B /source/release-candidate.test.py",
+    "exitCode": 0,
+    "passed": 70,
+    "failed": 0,
+    "unittestSeconds": 2.007,
+    "log": "/opt/physicsos/.physicsos-release/teaching-tools-20261118-validation/candidate-resume-01.log",
+    "logBytes": 169,
+    "logSha256": "7ccd01c90b7f72c129df0fd1e7afdde4e664d0d8c9c4699018cd2437ae074f20"
+  },
+  "isolation": {
+    "network": "none",
+    "readOnly": true,
+    "temporaryDirectory": "64 MiB tmpfs",
+    "capDrop": ["ALL"],
+    "noNewPrivileges": true,
+    "sourceReadOnly": true,
+    "environmentClearedBeforeExec": true,
+    "dockerSocketMounted": false,
+    "productionDataOrSecretsMounted": false
+  },
+  "notVerified": [
+    "Final application compilation and full regression",
+    "Real PostgreSQL and 90-day/ten-times activity capacity",
+    "Real bridge and enabled candidate launch/capabilities",
+    "Real browser safety and teaching interactions",
+    "Production backup or cutover"
+  ]
+}

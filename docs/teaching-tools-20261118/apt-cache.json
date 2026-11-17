@@ -1,0 +1,784 @@
+{
+  "startedAt": "2026-11-17T16:15:41.870564+00:00",
+  "scope": "regenerable APT index and package download caches only",
+  "beforeBytes": 399982592,
+  "targets": [
+    {
+      "path": "/var/cache/apt/pkgcache.bin",
+      "device": 64769,
+      "inode": 3810,
+      "size": 59074029,
+      "allocatedBytes": 59080704,
+      "mtimeNs": 1794921109334901277,
+      "sha256": "84e4c3e2c1f8a06e131dac9ac0f693cf615f2bab57660b02250a51c7797ca7cc"
+    },
+    {
+      "path": "/var/cache/apt/srcpkgcache.bin",
+      "device": 64769,
+      "inode": 2677,
+      "size": 59031950,
+      "allocatedBytes": 59039744,
+      "mtimeNs": 1794921109201900485,
+      "sha256": "eefdce01d3b18869ed38d421d48f143c0a4cac29af459615325b2f036dea8450"
+    },
+    {
+      "path": "/var/cache/apt/archives/sosreport_4.11.2-0ubuntu0~24.04.2_amd64.deb",
+      "device": 64769,
+      "inode": 4343,
+      "size": 408076,
+      "allocatedBytes": 409600,
+      "mtimeNs": 1794821121000000000,
+      "sha256": "a72edc62c8b809cd7c5cf5066e0b66f889c3b36ee2060d77cfb4fb4080f13c28"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-backports_InRelease",
+      "device": 64769,
+      "inode": 9409,
+      "size": 126173,
+      "allocatedBytes": 126976,
+      "mtimeNs": 1794881105000000000,
+      "sha256": "a853769b1583a20dfbc2a5488f3c7ba80cad91fdca180ce9555c979177a1023d"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-backports_main_binary-amd64_Packages",
+      "device": 64769,
+      "inode": 1600,
+      "size": 255999,
+      "allocatedBytes": 258048,
+      "mtimeNs": 1789945967000000000,
+      "sha256": "f7315ae1be37da51a6323bf26282b170ddab80fa9266e99c7417a81970476e4d"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-backports_main_cnf_Commands-amd64",
+      "device": 64769,
+      "inode": 1654,
+      "size": 902,
+      "allocatedBytes": 4096,
+      "mtimeNs": 1781200586000000000,
+      "sha256": "cdd11f1509b0051724e6646645a3ac2d77be9c0af86ce811a6d5ac1ff0cc072f"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-backports_main_dep11_Components-amd64.yml.gz",
+      "device": 64769,
+      "inode": 10117,
+      "size": 6354,
+      "allocatedBytes": 8192,
+      "mtimeNs": 1794859406000000000,
+      "sha256": "cbfb8e856cc3982d0e88620e8f24ee721d62922bf2fdc9d5f64d1dbc6bd351d7"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-backports_main_i18n_Translation-en",
+      "device": 64769,
+      "inode": 1605,
+      "size": 121051,
+      "allocatedBytes": 122880,
+      "mtimeNs": 1776792634000000000,
+      "sha256": "6b3a918ee3876dd78fa35ec6a565b01ebc56912629a30afd97d6428c7c868369"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-backports_multiverse_binary-amd64_Packages",
+      "device": 64769,
+      "inode": 1754,
+      "size": 1062,
+      "allocatedBytes": 4096,
+      "mtimeNs": 1791808126000000000,
+      "sha256": "fa8e1bf1238b3d4b0e9eb11dddfe67eae6751761c53b2b890f90bd69667fb29a"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-backports_multiverse_cnf_Commands-amd64",
+      "device": 64769,
+      "inode": 3642,
+      "size": 59,
+      "allocatedBytes": 4096,
+      "mtimeNs": 1704388172000000000,
+      "sha256": "4c079bc87733dc7f8386fb0ee5df2d5795e071592a1c004f462bb74f43bdb3d5"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-backports_multiverse_dep11_Components-amd64.yml.gz",
+      "device": 64769,
+      "inode": 1777,
+      "size": 161,
+      "allocatedBytes": 4096,
+      "mtimeNs": 1776680047000000000,
+      "sha256": "bb81f0e0bd6e240098ca75266914b49e531080b6447ee7b9604c513986ffa3a0"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-backports_multiverse_i18n_Translation-en",
+      "device": 64769,
+      "inode": 1776,
+      "size": 394,
+      "allocatedBytes": 4096,
+      "mtimeNs": 1776792634000000000,
+      "sha256": "d1c8ec4f558577e2e92fc9c917bf37943825e8b7cf4eb7ceea8af3b131ad922a"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-backports_restricted_cnf_Commands-amd64",
+      "device": 64769,
+      "inode": 3633,
+      "size": 59,
+      "allocatedBytes": 4096,
+      "mtimeNs": 1704388166000000000,
+      "sha256": "03020357076604b142b0b12b3455df861ec70485324f0cfe4bb8600eb1fcaaa6"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-backports_restricted_dep11_Components-amd64.yml.gz",
+      "device": 64769,
+      "inode": 1747,
+      "size": 160,
+      "allocatedBytes": 4096,
+      "mtimeNs": 1776680167000000000,
+      "sha256": "4761f272b7f9e29411aa01113474589231df87f1f74816134bbec2b88bc2874d"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-backports_universe_binary-amd64_Packages",
+      "device": 64769,
+      "inode": 1659,
+      "size": 144274,
+      "allocatedBytes": 147456,
+      "mtimeNs": 1789945967000000000,
+      "sha256": "c4acb7ae70e5163799faa267e6d040025253db7d137168a03f8a8d89890268d2"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-backports_universe_cnf_Commands-amd64",
+      "device": 64769,
+      "inode": 1721,
+      "size": 7862,
+      "allocatedBytes": 8192,
+      "mtimeNs": 1781200618000000000,
+      "sha256": "23db8ea13acf8bc9278b9734f2e87b6674ab940176a0756475638a401fb95e4e"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-backports_universe_dep11_Components-amd64.yml.gz",
+      "device": 64769,
+      "inode": 10238,
+      "size": 13593,
+      "allocatedBytes": 16384,
+      "mtimeNs": 1794859565000000000,
+      "sha256": "a3235ea275eef44ee2e9ace3e173b208069cad7f03e7dc21ccb3c3574bcb50c1"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-backports_universe_i18n_Translation-en",
+      "device": 64769,
+      "inode": 1672,
+      "size": 67348,
+      "allocatedBytes": 69632,
+      "mtimeNs": 1789945967000000000,
+      "sha256": "7d41fab643940d680af9e60e0b84093e1f256d5a03768411fc95e3b8e88b47ca"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-updates_InRelease",
+      "device": 64769,
+      "inode": 9478,
+      "size": 126125,
+      "allocatedBytes": 126976,
+      "mtimeNs": 1794908639000000000,
+      "sha256": "36ff967c10856863ac22248cc435d96a04d407ee38d049fc8a8406c61ad86de9"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-updates_main_binary-amd64_Packages",
+      "device": 64769,
+      "inode": 10004,
+      "size": 7860466,
+      "allocatedBytes": 7868416,
+      "mtimeNs": 1794908639000000000,
+      "sha256": "c65bab8b901086b8c1e3e49210d2869550683c04cf3756ca29bca73aa83ce432"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-updates_main_cnf_Commands-amd64",
+      "device": 64769,
+      "inode": 1478,
+      "size": 68447,
+      "allocatedBytes": 69632,
+      "mtimeNs": 1783201577000000000,
+      "sha256": "9ab82966464914d865df0ef7961fdaf1f1acf514af5c6a5db28e4b8651c222e9"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-updates_main_dep11_Components-amd64.yml.gz",
+      "device": 64769,
+      "inode": 10040,
+      "size": 242819,
+      "allocatedBytes": 245760,
+      "mtimeNs": 1794860426000000000,
+      "sha256": "a1875af76908c1c39f650b40d327424390c45180171f5ddc8f2298a803992085"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-updates_main_i18n_Translation-en",
+      "device": 64769,
+      "inode": 10038,
+      "size": 4632221,
+      "allocatedBytes": 4636672,
+      "mtimeNs": 1794908639000000000,
+      "sha256": "8d4c23aedafae054456028aa7debbe52c343c1af3aded4995eea368854ac3616"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-updates_multiverse_binary-amd64_Packages",
+      "device": 64769,
+      "inode": 85178,
+      "size": 364927,
+      "allocatedBytes": 368640,
+      "mtimeNs": 1794162493000000000,
+      "sha256": "ef9583c83ce096e8b988db074b35c1be61fe74648838fb6df87094a72edfea1c"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-updates_multiverse_cnf_Commands-amd64",
+      "device": 64769,
+      "inode": 1599,
+      "size": 2729,
+      "allocatedBytes": 4096,
+      "mtimeNs": 1780492663000000000,
+      "sha256": "021b1739f3d16e2a357b3a4e63997b6d48a8f4371d061479bde2f7bce27edf09"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-updates_multiverse_dep11_Components-amd64.yml.gz",
+      "device": 64769,
+      "inode": 10112,
+      "size": 888,
+      "allocatedBytes": 4096,
+      "mtimeNs": 1794860665000000000,
+      "sha256": "3bbcb05e8a01a5beafc98c7490ff1fe30c02b2454102b0dfea2f56bdc30483a9"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-updates_multiverse_i18n_Translation-en",
+      "device": 64769,
+      "inode": 7861,
+      "size": 183022,
+      "allocatedBytes": 184320,
+      "mtimeNs": 1794540130000000000,
+      "sha256": "30825e1581ec93683289f7f8c146f6f8e97be7fe068298201e94f4882b64539d"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-updates_restricted_binary-amd64_Packages",
+      "device": 64769,
+      "inode": 10092,
+      "size": 11191228,
+      "allocatedBytes": 11198464,
+      "mtimeNs": 1794908639000000000,
+      "sha256": "d5df15d9d137088b5568bc775ab79a72d7241067918c953afd3489a2ac16b790"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-updates_restricted_cnf_Commands-amd64",
+      "device": 64769,
+      "inode": 1590,
+      "size": 3166,
+      "allocatedBytes": 4096,
+      "mtimeNs": 1780484945000000000,
+      "sha256": "68c675d570f073bb472aa9157a2f36944cab54b6a6881745d9cb184df8553676"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-updates_restricted_dep11_Components-amd64.yml.gz",
+      "device": 64769,
+      "inode": 1586,
+      "size": 159,
+      "allocatedBytes": 4096,
+      "mtimeNs": 1776681890000000000,
+      "sha256": "a5c5ad60eb8a2f860a919fa58c5e05f77ada4e9bf480d2c28b2f3eba6820f3dc"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-updates_restricted_i18n_Translation-en",
+      "device": 64769,
+      "inode": 10103,
+      "size": 8147860,
+      "allocatedBytes": 8155136,
+      "mtimeNs": 1794908639000000000,
+      "sha256": "73fb18a5633ace08f355c9d29d0ba8ca7df23214c21e0665ee0377841593a80c"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-updates_universe_binary-amd64_Packages",
+      "device": 64769,
+      "inode": 10042,
+      "size": 10671256,
+      "allocatedBytes": 10678272,
+      "mtimeNs": 1794899429000000000,
+      "sha256": "8c1da03323c8d524e7bd244fc48831922f60382d74def0b7b0a5a7fe1813d9e7"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-updates_universe_cnf_Commands-amd64",
+      "device": 64769,
+      "inode": 1543,
+      "size": 301793,
+      "allocatedBytes": 303104,
+      "mtimeNs": 1783069927000000000,
+      "sha256": "745bee670a657676d7cdb371eec2e4f3c27cdec9ce49768e9a5017d8ca4b3123"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-updates_universe_dep11_Components-amd64.yml.gz",
+      "device": 64769,
+      "inode": 10043,
+      "size": 535107,
+      "allocatedBytes": 536576,
+      "mtimeNs": 1794860542000000000,
+      "sha256": "5b74b6d181ac2fbe0ef5376ad4c5c986545ab5823f26b742805e48756fe62ea9"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-updates_universe_i18n_Translation-en",
+      "device": 64769,
+      "inode": 7859,
+      "size": 3749843,
+      "allocatedBytes": 3756032,
+      "mtimeNs": 1794540130000000000,
+      "sha256": "bbed9a1ba651b81228a3df3bac024cdac7314aed350b1fe54933a7a1e8c34b31"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble_InRelease",
+      "device": 64769,
+      "inode": 736,
+      "size": 255850,
+      "allocatedBytes": 258048,
+      "mtimeNs": 1714057881000000000,
+      "sha256": "cdb2f31d809f589719a53c6ad15f255b27569c4059542ada282aaa21b8e164b0"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble_main_binary-amd64_Packages",
+      "device": 64769,
+      "inode": 1556,
+      "size": 7165069,
+      "allocatedBytes": 7168000,
+      "mtimeNs": 1713993181000000000,
+      "sha256": "8f6f71ae839c8cba390a7643fcbbdacddb0bc7d12c1583a2dd80a1f8443a30e5"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble_main_cnf_Commands-amd64",
+      "device": 64769,
+      "inode": 1757,
+      "size": 115715,
+      "allocatedBytes": 118784,
+      "mtimeNs": 1704392477000000000,
+      "sha256": "0fa99418c25140b7606d2cb2787d859f0c158e73cf25f9e577bceed2ec9eab73"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble_main_dep11_Components-amd64.yml.gz",
+      "device": 64769,
+      "inode": 1120,
+      "size": 664565,
+      "allocatedBytes": 667648,
+      "mtimeNs": 1699828897000000000,
+      "sha256": "2b0bae7a028eae95be48da94c11bae3c77faf062b82a2aedaaab64d76a1bc50b"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble_main_i18n_Translation-en",
+      "device": 64769,
+      "inode": 1640,
+      "size": 3095169,
+      "allocatedBytes": 3096576,
+      "mtimeNs": 1713993181000000000,
+      "sha256": "198c6729ca7c0a287ba391f310d6f8c323e6945b7364e7f69182f88069947e12"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble_multiverse_binary-amd64_Packages",
+      "device": 64769,
+      "inode": 2839,
+      "size": 1296005,
+      "allocatedBytes": 1298432,
+      "mtimeNs": 1713897247000000000,
+      "sha256": "65765aa769593ed76ced26878dbdc5e4b8ae9c4046cd9d1af567bd231a72d98a"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble_multiverse_cnf_Commands-amd64",
+      "device": 64769,
+      "inode": 2861,
+      "size": 35624,
+      "allocatedBytes": 36864,
+      "mtimeNs": 1704471213000000000,
+      "sha256": "7a09bec58c652565b2169c06fb8e42573461204ee4642d2e15a93ecd77da507a"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble_multiverse_dep11_Components-amd64.yml.gz",
+      "device": 64769,
+      "inode": 1406,
+      "size": 41921,
+      "allocatedBytes": 45056,
+      "mtimeNs": 1699829265000000000,
+      "sha256": "a8817f5cdf9fa8fa7f37074cc827e53012458605405b72ec0193c6d22eaef22c"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble_multiverse_i18n_Translation-en",
+      "device": 64769,
+      "inode": 2840,
+      "size": 625491,
+      "allocatedBytes": 626688,
+      "mtimeNs": 1713897247000000000,
+      "sha256": "fa23b1a87967b0e4d6140ed39c256c33757ee2d5825df4986f350c4f3a673bf5"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble_restricted_binary-amd64_Packages",
+      "device": 64769,
+      "inode": 1758,
+      "size": 669193,
+      "allocatedBytes": 671744,
+      "mtimeNs": 1713993181000000000,
+      "sha256": "f5620712a54076429190adbc8b3974250606ffb624c9b877bc240d8f2476118e"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble_restricted_cnf_Commands-amd64",
+      "device": 64769,
+      "inode": 1760,
+      "size": 2895,
+      "allocatedBytes": 4096,
+      "mtimeNs": 1704396820000000000,
+      "sha256": "e5402f9b900821615bf3e14d44e0fbb6762659024ce3196a2d69fd136f8035db"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble_restricted_i18n_Translation-en",
+      "device": 64769,
+      "inode": 1759,
+      "size": 231899,
+      "allocatedBytes": 233472,
+      "mtimeNs": 1713993181000000000,
+      "sha256": "90bab68113b8b7701817e39a1d4ed7ac3380d971829ad19e13e7e3eb9e858d38"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble_universe_binary-amd64_Packages",
+      "device": 64769,
+      "inode": 1761,
+      "size": 73379142,
+      "allocatedBytes": 73379840,
+      "mtimeNs": 1714046184000000000,
+      "sha256": "687ffc969e7700137677b9cfe2f614ee2d638052a91a7c9bf31f3f6a3040a99a"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble_universe_cnf_Commands-amd64",
+      "device": 64769,
+      "inode": 2837,
+      "size": 1402478,
+      "allocatedBytes": 1404928,
+      "mtimeNs": 1704420523000000000,
+      "sha256": "86d29b76c1bfd3524bb20b5ba97b89ecd1e26650d3cb1cb8c2a6c729184354f6"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble_universe_dep11_Components-amd64.yml.gz",
+      "device": 64769,
+      "inode": 1370,
+      "size": 5942598,
+      "allocatedBytes": 5943296,
+      "mtimeNs": 1699829047000000000,
+      "sha256": "e49d4232fe79502caab4e9cfb7990c8a48a7b6f76ad1a2370be9e90068527a1c"
+    },
+    {
+      "path": "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble_universe_i18n_Translation-en",
+      "device": 64769,
+      "inode": 2833,
+      "size": 32194499,
+      "allocatedBytes": 32194560,
+      "mtimeNs": 1714042920000000000,
+      "sha256": "691de9bf84a813c0033ec44957f242a5e605a2e06ac36e4d0a590e884be5b5d7"
+    },
+    {
+      "path": "/var/lib/apt/lists/download.docker.com_linux_ubuntu_dists_noble_InRelease",
+      "device": 64769,
+      "inode": 1253,
+      "size": 48475,
+      "allocatedBytes": 49152,
+      "mtimeNs": 1794908213000000000,
+      "sha256": "31c71e685921faa06872194551c12882a723885c692129cd121a2d7f2f8059ee"
+    },
+    {
+      "path": "/var/lib/apt/lists/download.docker.com_linux_ubuntu_dists_noble_stable_binary-amd64_Packages",
+      "device": 64769,
+      "inode": 9482,
+      "size": 503128,
+      "allocatedBytes": 503808,
+      "mtimeNs": 1794908213000000000,
+      "sha256": "eeaef7298867c4ca58c1e059bf54f66e4f7fd0a6f3f3a7b81988673be4cb2d9d"
+    },
+    {
+      "path": "/var/lib/apt/lists/security.ubuntu.com_ubuntu_dists_noble-security_InRelease",
+      "device": 64769,
+      "inode": 9475,
+      "size": 126127,
+      "allocatedBytes": 126976,
+      "mtimeNs": 1794890907000000000,
+      "sha256": "3f5d31559cf5d4d942d96a5ca7f2e721bc8f52c85a2e0786532737cab87d43fe"
+    },
+    {
+      "path": "/var/lib/apt/lists/security.ubuntu.com_ubuntu_dists_noble-security_main_binary-amd64_Packages",
+      "device": 64769,
+      "inode": 9467,
+      "size": 6511997,
+      "allocatedBytes": 6512640,
+      "mtimeNs": 1794867388000000000,
+      "sha256": "1900fa69ed864c9bb208facb77c1d11b79b79dbfc101f491f7c98126388944c9"
+    },
+    {
+      "path": "/var/lib/apt/lists/security.ubuntu.com_ubuntu_dists_noble-security_main_cnf_Commands-amd64",
+      "device": 64769,
+      "inode": 1319,
+      "size": 49133,
+      "allocatedBytes": 49152,
+      "mtimeNs": 1783357606000000000,
+      "sha256": "e27c37a73f76519a97a91d09336dc5976face2cc5cc0f1ac388aa553d8389f64"
+    },
+    {
+      "path": "/var/lib/apt/lists/security.ubuntu.com_ubuntu_dists_noble-security_main_dep11_Components-amd64.yml.gz",
+      "device": 64769,
+      "inode": 10003,
+      "size": 58752,
+      "allocatedBytes": 61440,
+      "mtimeNs": 1794860163000000000,
+      "sha256": "a2e7e16b5d37c1f8cda05db9f8827d97124a203a489c67fe7160e277cce13192"
+    },
+    {
+      "path": "/var/lib/apt/lists/security.ubuntu.com_ubuntu_dists_noble-security_main_i18n_Translation-en",
+      "device": 64769,
+      "inode": 9486,
+      "size": 4054473,
+      "allocatedBytes": 4055040,
+      "mtimeNs": 1794867388000000000,
+      "sha256": "91418d837489b4443dd6c12c5fca23f2518eec1e4f610aed49ed77e6995c39eb"
+    },
+    {
+      "path": "/var/lib/apt/lists/security.ubuntu.com_ubuntu_dists_noble-security_multiverse_binary-amd64_Packages",
+      "device": 64769,
+      "inode": 76053,
+      "size": 342166,
+      "allocatedBytes": 344064,
+      "mtimeNs": 1793905476000000000,
+      "sha256": "573ccebc1d71407e7523411bb5299e812629652bef33551bf36875d02fef276a"
+    },
+    {
+      "path": "/var/lib/apt/lists/security.ubuntu.com_ubuntu_dists_noble-security_multiverse_cnf_Commands-amd64",
+      "device": 64769,
+      "inode": 1537,
+      "size": 2282,
+      "allocatedBytes": 4096,
+      "mtimeNs": 1780493039000000000,
+      "sha256": "9917b880572ee4232f7b2b51d26c6f4613e43baecfca352af7e62eba7c04a5f1"
+    },
+    {
+      "path": "/var/lib/apt/lists/security.ubuntu.com_ubuntu_dists_noble-security_multiverse_dep11_Components-amd64.yml.gz",
+      "device": 64769,
+      "inode": 1503,
+      "size": 158,
+      "allocatedBytes": 4096,
+      "mtimeNs": 1776681215000000000,
+      "sha256": "8a79050189a81871e6ba17696b0fb9f6f80202c4f5bd7d867f7a84c821e34c17"
+    },
+    {
+      "path": "/var/lib/apt/lists/security.ubuntu.com_ubuntu_dists_noble-security_multiverse_i18n_Translation-en",
+      "device": 64769,
+      "inode": 10020,
+      "size": 169663,
+      "allocatedBytes": 172032,
+      "mtimeNs": 1794827863000000000,
+      "sha256": "b6792135c9625812687f339271ce9134ebb256f9124a067d00372e883ca76151"
+    },
+    {
+      "path": "/var/lib/apt/lists/security.ubuntu.com_ubuntu_dists_noble-security_restricted_binary-amd64_Packages",
+      "device": 64769,
+      "inode": 20634,
+      "size": 10633292,
+      "allocatedBytes": 10637312,
+      "mtimeNs": 1794451145000000000,
+      "sha256": "d9bf1b66c1092a222441ec8ec83042b087892809a98d3ebe7232c4cf1729d1f3"
+    },
+    {
+      "path": "/var/lib/apt/lists/security.ubuntu.com_ubuntu_dists_noble-security_restricted_cnf_Commands-amd64",
+      "device": 64769,
+      "inode": 1497,
+      "size": 3251,
+      "allocatedBytes": 4096,
+      "mtimeNs": 1780492934000000000,
+      "sha256": "3400ad53fe35d9e4d4c654f5cc963bffe17e9502c007b881df8783e7c1c26e58"
+    },
+    {
+      "path": "/var/lib/apt/lists/security.ubuntu.com_ubuntu_dists_noble-security_restricted_dep11_Components-amd64.yml.gz",
+      "device": 64769,
+      "inode": 1494,
+      "size": 157,
+      "allocatedBytes": 4096,
+      "mtimeNs": 1776681338000000000,
+      "sha256": "db2678d8f6847606f200f53014c7789d197c1e2d9670f0cbb9b60c165d179837"
+    },
+    {
+      "path": "/var/lib/apt/lists/security.ubuntu.com_ubuntu_dists_noble-security_restricted_i18n_Translation-en",
+      "device": 64769,
+      "inode": 20635,
+      "size": 7740690,
+      "allocatedBytes": 7745536,
+      "mtimeNs": 1794451145000000000,
+      "sha256": "5de6f4845dc8360447730a70fe859d7eece66696716c649bc1535f21c559b6d3"
+    },
+    {
+      "path": "/var/lib/apt/lists/security.ubuntu.com_ubuntu_dists_noble-security_universe_binary-amd64_Packages",
+      "device": 64769,
+      "inode": 10005,
+      "size": 7714626,
+      "allocatedBytes": 7720960,
+      "mtimeNs": 1794890907000000000,
+      "sha256": "12fec964476bf0d5f416adc5914bd008efa7d374e1a0d31628ad4b05c2e4b430"
+    },
+    {
+      "path": "/var/lib/apt/lists/security.ubuntu.com_ubuntu_dists_noble-security_universe_cnf_Commands-amd64",
+      "device": 64769,
+      "inode": 1444,
+      "size": 206101,
+      "allocatedBytes": 208896,
+      "mtimeNs": 1783347215000000000,
+      "sha256": "ea4228e42972e8693d9fed48097edf65d521bb09aad6837c57ada881b6283ff9"
+    },
+    {
+      "path": "/var/lib/apt/lists/security.ubuntu.com_ubuntu_dists_noble-security_universe_dep11_Components-amd64.yml.gz",
+      "device": 64769,
+      "inode": 10019,
+      "size": 97956,
+      "allocatedBytes": 98304,
+      "mtimeNs": 1794860297000000000,
+      "sha256": "e27b516ab8eb777fe7db93195a7c3e3fe7e2be621bd8fdd2e42c56a22146dd42"
+    },
+    {
+      "path": "/var/lib/apt/lists/security.ubuntu.com_ubuntu_dists_noble-security_universe_i18n_Translation-en",
+      "device": 64769,
+      "inode": 10011,
+      "size": 2763886,
+      "allocatedBytes": 2764800,
+      "mtimeNs": 1794827863000000000,
+      "sha256": "fff8332fb40871ca15a4ee5d63b267a2604d8a3fb3e371b45073af210369506b"
+    }
+  ],
+  "installedPackagesTouched": false,
+  "dpkgDatabaseTouched": false,
+  "deleted": [
+    "/var/cache/apt/pkgcache.bin",
+    "/var/cache/apt/srcpkgcache.bin",
+    "/var/cache/apt/archives/sosreport_4.11.2-0ubuntu0~24.04.2_amd64.deb",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-backports_InRelease",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-backports_main_binary-amd64_Packages",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-backports_main_cnf_Commands-amd64",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-backports_main_dep11_Components-amd64.yml.gz",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-backports_main_i18n_Translation-en",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-backports_multiverse_binary-amd64_Packages",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-backports_multiverse_cnf_Commands-amd64",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-backports_multiverse_dep11_Components-amd64.yml.gz",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-backports_multiverse_i18n_Translation-en",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-backports_restricted_cnf_Commands-amd64",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-backports_restricted_dep11_Components-amd64.yml.gz",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-backports_universe_binary-amd64_Packages",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-backports_universe_cnf_Commands-amd64",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-backports_universe_dep11_Components-amd64.yml.gz",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-backports_universe_i18n_Translation-en",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-updates_InRelease",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-updates_main_binary-amd64_Packages",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-updates_main_cnf_Commands-amd64",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-updates_main_dep11_Components-amd64.yml.gz",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-updates_main_i18n_Translation-en",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-updates_multiverse_binary-amd64_Packages",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-updates_multiverse_cnf_Commands-amd64",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-updates_multiverse_dep11_Components-amd64.yml.gz",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-updates_multiverse_i18n_Translation-en",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-updates_restricted_binary-amd64_Packages",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-updates_restricted_cnf_Commands-amd64",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-updates_restricted_dep11_Components-amd64.yml.gz",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-updates_restricted_i18n_Translation-en",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-updates_universe_binary-amd64_Packages",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-updates_universe_cnf_Commands-amd64",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-updates_universe_dep11_Components-amd64.yml.gz",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-updates_universe_i18n_Translation-en",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble_InRelease",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble_main_binary-amd64_Packages",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble_main_cnf_Commands-amd64",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble_main_dep11_Components-amd64.yml.gz",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble_main_i18n_Translation-en",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble_multiverse_binary-amd64_Packages",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble_multiverse_cnf_Commands-amd64",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble_multiverse_dep11_Components-amd64.yml.gz",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble_multiverse_i18n_Translation-en",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble_restricted_binary-amd64_Packages",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble_restricted_cnf_Commands-amd64",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble_restricted_i18n_Translation-en",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble_universe_binary-amd64_Packages",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble_universe_cnf_Commands-amd64",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble_universe_dep11_Components-amd64.yml.gz",
+    "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble_universe_i18n_Translation-en",
+    "/var/lib/apt/lists/download.docker.com_linux_ubuntu_dists_noble_InRelease",
+    "/var/lib/apt/lists/download.docker.com_linux_ubuntu_dists_noble_stable_binary-amd64_Packages",
+    "/var/lib/apt/lists/security.ubuntu.com_ubuntu_dists_noble-security_InRelease",
+    "/var/lib/apt/lists/security.ubuntu.com_ubuntu_dists_noble-security_main_binary-amd64_Packages",
+    "/var/lib/apt/lists/security.ubuntu.com_ubuntu_dists_noble-security_main_cnf_Commands-amd64",
+    "/var/lib/apt/lists/security.ubuntu.com_ubuntu_dists_noble-security_main_dep11_Components-amd64.yml.gz",
+    "/var/lib/apt/lists/security.ubuntu.com_ubuntu_dists_noble-security_main_i18n_Translation-en",
+    "/var/lib/apt/lists/security.ubuntu.com_ubuntu_dists_noble-security_multiverse_binary-amd64_Packages",
+    "/var/lib/apt/lists/security.ubuntu.com_ubuntu_dists_noble-security_multiverse_cnf_Commands-amd64",
+    "/var/lib/apt/lists/security.ubuntu.com_ubuntu_dists_noble-security_multiverse_dep11_Components-amd64.yml.gz",
+    "/var/lib/apt/lists/security.ubuntu.com_ubuntu_dists_noble-security_multiverse_i18n_Translation-en",
+    "/var/lib/apt/lists/security.ubuntu.com_ubuntu_dists_noble-security_restricted_binary-amd64_Packages",
+    "/var/lib/apt/lists/security.ubuntu.com_ubuntu_dists_noble-security_restricted_cnf_Commands-amd64",
+    "/var/lib/apt/lists/security.ubuntu.com_ubuntu_dists_noble-security_restricted_dep11_Components-amd64.yml.gz",
+    "/var/lib/apt/lists/security.ubuntu.com_ubuntu_dists_noble-security_restricted_i18n_Translation-en",
+    "/var/lib/apt/lists/security.ubuntu.com_ubuntu_dists_noble-security_universe_binary-amd64_Packages",
+    "/var/lib/apt/lists/security.ubuntu.com_ubuntu_dists_noble-security_universe_cnf_Commands-amd64",
+    "/var/lib/apt/lists/security.ubuntu.com_ubuntu_dists_noble-security_universe_dep11_Components-amd64.yml.gz",
+    "/var/lib/apt/lists/security.ubuntu.com_ubuntu_dists_noble-security_universe_i18n_Translation-en"
+  ],
+  "servicesBefore": [
+    {
+      "name": "physicsos-app-1",
+      "id": "f8d97362d4019495acba2630537087d83687377332e995364621444ded83ff49",
+      "image": "sha256:eddf40d1307b644db51edd995c98f731ecec8ee4cb668f7237447bbbba765bdc",
+      "running": true,
+      "health": "healthy",
+      "restartCount": 0
+    },
+    {
+      "name": "physicsos-validation-worker-1",
+      "id": "9b236e3956d5a311e90f49516831eae09098a79741bf603470ff83bf887e6c5c",
+      "image": "sha256:e888ca49106c262defbe416bbbcc58ab8bd729a00d78ff8fe0a7a800d7d1f940",
+      "running": true,
+      "health": "healthy",
+      "restartCount": 0
+    },
+    {
+      "name": "physicsos-postgres-1",
+      "id": "6354596c85b5af643c88c283c1d49b1ccf26231b509fb1c292e32dd3fa57772b",
+      "image": "sha256:858bb5e98eed02eb8cafbcdc007f9a65d1b613972028944a8ec2133ccaf80d27",
+      "running": true,
+      "health": "healthy",
+      "restartCount": 0
+    },
+    {
+      "name": "physicsos-redis-1",
+      "id": "4e6d8d0773411a961f4bc3d1efff604dabd39769e4f6fa29610c2a34b06b9827",
+      "image": "sha256:bd28fff4b665fdf1b73e8b5b73ec05d2f858f4fa3c8ea0d7c9bc09f7f6bf7039",
+      "running": true,
+      "health": "healthy",
+      "restartCount": 0
+    }
+  ],
+  "finishedAt": "2026-11-17T16:15:46.330124+00:00",
+  "afterBytes": 735629312,
+  "servicesAfter": [
+    {
+      "name": "physicsos-app-1",
+      "id": "f8d97362d4019495acba2630537087d83687377332e995364621444ded83ff49",
+      "image": "sha256:eddf40d1307b644db51edd995c98f731ecec8ee4cb668f7237447bbbba765bdc",
+      "running": true,
+      "health": "healthy",
+      "restartCount": 0
+    },
+    {
+      "name": "physicsos-validation-worker-1",
+      "id": "9b236e3956d5a311e90f49516831eae09098a79741bf603470ff83bf887e6c5c",
+      "image": "sha256:e888ca49106c262defbe416bbbcc58ab8bd729a00d78ff8fe0a7a800d7d1f940",
+      "running": true,
+      "health": "healthy",
+      "restartCount": 0
+    },
+    {
+      "name": "physicsos-postgres-1",
+      "id": "6354596c85b5af643c88c283c1d49b1ccf26231b509fb1c292e32dd3fa57772b",
+      "image": "sha256:858bb5e98eed02eb8cafbcdc007f9a65d1b613972028944a8ec2133ccaf80d27",
+      "running": true,
+      "health": "healthy",
+      "restartCount": 0
+    },
+    {
+      "name": "physicsos-redis-1",
+      "id": "4e6d8d0773411a961f4bc3d1efff604dabd39769e4f6fa29610c2a34b06b9827",
+      "image": "sha256:bd28fff4b665fdf1b73e8b5b73ec05d2f858f4fa3c8ea0d7c9bc09f7f6bf7039",
+      "running": true,
+      "health": "healthy",
+      "restartCount": 0
+    }
+  ],
+  "netFreedBytes": 335646720,
+  "runtimeUnchanged": true,
+  "ok": true
+}
