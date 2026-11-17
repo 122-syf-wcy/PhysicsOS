@@ -2,6 +2,7 @@ import { ok } from 'node:assert/strict'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { performance } from 'node:perf_hooks'
 import { isDeepStrictEqual } from 'node:util'
 import { Context } from '@deepseek-ai/cordis'
 import Storage from '@deepseek-ai/dsh-storage'
@@ -51,27 +52,49 @@ async function settled(service: CanvasAssistantService, id: string) {
 
 describe('owned saved-canvas assistant jobs', () => {
   it('admits bounded relevant geometry for a selected node without copying or changing dense raw offscreen ink', async () => {
-    let observed: { context: { canvas: { annotations: { primitives: { id: string; points?: number[][]; samples?: unknown[] }[] } } } } | undefined
-    const f = await fixture({ run: async (request, _signal, admission) => { await admission?.(); observed = JSON.parse(request.prompt); expect(Buffer.byteLength(request.prompt)).toBeLessThan(256 * 1024); return { proposal } } })
-    const body = await input(f); const saved = await f.canvas.open(a, 'lesson')
-    const primitive = (id: string, offset: number) => {
-      const samples = Array.from({ length: 5000 }, (_, index) => ({ x: offset + index / 100, y: offset + Math.sin(index / 100) * 8, pressure: index / 5000, time: index }))
-      return { id, type: 'polyline', points: samples.map(p => [p.x, p.y]), samples }
+    const timings: Record<string, number> = {}
+    const startedAt = performance.now()
+    let stage = 'fixtureInitialization'
+    let stageStartedAt = startedAt
+    const markStage = (next: string): void => {
+      const now = performance.now()
+      timings[stage] = now - stageStartedAt
+      stage = next
+      stageStartedAt = now
     }
-    const annotations = { schemaVersion: 1, primitives: [primitive('nearby', 20), primitive('far-away', 50000)] }
-    const manifest = { ...saved.manifest, nodes: [{ id: 'small-note', kind: 'note', body: 'One relevant note', format: 'plain', layout: { x: 0, y: 0, width: 200, height: 100, zIndex: 0 } }], metadata: { physicsosAnnotations: annotations } }
-    const bytes = canonicalBytes(manifest); const digest = canvasHash(bytes)
-    await f.canvas.uploadObject(a, 'lesson', digest, bytes)
-    const committed = await f.canvas.commit(a, 'lesson', { expectedVersion: saved.head.version, expectedGeneration: saved.head.generation, mutationId: 'dense-ink', manifestDigest: digest })
-    const job = await f.assistant.create(a, 'lesson', { ...body, mode: 'check', expectedVersion: committed.head.version, manifestDigest: committed.head.manifestDigest, selectedNodeIds: ['small-note'] })
-    expect((await settled(f.assistant, job.id)).status).toBe('ready')
-    expect(observed?.context.canvas.annotations.primitives.map(p => p.id)).toEqual(['nearby'])
-    expect(observed?.context.canvas.annotations.primitives[0]?.samples).toBeUndefined()
-    expect(observed?.context.canvas.annotations.primitives[0]?.points?.length).toBeLessThanOrEqual(256)
-    ok(
-      isDeepStrictEqual((await f.canvas.open(a, 'lesson')).manifest.metadata?.physicsosAnnotations, annotations),
-      'Every saved raw ink point and pressure sample must remain unchanged.',
-    )
+    try {
+      let observed: { context: { canvas: { annotations: { primitives: { id: string; points?: number[][]; samples?: unknown[] }[] } } } } | undefined
+      const f = await fixture({ run: async (request, _signal, admission) => { await admission?.(); observed = JSON.parse(request.prompt); expect(Buffer.byteLength(request.prompt)).toBeLessThan(256 * 1024); return { proposal } } })
+      markStage('inputPreparationAndEncoding')
+      const body = await input(f); const saved = await f.canvas.open(a, 'lesson')
+      const primitive = (id: string, offset: number) => {
+        const samples = Array.from({ length: 5000 }, (_, index) => ({ x: offset + index / 100, y: offset + Math.sin(index / 100) * 8, pressure: index / 5000, time: index }))
+        return { id, type: 'polyline', points: samples.map(p => [p.x, p.y]), samples }
+      }
+      const annotations = { schemaVersion: 1, primitives: [primitive('nearby', 20), primitive('far-away', 50000)] }
+      const manifest = { ...saved.manifest, nodes: [{ id: 'small-note', kind: 'note', body: 'One relevant note', format: 'plain', layout: { x: 0, y: 0, width: 200, height: 100, zIndex: 0 } }], metadata: { physicsosAnnotations: annotations } }
+      const bytes = canonicalBytes(manifest); const digest = canvasHash(bytes)
+      markStage('uploadCommit')
+      await f.canvas.uploadObject(a, 'lesson', digest, bytes)
+      const committed = await f.canvas.commit(a, 'lesson', { expectedVersion: saved.head.version, expectedGeneration: saved.head.generation, mutationId: 'dense-ink', manifestDigest: digest })
+      markStage('create')
+      const job = await f.assistant.create(a, 'lesson', { ...body, mode: 'check', expectedVersion: committed.head.version, manifestDigest: committed.head.manifestDigest, selectedNodeIds: ['small-note'] })
+      markStage('settled')
+      expect((await settled(f.assistant, job.id)).status).toBe('ready')
+      markStage('otherAssertions')
+      expect(observed?.context.canvas.annotations.primitives.map(p => p.id)).toEqual(['nearby'])
+      expect(observed?.context.canvas.annotations.primitives[0]?.samples).toBeUndefined()
+      expect(observed?.context.canvas.annotations.primitives[0]?.points?.length).toBeLessThanOrEqual(256)
+      markStage('completeRawComparison')
+      ok(
+        isDeepStrictEqual((await f.canvas.open(a, 'lesson')).manifest.metadata?.physicsosAnnotations, annotations),
+        'Every saved raw ink point and pressure sample must remain unchanged.',
+      )
+    } finally {
+      const now = performance.now()
+      timings[stage] = now - stageStartedAt
+      console.info('[canvas-assistant dense-ink stage timings ms]', { ...timings, total: now - startedAt, lastStage: stage })
+    }
   })
   // Removing owner/head admission would disclose a foreign or obsolete proposal.
   it('singleflights durable proposals and records the actual numeric usage once without editing physics', async () => {

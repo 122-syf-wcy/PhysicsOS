@@ -20,7 +20,7 @@ describe('experiment run durable capsule -> activity v1 recovery', () => {
     activity.setNow('2026-11-16T00:00:02.000Z')
     await activity.restart({ replaySources: [run.service.activityReplaySource] })
     await activity.service.recover()
-    const first = await activity.service.userDetail(admin, { schoolId: alice.schoolId, username: alice.username, days: 1 })
+    const first = await activity.service.userDetail(admin, { schoolId: alice.schoolId, username: alice.username }, { days: 1 })
     expect(first).toMatchObject({ uses: 1, lastUseAt: '2026-11-16T00:00:01.000Z' })
     expect(first.modules.find(module => module.module === 'lab')).toMatchObject({ uses: 1 })
     await activity.service.recover()

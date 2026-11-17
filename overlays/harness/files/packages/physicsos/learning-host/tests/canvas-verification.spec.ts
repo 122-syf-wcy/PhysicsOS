@@ -1,5 +1,6 @@
 import { ok } from 'node:assert/strict'
 import { Buffer } from 'node:buffer'
+import { performance } from 'node:perf_hooks'
 import { isDeepStrictEqual } from 'node:util'
 import { describe, expect, it, vi } from 'vitest'
 import type { SimulationOptions, SimulationRequest, SimulationResult, SimulationState } from '@physicsos/physics-core'
@@ -134,89 +135,108 @@ function nearestCollisionFixture(): Fixture {
 
 describe('verifyCanvasCapture with actual selected engines and retained requests', () => {
   it('verifies mechanics and creates independent complete server evidence without changing frozen capture or scene bytes', () => {
-    const value = fixture(mechanicsSource(), { outputSampleRate: MAX_TRAJECTORY_STORAGE_SAMPLES })
-    const original = present(value.capture.result)
-    const input = inputFor(value.source, value.capture)
-    const sourceBytes = canonicalBytes(value.source)
-    const sceneBytes = canonicalBytes(value.source.scene)
-    const captureBytes = canonicalBytes(value.capture)
-    expect(deeplyFrozen(value.source)).toBe(true)
-    expect(deeplyFrozen(value.capture)).toBe(true)
-    expect(original.verification.status).toBe('passed')
-    expect(original.states).toHaveLength(MAX_TRAJECTORY_STORAGE_SAMPLES)
-
-    const outcome = verifyCanvasCapture(value.source, value.capture, input, limits, new AbortController().signal)
-    expect(outcome.receipt).toMatchObject({
-      ...input, status: 'verified', engineId: 'engine-mechanics', engineVersion: value.capture.engine.version,
-      details: { subject: 'complete-simulation-raw-evidence', comparedStates: original.states.length },
-    })
-    expect(outcome.receipt.details.mismatch).toBeUndefined()
-    const snapshot = present(outcome.snapshot)
-    const result = present(snapshot.result)
-    expect(snapshot).not.toBe(value.capture)
-    expect(result).not.toBe(original)
-    expect(result.states).not.toBe(original.states)
-    expect(result.states[0]).not.toBe(original.states[0])
-    expect(snapshot).toMatchObject({
-      source: 'server-engine', capturedAt: checkedAt, scene: value.capture.scene,
-      sceneRevision: value.source.scene.revision, instanceId: value.capture.instanceId,
-      instanceEditRevision: value.capture.instanceEditRevision, clock: value.capture.clock, cursor: value.capture.cursor,
-      metadata: { originalCaptureDigest: input.captureDigest, verificationReceiptId: input.id },
-    })
-    expect(snapshot.diagnostics).toContainEqual({ originalCaptureDigest: input.captureDigest, receiptId: input.id, receiptStatus: 'verified' })
-    expect(snapshot.request).toEqual(value.capture.request)
-    expect(snapshot.capturedState).toEqual(value.capture.capturedState)
-    expect(snapshot.rawState).toBeUndefined()
-    expect(snapshot.datasets).toEqual([])
-    expect(result.simulationId).toBe(present(value.capture.request).simulationId)
-    expect(result.trace).toEqual(present(value.capture.request).trace)
-    ok(isDeepStrictEqual(result.states, original.states), 'Every raw server replay state and field must match the original capture.')
-    expect(result.events).toEqual(original.events)
-    expect(result.measurements).toEqual(original.measurements)
-    expect(result.derivedQuantities).toEqual(original.derivedQuantities)
-    expect(result.verification.status).toBe('passed')
-    expect(result.verification.checks).toContainEqual(expect.objectContaining({ id: 'mechanics_kinematic_consistency', type: 'numerical', passed: true }))
-
-    ok(
-      isDeepStrictEqual(
-        outcome.datasets,
-        datasetFromSimulationResult(original, { sourceScene: value.capture.scene, conditions: conditionsFromScene(value.source.scene) }),
-      ),
-      'Server datasets must match the independent extraction of every original sample and field.',
-    )
-    const states = present(outcome.datasets.find(dataset => dataset.origin.collection === 'states'))
-    const derived = present(outcome.datasets.find(dataset => dataset.origin.collection === 'derived'))
-    expect(states.rows).toHaveLength(original.states.length)
-    expect(states.rows.length).toBeGreaterThan(512)
-    ok(
-      isDeepStrictEqual(states.rows.map(row => row.axes.time), original.states.map(state => canonicalValue(state.time))),
-      'Every dataset time axis value must match the original states.',
-    )
-    for (const key of ['position', 'velocity', 'acceleration'] as const) {
-      for (const component of ['x', 'y', 'z'] as const) {
-        const metric = present(states.metrics.find(metric => metric.semanticKey === key && metric.component === component && metric.targetId === 'body-1'))
-        ok(
-          isDeepStrictEqual(
-            states.rows.map(row => row.values[metric.id]),
-            original.states.map(state => present(present(state.objects[0])[key]).vector[component]),
-          ),
-          `Every ${key}.${component} dataset value must match the original states.`,
-        )
-      }
+    const timings: Record<string, number> = {}
+    const startedAt = performance.now()
+    let stage = 'fixtureFreezeEncoding'
+    let stageStartedAt = startedAt
+    const markStage = (next: string): void => {
+      const now = performance.now()
+      timings[stage] = now - stageStartedAt
+      stage = next
+      stageStartedAt = now
     }
-    expect(states.rows[1]?.evidence?.rawTime).toEqual(original.states[1]?.time)
-    expect(derived.rows).toHaveLength(1)
-    expect(derived.rows[0]?.evidence?.timeMeaning).toBe('not-inferred-from-states')
-    expect(present(result.states.at(-1)).objects[0]?.position?.vector.x).toBe(2.5)
-    expect(present(result.states.at(-1)).objects[0]?.velocity?.vector.x).toBe(3)
-    expect(deeplyFrozen(snapshot)).toBe(true)
-    expect(deeplyFrozen(outcome.datasets)).toBe(true)
-    expect(canvasHash(canonicalBytes(snapshot))).not.toBe(input.captureDigest)
-    ok(Buffer.from(canonicalBytes(value.source)).equals(sourceBytes), 'Original scene-object bytes must remain unchanged.')
-    ok(Buffer.from(canonicalBytes(value.source.scene)).equals(sceneBytes), 'Original scene bytes must remain unchanged.')
-    ok(Buffer.from(canonicalBytes(value.capture)).equals(captureBytes), 'Original capture bytes must remain unchanged.')
-    expect(deeplyFrozen(value.source)).toBe(true)
-    expect(deeplyFrozen(value.capture)).toBe(true)
+    try {
+      const value = fixture(mechanicsSource(), { outputSampleRate: MAX_TRAJECTORY_STORAGE_SAMPLES })
+      const original = present(value.capture.result)
+      const input = inputFor(value.source, value.capture)
+      const sourceBytes = canonicalBytes(value.source)
+      const sceneBytes = canonicalBytes(value.source.scene)
+      const captureBytes = canonicalBytes(value.capture)
+      expect(deeplyFrozen(value.source)).toBe(true)
+      expect(deeplyFrozen(value.capture)).toBe(true)
+      expect(original.verification.status).toBe('passed')
+      expect(original.states).toHaveLength(MAX_TRAJECTORY_STORAGE_SAMPLES)
+
+      markStage('verifyCanvasCapture')
+      const outcome = verifyCanvasCapture(value.source, value.capture, input, limits, new AbortController().signal)
+      markStage('completeRawComparison')
+      expect(outcome.receipt).toMatchObject({
+        ...input, status: 'verified', engineId: 'engine-mechanics', engineVersion: value.capture.engine.version,
+        details: { subject: 'complete-simulation-raw-evidence', comparedStates: original.states.length },
+      })
+      expect(outcome.receipt.details.mismatch).toBeUndefined()
+      const snapshot = present(outcome.snapshot)
+      const result = present(snapshot.result)
+      expect(snapshot).not.toBe(value.capture)
+      expect(result).not.toBe(original)
+      expect(result.states).not.toBe(original.states)
+      expect(result.states[0]).not.toBe(original.states[0])
+      expect(snapshot).toMatchObject({
+        source: 'server-engine', capturedAt: checkedAt, scene: value.capture.scene,
+        sceneRevision: value.source.scene.revision, instanceId: value.capture.instanceId,
+        instanceEditRevision: value.capture.instanceEditRevision, clock: value.capture.clock, cursor: value.capture.cursor,
+        metadata: { originalCaptureDigest: input.captureDigest, verificationReceiptId: input.id },
+      })
+      expect(snapshot.diagnostics).toContainEqual({ originalCaptureDigest: input.captureDigest, receiptId: input.id, receiptStatus: 'verified' })
+      expect(snapshot.request).toEqual(value.capture.request)
+      expect(snapshot.capturedState).toEqual(value.capture.capturedState)
+      expect(snapshot.rawState).toBeUndefined()
+      expect(snapshot.datasets).toEqual([])
+      expect(result.simulationId).toBe(present(value.capture.request).simulationId)
+      expect(result.trace).toEqual(present(value.capture.request).trace)
+      ok(isDeepStrictEqual(result.states, original.states), 'Every raw server replay state and field must match the original capture.')
+      expect(result.events).toEqual(original.events)
+      expect(result.measurements).toEqual(original.measurements)
+      expect(result.derivedQuantities).toEqual(original.derivedQuantities)
+      expect(result.verification.status).toBe('passed')
+      expect(result.verification.checks).toContainEqual(expect.objectContaining({ id: 'mechanics_kinematic_consistency', type: 'numerical', passed: true }))
+
+      markStage('independentDatasetExtractionAndOtherAssertions')
+      ok(
+        isDeepStrictEqual(
+          outcome.datasets,
+          datasetFromSimulationResult(original, { sourceScene: value.capture.scene, conditions: conditionsFromScene(value.source.scene) }),
+        ),
+        'Server datasets must match the independent extraction of every original sample and field.',
+      )
+      const states = present(outcome.datasets.find(dataset => dataset.origin.collection === 'states'))
+      const derived = present(outcome.datasets.find(dataset => dataset.origin.collection === 'derived'))
+      expect(states.rows).toHaveLength(original.states.length)
+      expect(states.rows.length).toBeGreaterThan(512)
+      ok(
+        isDeepStrictEqual(states.rows.map(row => row.axes.time), original.states.map(state => canonicalValue(state.time))),
+        'Every dataset time axis value must match the original states.',
+      )
+      for (const key of ['position', 'velocity', 'acceleration'] as const) {
+        for (const component of ['x', 'y', 'z'] as const) {
+          const metric = present(states.metrics.find(metric => metric.semanticKey === key && metric.component === component && metric.targetId === 'body-1'))
+          ok(
+            isDeepStrictEqual(
+              states.rows.map(row => row.values[metric.id]),
+              original.states.map(state => present(present(state.objects[0])[key]).vector[component]),
+            ),
+            `Every ${key}.${component} dataset value must match the original states.`,
+          )
+        }
+      }
+      expect(states.rows[1]?.evidence?.rawTime).toEqual(original.states[1]?.time)
+      expect(derived.rows).toHaveLength(1)
+      expect(derived.rows[0]?.evidence?.timeMeaning).toBe('not-inferred-from-states')
+      expect(present(result.states.at(-1)).objects[0]?.position?.vector.x).toBe(2.5)
+      expect(present(result.states.at(-1)).objects[0]?.velocity?.vector.x).toBe(3)
+      expect(deeplyFrozen(snapshot)).toBe(true)
+      expect(deeplyFrozen(outcome.datasets)).toBe(true)
+      expect(canvasHash(canonicalBytes(snapshot))).not.toBe(input.captureDigest)
+      ok(Buffer.from(canonicalBytes(value.source)).equals(sourceBytes), 'Original scene-object bytes must remain unchanged.')
+      ok(Buffer.from(canonicalBytes(value.source.scene)).equals(sceneBytes), 'Original scene bytes must remain unchanged.')
+      ok(Buffer.from(canonicalBytes(value.capture)).equals(captureBytes), 'Original capture bytes must remain unchanged.')
+      expect(deeplyFrozen(value.source)).toBe(true)
+      expect(deeplyFrozen(value.capture)).toBe(true)
+    } finally {
+      const now = performance.now()
+      timings[stage] = now - stageStartedAt
+      console.info('[canvas-verification mechanics stage timings ms]', { ...timings, total: now - startedAt, lastStage: stage })
+    }
   })
 
   it('rejects a forged numerical state inside an otherwise genuine full result and retains the actual server value', () => {

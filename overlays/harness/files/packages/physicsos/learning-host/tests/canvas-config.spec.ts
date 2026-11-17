@@ -24,7 +24,12 @@ describe('Canvas deployment configuration', () => {
       if (parsed.issues !== undefined) throw new Error('Declared teaching mode failed validation')
       expect(parsed.value.teachingToolsMode).toBe(teachingToolsMode)
     }
-    for (const teachingToolsMode of ['unknown', '', null, true, 1, {}, []]) {
+    const nullish = await validate({ teachingToolsMode: null })
+    expect(nullish.issues).toBeUndefined()
+    if (nullish.issues !== undefined) throw new Error('Nullish teaching mode did not use the safe default')
+    expect(nullish.value.teachingToolsMode).toBe('bridge')
+    expect(resolveCanvasConfig(nullish.value).lifecycleWritesEnabled).toBe(false)
+    for (const teachingToolsMode of ['unknown', '', true, 1, {}, []]) {
       expect((await validate({ teachingToolsMode })).issues).toBeDefined()
     }
   })
