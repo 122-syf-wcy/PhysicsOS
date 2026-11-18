@@ -136,9 +136,9 @@ export function VisualMaterialLibrary({ api, language = 'zh', onNotify }: Visual
     pending.current?.abort(); pending.current = controller
     if (lastApi.current !== api) { lastApi.current = api; setPage(undefined); setQuota(undefined); setQuotaError(false); setEditing(undefined); setConfirming(undefined) }
     setBusy('load'); setError('')
-    const input = searchInput(filters)
-    const load = scope === 'owned' ? api.owned({ lifecycle: filters.lifecycle, cursor, limit: 12 }, controller.signal)
-      : api.search({ ...input, cursor }, controller.signal)
+    const input = searchInput(filters), pagination = cursor === undefined ? {} : { cursor }
+    const load = scope === 'owned' ? api.owned({ lifecycle: filters.lifecycle, ...pagination, limit: 12 }, controller.signal)
+      : api.search({ ...input, ...pagination }, controller.signal)
     void load.then(next => {
       if (controller.signal.aborted || generation !== requestGeneration.current || activeApi.current !== api) return
       setPage(next)

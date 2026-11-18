@@ -96,7 +96,7 @@ export interface AdminWorkspaceProps {
   generationChannelApi?: GenerationChannelApi
   visualMaterialApi?: VisualMaterialApi
   language?: 'zh' | 'en'
-  languageStore?: SnapshotStore<'zh' | 'en'>
+  languageStore?: Pick<SnapshotStore<'zh' | 'en'>, 'getSnapshot' | 'subscribe'>
   onNotify?: (notice: PhysicsosAdminNotice) => void
   /** Account and tenant scope are decided by the usage host, not this page. */
   usageApi?: UsageApi

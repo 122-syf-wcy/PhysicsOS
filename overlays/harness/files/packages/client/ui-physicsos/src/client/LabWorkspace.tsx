@@ -74,7 +74,7 @@ export interface PhysicsSurfaceInjected {
   modelPoolApi?: ModelPoolApi
   generationChannelApi?: GenerationChannelApi
   visualMaterialApi?: VisualMaterialApi
-  adminLanguage?: SnapshotStore<'zh' | 'en'>
+  adminLanguage?: Pick<SnapshotStore<'zh' | 'en'>, 'getSnapshot' | 'subscribe'>
   onAdminNotify?: (notice: PhysicsosAdminNotice) => void
   openSurface?: (id: PhysicsSurfaceId, sceneRef?: PhysicsSceneRef) => void
   newCanvas?: (title: string) => Promise<string>
