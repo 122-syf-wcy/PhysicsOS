@@ -12,7 +12,7 @@
  * constant time. An unset token refuses to start rather than running open.
  */
 import { timingSafeEqual, randomBytes } from 'node:crypto'
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
+import { createServer, type IncomingMessage, type Server } from 'node:http'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -21,6 +21,8 @@ import { validateCandidate, type CandidateAssets } from './driver.ts'
 import { evaluateObservation } from './verdict.ts'
 import type { HostFrame } from './page.ts'
 import type { BrowserResult } from './types.ts'
+import { MECHANICS_VALIDATION_PROFILE, UNSUPPORTED_VALIDATION_PROFILE, isQuestionCodeValidationProfile, requiredValidationChecks, validationProfileKey, type QuestionCodeValidationProfile } from '@physicsos/shared'
+import { PlannerError } from './planner.ts'
 
 const MAX_BODY = 512 * 1024
 
@@ -45,6 +47,8 @@ export interface ValidationRequest {
   /** Frozen question scene, used to plan frames when `frames` is absent. */
   readonly scene?: Record<string, unknown>
   readonly experimentId?: string
+  /** Expected server policy only; the runtime planner independently binds it. */
+  readonly validationProfile?: QuestionCodeValidationProfile
   readonly expected: {
     readonly candidateSha256: string
     readonly sceneSha256: string
@@ -54,12 +58,15 @@ export interface ValidationRequest {
 
 /** Injected planner; undefined when this build has no domain viewport runtime. */
 export type FramePlanner = (scene: Record<string, unknown>, experimentId: string) => {
+  readonly validationProfile?: QuestionCodeValidationProfile
   readonly frames: readonly { readonly frameId: string; readonly snapshot: Record<string, unknown> }[]
   readonly changedFrame?: { readonly frameId: string; readonly snapshot: Record<string, unknown> }
+  readonly parameter?: { readonly id: string; readonly from: number; readonly to: number }
   readonly notes: readonly string[]
 }
 
 export interface ValidationResponse {
+  readonly validationProfile: QuestionCodeValidationProfile
   readonly result: BrowserResult
   readonly checks: readonly { readonly name: string; readonly passed: boolean; readonly detail?: string }[]
   readonly passed: boolean
@@ -92,14 +99,12 @@ const isRequest = (value: unknown): value is ValidationRequest => {
   const sceneOk = typeof body.scene === 'object' && body.scene !== null && !Array.isArray(body.scene)
     && typeof body.experimentId === 'string' && /^[a-z0-9][a-z0-9-]{0,79}$/.test(body.experimentId)
   return text('wrapperUrl') && text('entryUrl') && text('token')
+    && (body.validationProfile === undefined || isQuestionCodeValidationProfile(body.validationProfile))
     && (framesOk || sceneOk)
     && typeof body.expected === 'object' && body.expected !== null
 }
 
-/**
- * Serve the app-provided host page and wrapper locally? No: the app serves
- * them at `hostUrl` on its own origin. The worker only drives the browser.
- */
+/** Plan engine facts and drive the candidate through a worker-owned loopback host. */
 export async function evaluateCandidate(
   browser: Browser,
   request: ValidationRequest,
@@ -107,22 +112,39 @@ export async function evaluateCandidate(
   planner?: FramePlanner,
 ): Promise<ValidationResponse> {
   const started = Date.now()
-  /* Frames pinned by the caller win; otherwise the worker plans them from the
-     scene with the Lab's own viewport builder. A missing planner is a
-     configuration failure, never a pass. */
-  let frames = request.frames
-  let changedFrame = request.changedFrame
-  if (frames === undefined || changedFrame === undefined) {
+  const requestedProfile = request.validationProfile ?? MECHANICS_VALIDATION_PROFILE
+  const rejectedProfile = (profile: QuestionCodeValidationProfile): ValidationResponse => ({
+    validationProfile: profile,
+    result: { ready: false, firstFrameAcknowledged: false, nativeSurface: false, frames: [] },
+    checks: requiredValidationChecks(profile).map(name => ({ name, passed: false,
+      ...(name === 'profile-binding' ? { detail: validationProfileKey(profile) } : { detail: '该冻结场景/运行时无法绑定到所要求的原生验收策略。' }) })),
+    passed: false, screenshot: null, durationMs: Date.now() - started,
+  })
+  if (!isQuestionCodeValidationProfile(requestedProfile)) return rejectedProfile(UNSUPPORTED_VALIDATION_PROFILE)
+  if (requestedProfile.id === 'unsupported-runtime') return rejectedProfile(requestedProfile)
+  let frames = request.frames, changedFrame = request.changedFrame
+  let validationProfile = MECHANICS_VALIDATION_PROFILE as QuestionCodeValidationProfile
+  let parameter: { readonly id: string; readonly from: number; readonly to: number } | undefined
+  // Static NEVER accepts pinned child frames. Always plan independently from
+  // the canonical scene via the real domain runtime in the worker image.
+  if (frames === undefined || changedFrame === undefined || requestedProfile.id === 'optics-thin-lens-real-static') {
     if (request.scene === undefined || typeof request.experimentId !== 'string'
-      || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(request.experimentId)) {
-      throw Object.assign(new Error('scene and template identity required to plan frames'), { status: 400 })
-    }
+      || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(request.experimentId)) return rejectedProfile(requestedProfile)
     if (planner === undefined) throw Object.assign(new Error('frame planner unavailable'), { status: 503 })
-    const plan = planner(request.scene, request.experimentId)
-    if (plan.changedFrame === undefined) throw Object.assign(new Error('no editable parameter to verify'), { status: 422 })
+    let plan: ReturnType<FramePlanner>
+    try { plan = planner(request.scene, request.experimentId) } catch (error) {
+      if (error instanceof PlannerError && error.code !== 'RUNTIME_UNAVAILABLE') return rejectedProfile(requestedProfile)
+      if (error instanceof PlannerError) throw Object.assign(error, { status: 503 })
+      throw error
+    }
+    validationProfile = plan.validationProfile ?? MECHANICS_VALIDATION_PROFILE
+    if (!isQuestionCodeValidationProfile(validationProfile) || validationProfileKey(validationProfile) !== validationProfileKey(requestedProfile)) return rejectedProfile(requestedProfile)
+    if (plan.changedFrame === undefined) return rejectedProfile(requestedProfile)
     frames = plan.frames
     changedFrame = plan.changedFrame
+    parameter = plan.parameter
   }
+  if (validationProfileKey(validationProfile) !== validationProfileKey(requestedProfile)) return rejectedProfile(requestedProfile)
   /* The host page carries this run's frames. The worker serves it on a
      loopback origin; the wrapper and candidate stay on the app's origin, so
      the two-layer protocol is exercised exactly as in production. */
@@ -141,10 +163,13 @@ export async function evaluateCandidate(
       assets,
       frames,
       changedFrame,
+      validationProfile,
+      ...(parameter === undefined ? {} : { parameter }),
       ...(screenshotPath === undefined ? {} : { screenshotPath }),
     })
     const verdict = evaluateObservation({
       ...result,
+      validationProfile,
       candidateSha256: request.expected.candidateSha256,
       expectedSceneSha256: request.expected.sceneSha256,
       candidateSceneSha256: request.expected.sceneSha256,
@@ -155,7 +180,7 @@ export async function evaluateCandidate(
     if (screenshotPath !== undefined) {
       try { screenshot = (await readFile(screenshotPath)).toString('base64') } catch { screenshot = null }
     }
-    return { result, checks: verdict.checks, passed: verdict.passed, screenshot, durationMs: Date.now() - started }
+    return { validationProfile: verdict.validationProfile, result, checks: verdict.checks, passed: verdict.passed, screenshot, durationMs: Date.now() - started }
   } finally {
     await host.close()
   }
@@ -276,6 +301,7 @@ function workspaceRuntimeLoader(root: string): (scene: Record<string, unknown>) 
      decision the Lab makes (physics-runtime `pickEngine`/`domainOfEngine`). */
   const modules: Record<string, { readonly path: string; readonly factory: string }> = {
     mechanics: { path: 'viewport/mechanics-workspace-runtime.js', factory: 'createMechanicsWorkspaceRuntime' },
+    optics: { path: 'viewport/optics-workspace-runtime.js', factory: 'createOpticsWorkspaceRuntime' },
   }
   const cache = new Map<string, ((scene: Record<string, unknown>) => import('./frame-plan.ts').FrameSource | null) | null>()
   const base = `file://${root.endsWith('/') ? root : root + '/'}`
@@ -295,9 +321,9 @@ function workspaceRuntimeLoader(root: string): (scene: Record<string, unknown>) 
       return null
     }
     if (domain === undefined) return null
-    /* Only mechanics has a shipped viewport module today; an engine without
-       one is a configuration gap, reported honestly rather than guessed. */
-    const moduleEntry = domain === 'mechanics' ? modules.mechanics : undefined
+    /* Profiles exist only for native mechanics and the concrete imaging
+       runtime. An absent compiled module remains a configuration gap. */
+    const moduleEntry = domain === 'mechanics' ? modules.mechanics : domain === 'optics' ? modules.optics : undefined
     if (moduleEntry === undefined) {
       console.error(JSON.stringify({ level: 'warn', phase: 'runtime-loader', domain, error: 'no viewport module for this domain' }))
       return null

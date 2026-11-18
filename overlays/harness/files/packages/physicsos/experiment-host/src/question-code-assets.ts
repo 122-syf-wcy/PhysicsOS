@@ -1,15 +1,32 @@
-/** Runtime image assets belong to one verified generation, never to the public library. */
+/** Current-job image bindings stay private even when their original bytes are reusable. */
 import { createHash, randomBytes } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { crc32, inflateSync } from 'node:zlib'
 import { cssReferences } from './html.ts'
 export interface AssetBinding { ownerSessionId: string; ownerKey: string; generationId: string; sceneSha256: string }
-export interface QuestionAssetDescriptor { path: string; cssPath: string; sha256: string; width: number; height: number; kind: 'environment' | 'material'; model: string }
+export interface QuestionAssetDescriptor { path: string; cssPath: string; sha256: string; width: number; height: number; kind: 'environment' | 'material'; model: string; materialId?: string; materialRevision?: number }
 export interface QuestionAssetFallback { status: 'unavailable'; mode: 'native'; code: 'IMAGE_TIMEOUT' | 'IMAGE_RATE_LIMIT' | 'IMAGE_SERVICE_UNAVAILABLE' }
-export interface GenerateQuestionAssetInput extends AssetBinding { prompt: string; kind: 'environment' | 'material'; signal: AbortSignal }
-interface StoredAsset { descriptor: QuestionAssetDescriptor; bytes: Buffer; prompt: string }
+export interface GenerateQuestionAssetInput extends AssetBinding {
+  prompt: string; kind: 'environment' | 'material'; theme?: string; purpose?: string; tags?: readonly string[]; style?: string; signal: AbortSignal
+}
+export interface QuestionAssetImageResult {
+  bytes: Uint8Array; mediaType: 'image/png'; model: string
+  channelId?: string; configRevision?: string
+  usage?: Readonly<{ inputTokens?: number; outputTokens?: number; totalTokens?: number; textInputTokens?: number; imageInputTokens?: number }>
+}
+/** Only the native channel adapter can grant an observed, typed image fallback. */
+export class QuestionAssetImageError extends Error {
+  constructor(readonly code: string, readonly fallbackCode?: QuestionAssetFallback['code']) { super(code) }
+}
+export interface QuestionCodeAssetOptions {
+  env?: NodeJS.ProcessEnv
+  fetchImpl?: typeof fetch
+  imageProvider?: (input: { requestId: string; prompt: string; size: string; signal: AbortSignal }) => Promise<QuestionAssetImageResult>
+  retainGenerated?: (input: GenerateQuestionAssetInput, image: QuestionAssetImageResult & { width: number; height: number; prompt: string; operationId: string }) => Promise<{ id: string; revision: number }>
+  assertBinding?: (binding: AssetBinding) => void
+}
+interface StoredAsset { descriptor: QuestionAssetDescriptor; bytes: Buffer; prompt: string; source: 'generated' | 'library' }
 interface AssetJob { binding: AssetBinding; expires: number; attempts: number; assets: StoredAsset[]; fallbackCode?: QuestionAssetFallback['code'] }
-interface Options { env?: NodeJS.ProcessEnv; fetchImpl?: typeof fetch }
 const MAX_IMAGE = 6 * 1024 * 1024, MAX_BODY = 10 * 1024 * 1024, MAX_MEMORY = 64 * 1024 * 1024
 const failure = (code: string): Error => Object.assign(new Error(code), { code })
 const digest = (bytes: Buffer): string => createHash('sha256').update(bytes).digest('hex')
@@ -471,7 +488,7 @@ async function bounded(response: Response, maximum: number, signal: AbortSignal)
   signal.throwIfAborted()
   return Buffer.concat(chunks)
 }
-function pngSize(bytes: Buffer): { width: number; height: number } {
+export function pngSize(bytes: Buffer): { width: number; height: number } {
   if (bytes.length < 45 || bytes.length > MAX_IMAGE || !bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]))) throw failure('IMAGE_RESPONSE_INVALID')
   let width = 0, height = 0, depth = 0, color = 0, ended = false, afterData = false, palette = false
   const compressed: Buffer[] = []
@@ -513,7 +530,7 @@ export class QuestionCodeAssets {
   private readonly jobs = new Map<string, AssetJob>()
   private readonly env: NodeJS.ProcessEnv
   private readonly fetcher: typeof fetch
-  constructor(options: Options = {}) { this.env = options.env ?? process.env; this.fetcher = options.fetchImpl ?? fetch }
+  constructor(private readonly options: QuestionCodeAssetOptions = {}) { this.env = options.env ?? process.env; this.fetcher = options.fetchImpl ?? fetch }
   private prune(): void { for (const [key, job] of this.jobs) if (job.expires < Date.now()) this.jobs.delete(key) }
   private job(binding: AssetBinding, create = false): AssetJob | undefined {
     this.prune()
@@ -535,7 +552,7 @@ export class QuestionCodeAssets {
     return job?.fallbackCode && !job.assets.length
       ? { status: 'unavailable', mode: 'native', code: job.fallbackCode } : undefined
   }
-  files(binding: AssetBinding, source: string, stylesheet = ''): Map<string, Buffer> {
+  files(binding: AssetBinding, source: string, stylesheet = '', allowNative = false): Map<string, Buffer> {
     const job = this.job(binding), available = job?.assets ?? []
     const masked = source.replace(/"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'|`(?:\\[\s\S]|[^`\\])*`|\/\*[\s\S]*?\*\/|\/\/[^\r\n]*/g, value => ' '.repeat(value.length))
     const references = new Set([...cssReferences(stylesheet.replace(/\/\*[\s\S]*?\*\//g, '')), ...constantImageReferences(source)])
@@ -545,26 +562,49 @@ export class QuestionCodeAssets {
     for (const match of source.matchAll(/\.setAttribute\s*\(\s*(["'])src\1\s*,\s*(["'])([^"']+)\2\s*\)/g)) {
       if (masked.slice(match.index, match.index + 13) === '.setAttribute') references.add(match[3] ?? '')
     }
-    if (!available.length && job?.fallbackCode) {
+    const selected = available.filter(asset => references.has(asset.descriptor.path) || references.has(asset.descriptor.cssPath))
+    if (!selected.length && (job?.fallbackCode || allowNative)) {
       if ([...references].some(reference => !reference.startsWith('#'))) throw failure('IMAGE_BINDING_INVALID')
       validateNativeAssets(source)
     }
-    const selected = available.filter(asset => references.has(asset.descriptor.path) || references.has(asset.descriptor.cssPath))
     for (const match of (source + '\n' + stylesheet).matchAll(/(?:\.\/)?(?:assets\/)?generated\/[a-f0-9]+\.png/g)) {
       if (!available.some(asset => asset.descriptor.path.endsWith(match[0].replace(/^\.\//, '')))) throw failure('IMAGE_BINDING_INVALID')
     }
-    if (available.length && !selected.length) throw failure('IMAGE_UNUSED')
+    if (available.length && !selected.length && !allowNative) throw failure('IMAGE_UNUSED')
     const files = new Map<string, Buffer>()
     for (const asset of selected) {
       const name = asset.descriptor.path.slice(2)
       files.set('public/' + name, asset.bytes); files.set('dist/' + name, asset.bytes)
     }
     if (selected.length) {
-      const provenance = Buffer.from(JSON.stringify(selected.map(asset => ({ ...asset.descriptor, prompt: asset.prompt, source: 'PhysicsOS runtime image model', usage: 'Appearance only; physics remains engine-owned' })), null, 2))
+      const provenance = Buffer.from(JSON.stringify(selected.map(asset => ({ path: asset.descriptor.path, cssPath: asset.descriptor.cssPath,
+        sha256: asset.descriptor.sha256, width: asset.descriptor.width, height: asset.descriptor.height, kind: asset.descriptor.kind, mediaType: 'image/png',
+        source: asset.source === 'library' ? 'PhysicsOS authorized material reuse' : 'PhysicsOS runtime image model', usage: 'Appearance only; physics remains engine-owned' })), null, 2))
       files.set('public/assets/generated/provenance.json', provenance)
       files.set('dist/assets/generated/provenance.json', provenance)
     }
     return files
+  }
+  /** Revalidate stored bytes and give them new current-job paths; no old job address is reused. */
+  useMaterial(binding: AssetBinding, material: { bytes: Uint8Array; kind: 'environment' | 'material'; model: string; id: string; revision: number; sha256: string }): QuestionAssetDescriptor {
+    const bytes = Buffer.from(material.bytes), dimensions = pngSize(bytes)
+    if (digest(bytes) !== material.sha256 || !material.id || !Number.isSafeInteger(material.revision) || material.revision < 1) throw failure('IMAGE_BINDING_INVALID')
+    return this.stage(binding, bytes, dimensions, material.kind, material.model, '', 'library', { id: material.id, revision: material.revision })
+  }
+  private stage(binding: AssetBinding, bytes: Buffer, dimensions: { width: number; height: number }, kind: 'environment' | 'material', model: string, prompt: string, source: StoredAsset['source'], material?: { id: string; revision: number }): QuestionAssetDescriptor {
+    this.options.assertBinding?.(binding)
+    const job = this.job(binding, true)
+    if (!job || !['environment', 'material'].includes(kind) || typeof model !== 'string' || !model || model.length > 200) throw failure('IMAGE_BINDING_INVALID')
+    const sha256 = digest(bytes), prior = job.assets.find(asset => asset.descriptor.sha256 === sha256 && asset.descriptor.kind === kind)
+    if (prior) return { ...prior.descriptor }
+    if (job.assets.length >= 2) throw failure('IMAGE_LIMIT')
+    const resident = [...this.jobs.values()].flatMap(value => value.assets).reduce((sum, asset) => sum + asset.bytes.length, 0)
+    if (resident + bytes.length > MAX_MEMORY) throw failure('IMAGE_CAPACITY')
+    const id = randomBytes(16).toString('hex')
+    const descriptor: QuestionAssetDescriptor = { path: './assets/generated/' + id + '.png', cssPath: './generated/' + id + '.png', sha256, ...dimensions, kind, model,
+      ...(material === undefined ? {} : { materialId: material.id, materialRevision: material.revision }) }
+    job.assets.push({ descriptor, bytes, prompt, source })
+    return { ...descriptor }
   }
   async generate(input: GenerateQuestionAssetInput): Promise<QuestionAssetDescriptor> {
     const isAborted = (): boolean => input.signal.aborted
@@ -572,8 +612,10 @@ export class QuestionCodeAssets {
     if (!['environment', 'material'].includes(input.kind) || !input.prompt.trim() || input.prompt.length > 5000) throw failure('IMAGE_INPUT_INVALID')
     const job = this.job(input, true)
     if (!job) throw failure('IMAGE_BINDING_INVALID')
+    this.options.assertBinding?.(input)
     if (job.attempts >= 2) throw failure('IMAGE_LIMIT')
-    job.attempts++
+    const attempt = ++job.attempts
+    const operationId = digest(Buffer.from(JSON.stringify([input.ownerKey, input.ownerSessionId, input.generationId, attempt])))
     const controller = new AbortController(), onAbort = (): void => { controller.abort() }
     let timedOut = false, transientCode: QuestionAssetFallback['code'] | undefined
     const upstreamFailure = (status: number): Error => {
@@ -584,42 +626,56 @@ export class QuestionCodeAssets {
     input.signal.addEventListener('abort', onAbort, { once: true })
     const timer = setTimeout(() => { timedOut = true; controller.abort() }, 180_000)
     try {
-      const env = this.env
-      const keyFile = env.PHYSICSOS_IMAGE_API_KEY_FILE ?? env.PHYSICOS_IMAGE_API_KEY_FILE ?? '/run/secrets/image_api_key'
-      const key = (env.PHYSICSOS_IMAGE_API_KEY ?? env.PHYSICOS_IMAGE_API_KEY ?? await readFile(keyFile, 'utf8').catch(() => '')).trim()
-      if (!key || /placeholder|set-later/i.test(key)) throw failure('IMAGE_NOT_CONFIGURED')
-      const base = new URL(env.PHYSICSOS_IMAGE_API_BASE ?? env.PHYSICOS_IMAGE_API_BASE ?? 'https://image.haqiuhaqiu.xyz')
-      if (base.protocol !== 'https:' || base.username || base.password || base.search || base.hash) throw failure('IMAGE_NOT_CONFIGURED')
-      const model = env.PHYSICSOS_IMAGE_API_MODEL ?? env.PHYSICOS_IMAGE_API_MODEL ?? 'gpt-image-2.5-sunburst'
-      const endpoint = base.href.replace(/\/+$/, '').replace(/\/v1$/, '') + '/v1/images/generations'
       const prompt = 'PhysicsOS Warm Lab runtime appearance asset. Natural materials, soft daylight, credible physical laboratory. No text, numbers, formulas, arrows, trajectories, graphs, watermarks or baked-in moving objects. Leave clear space for engine-driven apparatus.\n' + input.prompt
-      const response = await this.fetcher(endpoint, { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + key }, body: JSON.stringify({ model, prompt, n: 1, size: input.kind === 'environment' ? '1536x1024' : '1024x1024', response_format: 'b64_json' }), redirect: 'error', signal: controller.signal })
-      if (!response.ok) { const error = upstreamFailure(response.status); await response.body?.cancel().catch(() => undefined); throw error }
-      const parsed: unknown = JSON.parse((await bounded(response, MAX_BODY, controller.signal)).toString('utf8'))
-      const item = typeof parsed === 'object' && parsed !== null && 'data' in parsed && Array.isArray(parsed.data) ? parsed.data[0] as unknown : undefined
-      if (typeof item !== 'object' || item === null) throw failure('IMAGE_RESPONSE_INVALID')
-      let bytes: Buffer
-      if ('b64_json' in item && typeof item.b64_json === 'string' && item.b64_json.length > 0) {
-        if (item.b64_json.length > MAX_IMAGE * 1.4 || !/^[A-Za-z0-9+/=\r\n]+$/.test(item.b64_json)) throw failure('IMAGE_RESPONSE_INVALID')
-        bytes = Buffer.from(item.b64_json, 'base64')
-      } else if ('url' in item && typeof item.url === 'string') {
-        const url = new URL(item.url)
-        if (url.origin !== base.origin || url.protocol !== 'https:' || url.username || url.password || url.hash) throw failure('IMAGE_RESPONSE_INVALID')
-        const download = await this.fetcher(url, { signal: controller.signal, redirect: 'error' })
-        if (!download.ok) { const error = upstreamFailure(download.status); await download.body?.cancel().catch(() => undefined); throw error }
-        bytes = await bounded(download, MAX_IMAGE, controller.signal)
-      } else throw failure('IMAGE_RESPONSE_INVALID')
+      const size = input.kind === 'environment' ? '1536x1024' : '1024x1024'
+      let bytes: Buffer, model: string, receipt: QuestionAssetImageResult | undefined
+      if (this.options.imageProvider !== undefined) {
+        const image = await this.options.imageProvider({ requestId: operationId, prompt, size, signal: controller.signal })
+        if (image.mediaType !== 'image/png' || !(image.bytes instanceof Uint8Array) || typeof image.model !== 'string' || !image.model || image.model.length > 200) throw failure('IMAGE_RESPONSE_INVALID')
+        bytes = Buffer.from(image.bytes); model = image.model; receipt = image
+      } else {
+        // Existing deployments retain their explicit image configuration until
+        // the independent encrypted image channel has been migrated/configured.
+        const env = this.env
+        const keyFile = env.PHYSICSOS_IMAGE_API_KEY_FILE ?? env.PHYSICOS_IMAGE_API_KEY_FILE ?? '/run/secrets/image_api_key'
+        const key = (env.PHYSICSOS_IMAGE_API_KEY ?? env.PHYSICOS_IMAGE_API_KEY ?? await readFile(keyFile, 'utf8').catch(() => '')).trim()
+        if (!key || /placeholder|set-later/i.test(key)) throw failure('IMAGE_NOT_CONFIGURED')
+        const base = new URL(env.PHYSICSOS_IMAGE_API_BASE ?? env.PHYSICOS_IMAGE_API_BASE ?? 'https://image.haqiuhaqiu.xyz')
+        if (base.protocol !== 'https:' || base.username || base.password || base.search || base.hash) throw failure('IMAGE_NOT_CONFIGURED')
+        model = env.PHYSICSOS_IMAGE_API_MODEL ?? env.PHYSICOS_IMAGE_API_MODEL ?? 'gpt-image-2.5-sunburst'
+        const endpoint = base.href.replace(/\/+$/, '').replace(/\/v1$/, '') + '/v1/images/generations'
+        const response = await this.fetcher(endpoint, { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + key }, body: JSON.stringify({ model, prompt, n: 1, size, response_format: 'b64_json' }), redirect: 'error', signal: controller.signal })
+        if (!response.ok) { const error = upstreamFailure(response.status); await response.body?.cancel().catch(() => undefined); throw error }
+        const parsed: unknown = JSON.parse((await bounded(response, MAX_BODY, controller.signal)).toString('utf8'))
+        const item = typeof parsed === 'object' && parsed !== null && 'data' in parsed && Array.isArray(parsed.data) ? parsed.data[0] as unknown : undefined
+        if (typeof item !== 'object' || item === null) throw failure('IMAGE_RESPONSE_INVALID')
+        if ('b64_json' in item && typeof item.b64_json === 'string' && item.b64_json.length > 0) {
+          if (item.b64_json.length > MAX_IMAGE * 1.4 || !/^[A-Za-z0-9+/=\r\n]+$/.test(item.b64_json)) throw failure('IMAGE_RESPONSE_INVALID')
+          bytes = Buffer.from(item.b64_json, 'base64')
+        } else if ('url' in item && typeof item.url === 'string') {
+          const url = new URL(item.url)
+          if (url.origin !== base.origin || url.protocol !== 'https:' || url.username || url.password || url.hash) throw failure('IMAGE_RESPONSE_INVALID')
+          const download = await this.fetcher(url, { signal: controller.signal, redirect: 'error' })
+          if (!download.ok) { const error = upstreamFailure(download.status); await download.body?.cancel().catch(() => undefined); throw error }
+          bytes = await bounded(download, MAX_IMAGE, controller.signal)
+        } else throw failure('IMAGE_RESPONSE_INVALID')
+      }
       controller.signal.throwIfAborted()
       const dimensions = pngSize(bytes)
-      const resident = [...this.jobs.values()].flatMap(value => value.assets).reduce((sum, asset) => sum + asset.bytes.length, 0)
-      if (resident + bytes.length > MAX_MEMORY) throw failure('IMAGE_CAPACITY')
-      const id = randomBytes(16).toString('hex'), descriptor: QuestionAssetDescriptor = { path: './assets/generated/' + id + '.png', cssPath: './generated/' + id + '.png', sha256: digest(bytes), ...dimensions, kind: input.kind, model }
-      job.assets.push({ descriptor, bytes, prompt })
-      return { ...descriptor }
+      // Retain successful candidates even if this renderer never selects them.
+      // An unavailable library is a failed operation, not a fabricated save receipt.
+      let material: { id: string; revision: number } | undefined
+      if (this.options.retainGenerated !== undefined) {
+        material = await this.options.retainGenerated({ ...input, signal: controller.signal }, { ...receipt, bytes, mediaType: 'image/png', model, ...dimensions, prompt, operationId })
+        if (!material.id || !Number.isSafeInteger(material.revision) || material.revision < 1) throw failure('IMAGE_LIBRARY_FAILED')
+      }
+      controller.signal.throwIfAborted()
+      return this.stage(input, bytes, dimensions, input.kind, model, prompt, 'generated', material)
     } catch (error) {
       if (isAborted()) throw failure('IMAGE_ABORTED')
       // Never infer permission from provider/user diagnostic strings.
       if (timedOut) { job.fallbackCode = 'IMAGE_TIMEOUT'; throw failure('IMAGE_TIMEOUT') }
+      if (error instanceof QuestionAssetImageError && error.fallbackCode !== undefined) transientCode = error.fallbackCode
       if (transientCode !== undefined) job.fallbackCode = transientCode
       if (error instanceof Error && /^IMAGE_[A-Z_]+$/.test(error.message)) throw error
       throw failure('IMAGE_GENERATION_FAILED')

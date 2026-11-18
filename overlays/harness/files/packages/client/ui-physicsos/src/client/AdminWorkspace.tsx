@@ -6,7 +6,7 @@
  * scoped to their own tenant.
  */
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import type {
   AdminApi, AdminUserRow, AuditEventRow, AuthUser, SchoolRequestRow,
 } from './auth-api.ts'
@@ -18,6 +18,12 @@ import { AdminOverviewTab } from './AdminOverviewTab.tsx'
 import { AdminSectionTabs } from './AdminSectionTabs.tsx'
 import { AdminExperimentTab } from './AdminExperimentTab.tsx'
 import { AdminModelPoolTab } from './AdminModelPoolTab.tsx'
+import { AdminGenerationChannelsTab } from './AdminGenerationChannelsTab.tsx'
+import { VisualMaterialLibrary } from './VisualMaterialLibrary.tsx'
+import type { GenerationChannelApi } from './generation-channel-api.ts'
+import type { VisualMaterialApi } from './visual-material-api.ts'
+import type { PhysicsosAdminNotice } from './PhysicsosAdminToast.tsx'
+import type { SnapshotStore } from './runtime-compat.ts'
 import { AdminNoticeTab } from './AdminNoticeTab.tsx'
 import { AdminWebsiteTab } from './AdminWebsiteTab.tsx'
 import { createWebsiteApi, type WebsiteApi } from './website-api.ts'
@@ -62,6 +68,7 @@ type Tab =
   | 'website'
   | 'moderation'
   | 'modelPool'
+  | 'visualMaterials'
 
 export interface AdminWorkspaceProps {
   api: AdminApi
@@ -86,6 +93,11 @@ export interface AdminWorkspaceProps {
   noticeApi?: NoticeApi
   /** `/physicsos/model-pool` client — absent in stripped test compositions. */
   modelPoolApi?: ModelPoolApi
+  generationChannelApi?: GenerationChannelApi
+  visualMaterialApi?: VisualMaterialApi
+  language?: 'zh' | 'en'
+  languageStore?: SnapshotStore<'zh' | 'en'>
+  onNotify?: (notice: PhysicsosAdminNotice) => void
   /** Account and tenant scope are decided by the usage host, not this page. */
   usageApi?: UsageApi
   /** Independent v1 activity client; never reinterpret legacy UsageApi.use:view. */
@@ -106,12 +118,20 @@ const fmtTime = (iso: string): string => {
 
 const defaultModerationApi = createModerationApi()
 const defaultWebsiteApi = createWebsiteApi()
+const noLanguageSubscription = (): (() => void) => () => {}
 
 export function AdminWorkspace({
-  api, paperApi, noticeApi, modelPoolApi, usageApi, activityApi,
+  api, paperApi, noticeApi, modelPoolApi, generationChannelApi, visualMaterialApi, usageApi, activityApi,
+  language = 'zh', languageStore, onNotify,
   moderationApi = defaultModerationApi, websiteApi = defaultWebsiteApi, useAuth, t,
 }: AdminWorkspaceProps) {
   const principal = useAuth(state => state.user)
+  const readLanguage = languageStore?.getSnapshot ?? (() => language)
+  const currentLanguage = useSyncExternalStore(languageStore?.subscribe ?? noLanguageSubscription, readLanguage, readLanguage)
+  const noticeOwner = principal === undefined ? undefined : JSON.stringify([principal.schoolId, principal.id])
+  const notify = useCallback((notice: PhysicsosAdminNotice): void => {
+    if (noticeOwner !== undefined) onNotify?.({ ...notice, ownerKey: noticeOwner })
+  }, [onNotify, noticeOwner])
   const role = principal?.role
   /* The judging account, attributed on every review — the same identity the
      server files the ledger row under. */
@@ -139,6 +159,7 @@ export function AdminWorkspace({
       ? [{ id: 'experimentReview' as const, label: t('admin.tab.experimentReview'), group: 'content' as const }]
       : []),
     ...(noticeApi === undefined ? [] : [{ id: 'feedback' as const, label: t('admin.tab.feedback'), group: 'content' as const }]),
+    ...(visualMaterialApi === undefined ? [] : [{ id: 'visualMaterials' as const, label: currentLanguage === 'zh' ? '素材库' : 'Visual materials', group: 'content' as const }]),
     ...(isSuper
       ? [{ id: 'website' as const, label: t('admin.tab.website'), group: 'content' as const }]
       : []),
@@ -154,7 +175,7 @@ export function AdminWorkspace({
     schools: <IconLibrary size={18} />, schoolRanking: <IconChart size={18} />, users: <IconScene size={18} />,
     experimentReview: <IconVerified size={18} />, feedback: <IconAnnouncement size={18} />,
     website: <IconArchive size={18} />, moderation: <IconChatBubble size={18} />,
-    modelPool: <IconComputed size={18} />,
+    modelPool: <IconComputed size={18} />, visualMaterials: <IconLibrary size={18} />,
   }
   const navigationTabs = tabs.map(item => ({ ...item, icon: navigationIcons[item.id] }))
 
@@ -193,13 +214,32 @@ export function AdminWorkspace({
         {active === 'experimentReview' && <ReviewTab paperApi={paperApi} isSuper={isSuper} reviewer={username} t={t} />}
         {active === 'feedback' && noticeApi !== undefined && <FeedbackTab api={noticeApi} isSuper={isSuper} t={t} />}
         {active === 'modelPool' && modelPoolApi !== undefined && isSuper && (
-          <AdminModelPoolTab api={modelPoolApi} t={t} />
+          <ModelChannelsTab api={modelPoolApi} generationApi={generationChannelApi} language={currentLanguage} onNotify={notify} t={t} />
         )}
+        {active === 'visualMaterials' && visualMaterialApi !== undefined && <VisualMaterialLibrary api={visualMaterialApi} language={currentLanguage} onNotify={notify} />}
         {active === 'website' && isSuper && <AdminWebsiteTab api={websiteApi} t={t} />}
         {active === 'moderation' && isSuper && <AdminModerationTab api={moderationApi} />}
       </AdminPage>
     </div>
   )
+}
+
+function ModelChannelsTab({ api, generationApi, language, onNotify, t }: {
+  readonly api: ModelPoolApi
+  readonly generationApi: GenerationChannelApi | undefined
+  readonly language: 'zh' | 'en'
+  readonly onNotify: (notice: PhysicsosAdminNotice) => void
+  readonly t: (key: PhysicsosKey) => string
+}) {
+  const [section, setSection] = useState<'conversation' | 'visualization'>('conversation')
+  if (generationApi === undefined) return <AdminModelPoolTab api={api} t={t} />
+  return <AdminSectionTabs label={t('admin.tab.modelPool')} value={section} onChange={setSection} items={[
+    { id: 'conversation', label: language === 'zh' ? '主对话通道' : 'Conversation channels' },
+    { id: 'visualization', label: language === 'zh' ? '可视化与生图' : 'Visualization and images' },
+  ]}>
+    {section === 'conversation' ? <AdminModelPoolTab api={api} t={t} />
+      : <AdminGenerationChannelsTab api={generationApi} language={language} onNotify={onNotify} />}
+  </AdminSectionTabs>
 }
 
 function ReviewTab({ paperApi, isSuper, reviewer, t }: {

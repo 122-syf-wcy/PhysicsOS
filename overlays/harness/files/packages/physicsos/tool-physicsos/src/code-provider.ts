@@ -6,7 +6,7 @@
  * how the child stopped so the parent can decide on its single retry.
  * @module @deepseek-ai/dsh-tool-physicsos/code-provider
  */
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { canonicalJson } from '@physicsos/agent-tools'
 import type { Context } from '@deepseek-ai/cordis'
 import type { SubagentProvider, ResolvedSubagentStartRequest, SubagentRun } from '@deepseek-ai/dsh-subagent'
@@ -18,12 +18,13 @@ import { startInProcessRun } from '@deepseek-ai/dsh-subagent-in-process-driver'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import { CODE_PART_TARGET_CHARACTERS, MAX_CODE_PART_CHARACTERS, QuestionCodeParts } from './question-code-parts.ts'
 import { CodeCheckpoints } from './code-checkpoints.ts'
-import { codeChildGuard, registerAssetTool, registerWriteCodeTool, type AssetService, type CodeChildJob } from './code-child-tools.ts'
+import { codeChildGuard, registerAssetTool, registerMaterialTools, registerWriteCodeTool, type AssetService, type CodeChildJob } from './code-child-tools.ts'
+import { CodeModelRouting, type CodeMainModel, type VisualizationChannels } from './code-model-routing.ts'
 import { generationError, isTransientDiagnostic } from './generation-errors.ts'
 
 export const CODE_PROVIDER_NAME = 'physics-question-code'
 export const CODE_PRESET_ID = 'physics-code-only'
-export const CODE_PERSONA = `你是PhysicsOS专用实验绘图作者，只绘制只读snapshot引擎事实，不解题或改条件。没有素材且提供素材工具时先生成一张环境/材质；已有素材直接复用。仅平台工具返回mode:native或可信任务提示时，删除Image/decode/图片路径，直接用原生Canvas/SVG完成画面，不重试生图。立即用physics_write_experiment_code分段提交，通常每段不超过${CODE_PART_TARGET_CHARACTERS}字符，首段replace、收到回执后逐段append；不要在一次输出中规划并写完整大文件。完整JS合计最多${MAX_CODE_PART_CHARACTERS}字符、CSS合计最多6000字符；保留全部装置和科学标注，最后structured_output只提交title/summary。`
+export const CODE_PERSONA = `你是PhysicsOS专用可视化作者，只绘制只读snapshot引擎事实，不解题或改条件。需要实物/材质/环境图片时先检索素材库并选择适配素材，没有合适素材才按需生图；原生Canvas/SVG足以清楚表达时不用位图。只用工具返回的本任务路径。若平台确认图片通道瞬态故障，只写原生图形，不伪造图片。使用physics_write_experiment_code分段提交，建议每段${CODE_PART_TARGET_CHARACTERS}字符，replace首段并按回执append；JS合计最多${MAX_CODE_PART_CHARACTERS}字符、CSS最多6000字符，最后structured_output只提交title/summary。保留完整装置、科学标注和可探索参数。`
 
 /** Output cap per child request; never above the parent's own. */
 const CHILD_MAX_TOKENS = 8192
@@ -47,6 +48,7 @@ interface JobPlan {
   readonly chunked: boolean
   /** The child may generate one image (service present, none yet). */
   readonly canGenerateAsset: boolean
+  readonly canSearchMaterials: boolean
   readonly nativeFallback: boolean
 }
 
@@ -56,7 +58,10 @@ export class PhysicsCodeProvider implements SubagentProvider {
   readonly capabilities = { agentOptions: true, outputSchema: true, depthLimit: true, toolFilter: true, persona: true }
   private presetReady?: Promise<void>
   private readonly checkpoints = new CodeCheckpoints()
-  constructor(private readonly ctx: Context) {}
+  private readonly modelRouting: CodeModelRouting
+  constructor(private readonly ctx: Context) {
+    this.modelRouting = new CodeModelRouting(() => (this.ctx.get as (key: string) => unknown)('visualizationChannels') as VisualizationChannels | undefined)
+  }
 
   private ensurePreset(): Promise<void> {
     return this.presetReady ??= (async () => {
@@ -75,7 +80,7 @@ export class PhysicsCodeProvider implements SubagentProvider {
    * only: a missing catalog never blocks the child, and the lookup is raced
    * against the request's own cancellation.
    */
-  private async lightEffort(request: ResolvedSubagentStartRequest): Promise<ReasoningEffortId | undefined> {
+  private async lightEffort(request: ResolvedSubagentStartRequest, selected?: CodeMainModel): Promise<ReasoningEffortId | undefined> {
     const signal = request.signal
     /* Read through a function: the signal flips asynchronously, so a plain
        property read would be narrowed to `false` after the first check. */
@@ -86,7 +91,7 @@ export class PhysicsCodeProvider implements SubagentProvider {
       return Object.assign(new Error('Code metadata lookup aborted'), { code: timedOut ? 'GENERATION_TIMEOUT' : 'GENERATION_ABORTED' })
     }
     if (isAborted()) throw abortError()
-    const route = parentAgentOptionsForDelegation(request.parent)
+    const route = selected ?? parentAgentOptionsForDelegation(request.parent)
     const llm = this.ctx.get('llm')
     if (llm === undefined || route.provider === undefined || route.model === undefined) return undefined
     let onAbort: (() => void) | undefined
@@ -124,7 +129,9 @@ export class PhysicsCodeProvider implements SubagentProvider {
     const chunked = typeof assets?.generateAsset === 'function'
     const existing = chunked ? assets.assetManifest?.({ ownerSessionId: owner, generationId, scene: scene.scene }) ?? [] : []
     const nativeFallback = chunked && existing.length === 0 && assets.assetFallback?.({ ownerSessionId: owner, generationId, scene: scene.scene }) !== undefined
-    return { scene, generationId, owner, assets, chunked, nativeFallback, canGenerateAsset: chunked && existing.length === 0 && !nativeFallback }
+    return { scene, generationId, owner, assets, chunked, nativeFallback,
+      canSearchMaterials: typeof assets?.searchMaterials === 'function' && typeof assets.useMaterial === 'function' && !nativeFallback,
+      canGenerateAsset: chunked && existing.length === 0 && !nativeFallback }
   }
 
   /** A suspended start may only resume the scene and job it originally captured. */
@@ -156,7 +163,10 @@ export class PhysicsCodeProvider implements SubagentProvider {
       throw new Error('Code generation requires a structured first-level child')
     }
     this.assertCurrent(request, plan)
-    const reasoningEffort = await this.lightEffort(request)
+    const modelRequestId = plan ? createHash('sha256').update(canonicalJson([String(request.parent.id), plan.generationId])).digest('hex') : undefined
+    const model = modelRequestId === undefined ? undefined : await this.modelRouting.resolve(request.parent, modelRequestId, request.signal)
+    this.assertCurrent(request, plan)
+    const reasoningEffort = await this.lightEffort(request, model)
     this.assertCurrent(request, plan)
     const chunked = plan?.chunked === true
     /* The write budget survives a resume of the same job; a fresh job starts clean. */
@@ -169,6 +179,7 @@ export class PhysicsCodeProvider implements SubagentProvider {
     if (request.signal.aborted) release()
 
     const allowedTools = [
+      ...(plan?.canSearchMaterials ? ['physics_search_visual_materials', 'physics_use_visual_material'] : []),
       ...(plan?.canGenerateAsset ? ['physics_generate_experiment_asset'] : []),
       ...(chunked ? ['physics_write_experiment_code'] : []),
     ]
@@ -215,7 +226,10 @@ export class PhysicsCodeProvider implements SubagentProvider {
           parent: request.parent, scene: plan.scene, generationId: plan.generationId, parts, signal: request.signal,
         }
         registerWriteCodeTool(agent.ctx, job, staged)
-        if (plan.canGenerateAsset && plan.assets !== undefined) registerAssetTool(agent.ctx, job, plan.assets, plan.owner)
+        if (plan.assets !== undefined) {
+          if (plan.canSearchMaterials) registerMaterialTools(agent.ctx, job, plan.assets, plan.owner)
+          if (plan.canGenerateAsset) registerAssetTool(agent.ctx, job, plan.assets, plan.owner)
+        }
       }
       agent.ctx.tools.presentAs('native')
       agent.ctx.tools.restrict({ allow: [] })
@@ -232,7 +246,9 @@ export class PhysicsCodeProvider implements SubagentProvider {
       const run = await startInProcessRun({
         ...request, persona, toolFilter: { allow: [] },
         ...(chunked ? { outputSchema: METADATA_SCHEMA } : {}),
-        agentOptions: { maxTokens, ...(reasoningEffort === undefined ? {} : { reasoningEffort }) },
+        agentOptions: { maxTokens,
+          ...(model === undefined ? {} : { provider: model.provider, model: model.model }),
+          ...(reasoningEffort === undefined ? {} : { reasoningEffort }) },
       }, {})
       if (!flags.isolated) { await run.dispose(); throw new Error('Code child creation did not establish its restricted preset') }
       if (!chunked) return run
@@ -247,7 +263,10 @@ export class PhysicsCodeProvider implements SubagentProvider {
           const end = child?.session.snapshotEvents().findLast(event => event.type === 'turn/end')
           const reason = end?.type === 'turn/end' ? end.data.reason : undefined
           const code = reason?.kind === 'error' ? reason.error.code : undefined
-          const diagnostic = code === 'EMPTY_RESPONSE' || isTransientDiagnostic(code) ? code : undefined
+          // The route lease is private and exact to this job. Error strings
+          // alone never grant a model change for an authentication/format fault.
+          const allLimited = modelRequestId !== undefined && this.modelRouting.reviewRateLimit(modelRequestId)
+          const diagnostic = allLimited ? 'RATE_LIMIT' : code === 'EMPTY_RESPONSE' || isTransientDiagnostic(code) ? code : undefined
           if (result.stopReason === 'aborted' || request.signal.aborted) release()
           return { ...result, ...(hasPartial ? { partialSource } : {}), ...(diagnostic === undefined ? {} : { diagnostic }) }
         }

@@ -1,6 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 afterEach(() => { vi.useRealTimers() })
 import { requestCandidateValidation, validationWorkerFromEnv } from '../src/question-code-validation.ts'
+import { MECHANICS_VALIDATION_PROFILE, OPTICS_VALIDATION_PROFILE, requiredValidationChecks, validationProfileKey, type QuestionCodeValidationProfile } from '@physicsos/shared'
+import { createMechanicsScene, createOpticalBenchScene } from '@physicsos/physics-scene'
+
+const checksFor = (profile = MECHANICS_VALIDATION_PROFILE as QuestionCodeValidationProfile, fail?: string) => requiredValidationChecks(profile).map(name => ({
+  name, passed: name !== fail, ...(name === 'profile-binding' ? { detail: validationProfileKey(profile) } : {}),
+}))
+const report = (overrides: Record<string, unknown> = {}, profile = MECHANICS_VALIDATION_PROFILE as QuestionCodeValidationProfile) => ({
+  passed: true, durationMs: 900, validationProfile: profile, checks: checksFor(profile), ...overrides,
+})
 
 const config = { url: 'http://worker:8099', token: 't'.repeat(32) }
 const input = {
@@ -18,29 +27,30 @@ const respond = (body: unknown, status = 200): typeof fetch => (async () => new 
 
 describe('candidate validation request', () => {
   it('passes only when the worker passes every check', async () => {
-    const fetchMock = vi.fn(respond({ passed: true, durationMs: 900, checks: [{ name: 'first-frame', passed: true }, { name: 'motion-sampled', passed: true }], screenshot: 'x'.repeat(200) }))
+    const fetchMock = vi.fn(respond(report({ screenshot: 'x'.repeat(200) })))
     const outcome = await requestCandidateValidation(config, input, fetchMock as unknown as typeof fetch)
     expect(outcome.kind).toBe('passed')
     if (outcome.kind === 'passed') {
-      expect(outcome.checks).toHaveLength(2)
+      expect(outcome.checks).toHaveLength(requiredValidationChecks(MECHANICS_VALIDATION_PROFILE).length)
+      expect(outcome.validationProfile).toEqual(MECHANICS_VALIDATION_PROFILE)
       expect(outcome.screenshotRef).toContain('gen-1')
     }
   })
 
   it('treats a contradictory report (passed:true with a failed check) as rejected', async () => {
-    const fetchMock = vi.fn(respond({ passed: true, durationMs: 900, checks: [{ name: 'first-frame', passed: true }, { name: 'motion-sampled', passed: false }] }))
+    const fetchMock = vi.fn(respond(report({ checks: checksFor(MECHANICS_VALIDATION_PROFILE, 'motion-sampled') })))
     const outcome = await requestCandidateValidation(config, input, fetchMock as unknown as typeof fetch)
     expect(outcome.kind).toBe('rejected')
   })
 
   it('treats passed:false as rejected even when every listed check passed', async () => {
-    const fetchMock = vi.fn(respond({ passed: false, durationMs: 900, checks: [{ name: 'first-frame', passed: true }] }))
+    const fetchMock = vi.fn(respond(report({ passed: false })))
     const outcome = await requestCandidateValidation(config, input, fetchMock as unknown as typeof fetch)
     expect(outcome.kind).toBe('rejected')
   })
 
   it('sends the real scene digest and revision to the worker', async () => {
-    const fetchMock = vi.fn(respond({ passed: true, durationMs: 1, checks: [{ name: 'first-frame', passed: true }] }))
+    const fetchMock = vi.fn(respond(report({ durationMs: 1 })))
     await requestCandidateValidation(config, input, fetchMock as unknown as typeof fetch)
     const body = JSON.parse(String((fetchMock.mock.calls[0] as unknown[])[1] && ((fetchMock.mock.calls[0] as [string, RequestInit])[1].body)))
     expect(body.expected).toEqual({ candidateSha256: input.candidateSha256, sceneSha256: input.sceneSha256, sceneRevision: 7 })
@@ -51,10 +61,12 @@ describe('candidate validation request', () => {
   })
 
   it('includes the frozen scene but no manufactured frames for the normal planner path', async () => {
-    const scene = { id: 'scene-1', revision: 7, metadata: { sourceQuestionId: 'frozen-question' } }
-    const fetchMock = vi.fn(respond({ passed: true, durationMs: 1, checks: [{ name: 'first-frame', passed: true }] }))
+    const scene = createMechanicsScene({ sceneId: 'scene-1', revision: 7, model: 'projectile_motion',
+      position: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 10, z: 0 }, gravity: { x: 0, y: -10, z: 0 },
+      endTime: 2, now: '2026-11-18T00:00:00Z', sourceQuestionId: 'frozen-question' })
+    const fetchMock = vi.fn(respond(report({ durationMs: 1 })))
     const { frames: _frames, changedFrame: _changed, ...normal } = input
-    await requestCandidateValidation(config, { ...normal, scene, experimentId: 'projectile-oblique' }, fetchMock as unknown as typeof fetch)
+    await requestCandidateValidation(config, { ...normal, scene: { ...scene }, experimentId: 'projectile-oblique' }, fetchMock as unknown as typeof fetch)
     const body = JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body))
     expect(body.scene).toEqual(scene)
     expect(body.experimentId).toBe('projectile-oblique')
@@ -109,8 +121,42 @@ describe('candidate validation request', () => {
       .toMatchObject({ kind: 'infrastructure', code: 'WORKER_500' })
     expect(await requestCandidateValidation(config, input, vi.fn(respond({ hi: true })) as unknown as typeof fetch))
       .toMatchObject({ kind: 'infrastructure', code: 'WORKER_BAD_REPORT' })
-    expect(await requestCandidateValidation(config, input, vi.fn(respond({ passed: true, durationMs: 1, checks: [] })) as unknown as typeof fetch))
+    expect(await requestCandidateValidation(config, input, vi.fn(respond(report({ durationMs: 1, checks: [] }))) as unknown as typeof fetch))
       .toMatchObject({ kind: 'infrastructure', code: 'WORKER_EMPTY_REPORT' })
+  })
+
+  it.each(['missing-check', 'duplicate-check', 'unknown-check', 'missing-profile', 'wrong-version', 'extra-profile-field', 'wrong-profile', 'forged-binding'] as const)(
+    'refuses a purported pass with an unbound profile inventory: %s', async mode => {
+      const valid = report(), checks = checksFor()
+      const invalid = mode === 'missing-check' ? { ...valid, checks: checks.slice(1) }
+        : mode === 'duplicate-check' ? { ...valid, checks: [...checks.slice(0, -1), checks[0]] }
+          : mode === 'unknown-check' ? { ...valid, checks: [...checks.slice(0, -1), { name: 'nonblank-screenshot', passed: true }] }
+            : mode === 'missing-profile' ? { ...valid, validationProfile: undefined }
+              : mode === 'wrong-version' ? { ...valid, validationProfile: { id: MECHANICS_VALIDATION_PROFILE.id, version: 2 } }
+                : mode === 'extra-profile-field' ? { ...valid, validationProfile: { ...MECHANICS_VALIDATION_PROFILE, skipMotion: true } }
+                  : mode === 'wrong-profile' ? report({}, OPTICS_VALIDATION_PROFILE)
+                    : { ...valid, checks: checks.map(check => check.name === 'profile-binding' ? { ...check, detail: 'optics-thin-lens-real-static@1' } : check) }
+      expect(await requestCandidateValidation(config, input, respond(invalid))).toMatchObject({ kind: 'infrastructure', code: 'WORKER_BAD_REPORT' })
+    })
+
+  it('selects static optics from canonical frozen facts and trusted template domain, not injected profile or frames', async () => {
+    const scene = createOpticalBenchScene({ sceneId: 'real-lens', revision: 7, now: '2026-11-18T00:00:00Z',
+      object: { position: -30, height: 6 }, element: { type: 'thin_lens', position: 0, focalLength: 10 } })
+    const fetchMock = vi.fn(respond(report({}, OPTICS_VALIDATION_PROFILE)))
+    const normal = { ...input, scene: { ...scene }, experimentId: 'convex-lens', validationProfile: { id: 'child-static', version: 99 } }
+    expect(await requestCandidateValidation(config, normal, fetchMock)).toMatchObject({ kind: 'passed', validationProfile: OPTICS_VALIDATION_PROFILE })
+    const body = JSON.parse(String((fetchMock.mock.calls[0] as [string, RequestInit])[1].body))
+    expect(body.validationProfile).toEqual(OPTICS_VALIDATION_PROFILE)
+    expect(body.validationProfile).not.toEqual(normal.validationProfile)
+  })
+
+  it('does not accept the mechanics inventory for an optics scene or static inventory for unverified scene data', async () => {
+    const scene = createOpticalBenchScene({ sceneId: 'real-lens', revision: 7, now: '2026-11-18T00:00:00Z',
+      object: { position: -30, height: 6 }, element: { type: 'thin_lens', position: 0, focalLength: 10 } })
+    expect(await requestCandidateValidation(config, { ...input, scene: { ...scene }, experimentId: 'convex-lens' }, respond(report())))
+      .toMatchObject({ kind: 'infrastructure', code: 'WORKER_BAD_REPORT' })
+    expect(await requestCandidateValidation(config, { ...input, scene: { id: 'forged', domain: 'optics' }, experimentId: 'convex-lens' }, respond(report({}, OPTICS_VALIDATION_PROFILE))))
+      .toMatchObject({ kind: 'infrastructure', code: 'WORKER_BAD_REPORT' })
   })
 
   it('is unconfigured (fail closed) without both url and a long token', () => {

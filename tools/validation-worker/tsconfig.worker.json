@@ -215,6 +215,7 @@
     "tools/validation-worker/src/frame-plan.ts",
     "tools/validation-worker/src/planner.ts",
     "tools/validation-worker/src/server.ts",
-    "viewport/mechanics-workspace-runtime.ts"
+    "viewport/mechanics-workspace-runtime.ts",
+    "viewport/optics-workspace-runtime.ts"
   ]
 }

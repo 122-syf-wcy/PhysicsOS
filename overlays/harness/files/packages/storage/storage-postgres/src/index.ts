@@ -224,6 +224,28 @@ export class PostgresStorageBackend implements StorageBackend {
     }
   }
 
+  /** Let indexed sibling repositories share the host's existing single-writer fence. */
+  assertWriterHeld(): void {
+    if (this.closing !== undefined) throw new StorageError('closed', 'postgres storage backend is closed')
+    this.writer.assertHeld()
+  }
+
+  /** Native-host composition only; this private connection configuration is never a remote DTO. */
+  siblingPoolConfig(): { readonly schema: string; readonly poolConfig: PoolConfig } {
+    this.assertWriterHeld()
+    return {
+      schema: this.schema,
+      poolConfig: {
+        application_name: 'physicsos-indexed-sibling',
+        connectionString: this.connectionString,
+        connectionTimeoutMillis: 10_000,
+        idleTimeoutMillis: 30_000,
+        max: 4,
+        ssl: typeof this.ssl === 'object' ? { ...this.ssl } : this.ssl,
+      },
+    }
+  }
+
   private closePool(): Promise<void> {
     this.poolClosing ??= this.pool.end()
     return this.poolClosing

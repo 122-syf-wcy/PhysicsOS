@@ -35,6 +35,9 @@
       "path": "../../storage/storage-json"
     },
     {
+      "path": "../model-pool-host"
+    },
+    {
       "path": "../../runtime-diagnostics/invariants"
     }
   ]

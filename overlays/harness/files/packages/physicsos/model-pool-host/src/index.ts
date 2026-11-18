@@ -26,7 +26,15 @@ import { openModelPoolDomain } from './domain.ts'
 import { PoolError } from './errors.ts'
 import { identityOf } from './identity.ts'
 import { upstreamModelOf, WeightedRotation } from './pool.ts'
-import { startModelProxy } from './proxy.ts'
+import { boundAddress, startModelProxy } from './proxy.ts'
+import { openGenerationChannelsDomain } from './generation-domain.ts'
+import { discoverGenerationModels } from './generation-discovery.ts'
+import { generationProxyHandler, isGenerationLoopbackPath } from './generation-proxy.ts'
+import { registerGenerationTextProvider, type GenerationRegistrar } from './generation-registrar.ts'
+import { generationRoutes } from './generation-routes.ts'
+import { GenerationChannelsService } from './generation-service.ts'
+import { GenerationStore } from './generation-store.ts'
+import { GENERATION_ADMIN_PATH } from './generation-types.ts'
 import { modelPoolRoutes, type ChannelModelsResult } from './routes.ts'
 import { PoolStore } from './store.ts'
 import {
@@ -44,6 +52,12 @@ export * from './routes.ts'
 export * from './store.ts'
 export * from './types.ts'
 export * from './upstream.ts'
+export * from './generation-types.ts'
+export * from './generation-domain.ts'
+export * from './generation-schemas.ts'
+export * from './generation-store.ts'
+export * from './generation-routes.ts'
+export { GenerationRequestError } from './generation-upstream.ts'
 
 export const name = 'model-pool-host'
 export const inject = ['webServer', 'storageDomain']
@@ -109,6 +123,25 @@ export function apply(ctx: Context, config: Config = {}): () => Promise<void> {
     })
     await seedFallback(store, normalized)
 
+    const generationDomain = await openGenerationChannelsDomain(ctx)
+    const generationStore = new GenerationStore({ domain: generationDomain, cipherKey })
+    let generationRegistrar: GenerationRegistrar | undefined
+    const generationService = new GenerationChannelsService({
+      store: generationStore,
+      onLeasesChanged: () => { generationRegistrar?.refresh() },
+      textAvailable: () => generationRegistrar?.available() ?? false,
+    })
+    const generationHandler = generationProxyHandler(generationService)
+    const generationLoopbackEnabled = ['127.0.0.1', '::1', 'localhost'].includes(normalized.host)
+    const generationAdmin = generationRoutes({
+      store: generationStore,
+      identity: () => identityOf(ctx),
+      discoverModels: (channelId, keyId, signal) => discoverGenerationModels(generationStore, channelId, keyId, signal),
+    })
+    yield () => generationDomain.close()
+    yield () => generationService.dispose()
+    yield ctx.provide('visualizationChannels', generationService.runtime())
+
     const rotation = new WeightedRotation()
     const proxy = await startModelProxy({
       store,
@@ -117,7 +150,16 @@ export function apply(ctx: Context, config: Config = {}): () => Promise<void> {
       headersTimeoutMs: normalized.headersTimeoutMs,
       requestBudgetMs: normalized.requestBudgetMs,
       log: (message) => { ctx.logger.warn(message) },
+      ...generationLoopbackEnabled ? { generation: { matches: isGenerationLoopbackPath, handler: generationHandler } } : {},
     }, normalized.host, normalized.port)
+    yield () => proxy.close()
+    const address = boundAddress(proxy.server)
+    if (generationLoopbackEnabled) {
+      generationRegistrar = registerGenerationTextProvider(ctx, generationService, address.host, address.port)
+    } else {
+      ctx.logger.warn('model-pool-host: private generation provider disabled because the proxy listener is not loopback')
+    }
+    yield () => generationRegistrar?.dispose()
     ctx.logger.info(
       `model-pool-host: proxy on http://${normalized.host}:${String(normalized.port)}/v1 `
       + `(${String(store.stats().keys)} key(s), encryption=${cipherKey === undefined ? 'off' : 'on'})`,
@@ -183,14 +225,19 @@ export function apply(ctx: Context, config: Config = {}): () => Promise<void> {
     yield ctx.webServer.register({
       kind: 'prefix',
       path: '/physicsos/model-pool',
-      handler: modelPoolRoutes({
-        store,
-        identity: () => identityOf(ctx),
-        probe,
-        listModels,
-      }),
+      handler: (() => {
+        const generic = modelPoolRoutes({ store, identity: () => identityOf(ctx), probe, listModels })
+        return (req, res) => {
+          const path = new URL(req.url ?? '/', 'http://model-pool-admin').pathname
+          return path === GENERATION_ADMIN_PATH || path.startsWith(`${GENERATION_ADMIN_PATH}/`)
+            ? generationAdmin(req, res) : generic(req, res)
+        }
+      })(),
     })
-    yield () => proxy.close()
+    yield () => {
+      generationService.dispose()
+      return proxy.close()
+    }
     yield () => domain.close()
   }, 'model-pool-host')
 }

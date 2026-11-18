@@ -23,6 +23,11 @@ import { questionCodeRoutes, QUESTION_CODE_PREFIX } from './question-code-routes
 import { QuestionCodeJobs, type ValidationSourceBinding } from './question-code-jobs.ts'
 import { currentCandidateSource, validateFrozenCandidate, retryFrozenCandidate, validationWorkerFromEnv, type FrozenCandidateValidationInput } from './question-code-validation.ts'
 import { validationWrapper as buildWrapper } from './validation-wrapper.ts'
+import { createVisualMaterialHost, VISUAL_MATERIAL_POSTGRES_SERVICE, VISUAL_MATERIAL_SERVICE } from './visual-material-host.ts'
+import { visualMaterialRoutes, VISUAL_MATERIAL_PREFIX } from './visual-material-routes.ts'
+import { createQuestionCodeImageAssets } from './question-code-image-channel.ts'
+export type { VisualMaterialService, VisualMaterialDescriptor, VisualMaterialActor } from './visual-material-contracts.ts'
+export { VISUAL_MATERIAL_SERVICE } from './visual-material-host.ts'
 export {
   QuestionCodeArtifactService,
   QUESTION_CODE_SERVICE,
@@ -45,7 +50,7 @@ export { QuestionCodeJobs, QuestionCodeJobError } from './question-code-jobs.ts'
 export type { JobStatus, JobAttempt } from './question-code-jobs.ts'
 export type { QuestionCodeJob } from './question-code-domain.ts'
 export const name = 'experiment-host'
-export const inject = ['webServer', 'storageDomain']
+export const inject = ['webServer', 'storageDomain', 'storage', VISUAL_MATERIAL_POSTGRES_SERVICE]
 export interface Config {
   questionArtifactsRoot?: string
   packagesRoot?: string
@@ -76,7 +81,21 @@ export async function apply(ctx: Context, config: Config = {}): Promise<() => Pr
     yield () => promptDomain.close()
     yield () => prompts.close()
     await prompts.initialize()
+    const materialHost = await createVisualMaterialHost({ storage: ctx.storage, get: ctx.get.bind(ctx) as (key: string) => unknown }, {
+      ...(config.assetOrigin === undefined ? {} : { assetOrigin: config.assetOrigin }),
+      onWriterLost: () => { process.stderr.write('Visual material writer lease lost.\n'); process.exit(1) },
+    })
+    yield () => materialHost.close()
+    const recovery = await materialHost.initialize()
+    const recoveryIssues = recovery.reduce((count, batch) => count + batch.issues.length, 0)
+    if (recoveryIssues > 0) process.stderr.write(`Visual material recovery requires attention: ${recoveryIssues} issue(s).\n`)
+    ctx.provide(VISUAL_MATERIAL_SERVICE, materialHost.service)
+    yield ctx.webServer.register({
+      kind: 'prefix', path: VISUAL_MATERIAL_PREFIX,
+      handler: visualMaterialRoutes({ service: materialHost.service, identity: materialHost.identity, origin: materialHost.origin }),
+    })
     const questionDomain = await openQuestionCodeDomain(ctx)
+    yield () => questionDomain.close()
     const questionIdentity = (): QuestionCodeIdentity | undefined => {
       const identity = identityOf(ctx) as QuestionCodeIdentity | undefined
       return identity && typeof identity.sessionOwnerKey === 'function' ? identity : undefined
@@ -94,11 +113,18 @@ export async function apply(ctx: Context, config: Config = {}): Promise<() => Pr
           : dshHomePath('question-code-artifacts')),
       identity: questionIdentity,
       prompts,
+      visualMaterials: materialHost.service,
+      materialActor: materialHost.actorForSession,
+      allowNativeAssets: true,
+      requireAssetJob: true,
+      imageAssets: createQuestionCodeImageAssets({
+        channels: () => ctx.get('visualizationChannels'), materials: materialHost.service,
+        actorForSession: materialHost.actorForSession, assertBinding: binding => questionCodes.assertAssetBinding(binding),
+      }),
       ...(config.drawingTimeoutMs === undefined ? {} : { drawingTimeoutMs: config.drawingTimeoutMs }),
       ...(config.drawingConcurrency === undefined ? {} : { drawingConcurrency: config.drawingConcurrency }),
       ...(config.assetOrigin === undefined ? {} : { assetOrigin: config.assetOrigin }),
     })
-    yield () => questionDomain.close()
     yield () => questionCodes.close()
     await questionCodes.initialize()
     const currentSource = (binding: ValidationSourceBinding) => currentCandidateSource(binding, {

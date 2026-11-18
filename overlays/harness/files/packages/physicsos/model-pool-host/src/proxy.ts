@@ -36,6 +36,11 @@ export interface ProxyDeps {
   readonly requestBudgetMs?: number
   readonly nowMs?: () => number
   readonly log?: (line: string) => void
+  /** A private loopback-only subrouter; generic /v1 selection remains unchanged. */
+  readonly generation?: {
+    readonly matches: (pathname: string) => boolean
+    readonly handler: (req: IncomingMessage, res: ServerResponse) => Promise<void>
+  }
 }
 
 const openAiError = (res: ServerResponse, status: number, code: string, message: string): void => {
@@ -220,6 +225,10 @@ export const modelProxyHandler = (deps: ProxyDeps) => {
 
   return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const url = new URL(req.url ?? '/', 'http://model-pool')
+    if (deps.generation?.matches(url.pathname)) {
+      await deps.generation.handler(req, res)
+      return
+    }
     if (url.pathname !== CHAT_PATH && url.pathname !== MODELS_PATH) {
       openAiError(res, 404, 'NOT_FOUND', 'only /v1/chat/completions and /v1/models are served')
       return

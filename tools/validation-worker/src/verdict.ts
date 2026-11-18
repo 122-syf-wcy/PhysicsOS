@@ -4,17 +4,11 @@
  * The browser driver collects observations; this module decides. Missing or
  * unattributable evidence fails closed, including a frame with only stamps.
  */
-import type { BrowserFrame, DrawnBody, DrawnGround } from './types.ts'
+import type { BrowserFrame, DrawnBody, DrawnGround, ParameterControlEvidence } from './types.ts'
+import { MECHANICS_VALIDATION_PROFILE, UNSUPPORTED_VALIDATION_PROFILE, isQuestionCodeValidationProfile, validationProfileKey, type QuestionCodeValidationProfile, type QuestionCodeValidationCheckName } from '@physicsos/shared'
+import { opticsGeometry, opticsParameterChanged, opticsSemanticState, opticsStaticStable } from './optics-verdict.ts'
 
-export type CheckName =
-  | 'first-frame'
-  | 'runtime-error'
-  | 'subject-drawn'
-  | 'geometry-follows-engine'
-  | 'motion-sampled'
-  | 'parameter-change'
-  | 'mobile-layout'
-  | 'scene-binding'
+export type CheckName = QuestionCodeValidationCheckName
 
 export interface Check {
   readonly name: CheckName
@@ -33,6 +27,10 @@ export interface Observation {
   /** Whether at least one visible canvas/svg element existed at all. */
   readonly nativeSurface: boolean
   readonly changedFrame?: SampledFrame
+  readonly mobileFrame?: SampledFrame
+  readonly parameterControl?: ParameterControlEvidence
+  /** Chosen by the trusted server plan, never read from the candidate page. */
+  readonly validationProfile?: QuestionCodeValidationProfile
   readonly parameterChanged?: boolean
   readonly changedPaintHash?: string
   readonly originalPaintHash?: string
@@ -157,7 +155,13 @@ function bodyTrack(frames: readonly SampledFrame[], changedFrame?: SampledFrame)
 }
 
 /** All checks are mandatory; absent evidence is never filtered out as a pass. */
-export function evaluateObservation(observation: Observation): { passed: boolean; checks: readonly Check[] } {
+export function evaluateObservation(observation: Observation): { passed: boolean; validationProfile: QuestionCodeValidationProfile; checks: readonly Check[] } {
+  const requested = observation.validationProfile ?? MECHANICS_VALIDATION_PROFILE
+  const known = isQuestionCodeValidationProfile(requested)
+  const validationProfile = known ? requested : UNSUPPORTED_VALIDATION_PROFILE
+  if (!known || validationProfile.id === 'unsupported-runtime') return {
+    passed: false, validationProfile, checks: [{ name: 'profile-binding', passed: false, detail: validationProfileKey(validationProfile) }],
+  }
   const checks: Check[] = []
   const bound = observation.candidateSceneSha256 === observation.expectedSceneSha256
     && observation.candidateSceneRevision === observation.expectedSceneRevision
@@ -173,6 +177,7 @@ export function evaluateObservation(observation: Observation): { passed: boolean
           ? '候选绑定的题目修订号已过期。'
           : '候选摘要无效。',
   })
+  checks.push({ name: 'profile-binding', passed: true, detail: validationProfileKey(validationProfile) })
   checks.push({ name: 'first-frame', passed: observation.firstFrameAcknowledged, detail: observation.firstFrameAcknowledged ? undefined : '15 秒内没有收到首帧绘制确认。' })
   checks.push({ name: 'runtime-error', passed: observation.runtimeError === undefined, detail: observation.runtimeError })
   const painted = observation.frames.filter(frame => frame.opaquePixels > 0 && (frame.distinctColors > 3 || frame.geometryCount > 0))
@@ -181,6 +186,34 @@ export function evaluateObservation(observation: Observation): { passed: boolean
     detail: subjectDrawn ? undefined : observation.frames.some(frame => (frame.taintedSurfaces ?? 0) > 0)
       ? 'Canvas 绘制跨源图片后不可读；尚无经验证的截图绘制证据，验收阻断。'
       : observation.nativeSurface ? '未观察到非空的实验主体绘制。' : '页面上没有可见的 canvas/svg 绘制表面。' })
+
+  if (validationProfile.id === 'optics-thin-lens-real-static') {
+    const geometry = observation.frames.length === 2 && observation.frames.every(frame => opticsGeometry(frame) !== undefined)
+    checks.push({ name: 'geometry-follows-engine', passed: geometry,
+      detail: geometry ? undefined : '缺少原生线段/箭头实绘或独立轴投影；未支持的光学几何仍阻断。' })
+    const stable = opticsStaticStable(observation.frames)
+    checks.push({ name: 'static-frame-stable', passed: stable,
+      detail: stable ? undefined : '相同冻结时刻、引擎事实和实际画面未保持一致；不能伪造时间替代静态证明。' })
+    const semantics = observation.frames.length === 2 && observation.frames.every(opticsSemanticState)
+    checks.push({ name: 'semantic-state', passed: semantics,
+      detail: semantics ? undefined : '真实光路/实像事实或原生绘制的精确语义读数缺失。' })
+    const changed = observation.parameterChanged === true && opticsParameterChanged(observation.frames[0], observation.changedFrame, observation.parameterControl)
+      && observation.changedPaintHash === observation.changedFrame?.paintHash && observation.originalPaintHash === observation.frames[0]?.paintHash
+      && observation.changedPaintHash !== observation.originalPaintHash
+      && /^[a-f0-9]{64}$/.test(observation.changedPaintHash ?? '') && /^[a-f0-9]{64}$/.test(observation.originalPaintHash ?? '')
+    checks.push({ name: 'parameter-change', passed: changed,
+      detail: changed ? undefined : '未核对物高原生控件的精确平台契约、真实改参意图及新快照的几何/语义实绘。' })
+    const mobile = observation.mobile
+    checks.push({ name: 'mobile-layout', passed: mobile !== undefined && mobile.scrollWidth <= mobile.viewportWidth + 1 && !mobile.overflow,
+      detail: mobile === undefined ? '没有手机视口结果。' : undefined })
+    const resized = observation.mobileFrame, last = observation.changedFrame
+    const mobileGeometry = resized !== undefined && last !== undefined && resized.snapshotSha256 === last.snapshotSha256
+      && resized.time === last.time && resized.revision === last.revision && JSON.stringify(resized.optics) === JSON.stringify(last.optics)
+      && opticsGeometry(resized) !== undefined && opticsSemanticState(resized)
+    checks.push({ name: 'mobile-geometry', passed: mobileGeometry,
+      detail: mobileGeometry ? undefined : '手机尺寸下未保留相同引擎事实的可见真实几何与语义实绘。' })
+    return { passed: checks.every(check => check.passed), validationProfile, checks }
+  }
 
   const track = bodyTrack(observation.frames)
   checks.push({
@@ -227,5 +260,5 @@ export function evaluateObservation(observation: Observation): { passed: boolean
     detail: mobile === undefined ? '没有手机视口结果。' : !(mobile.scrollWidth <= mobile.viewportWidth + 1) ? '手机视口出现横向溢出。' : mobile.overflow ? '实验主体超出手机视口。' : undefined,
   })
 
-  return { passed: checks.every(check => check.passed), checks }
+  return { passed: checks.every(check => check.passed), validationProfile, checks }
 }

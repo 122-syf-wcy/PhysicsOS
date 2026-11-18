@@ -15,10 +15,8 @@ describe('frame planning', () => {
     } as Partial<SnapshotLike>))).toEqual([0, 1.5, 3, 4])
   })
 
-  it('never returns a single time, even for a static scene', () => {
-    const times = sampleTimes(snapshot(0, 0))
-    expect(times.length).toBeGreaterThanOrEqual(2)
-    expect(new Set(times).size).toBeGreaterThanOrEqual(2)
+  it('does not fabricate a second time for a zero-duration engine', () => {
+    expect(sampleTimes(snapshot(0, 0))).toEqual([0])
   })
 
   it('uses the runtime seek and leaves the engine output untouched', () => {

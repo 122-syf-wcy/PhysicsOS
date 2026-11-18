@@ -20,6 +20,9 @@ import { OptionalAdminWorkspace as AdminWorkspace } from './optional-surfaces.ts
 import type { AdminApi } from './auth-api.ts'
 import type { NoticeApi } from './notice-api.ts'
 import type { ModelPoolApi } from './model-pool-api.ts'
+import type { GenerationChannelApi } from './generation-channel-api.ts'
+import type { VisualMaterialApi } from './visual-material-api.ts'
+import type { PhysicsosAdminNotice } from './PhysicsosAdminToast.tsx'
 import { NoticeBoard } from './NoticeBoard.tsx'
 import type { AuthState } from './auth-store.ts'
 import { LabEmptyState } from './LabEmptyState.tsx'
@@ -69,6 +72,10 @@ export interface PhysicsSurfaceInjected {
   noticeApi?: NoticeApi
   /** `/physicsos/model-pool` client — absent in stripped test compositions. */
   modelPoolApi?: ModelPoolApi
+  generationChannelApi?: GenerationChannelApi
+  visualMaterialApi?: VisualMaterialApi
+  adminLanguage?: SnapshotStore<'zh' | 'en'>
+  onAdminNotify?: (notice: PhysicsosAdminNotice) => void
   openSurface?: (id: PhysicsSurfaceId, sceneRef?: PhysicsSceneRef) => void
   newCanvas?: (title: string) => Promise<string>
   requestSceneInCanvas?: (sceneRef: PhysicsSceneRef) => void
@@ -119,6 +126,10 @@ export function PhysicsSurface({
   activityApi,
   noticeApi,
   modelPoolApi,
+  generationChannelApi,
+  visualMaterialApi,
+  adminLanguage,
+  onAdminNotify,
   useAuth,
   questionCodeOwner,
 }: PhysicsSurfaceProps) {
@@ -202,6 +213,10 @@ export function PhysicsSurface({
         {...(paperApi === undefined ? {} : { paperApi })}
         {...(noticeApi === undefined ? {} : { noticeApi })}
         {...(modelPoolApi === undefined ? {} : { modelPoolApi })}
+        {...(generationChannelApi === undefined ? {} : { generationChannelApi })}
+        {...(visualMaterialApi === undefined ? {} : { visualMaterialApi })}
+        {...(adminLanguage === undefined ? {} : { languageStore: adminLanguage })}
+        {...(onAdminNotify === undefined ? {} : { onNotify: onAdminNotify })}
         useAuth={useAuth}
         t={t}
       />

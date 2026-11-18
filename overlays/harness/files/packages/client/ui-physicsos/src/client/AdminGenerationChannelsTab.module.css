@@ -1,0 +1,55 @@
+.root, .scope, .editor, .keys, .modelList {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+.root { container-type: inline-size; }
+.root p, .root code, .root span { overflow-wrap: anywhere; }
+.root strong { font-weight: 500; }
+.root input, .root select { min-width: 0; width: 100%; max-width: 100%; }
+.root button:focus-visible {
+  outline: 2px solid var(--dsw-alias-button-info-fill);
+  outline-offset: 3px;
+}
+.heading { min-width: 0; }
+.fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.editor { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--physics-glass-border-soft); }
+.modelList { margin: 0; padding: 0; border: 0; }
+.modelList legend { margin-bottom: 12px; font-size: 13px; color: var(--physics-ink); }
+.model {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 12px;
+  background: var(--physics-glass-fill);
+}
+.wide { grid-column: 1 / -1; }
+.hint { margin: 0; font-size: 13px; line-height: 1.7; color: var(--dsw-alias-label-caption); }
+.models { display: grid; gap: 10px; margin: 16px 0; padding: 0; list-style: none; font-size: 13px; }
+.models li, .keySummary { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; min-width: 0; }
+.models li span { color: var(--dsw-alias-label-caption); }
+.keys { margin: 18px 0; }
+.key { display: grid; gap: 12px; padding: 14px 0; border-top: 1px solid var(--physics-glass-border-soft); font-size: 13px; }
+.keySummary code { color: var(--physics-ink); }
+.discovery { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; font-size: 13px; }
+.confirm { display: grid; gap: 12px; padding: 14px; margin: 14px 0; border: 1px solid var(--physics-glass-border-soft); border-radius: 12px; }
+.confirm p { margin: 0; font-size: 13px; line-height: 1.7; }
+@container (max-width: 650px) {
+  .fields, .model { grid-template-columns: minmax(0, 1fr); }
+  .root button { min-height: 44px; height: auto; white-space: normal; }
+  .keySummary { align-items: flex-start; }
+}
+@media (max-width: 640px) {
+  .fields, .model { grid-template-columns: minmax(0, 1fr); }
+  .root button { min-height: 44px; height: auto; white-space: normal; }
+}

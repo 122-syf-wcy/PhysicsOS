@@ -152,8 +152,8 @@
       ],
       "entry": "packages/physicsos/model-pool-host/src/index.ts",
       "publisher": "PhysicsOS",
-      "sha256": "00ceb35fa13d462691108b85e41760681c4509b88d5225e42f41a0452d352292",
-      "signature": "ed25519:bul2MuC1crDBUS3jXadMroLwv1CTDt9CR12ZQ3e/SEQUKn3tKCkJlBgfNDV/+FaskJhP4VSas88c+yA7n/RzCQ==",
+      "sha256": "1ad8a2166b9a2851b7b9a856c2355590d3cafb5f12236413c2ca2c1bfd009149",
+      "signature": "ed25519:bDg0MAflL4hCFnml/tCZAYNmIxPNkpJqIhI3QwD22fqPh8xMdyvTsj0gK4oP+rz6rqqVr1D0quN0A/0m5J5JAw==",
       "description": "Encrypted model-channel rotation, failover, and local OpenAI proxy."
     },
     {
@@ -168,8 +168,8 @@
       ],
       "entry": "packages/storage/storage-postgres/src/index.ts",
       "publisher": "PhysicsOS",
-      "sha256": "2afda20a8950291be8d3c1199783147177e9b870cf01bc29083c5226e8e96790",
-      "signature": "ed25519:cB0ykqgXHlOP4g36fDi47FUNvA33csLKiQZtz2+zpY3yw0TwzzNtNxqB0Qn3crJvqAkEiTL6+cNuI+VCkzQEDw==",
+      "sha256": "57d8ff57e84eff9d90dca26b9b915b3c24792065f06dd59c46e99749894a1cb5",
+      "signature": "ed25519:09upIFBEDLkSozmbcfICU6kFjdEFY5iBI2QSCzdNoOe4SHhJPgV6sswwqtDnZvOTxdSuDviwMrgTtvA3XXihAA==",
       "description": "PostgreSQL-backed domain and key-value storage."
     },
     {

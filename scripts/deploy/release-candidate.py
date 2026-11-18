@@ -1247,6 +1247,7 @@ def prepare(config, image_name):
     environment = {name: redirect_pool(value, old_pool_port, config['modelPoolPort']) for name, value in environment.items()}
     environment['REDIS_URL_FILE'] = ''
     environment.update({'DSH_HOME': '/var/lib/physicsos', 'DSH_TELEMETRY_DISABLED': '1', 'PHYSICSOS_STORAGE_BACKEND': 'postgres', 'PHYSICSOS_STORAGE_SCHEMA': config['schema'], 'DATABASE_URL_FILE': '/run/secrets/database_url', 'DEEPSEEK_BASE_URL': f"http://127.0.0.1:{config['modelPoolPort']}/v1", 'PHYSICSOS_ADMIN_PASSWORD_FILE': '/run/secrets/admin_password', 'PHYSICSOS_ADMIN_USERNAME': config['username'], 'PHYSICSOS_SHARED_STATE_BACKEND': 'memory', 'PHYSICSOS_MODEL_POOL_PORT': str(config['modelPoolPort']), 'PHYSICOS_TRUSTED_HOSTS': f'physicsos-validation.invalid:{port}', 'PHYSICOS_TRUSTED_PROXIES': '', 'PHYSICSOS_SESSIONS_ROOT': '/var/lib/physicsos/sessions', 'PHYSICSOS_REGISTRATION_MODE': 'open', 'PHYSICSOS_SMTP_USER_FILE': '', 'PHYSICSOS_SMTP_PASSWORD_FILE': ''})
+    environment['PHYSICSOS_PUBLIC_URL'] = f'http://127.0.0.1:{port}'
     environment.update(teaching_environment)
     if search_configuration(config) is not None:
         environment.update({'PHYSICSOS_RESEARCH_SEARXNG_URL': SEARCH_URL, 'PHYSICSOS_RESEARCH_SEARXNG_KEY_FILE': ''})

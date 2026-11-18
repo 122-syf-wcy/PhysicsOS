@@ -24,6 +24,11 @@ import { questionSceneSha256, type QuestionCodeArtifactService, type QuestionCod
 import { ExperimentError, type IdentityActor } from './identity.ts'
 import type { PhysicsScene } from '@physicsos/physics-scene'
 import type { CodeVisualizationState } from '@physicsos/agent-tools'
+import {
+  MECHANICS_VALIDATION_PROFILE, isQuestionCodeValidationProfile, requiredValidationChecks, validationProfileKey,
+  type QuestionCodeValidationProfile,
+} from '@physicsos/shared'
+import { selectQuestionCodeValidationProfile } from './question-code-validation-profile.ts'
 
 export interface ValidationFrame {
   readonly frameId: string
@@ -115,8 +120,8 @@ export interface CandidateValidationInput {
 }
 
 export type CandidateValidationOutcome =
-  | { readonly kind: 'passed'; readonly checks: readonly { readonly name: string; readonly passed: boolean; readonly detail?: string }[]; readonly screenshotRef?: string; readonly durationMs: number }
-  | { readonly kind: 'rejected'; readonly checks: readonly { readonly name: string; readonly passed: boolean; readonly detail?: string }[]; readonly screenshotRef?: string; readonly durationMs: number }
+  | { readonly kind: 'passed'; readonly validationProfile: QuestionCodeValidationProfile; readonly checks: readonly { readonly name: string; readonly passed: boolean; readonly detail?: string }[]; readonly screenshotRef?: string; readonly durationMs: number }
+  | { readonly kind: 'rejected'; readonly validationProfile: QuestionCodeValidationProfile; readonly checks: readonly { readonly name: string; readonly passed: boolean; readonly detail?: string }[]; readonly screenshotRef?: string; readonly durationMs: number }
   | { readonly kind: 'infrastructure'; readonly code: string; readonly message: string }
 
 export interface ValidationWorkerConfig {
@@ -190,6 +195,8 @@ export async function validateFrozenCandidate(
       }, assertCurrent)
       return outcome
     }
+    // Legacy strict job rows retain their shape. The mandatory binding check's
+    // detail stores the selected policy/version with this exact lease evidence.
     await deps.jobs.recordValidation(binding.jobId, binding.epoch, {
       passed: outcome.kind === 'passed', candidateSha256: binding.candidateSha256, checks: outcome.checks,
       ...(outcome.screenshotRef === undefined ? {} : { screenshotRef: outcome.screenshotRef }),
@@ -269,6 +276,12 @@ export async function requestCandidateValidation(
   if (!plannedScene && !pinnedFrames) {
     return { kind: 'infrastructure', code: 'WORKER_INPUT_MISSING', message: 'frozen scene with template identity or complete engine frames required' }
   }
+  // Pinned-frame callers retain only the old motion policy. A static policy
+  // requires the frozen scene and registered experiment identity, never a
+  // renderer-supplied profile or arbitrary zero-clock child snapshots.
+  const validationProfile = plannedScene
+    ? selectQuestionCodeValidationProfile(input.scene, input.experimentId!) : MECHANICS_VALIDATION_PROFILE
+  const requiredChecks = requiredValidationChecks(validationProfile)
   const controller = new AbortController()
   const timer = setTimeout(() => { controller.abort() }, config.timeoutMs ?? 60_000)
   let onAbort: (() => void) | undefined
@@ -286,6 +299,7 @@ export async function requestCandidateValidation(
         // Resource authority stays in the URLs. The V3 channel has its own
         // bounded protocol alphabet and must not contain the job/ticket prefix.
         token: randomUUID(),
+        validationProfile,
         ...(input.experimentId === undefined ? {} : { experimentId: input.experimentId }),
         ...(input.scene === undefined ? {} : { scene: input.scene }),
         ...(input.frames === undefined ? {} : { frames: input.frames }),
@@ -306,7 +320,9 @@ export async function requestCandidateValidation(
       return { kind: 'infrastructure', code: controller.signal.aborted ? 'WORKER_TIMEOUT' : 'WORKER_BAD_JSON', message: controller.signal.aborted ? 'worker deadline exceeded' : 'worker returned invalid JSON' }
     }
     if (!isRecord(body) || !Array.isArray(body.checks) || typeof body.durationMs !== 'number'
-      || !Number.isFinite(body.durationMs) || body.durationMs < 0 || typeof body.passed !== 'boolean') {
+      || !Number.isFinite(body.durationMs) || body.durationMs < 0 || typeof body.passed !== 'boolean'
+      || !isQuestionCodeValidationProfile(body.validationProfile)
+      || validationProfileKey(body.validationProfile) !== validationProfileKey(validationProfile)) {
       return { kind: 'infrastructure', code: 'WORKER_BAD_REPORT', message: 'worker returned an unexpected report' }
     }
     const checks = body.checks.filter((check): check is { name: string; passed: boolean; detail?: string } =>
@@ -314,8 +330,13 @@ export async function requestCandidateValidation(
       && typeof check.passed === 'boolean' && (check.detail === undefined || typeof check.detail === 'string' && check.detail.length <= 600))
       .map(check => ({ name: check.name, passed: check.passed, ...(check.detail === undefined ? {} : { detail: check.detail }) }))
     if (checks.length === 0) return { kind: 'infrastructure', code: 'WORKER_EMPTY_REPORT', message: 'worker returned no checks' }
-    if (checks.length !== body.checks.length || checks.length > 20) {
-      return { kind: 'infrastructure', code: 'WORKER_BAD_REPORT', message: 'worker returned invalid checks' }
+    const names = new Set(checks.map(check => check.name))
+    const profileCheck = checks.find(check => check.name === 'profile-binding')
+    if (checks.length !== body.checks.length || checks.length !== requiredChecks.length
+      || names.size !== checks.length || !requiredChecks.every(name => names.has(name))
+      || profileCheck?.detail !== validationProfileKey(validationProfile)
+      || validationProfile.id === 'unsupported-runtime' && (body.passed || profileCheck?.passed)) {
+      return { kind: 'infrastructure', code: 'WORKER_BAD_REPORT', message: 'worker returned an invalid profile check inventory' }
     }
     const passed = body.passed === true && checks.every(check => check.passed)
     const screenshotRef = typeof body.screenshot === 'string' && body.screenshot.length > 100
@@ -323,6 +344,7 @@ export async function requestCandidateValidation(
       : undefined
     return {
       kind: passed ? 'passed' : 'rejected',
+      validationProfile,
       checks,
       ...(screenshotRef === undefined ? {} : { screenshotRef }),
       durationMs: body.durationMs,

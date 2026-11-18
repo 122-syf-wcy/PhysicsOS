@@ -24,6 +24,9 @@ import { registerWhiteboard } from './whiteboard-entry.tsx'
 import { registerCourseware } from './courseware/entry.tsx'
 import { startUsageTelemetry } from './usage-telemetry.ts'
 import { createModelPoolApi } from './model-pool-api.ts'
+import { createGenerationChannelApi } from './generation-channel-api.ts'
+import { createVisualMaterialApi } from './visual-material-api.ts'
+import { PhysicsosAdminToast, type PhysicsosAdminNotice, type PhysicsosAdminToastState } from './PhysicsosAdminToast.tsx'
 import { createNoticeApi } from './notice-api.ts'
 import { PlatformNoticeDialog, UpstreamOnboardingSink } from './PlatformNoticeDialog.tsx'
 import { createAuthController, namespacedStorage, readStoredAuthUser } from './auth-store.ts'
@@ -355,6 +358,29 @@ export function apply(ctx: ClientContext): void {
   const noticeApi = createNoticeApi()
   /* 模型通道: platform-wide pool and its encrypted upstream credentials. */
   const modelPoolApi = createModelPoolApi()
+  const generationChannelApi = createGenerationChannelApi()
+  const visualMaterialApi = createVisualMaterialApi()
+  const adminLanguage = {
+    getSnapshot: (): 'zh' | 'en' => ctx.locale.getSnapshot().active === 'zh' ? 'zh' : 'en',
+    subscribe: (listener: () => void): (() => void) => ctx.locale.subscribe(listener),
+  }
+  const adminToast = createSnapshotStore<PhysicsosAdminToastState | null>(null)
+  let adminToastSequence = 0
+  const notifyAdmin = (owner: string | undefined, notice: PhysicsosAdminNotice): void => {
+    if (owner === undefined || owner !== accountKey() || auth.store.getSnapshot().status !== 'authed') return
+    adminToast.set({ ...notice, message: notice.message.slice(0, 600), ownerKey: owner, sequence: ++adminToastSequence })
+  }
+  const scopedAdminNotifications = (): ((notice: PhysicsosAdminNotice) => void) =>
+    notice => { notifyAdmin(notice.ownerKey, notice) }
+  ctx.effect(() => auth.store.subscribe(() => {
+    if (adminToast.getSnapshot()?.ownerKey !== accountKey()) adminToast.set(null)
+  }), 'ui-physicsos: clear administrator notifications on account change')
+  ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+    name: 'shell.overlay', id: 'physicsos.admin-toast',
+    inject: () => ({ hooks: { adminToast }, dismissAdminToast: (sequence: number) => {
+      if (adminToast.getSnapshot()?.sequence === sequence) adminToast.set(null)
+    } }),
+  }, PhysicsosAdminToast))
 
   /* The shell's panellist rows and the product's own navigation share one
      selection: a row click lands here through the layout store, and the
@@ -1085,6 +1111,10 @@ export function apply(ctx: ClientContext): void {
         activityApi,
         noticeApi,
         modelPoolApi,
+        generationChannelApi,
+        visualMaterialApi,
+        adminLanguage,
+        onAdminNotify: scopedAdminNotifications(),
         openSurface: (
           id: Parameters<typeof surface.open>[0],
           sceneRef?: Parameters<typeof surface.open>[1],
@@ -1114,7 +1144,7 @@ export function apply(ctx: ClientContext): void {
       })
       for (const panelId of Object.values(PHYSICS_PANEL_IDS)) {
         if (panelId === PHYSICS_PANEL_IDS.canvas || panelId === PHYSICS_PANEL_IDS.whiteboard
-          || panelId === PHYSICS_PANEL_IDS.projects) continue
+          || panelId === PHYSICS_PANEL_IDS.courseware || panelId === PHYSICS_PANEL_IDS.projects) continue
         yield scope.slots.register({
           name: 'main',
           key: panelId,

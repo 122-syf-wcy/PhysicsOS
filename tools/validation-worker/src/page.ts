@@ -35,6 +35,7 @@ const page = String.raw`(() => {
   const plan = __VALIDATION_PLAN__;
   const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
   const outcome = { ready: false, acknowledgements: [] };
+  const intents = [];
   let port;
   let latestError;
   const fail = message => { if (!outcome.error) outcome.error = message; };
@@ -73,6 +74,7 @@ const page = String.raw`(() => {
         if (!data || typeof data !== 'object') return;
         if (data.type === 'experiment/rendered') outcome.lastRendered = data.frameId;
         if (data.type === 'experiment/error') latestError = data.code || 'RENDER_FAILED';
+        if (data.protocolVersion === 3 && data.type === 'parameter/commit' && intents.length < 16) intents.push(data);
       };
       port.start();
       outcome.ready = true;
@@ -103,6 +105,8 @@ const page = String.raw`(() => {
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       return true;
     },
+    clearIntents() { intents.length = 0; },
+    intents() { return intents.slice(); },
     result() { return outcome; },
   };
 })();`

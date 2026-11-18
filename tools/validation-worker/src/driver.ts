@@ -8,7 +8,9 @@
  */
 import { createHash, randomUUID } from 'node:crypto'
 import type { Browser, BrowserContext, Frame, Page } from '@playwright/test'
-import type { BrowserFrame, BrowserResult, DrawnBody, DrawnGround } from './types.ts'
+import type { BrowserFrame, BrowserResult, DrawnBody, DrawnGround, DrawnSegment, DrawnTriangle, DrawnText, DrawnSurface } from './types.ts'
+import type { QuestionCodeValidationProfile } from '@physicsos/shared'
+import { staticOpticsFacts } from './static-optics.ts'
 import { canvasDrawProbeScript } from './draw-probe.ts'
 import { anonymousImagePolicyScript } from './image-policy.ts'
 
@@ -30,6 +32,9 @@ export interface DriverOptions {
   readonly frames: readonly { readonly frameId: string; readonly snapshot: Record<string, unknown> }[]
   /** One authoritative snapshot after a parameter change. */
   readonly changedFrame: { readonly frameId: string; readonly snapshot: Record<string, unknown> }
+  readonly validationProfile?: QuestionCodeValidationProfile
+  /** Server-planned exact parameter; not a selector supplied by the renderer. */
+  readonly parameter?: { readonly id: string; readonly from: number; readonly to: number }
   readonly mobile?: { readonly width: number; readonly height: number }
   /** Optional path to write a screenshot of the final mobile stage. */
   readonly screenshotPath?: string
@@ -46,6 +51,10 @@ interface FramePaint {
   readonly geometryCount: number
   readonly drawnBodies: readonly DrawnBody[]
   readonly drawnGrounds: readonly DrawnGround[]
+  readonly drawnSegments: readonly DrawnSegment[]
+  readonly drawnTriangles: readonly DrawnTriangle[]
+  readonly drawnTexts: readonly DrawnText[]
+  readonly drawnSurfaces: readonly DrawnSurface[]
   readonly nativeSurface: boolean
   readonly scrollWidth: number
 }
@@ -54,7 +63,7 @@ interface FramePaint {
 async function observeFrame(frame: Frame, probeKey: string): Promise<FramePaint> {
   return await frame.evaluate(key => {
     const probe = (window as unknown as Record<string, { read(): Omit<FramePaint, 'scrollWidth'> } | undefined>)[key]
-    const paint = probe?.read() ?? { paintHash: '', opaquePixels: 0, distinctColors: 0, taintedSurfaces: 0, geometryCount: 0, drawnBodies: [], drawnGrounds: [], nativeSurface: false }
+    const paint = probe?.read() ?? { paintHash: '', opaquePixels: 0, distinctColors: 0, taintedSurfaces: 0, geometryCount: 0, drawnBodies: [], drawnGrounds: [], drawnSegments: [], drawnTriangles: [], drawnTexts: [], drawnSurfaces: [], nativeSurface: false }
     return { ...paint, scrollWidth: document.documentElement.scrollWidth }
   }, probeKey)
 }
@@ -66,10 +75,11 @@ async function resetProbe(frame: Frame, probeKey: string): Promise<void> {
   }, probeKey)
 }
 
-const sampleFrame = (snapshot: Record<string, unknown>, paint: FramePaint): BrowserFrame => {
+const sampleFrame = (snapshot: Record<string, unknown>, paint: FramePaint, opticsProfile = false): BrowserFrame => {
   const time = (snapshot.clock as { time?: unknown } | undefined)?.time
   const engineBody = bodyOf(snapshot)
   const engineGround = groundOf(snapshot)
+  const optics = opticsProfile ? staticOpticsFacts(snapshot) : undefined
   return {
     time: typeof time === 'number' && Number.isFinite(time) ? time : Number.NaN,
     ...(typeof snapshot.revision === 'number' && Number.isSafeInteger(snapshot.revision) && snapshot.revision >= 0 ? { revision: snapshot.revision } : {}),
@@ -77,6 +87,8 @@ const sampleFrame = (snapshot: Record<string, unknown>, paint: FramePaint): Brow
     ...(engineGround === undefined ? {} : { engineGround }),
     drawnBodies: paint.drawnBodies,
     drawnGrounds: paint.drawnGrounds,
+    ...(opticsProfile ? { drawnSegments: paint.drawnSegments, drawnTriangles: paint.drawnTriangles, drawnTexts: paint.drawnTexts, drawnSurfaces: paint.drawnSurfaces, snapshotSha256: sha256(JSON.stringify(snapshot)) } : {}),
+    ...(optics === undefined ? {} : { optics }),
     ...(paint.taintedSurfaces > 0 ? { taintedSurfaces: paint.taintedSurfaces } : {}),
     paintHash: sha256(paint.paintHash),
     geometryCount: paint.geometryCount,
@@ -133,7 +145,8 @@ export async function validateCandidate(options: DriverOptions): Promise<DriverR
   const probeKey = `__validationDraw_${randomUUID().replaceAll('-', '')}`
   // One init script fixes ordering: standard anonymous asset CORS first, then
   // native paint observations. Renderer bytes and browser security are intact.
-  await context.addInitScript({ content: `${anonymousImagePolicyScript(candidateOrigin)}\n${canvasDrawProbeScript(probeKey)}` })
+  const opticsProfile = options.validationProfile?.id === 'optics-thin-lens-real-static'
+  await context.addInitScript({ content: `${anonymousImagePolicyScript(candidateOrigin)}\n${canvasDrawProbeScript(probeKey, opticsProfile)}` })
   const page = await context.newPage()
   // No cookies or storage are ever injected; block anything outside the
   // candidate origin except this run's exact driving document. The exception
@@ -186,13 +199,41 @@ export async function validateCandidate(options: DriverOptions): Promise<DriverR
       await inner.waitForTimeout(120)
       const paint = await observeFrame(inner, probeKey)
       nativeSurface &&= paint.nativeSurface
-      sampled.push(sampleFrame(frame.snapshot, paint))
+      sampled.push(sampleFrame(frame.snapshot, paint, opticsProfile))
     }
     // The changed frame needs actual geometry too, not just a different hash.
     let changedPaintHash: string | undefined
     let originalPaintHash: string | undefined
     let parameterChanged: boolean | undefined
     let changedSample: BrowserFrame | undefined
+    let parameterControl: BrowserResult['parameterControl']
+    if (opticsProfile && firstFrameAcknowledged && options.parameter?.id === 'object-height' && sampled[0]?.optics !== undefined) {
+      const inner = await authoredFrame(page), parameter = sampled[0].optics.heightParameter
+      await page.evaluate(() => (window as unknown as { __validation: { clearIntents(): void } }).__validation.clearIntents())
+      // These platform controls are deliberately hidden in embedded question
+      // packages. Exercise their real native change handler without unhiding UI
+      // or posting a fabricated child intent. The observed intent must be exact.
+      const nativeContract = await inner.evaluate(({ parameter, from, to }) => {
+        const controls = document.querySelectorAll('input[data-parameter="object-height"]')
+        const control = controls[0]
+        if (controls.length !== 1 || !(control instanceof HTMLInputElement) || control.type !== 'number' || control.disabled || control.readOnly
+          || control.min !== String(parameter.min) || control.max !== '' || control.step !== String(parameter.step)
+          || control.valueAsNumber !== from || !control.closest('label')?.textContent?.includes(`${parameter.label} (${parameter.unit})`)) return false
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+        if (setter === undefined) return false
+        setter.call(control, String(to))
+        if (!control.checkValidity()) return false
+        control.dispatchEvent(new Event('change', { bubbles: true }))
+        return true
+      }, { parameter, from: options.parameter.from, to: options.parameter.to })
+      await inner.waitForTimeout(120)
+      const intentMatched = await page.evaluate(parameter => {
+        const intents = (window as unknown as { __validation: { intents(): Record<string, unknown>[] } }).__validation.intents()
+        return intents.length === 1 && Object.keys(intents[0]!).length === 4 && intents[0]!.type === 'parameter/commit'
+          && intents[0]!.protocolVersion === 3 && intents[0]!.id === parameter.id && intents[0]!.value === parameter.to
+      }, options.parameter)
+      parameterControl = { ...options.parameter, nativeContract, intentMatched }
+    }
     if (firstFrameAcknowledged && sampled.length > 0) {
       const inner = await authoredFrame(page)
       await resetProbe(inner, probeKey)
@@ -203,7 +244,7 @@ export async function validateCandidate(options: DriverOptions): Promise<DriverR
         await inner.waitForTimeout(120)
         const paint = await observeFrame(inner, probeKey)
         nativeSurface &&= paint.nativeSurface
-        changedSample = sampleFrame(changedFrame.snapshot, paint)
+        changedSample = sampleFrame(changedFrame.snapshot, paint, opticsProfile)
         originalPaintHash = sampled[0]?.paintHash
         changedPaintHash = changedSample.paintHash
         parameterChanged = true
@@ -211,6 +252,7 @@ export async function validateCandidate(options: DriverOptions): Promise<DriverR
     }
     // Mobile layout at the product's smallest stage.
     let mobile: BrowserResult['mobile']
+    let mobileFrame: BrowserFrame | undefined
     if (firstFrameAcknowledged) {
       const size = options.mobile ?? { width: 219, height: 360 }
       await page.setViewportSize(size)
@@ -218,6 +260,12 @@ export async function validateCandidate(options: DriverOptions): Promise<DriverR
         await (window as unknown as { __validation: { resize(w: number, h: number): Promise<boolean> } }).__validation.resize(width, height)
       }, size)
       const inner = await authoredFrame(page)
+      if (opticsProfile && changedSample !== undefined) {
+        // Observe the resize's own repaint of the last frozen state. Do not
+        // inject a fresh snapshot to conceal a renderer that loses it on resize.
+        await inner.waitForTimeout(120)
+        mobileFrame = sampleFrame(changedFrame.snapshot, await observeFrame(inner, probeKey), true)
+      }
       const paint = await observeFrame(inner, probeKey)
       mobile = { viewportWidth: size.width, scrollWidth: paint.scrollWidth, overflow: paint.scrollWidth > size.width + 1 }
     }
@@ -239,6 +287,8 @@ export async function validateCandidate(options: DriverOptions): Promise<DriverR
       nativeSurface: sampled.length > 0 && nativeSurface,
       frames: sampled,
       ...(changedSample === undefined ? {} : { changedFrame: changedSample }),
+      ...(mobileFrame === undefined ? {} : { mobileFrame }),
+      ...(parameterControl === undefined ? {} : { parameterControl }),
       ...(parameterChanged === undefined ? {} : { parameterChanged }),
       ...(changedPaintHash === undefined ? {} : { changedPaintHash }),
       ...(originalPaintHash === undefined ? {} : { originalPaintHash }),

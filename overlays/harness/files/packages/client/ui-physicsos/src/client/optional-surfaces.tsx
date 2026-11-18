@@ -27,7 +27,11 @@ export function OptionalPhysicsSurface(props: PhysicsSurfaceProps) {
       {...(props.activityApi === undefined ? {} : { activityApi: props.activityApi })}
       {...(props.paperApi === undefined ? {} : { paperApi: props.paperApi })}
       {...(props.noticeApi === undefined ? {} : { noticeApi: props.noticeApi })}
-      {...(props.modelPoolApi === undefined ? {} : { modelPoolApi: props.modelPoolApi })} />
+      {...(props.modelPoolApi === undefined ? {} : { modelPoolApi: props.modelPoolApi })}
+      {...(props.generationChannelApi === undefined ? {} : { generationChannelApi: props.generationChannelApi })}
+      {...(props.visualMaterialApi === undefined ? {} : { visualMaterialApi: props.visualMaterialApi })}
+      {...(props.adminLanguage === undefined ? {} : { languageStore: props.adminLanguage })}
+      {...(props.onAdminNotify === undefined ? {} : { onNotify: props.onAdminNotify })} />
   }
   return <OptionalComponent load={loadSurface} componentProps={props} />
 }
@@ -37,7 +41,8 @@ export function OptionalSceneChatCard(props: SceneChatCardProps) {
 }
 
 export function OptionalAdminWorkspace(props: ComponentProps<typeof AdminWorkspace>) {
-  return <OptionalComponent load={loadAdmin} componentProps={props} />
+  const principal = props.useAuth(state => state.user)
+  return <OptionalComponent key={`${principal?.schoolId}:${principal?.id}:${principal?.role}`} load={loadAdmin} componentProps={props} />
 }
 
 export function OptionalCanvasSurface(props: CanvasSurfaceProps) {

@@ -1,5 +1,5 @@
 /**
- * The two tools the restricted code child may call, and the guard that keeps
+ * The bounded tools the restricted code child may call, and the guard that keeps
  * everything else out. Both tools re-check, on every call, that the parent's
  * scene still carries this exact job in `generating` — a superseded job
  * cannot write code or spend image budget.
@@ -23,7 +23,18 @@ export interface AssetService {
     scene: unknown
     prompt: string
     kind: 'environment' | 'material'
+    theme?: string
+    purpose?: string
+    tags?: string[]
+    style?: string
     signal: AbortSignal
+  }): Promise<{ path: string; cssPath: string; sha256: string; width: number; height: number; kind: string; model: string }>
+  searchMaterials?(input: {
+    ownerSessionId: string; generationId: string; scene: unknown; query: string;
+    kind?: 'environment' | 'material'; purpose?: string; tags?: string[]; style?: string; signal: AbortSignal;
+  }): Promise<{ items: readonly { materialId: string; sha256: string; theme: string; purpose: string; kind: string; width: number; height: number; tags: readonly string[]; style?: string }[] }>
+  useMaterial?(input: {
+    ownerSessionId: string; generationId: string; scene: unknown; materialId: string; sha256: string; signal: AbortSignal;
   }): Promise<{ path: string; cssPath: string; sha256: string; width: number; height: number; kind: string; model: string }>
   assetManifest?(input: { ownerSessionId: string; generationId: string; scene: unknown }): unknown[]
   assetFallback?(input: { ownerSessionId: string; generationId: string; scene: unknown }): {
@@ -103,20 +114,32 @@ export function registerAssetTool(child: Context, job: CodeChildJob, assets: Ass
   child.tools.register(defineTool({
     name: 'physics_generate_experiment_asset',
     timeoutMs: 185_000,
-    description: '调用平台已配置的gpt-image-2.5-sunburst为本题制作Warm Lab环境/材质图片。每题最多2次，通常1张环境已足够。不要生成文字、公式、轨迹或测量结果。成功返回本包图片path和CSS路径并须实际使用；仅平台确认瞬态故障时返回mode:native，立即用原生Canvas/SVG绘图，不重试生图或伪造图片路径。',
+    description: '通过独立图片渠道制作可视化环境/材质，并自动保存到素材库。先检索适配素材，确实缺失时调用；返回本任务可用的path/cssPath。图片只表现外观，物理数据与科学标注由引擎/代码绘制。',
     parameters: {
-      prompt: { type: 'string', required: true, description: '具体美术构图、材质、灯光、留白位置；不超过5000字。图片不可含物理读数或运动结果。' },
-      kind: { type: 'string', required: true, enum: ['environment', 'material'], description: 'environment为实验环境/场景背景，material为器材表面材质。' },
+      prompt: { type: 'string', required: true, maxLength: 5000, description: '美术构图、材质、灯光和留白；不得含文字、公式、箭头、轨迹或测量结果。每任务最多2次（失败也计数）。' },
+      kind: { type: 'string', required: true, enum: ['environment', 'material'], description: 'environment为场景背景，material为器材外观素材。' },
+      theme: { type: 'string', maxLength: 120, description: '可复用主题，例如“单摆实验器材”，不要包含题目全文或账号信息。' },
+      purpose: { type: 'string', maxLength: 120, description: '素材用途，例如“教学场景背景”或“实验器材外观”。' },
+      tags: { type: 'array', maxItems: 12, items: { type: 'string', maxLength: 40 }, description: '简洁的检索标签。' },
+      style: { type: 'string', maxLength: 80, description: '外观风格，不用于声明物理模型或正确性。' },
     },
     output: { schema: { type: 'object', additionalProperties: true }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] },
     execute: async (args, exec) => {
       if (job.signal.aborted || exec.signal.aborted) throw new HarnessError('素材生成已取消。', 'IMAGE_ABORTED')
       if (!jobIsCurrent(job)) throw new HarnessError('题目生成任务已更新。', 'STALE_GENERATION')
       try {
-        return await assets.generateAsset({
+        const generated = await assets.generateAsset({
           ownerSessionId: owner, generationId: job.generationId, scene: job.scene.scene,
-          prompt: args.prompt, kind: args.kind, signal: AbortSignal.any([job.signal, exec.signal]),
+          prompt: args.prompt, kind: args.kind,
+          ...(args.theme === undefined ? {} : { theme: args.theme }),
+          ...(args.purpose === undefined ? {} : { purpose: args.purpose }),
+          ...(args.tags === undefined ? {} : { tags: args.tags }),
+          ...(args.style === undefined ? {} : { style: args.style }),
+          signal: AbortSignal.any([job.signal, exec.signal]),
         })
+        if (job.signal.aborted || exec.signal.aborted) throw new HarnessError('素材生成已取消。', 'IMAGE_ABORTED')
+        if (!jobIsCurrent(job)) throw new HarnessError('题目生成任务已更新。', 'STALE_GENERATION')
+        return generated
       } catch (error) {
         if (job.signal.aborted || exec.signal.aborted) throw new HarnessError('素材生成已取消。', 'IMAGE_ABORTED')
         if (!jobIsCurrent(job)) throw new HarnessError('题目生成任务已更新。', 'STALE_GENERATION')
@@ -131,6 +154,64 @@ export function registerAssetTool(child: Context, job: CodeChildJob, assets: Ass
       }
     },
     presentCall: () => ({ card: 'generic', title: '制作本题实验素材', kind: 'other' }),
+  }))
+}
+
+const assertMaterialJob = (job: CodeChildJob, exec: ToolExecution): AbortSignal => {
+  if (job.signal.aborted || exec.signal.aborted) throw new HarnessError('素材请求已取消。', 'IMAGE_ABORTED')
+  if (!jobIsCurrent(job)) throw new HarnessError('可视化任务已更新。', 'STALE_GENERATION')
+  return AbortSignal.any([job.signal, exec.signal])
+}
+const materialFailure = (error: unknown): HarnessError => {
+  const code = error !== null && typeof error === 'object' && 'code' in error && typeof error.code === 'string' && /^(?:MATERIAL|IMAGE)_[A-Z_]+$/.test(error.code)
+    ? error.code : 'MATERIAL_REQUEST_FAILED'
+  return new HarnessError('素材请求未完成（' + code + '）。', code)
+}
+
+/** Search/select returns current-job paths; library addresses never enter the renderer. */
+export function registerMaterialTools(child: Context, job: CodeChildJob, assets: AssetService, owner: string): void {
+  if (typeof assets.searchMaterials !== 'function' || typeof assets.useMaterial !== 'function') return
+  child.tools.register(defineTool({
+    name: 'physics_search_visual_materials',
+    description: '检索当前账号或已授权学校的可复用图片，返回候选ID、摘要、主题、用途和尺寸。选择合适候选后调用physics_use_visual_material获得本任务路径。',
+    parameters: {
+      query: { type: 'string', required: true, minLength: 1, maxLength: 240, description: '物理主题和画面需求，不是题目全文。' },
+      kind: { type: 'string', enum: ['environment', 'material'], description: '按场景背景或器材外观筛选。' },
+      purpose: { type: 'string', maxLength: 120, description: '需要素材发挥的教学用途。' },
+      tags: { type: 'array', maxItems: 12, items: { type: 'string', maxLength: 40 } },
+      style: { type: 'string', maxLength: 80, description: '需要匹配的视觉风格。' },
+    },
+    output: { schema: { type: 'object', additionalProperties: true }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] },
+    execute: async (args, exec) => {
+      const signal = assertMaterialJob(job, exec)
+      try {
+        const found = await assets.searchMaterials!({ ownerSessionId: owner, generationId: job.generationId, scene: job.scene.scene,
+          query: args.query, ...(args.kind === undefined ? {} : { kind: args.kind }), ...(args.purpose === undefined ? {} : { purpose: args.purpose }),
+          ...(args.tags === undefined ? {} : { tags: args.tags }), ...(args.style === undefined ? {} : { style: args.style }), signal })
+        assertMaterialJob(job, exec)
+        return found
+      } catch (error) { assertMaterialJob(job, exec); throw materialFailure(error) }
+    },
+    presentCall: () => ({ card: 'generic', title: '检索可复用素材', kind: 'other' }),
+  }))
+  child.tools.register(defineTool({
+    name: 'physics_use_visual_material',
+    description: '把选中的授权素材绑定到当前可视化，返回可在renderer/CSS中使用的path/cssPath。保留原始素材，复用不调用生图模型。',
+    parameters: {
+      materialId: { type: 'string', required: true, minLength: 1, maxLength: 128, description: '检索返回的素材ID。' },
+      sha256: { type: 'string', required: true, pattern: '^[a-f0-9]{64}$', description: '同一候选返回的不可变图片摘要。' },
+    },
+    output: { schema: { type: 'object', additionalProperties: true }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] },
+    execute: async (args, exec) => {
+      const signal = assertMaterialJob(job, exec)
+      try {
+        const used = await assets.useMaterial!({ ownerSessionId: owner, generationId: job.generationId, scene: job.scene.scene,
+          materialId: args.materialId, sha256: args.sha256, signal })
+        assertMaterialJob(job, exec)
+        return used
+      } catch (error) { assertMaterialJob(job, exec); throw materialFailure(error) }
+    },
+    presentCall: () => ({ card: 'generic', title: '复用可视化素材', kind: 'other' }),
   }))
 }
 

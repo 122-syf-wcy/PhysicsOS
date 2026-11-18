@@ -62,7 +62,8 @@ describe('experiment acceptance verdict', () => {
   it('passes attributable native geometry without any renderer stamps', () => {
     const verdict = evaluateObservation(base())
     expect(verdict.passed).toBe(true)
-    expect(verdict.checks).toHaveLength(8)
+    expect(verdict.checks).toHaveLength(9)
+    expect(verdict.validationProfile).toEqual({ id: 'mechanics-native-motion', version: 1 })
     expect(base().frames.every(item => item.stamped === undefined)).toBe(true)
   })
 

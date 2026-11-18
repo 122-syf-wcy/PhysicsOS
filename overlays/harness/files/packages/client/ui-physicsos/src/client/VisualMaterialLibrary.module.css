@@ -1,0 +1,37 @@
+.root { display: grid; gap: 18px; min-width: 0; container-type: inline-size; }
+.root p, .root dd, .root h3 { overflow-wrap: anywhere; }
+.root strong { font-weight: 500; }
+.root input, .root select { width: 100%; min-width: 0; max-width: 100%; }
+.root button:focus-visible { outline: 2px solid var(--dsw-alias-button-info-fill); outline-offset: 3px; }
+.filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: end; }
+.hint, .usage { margin: 0; font-size: 13px; line-height: 1.7; color: var(--dsw-alias-label-caption); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 18px; min-width: 0; }
+.tile { display: grid; gap: 14px; align-content: start; min-width: 0; }
+.tile > div { min-width: 0; }
+.tile h3 { font-size: 15px; font-weight: 500; }
+.preview, .previewUnavailable { display: grid; place-items: center; aspect-ratio: 3 / 2; overflow: hidden; border: 1px solid var(--physics-glass-border-soft); border-radius: 12px; background: var(--physics-glass-fill); }
+.preview img { width: 100%; height: 100%; object-fit: contain; }
+.previewUnavailable { gap: 12px; padding: 16px; font-size: 13px; line-height: 1.7; color: var(--physics-ink); box-sizing: border-box; text-align: center; }
+.skeleton { width: 100%; height: 100%; background: var(--physics-glass-fill-strong); }
+.loadingTile { min-height: 280px; border: 1px solid var(--physics-glass-border-soft); border-radius: 18px; background: var(--physics-glass-fill-strong); }
+.badge { display: inline-flex; padding: 4px 9px; border: 1px solid var(--physics-glass-border-soft); border-radius: 30px; font-size: 12px; color: var(--physics-ink); }
+.details { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 12px; margin: 0; font-size: 13px; }
+.details dt { color: var(--dsw-alias-label-caption); }
+.details dd { margin: 0; min-width: 0; }
+.tags { display: flex; flex-wrap: wrap; gap: 8px; min-height: 22px; font-size: 12px; }
+.tags span { padding: 4px 9px; border-radius: 30px; border: 1px solid var(--physics-glass-border-soft); color: var(--physics-ink); overflow-wrap: anywhere; max-width: 100%; }
+.confirm, .tagEditor { display: grid; gap: 12px; padding-top: 14px; border-top: 1px solid var(--physics-glass-border-soft); }
+.confirm p { margin: 0; font-size: 13px; line-height: 1.7; }
+.pagination { justify-content: space-between; margin-top: 18px; font-size: 13px; }
+@container (max-width: 650px) {
+  .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .root button { min-height: 44px; height: auto; white-space: normal; }
+}
+@container (max-width: 420px) {
+  .filters { grid-template-columns: minmax(0, 1fr); }
+  .grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .filters { grid-template-columns: minmax(0, 1fr); }
+  .root button { min-height: 44px; height: auto; white-space: normal; }
+}

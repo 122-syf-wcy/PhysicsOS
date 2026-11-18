@@ -26,6 +26,10 @@
   "license": "PolyForm-Noncommercial-1.0.0",
   "dependencies": {
     "@deepseek-ai/dsh-host-webserver": "workspace:^",
+    "@deepseek-ai/dsh-llm": "workspace:*",
+    "@deepseek-ai/dsh-llm-pi-ai": "workspace:*",
+    "@earendil-works/pi-ai": "0.85.1",
+    "undici": "7.29.1",
     "@deepseek-ai/dsh-storage": "workspace:^",
     "@deepseek-ai/dsh-storage-domain": "workspace:^",
     "zod": "^4.4.3"
@@ -34,6 +38,7 @@
     "@deepseek-ai/cordis": "workspace:^"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "workspace:^"
+    "@deepseek-ai/cordis": "workspace:^",
+    "vite-tsconfig-paths": "6.1.1"
   }
 }

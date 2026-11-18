@@ -13,6 +13,19 @@
  */
 
 export interface SnapshotLike {
+  readonly domain?: string
+  readonly sceneRevision?: number
+  readonly status?: string
+  readonly title?: string
+  readonly ariaLabel?: string
+  readonly table?: object
+  readonly charts?: readonly unknown[]
+  readonly verification?: readonly unknown[]
+  readonly trajectoryTimes?: readonly number[]
+  /** Runtime-only behavior/authority; contributionSnapshot deliberately omits it. */
+  readonly sampleReadout?: unknown
+  readonly scene?: unknown
+  readonly ownerSessionId?: string
   readonly clock: { readonly time: number; readonly total: number; readonly running?: boolean; readonly rate?: number }
   readonly view: {
     readonly bodies?: readonly { readonly at: { readonly x: number; readonly y: number } }[]
@@ -22,10 +35,8 @@ export interface SnapshotLike {
     readonly parameters?: readonly { readonly id: string; readonly value: number; readonly min?: number; readonly max?: number; readonly step?: number }[]
   }[]
   readonly events?: readonly { readonly kind: string; readonly time: number }[]
-  readonly [key: string]: unknown
 }
 
-/** The slice of a runtime this planner needs; the app passes its real adapter. */
 /**
  * The wire copy of a runtime snapshot: plain JSON only.
  *
@@ -45,6 +56,12 @@ export interface FrameSource {
   getSnapshot(): SnapshotLike
   seek?(time: number): SnapshotLike
   editParameter?(id: string, value: number): SnapshotLike
+  /** Raw engine identity/cursor, read server-side only for a static policy. */
+  captureRaw?(): {
+    readonly scene?: unknown
+    readonly engineInfo: { readonly id: string; readonly version: string; readonly model?: string }
+    readonly cursor: { readonly kind: string; readonly identity?: string }
+  }
 }
 
 export interface PlannedFrame {
@@ -54,7 +71,7 @@ export interface PlannedFrame {
 
 export interface FramePlan {
   readonly frames: readonly PlannedFrame[]
-  /** One changed snapshot in the same revision; absent when the runtime has no editable parameter. */
+  /** Real edited snapshot (including its engine revision); absent without an editable parameter. */
   readonly changedFrame?: PlannedFrame
   readonly parameter?: { readonly id: string; readonly from: number; readonly to: number }
   readonly notes: readonly string[]
@@ -72,9 +89,9 @@ export function sampleTimes(snapshot: SnapshotLike): number[] {
     .filter((value): value is number => finite(value) && value >= 0)
   const unique = [...new Set(candidates.map(value => Math.round(value * 1000) / 1000))]
   if (unique.length >= 2) return unique.slice(0, 4)
-  // No events and no duration: two distinct sample points still let the
-  // driver prove the picture is not a single static frame.
-  return total > 0 ? [0, total] : [0, 0.0001]
+  // A zero-duration engine has only its actual frozen time. The motion policy
+  // then fails honestly; only a trusted static profile may replay this state.
+  return total > 0 ? [0, total] : [snapshot.clock.time]
 }
 
 /** Step a numeric parameter by one visible unit inside its declared range. */

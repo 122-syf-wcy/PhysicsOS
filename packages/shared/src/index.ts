@@ -37,3 +37,13 @@ export {
 } from './ids.ts'
 export { isIsoDateTime, type IsoDateTime } from './time.ts'
 export { PhysicsOSError, UnimplementedError } from './errors.ts'
+export {
+  MECHANICS_VALIDATION_PROFILE,
+  OPTICS_VALIDATION_PROFILE,
+  UNSUPPORTED_VALIDATION_PROFILE,
+  isQuestionCodeValidationProfile,
+  requiredValidationChecks,
+  validationProfileKey,
+  type QuestionCodeValidationProfile,
+  type QuestionCodeValidationCheckName,
+} from './validation-profile.ts'

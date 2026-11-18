@@ -1,7 +1,7 @@
 import { crc32, deflateSync } from 'node:zlib'
 import { spawnSync } from 'node:child_process'
 import { afterEach, expect, it, vi } from 'vitest'
-import { QuestionCodeAssets } from '../src/question-code-assets.ts'
+import { QuestionCodeAssets, QuestionAssetImageError, type QuestionCodeAssetOptions } from '../src/question-code-assets.ts'
 const chunk = (name: string, body: Buffer) => {
   const tag = Buffer.from(name), head = Buffer.alloc(4), tail = Buffer.alloc(4)
   head.writeUInt32BE(body.length)
@@ -131,4 +131,86 @@ it('cancels an oversized response body before rejecting it', async () => {
   const assets = new QuestionCodeAssets({ env, fetchImpl: async () => new Response(body, { headers: { 'content-length': String(20 * 1024 * 1024) } }) })
   await expect(assets.generate(input)).rejects.toThrow('IMAGE_RESPONSE_INVALID')
   expect(cancel).toHaveBeenCalledOnce()
+})
+
+it('uses the independent image executor and retains validated bytes and private provenance before staging', async () => {
+  const provider = vi.fn<NonNullable<QuestionCodeAssetOptions['imageProvider']>>(async () => ({
+    bytes: png, mediaType: 'image/png', model: 'independent-image-model', channelId: 'private-image-channel',
+    configRevision: 'private-config-revision', usage: { totalTokens: 12 },
+  }))
+  const retain = vi.fn<NonNullable<QuestionCodeAssetOptions['retainGenerated']>>(async () => ({ id: 'material-private-id', revision: 2 }))
+  const fetcher = vi.fn<typeof fetch>(async () => { throw new Error('legacy image credentials must not be read') })
+  const assets = new QuestionCodeAssets({ env, fetchImpl: fetcher, imageProvider: provider, retainGenerated: retain })
+  const item = await assets.generate({ ...input, theme: '单摆器材', purpose: '教学外观', tags: ['木材'], style: '暖色' })
+  expect(provider).toHaveBeenCalledOnce()
+  expect(fetcher).not.toHaveBeenCalled()
+  expect(retain).toHaveBeenCalledWith(expect.objectContaining({ theme: '单摆器材', purpose: '教学外观', tags: ['木材'], style: '暖色' }),
+    expect.objectContaining({ bytes: png, width: 256, height: 256, model: 'independent-image-model', operationId: expect.stringMatching(/^[a-f0-9]{64}$/),
+      prompt: expect.stringContaining(input.prompt), channelId: 'private-image-channel', usage: { totalTokens: 12 } }))
+  expect(item).toMatchObject({ materialId: 'material-private-id', materialRevision: 2 })
+  const provenance = assets.files(binding, `image.src = '${item.path}'`).get('dist/assets/generated/provenance.json')!.toString()
+  expect(provenance).not.toMatch(/material-private-id|private-image-channel|private-config-revision|independent-image-model|secret-test-key|Warm Lab environment/)
+  expect(JSON.parse(provenance)).toMatchObject([{ path: item.path, sha256: item.sha256, mediaType: 'image/png' }])
+})
+
+it('retains every successful candidate including an image not selected by the renderer', async () => {
+  const operationIds: string[] = []
+  const retain: NonNullable<QuestionCodeAssetOptions['retainGenerated']> = async (_request, image) => {
+    operationIds.push(image.operationId)
+    return { id: 'material-' + operationIds.length, revision: 1 }
+  }
+  const assets = new QuestionCodeAssets({ imageProvider: async () => ({ bytes: png, mediaType: 'image/png', model: 'image-model' }), retainGenerated: retain })
+  const first = await assets.generate(input)
+  const second = await assets.generate({ ...input, kind: 'material' })
+  const files = assets.files(binding, `image.src = '${first.path}'`)
+  expect(operationIds).toHaveLength(2)
+  expect(new Set(operationIds).size).toBe(2)
+  expect(files.get('dist/' + first.path.slice(2))).toEqual(png)
+  expect(files.has('dist/' + second.path.slice(2))).toBe(false)
+  await expect(assets.generate(input)).rejects.toThrow('IMAGE_LIMIT')
+  expect(operationIds).toHaveLength(2)
+})
+
+it('does not claim a library save or stage bytes when retention fails', async () => {
+  const assets = new QuestionCodeAssets({ imageProvider: async () => ({ bytes: png, mediaType: 'image/png', model: 'image-model' }),
+    retainGenerated: async () => { throw new QuestionAssetImageError('IMAGE_LIBRARY_FAILED') } })
+  await expect(assets.generate(input)).rejects.toThrow('IMAGE_LIBRARY_FAILED')
+  expect(assets.manifest(binding)).toEqual([])
+  expect(assets.nativeFallback(binding)).toBeUndefined()
+})
+
+it('revalidates library bytes and binds new current-job paths without invoking image generation', async () => {
+  const provider = vi.fn<NonNullable<QuestionCodeAssetOptions['imageProvider']>>(async () => ({ bytes: png, mediaType: 'image/png', model: 'image-model' }))
+  const assets = new QuestionCodeAssets({ imageProvider: provider })
+  const first = await assets.generate(input)
+  const current = { ...binding, generationId: 'second-job' }
+  const reused = assets.useMaterial(current, { bytes: png, sha256: first.sha256, kind: first.kind, model: first.model, id: 'owned-material', revision: 1 })
+  expect(reused.path).not.toBe(first.path)
+  expect(reused.sha256).toBe(first.sha256)
+  expect(assets.files(current, `image.src = '${reused.path}'`).get('dist/' + reused.path.slice(2))).toEqual(png)
+  expect(provider).toHaveBeenCalledOnce()
+  expect(() => assets.useMaterial(current, { bytes: png, sha256: '0'.repeat(64), kind: first.kind, model: first.model, id: 'owned-material', revision: 1 })).toThrow('IMAGE_BINDING_INVALID')
+})
+
+it('permits honestly native-only drawing without a forced image request and still rejects hidden image references', async () => {
+  const native = `export function renderFrame(snapshot) {
+    const view = snapshot.view, root = document.getElementById('canvas');
+    const board = document.createElement('canvas'); root.replaceChildren(board);
+    const ctx = board.getContext('2d');
+    for (const item of view.opticalObjects || []) {
+      ctx.beginPath(); ctx.arc(item.at.x, item.at.y, 3, 0, Math.PI * 2); ctx.fill();
+    }
+  }`
+  const assets = new QuestionCodeAssets()
+  expect(assets.files(binding, native, '', true).size).toBe(0)
+  expect(() => assets.files(binding, native, 'canvas { background: url(https://other.example/image.png) }', true)).toThrow('IMAGE_BINDING_INVALID')
+})
+
+it('recognizes only native typed fallback evidence, not an error message naming a rate limit', async () => {
+  const claimed = new QuestionCodeAssets({ imageProvider: async () => { throw new Error('IMAGE_RATE_LIMIT') } })
+  await expect(claimed.generate(input)).rejects.toThrow('IMAGE_RATE_LIMIT')
+  expect(claimed.nativeFallback(binding)).toBeUndefined()
+  const observed = new QuestionCodeAssets({ imageProvider: async () => { throw new QuestionAssetImageError('IMAGE_RATE_LIMIT', 'IMAGE_RATE_LIMIT') } })
+  await expect(observed.generate(input)).rejects.toThrow('IMAGE_RATE_LIMIT')
+  expect(observed.nativeFallback(binding)).toMatchObject({ code: 'IMAGE_RATE_LIMIT', mode: 'native' })
 })

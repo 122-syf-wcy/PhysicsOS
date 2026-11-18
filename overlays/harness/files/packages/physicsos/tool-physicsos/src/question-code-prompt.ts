@@ -11,6 +11,7 @@ import type { PhysicsSceneSnapshot } from './types.ts'
 import { focusedRenderContract, QUESTION_CODE_ENTRY_EXAMPLE, QUESTION_CODE_LABEL_EXAMPLE } from './question-code-prompt-context.ts'
 import { questionComposition } from './question-code-composition.ts'
 import { CODE_PART_TARGET_CHARACTERS, MAX_CODE_PART_CHARACTERS } from './question-code-parts.ts'
+import { questionCodeVisualBrief } from './question-code-visual-brief.ts'
 import {
   isResumeCode,
   SOURCE_VALIDATION_HINTS,
@@ -74,16 +75,19 @@ export function questionCodePrompt(
     ).replace('let board,image,decoded;', 'let board;')
   return [
     `真实题目标签：${snapshot.title.slice(0, 240)}。hasVerifiedSolution=${String(hasVerifiedSolution)}；${hasVerifiedSolution ? '仅展示引擎已有结论。' : '仅当前/局部场景演示，不称整题已解。'}`,
-    `physics_write_experiment_code：按函数边界分段，通常每段<=${CODE_PART_TARGET_CHARACTERS}字符；首段replace，等回执后append，不重复已写代码。每次硬限/JS合计<=${MAX_CODE_PART_CHARACTERS}、CSS合计<=6000，共10次；全部写完再structured_output提交title/summary。`,
-    'Canvas2D入口示例：#canvas铺满宿主，依clientWidth/clientHeight绘图，禁定宽高。仅普通函数；禁import/reexport、旧renderer、动态分派、fetch/外网/存储/parent/top/eval。',
+    `分段<=${CODE_PART_TARGET_CHARACTERS}为宜：physics_write_experiment_code({file:"rendererJs",mode:"replace",content:入口})，等回执后append；CSS用stylesheet。每次/JS合计<=${MAX_CODE_PART_CHARACTERS}、CSS合计<=6000、10次；写完structured_output({title:真实中文题目,summary:现象})。作者最多2轮，共享原截止时间；禁扩工具/子代理/旧上传文档/私有对象。`,
+    questionCodeVisualBrief(style, snapshot, instructions, images.length > 0),
+    'Canvas2D入口示例：clientWidth/clientHeight；禁定尺寸/import/reexport/旧renderer/动态分派/fetch/外网/存储/parent/top/eval。',
     entryExample.replace(/\n/g, ''),
-    '只读snapshot.view；origin/extent等比投影，y翻转一次，不拟合当前位置。斜面视窗局部跟随。禁解题/积分/自建时钟；from/to仅显示端点。缺省/零值合法，不造物体。',
-    'Warm Lab暖白木/金属，装置为主体，保留受力/场/光路方向和中文。body.rotation/incline.angle/coordinate.rotation/angles.startAngle/endAngle/电路rotation为度，leverBeam.tilt/currentRotor.angle为弧度。body.size是半径/半边长，单位不变。',
-    '角度弧令s=a.startAngle,e=a.endAngle,k=Math.PI/180；ctx.arc(cx,cy,r,-s*k,-e*k,e>=s)，保留有向跨度。开关用visible[observable]，禁用数组名作键。',
-    'drawScene只画几何/全部箭头，禁putLabel/fillText/strokeText。labels.push({text:vector.symbol,p:point(vector.to,t)})收集文字；body.label/view.labels[].text同队列，入口最后标注。p是屏幕坐标勿再投影。物块r=Math.max(8,body.size*t.s)，按rotation旋转；used含旋转包围区勿清空。颜色按vector.role；字>=11px。禁drawPanel/读数/写死物理数值，宿主显示读数。',
+    '只读snapshot.view；origin/extent等比，y翻转一次，禁拟合当前点；斜面局部跟随。禁解题/积分/自建时钟；from/to仅显示；零/缺省合法，禁造物体。',
+    snapshot.domain === 'mechanics' && style.experimentId === 'incline'
+      ? 'body.rotation/incline.angle/coordinate.rotation/angles.startAngle/endAngle为度；body.size为半径/半边长。'
+      : 'body.rotation/incline.angle/coordinate.rotation/angles.startAngle/endAngle/电路rotation为度；leverBeam.tilt/currentRotor.angle为弧度。body.size为半径/半边长，单位不变。',
+    '弧s=a.startAngle,e=a.endAngle,k=Math.PI/180：ctx.arc(cx,cy,r,-s*k,-e*k,e>=s)。visible[observable]非数组名。',
+    'drawScene禁putLabel/fillText/strokeText；labels.push({text:vector.symbol,p:point(vector.to,t)})及body.label/view.labels同队列，入口最后标注，p已投影。物块r=Math.max(8,body.size*t.s)按rotation旋转，used保留旋转包围区，颜色vector.role。',
     QUESTION_CODE_LABEL_EXAMPLE.replace(/\n/g, ''),
-    '缺素材且有工具时physics_generate_experiment_asset生成环境/材质，禁文字/动态事实。成功用真实path、CSS cssPath。仅可信mode:native可无图且不重试，不能自称故障。',
-    images.length ? '' : 'mode:native用字面DOM tag/attr；computed仅纯数据/真实Frame JSON链，DOM用点号字面操作，禁借用call/apply/bind、HTML/URI。未知访问改map/push或明确数据const；SVG色用本地色表，模板仅纯读取/算术。',
+    '图适题才显示；path写Image.src字符串、cssPath写CSS url。禁伪造mode:native/故障/任意URL；已有图禁重生。',
+    images.length ? '' : '无图片时用字面DOM tag/attr；computed仅纯数据/真实Frame JSON链，DOM用点号字面操作，禁借用call/apply/bind、HTML/URI。未知访问改map/push或明确数据const；SVG色用本地色表，模板仅纯读取/算术。',
     repair?.code === 'IMAGE_BINDING_INVALID' ? '图片绑定拒绝：删除图片/HTML/URI与未知computed sink；native用字面DOM tag/attr和map/push几何处理，已有图片仅复用真实path。replace错误文件再提交。' : '',
     // The focused incline contract already carries the exact surface, origin,
     // visibility and trajectory rules; the generic mechanics prose repeats them.
@@ -92,7 +96,6 @@ export function questionCodePrompt(
     focusedRenderContract(style.renderContract, snapshot.domain, style.experimentId),
     images[0]?.cssPath ? `首图CSS:${images[0].cssPath}` : '',
     images.length > 1 ? `其他素材（复用）:${JSON.stringify(images.slice(1))}` : '',
-    instructions ? `展示要求（不得改物理条件）：${instructions.slice(0, 4000)}` : '',
     repair === undefined ? '' : resume
       ? `${tokenLimit ? '本轮输出达到上限' : '上游中断'}（${repair.code}），同一任务仅续写一次。${repair.source ? '已保留代码，直接append补完；需替换才replace。' : '没有源码，从replace入口开始。'}不能重复生图。立即写代码，不重新规划。`
       : `封闭校验未通过（${repair.code}），唯一修复机会；replace错误文件后提交title/summary。`,

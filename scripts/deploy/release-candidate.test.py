@@ -914,6 +914,7 @@ class CandidateTeachingTools(unittest.TestCase):
             environment = {'PATH': '/usr/bin', candidate.TEACHING_TOOLS_ENV: mode,
                            candidate.ACTIVITY_CAPACITY_ENV: 'true' if capacity else 'false',
                            'PHYSICSOS_MODEL_POOL_PORT': str(config['modelPoolPort']),
+                           'PHYSICSOS_PUBLIC_URL': f"http://127.0.0.1:{config['httpPort']}",
                            'DEEPSEEK_BASE_URL': f"http://127.0.0.1:{config['modelPoolPort']}/v1",
                            'DATABASE_URL_FILE': '/run/secrets/database_url', 'PRESERVED_FILE': '/run/secrets/fixture'}
             spec = {'metadata': details, 'environment': environment, 'network': config['network'],
@@ -946,6 +947,7 @@ class CandidateTeachingTools(unittest.TestCase):
             production[0]['Config'].update({'Cmd': [*spec['command'][:-2], '--port', '3080', '--patch', '/production.patch.yml'],
                                            'Env': ['PATH=/usr/bin', 'DEEPSEEK_BASE_URL=http://127.0.0.1:3972/v1',
                                                    'PHYSICSOS_MODEL_POOL_PORT=3972', 'UNAPPROVED_SECRET=fake-production-material',
+                                                   'PHYSICSOS_PUBLIC_URL=https://physics.dongsiwei.com',
                                                    candidate.ACTIVITY_CAPACITY_ENV + '=true']})
             pg = {'Id': '8' * 64, 'Name': '/' + config['databaseContainer'], 'State': {'Running': True},
                   'Config': {'Labels': {'io.physicsos.task': config['task'], 'io.physicsos.role': 'validation-database'}},
@@ -1155,6 +1157,7 @@ class CandidateTeachingTools(unittest.TestCase):
                     run.assert_not_called()
                 self.assertEqual(spec['environment'][candidate.TEACHING_TOOLS_ENV], mode)
                 self.assertEqual(spec['environment'][candidate.ACTIVITY_CAPACITY_ENV], 'true' if capacity else 'false')
+                self.assertEqual(spec['environment']['PHYSICSOS_PUBLIC_URL'], f"http://127.0.0.1:{f.config['httpPort']}")
                 self.assertEqual(spec.get('activityCapacity'), f.config.get('activityCapacity'))
                 self.assertNotIn('activityCapacity', spec['metadata'])
                 self.assertNotIn('UNAPPROVED_SECRET', spec['environment'])
@@ -1193,6 +1196,8 @@ class CandidateTeachingTools(unittest.TestCase):
                    lambda f: f.current['Config'].update(Env=[entry.replace(candidate.TEACHING_TOOLS_ENV + '=bridge', candidate.TEACHING_TOOLS_ENV + '=enabled') for entry in f.current['Config']['Env']]),
                    lambda f: f.current['Config']['Env'].remove(candidate.TEACHING_TOOLS_ENV + '=bridge'),
                    lambda f: f.current['Config']['Env'].append('UNAPPROVED_SECRET=do-not-print-this'),
+                   lambda f: f.current['Config'].update(Env=[entry for entry in f.current['Config']['Env'] if not entry.startswith('PHYSICSOS_PUBLIC_URL=')] + ['PHYSICSOS_PUBLIC_URL=https://physics.dongsiwei.com']),
+                   lambda f: f.current['Config']['Env'].append('PHYSICSOS_PUBLIC_URL=http://127.0.0.1:65535'),
                    lambda f: f.current['Config']['Labels'].update({'io.physicsos.teaching-tools.mode': 'enabled'}),
                    lambda f: f.current.update(Id='9' * 64), lambda f: f.current.update(Name='/physicsos-app-1'),
                    lambda f: f.current['Mounts'][0].update(Source='/production/home'),

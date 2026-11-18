@@ -24,14 +24,26 @@ import {
 } from './question-code-domain.ts'
 import { questionCodeContext, styleVersionOf, type QuestionCodeContext } from './question-code-context.ts'
 import type { DeveloperPromptService } from './prompt-service.ts'
-import { QuestionCodeAssets, type QuestionAssetDescriptor, type QuestionAssetFallback } from './question-code-assets.ts'
+import { QuestionCodeAssets, type AssetBinding, type QuestionAssetDescriptor, type QuestionAssetFallback } from './question-code-assets.ts'
+import type { VisualMaterialActor, VisualMaterialService } from './visual-material-contracts.ts'
 import { CANVAS_TEXT_SHIM } from './question-code-canvas-text.ts'
 import { questionCodeJobMatchesArtifact, type ValidationSourceBinding } from './question-code-jobs.ts'
-export interface QuestionAssetRequest { ownerSessionId: string; generationId: string; scene: unknown; prompt: string; kind: 'environment' | 'material'; signal: AbortSignal }
+export interface QuestionAssetRequest {
+  ownerSessionId: string; generationId: string; scene: unknown; prompt: string; kind: 'environment' | 'material'
+  theme?: string; purpose?: string; tags?: readonly string[]; style?: string; signal: AbortSignal
+}
 export type QuestionAssetScope = Pick<QuestionAssetRequest, 'ownerSessionId' | 'generationId' | 'scene'>
+export interface QuestionMaterialSearch extends QuestionAssetScope {
+  query: string; kind?: 'environment' | 'material'; purpose?: string; tags?: readonly string[]; style?: string; signal: AbortSignal
+}
+export interface QuestionMaterialSelection extends QuestionAssetScope { materialId: string; sha256: string; signal: AbortSignal }
+export interface QuestionMaterialMatches {
+  items: readonly { materialId: string; sha256: string; theme: string; purpose: string; kind: string; width: number; height: number; tags: readonly string[]; style?: string }[]
+}
 export const QUESTION_CODE_SERVICE = 'questionCodeArtifacts'
 export interface QuestionCodeIdentity extends PhysicsosIdentity {
   sessionOwnerKey(sessionId: string): string | undefined
+  usageSessionOwner?(sessionId: string): { readonly userKey: string; readonly schoolId: string } | undefined
 }
 export interface CreateQuestionCodeInput {
   ownerSessionId: string
@@ -50,6 +62,8 @@ export interface QuestionCodeArtifacts {
   context(experimentId: string): Promise<QuestionCodeContext>
   describe(ownerSessionId: string, artifactId: string, expectedSha256: string): CodeExperimentRef
   generateAsset(input: QuestionAssetRequest): Promise<QuestionAssetDescriptor>
+  searchMaterials(input: QuestionMaterialSearch): Promise<QuestionMaterialMatches>
+  useMaterial(input: QuestionMaterialSelection): Promise<QuestionAssetDescriptor>
   assetManifest(input: QuestionAssetScope): QuestionAssetDescriptor[]
   assetFallback?(input: QuestionAssetScope): QuestionAssetFallback | undefined
 }
@@ -65,6 +79,11 @@ export interface QuestionCodeOptions {
   assetOrigin?: string
   previewTtlMs?: number
   imageAssets?: QuestionCodeAssets
+  visualMaterials?: Pick<VisualMaterialService, 'search' | 'select'>
+  materialActor?: (ownerSessionId: string, expectedUserKey: string) => VisualMaterialActor
+  /** Trusted host settings, never arguments authored by a child. */
+  allowNativeAssets?: boolean
+  requireAssetJob?: boolean
   drawingTimeoutMs?: number
   drawingConcurrency?: number
 }
@@ -97,6 +116,15 @@ const inputSchema = z
     requestSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   })
   .strict()
+const assetMetadataSchema = z.object({
+  theme: z.string().trim().min(1).max(120).optional(), purpose: z.string().trim().min(1).max(120).optional(),
+  tags: z.array(z.string().trim().min(1).max(40)).max(12).optional(), style: z.string().trim().min(1).max(80).optional(),
+}).strict()
+const appearanceDomainTitles: Readonly<Record<string, string>> = {
+  mechanics: '力学', optics: '光学', electric: '电场', magnetic: '磁场', induction: '电磁感应',
+  circuit: '电路', wave: '波动', acoustics: '声学', fluid: '流体', thermal: '热学', modern: '近代物理',
+  lever: '杠杆', collision: '碰撞', energy: '能量', composite: '复合场',
+}
 const missing = (): ExperimentError =>
   new ExperimentError(404, 'NOT_FOUND', '未找到当前账号的题目实验。')
 type SourceValidationReason =
@@ -874,16 +902,95 @@ export class QuestionCodeArtifactService implements QuestionCodeArtifacts {
   context(experimentId: string): Promise<QuestionCodeContext> {
     return Promise.resolve().then(() => questionCodeContext(experimentId, this.options.prompts))
   }
-  private assetBinding(input: QuestionAssetScope) {
+  private assetBinding(input: QuestionAssetScope): AssetBinding {
     this.requireReady()
     const ownerKey = this.owner(input.ownerSessionId)
     if (!ownerKey) throw new ExperimentError(403, 'SESSION_OWNER_UNAVAILABLE', '对话账号身份不可用。')
-    if (validateScene(input.scene as PhysicsScene).status === 'failed') throw new ExperimentError(400, 'INVALID_SCENE', '题目场景无效。')
-    return { ownerSessionId: input.ownerSessionId, ownerKey, generationId: input.generationId,
-      sceneSha256: questionSceneSha256(input.scene as PhysicsScene) }
+    if (typeof input.generationId !== 'string' || !input.generationId || input.generationId.length > 200) throw new ExperimentError(400, 'IMAGE_BINDING_INVALID', '素材任务身份无效。')
+    const scene = input.scene as PhysicsScene
+    if (validateScene(scene).status === 'failed') throw new ExperimentError(400, 'INVALID_SCENE', '题目场景无效。')
+    const sceneSha256 = questionSceneSha256(scene)
+    if (this.options.requireAssetJob) {
+      const job = this.domain.table('jobs').get(input.generationId)
+      if (job === undefined || job.ownerKey !== ownerKey || job.ownerSessionId !== input.ownerSessionId
+        || job.sceneId !== scene.id || job.sceneRevision !== scene.revision || job.sceneSha256 !== sceneSha256
+        || !['queued', 'running'].includes(job.status)) throw new ExperimentError(409, 'STALE_GENERATION', '素材请求不属于当前可视化任务。')
+    }
+    return { ownerSessionId: input.ownerSessionId, ownerKey, generationId: input.generationId, sceneSha256 }
+  }
+  /** Native image/library adapters recheck this fence before spending and publishing. */
+  assertAssetBinding(binding: AssetBinding): void {
+    this.requireReady()
+    if (this.owner(binding.ownerSessionId) !== binding.ownerKey) throw new ExperimentError(403, 'IMAGE_BINDING_INVALID', '素材账号身份已变化。')
+    if (this.options.requireAssetJob) {
+      const job = this.domain.table('jobs').get(binding.generationId)
+      if (job === undefined || job.ownerSessionId !== binding.ownerSessionId || job.ownerKey !== binding.ownerKey
+        || job.sceneSha256 !== binding.sceneSha256 || !['queued', 'running'].includes(job.status)) throw new ExperimentError(409, 'STALE_GENERATION', '素材生成任务已变化。')
+    }
+  }
+  private assetFence(input: QuestionAssetScope, binding: AssetBinding, signal: AbortSignal): () => void {
+    return () => {
+      signal.throwIfAborted()
+      if (canonicalQuestionJson(this.assetBinding(input)) !== canonicalQuestionJson(binding)) throw new ExperimentError(409, 'STALE_GENERATION', '素材请求的账号或场景已变化。')
+    }
+  }
+  private materialActor(binding: AssetBinding): VisualMaterialActor {
+    const actor = this.options.materialActor?.(binding.ownerSessionId, binding.ownerKey)
+    if (actor === undefined || actor.userKey !== binding.ownerKey || !actor.schoolId) throw new ExperimentError(503, 'MATERIAL_IDENTITY_UNAVAILABLE', '素材库账号归属不可用。')
+    return actor
+  }
+  private trackAsset<T>(operation: Promise<T>): Promise<T> {
+    this.inflight.add(operation)
+    void operation.finally(() => this.inflight.delete(operation)).catch(() => {})
+    return operation
   }
   generateAsset(input: QuestionAssetRequest): Promise<QuestionAssetDescriptor> {
-    return this.imageAssets.generate({ ...this.assetBinding(input), prompt: input.prompt, kind: input.kind, signal: input.signal })
+    return this.trackAsset((async () => {
+      const binding = this.assetBinding(input), fence = this.assetFence(input, binding, input.signal)
+      const metadata = assetMetadataSchema.safeParse({
+        ...(input.theme === undefined ? {} : { theme: input.theme }), ...(input.purpose === undefined ? {} : { purpose: input.purpose }),
+        ...(input.tags === undefined ? {} : { tags: input.tags }), ...(input.style === undefined ? {} : { style: input.style }),
+      })
+      if (!metadata.success) throw new ExperimentError(400, 'IMAGE_INPUT_INVALID', '请提供简洁、有效的素材主题和用途。')
+      const selected = pickEngine(input.scene as PhysicsScene)
+      const domain = selected.entry === undefined ? 'physics' : domainOfEngine(selected.entry.engine)
+      fence()
+      const result = await this.imageAssets.generate({ ...binding, prompt: input.prompt, kind: input.kind,
+        theme: metadata.data.theme ?? (appearanceDomainTitles[domain] ?? '物理') + (input.kind === 'environment' ? '实验背景' : '实验器材'),
+        purpose: metadata.data.purpose ?? (input.kind === 'environment' ? '教学场景背景' : '实验器材外观'),
+        tags: metadata.data.tags ?? [domain, input.kind], ...(metadata.data.style === undefined ? {} : { style: metadata.data.style }), signal: input.signal })
+      fence()
+      return result
+    })())
+  }
+  searchMaterials(input: QuestionMaterialSearch): Promise<QuestionMaterialMatches> {
+    return this.trackAsset((async () => {
+      const binding = this.assetBinding(input), fence = this.assetFence(input, binding, input.signal), actor = this.materialActor(binding)
+      const library = this.options.visualMaterials
+      if (library === undefined) throw new ExperimentError(503, 'MATERIAL_UNAVAILABLE', '素材库尚未就绪。')
+      fence()
+      const page = await library.search(actor, { query: input.query, limit: 8,
+        ...(input.kind === undefined ? {} : { kind: input.kind }), ...(input.purpose === undefined ? {} : { purpose: input.purpose }),
+        ...(input.tags === undefined ? {} : { tags: input.tags }), ...(input.style === undefined ? {} : { style: input.style }) }, input.signal)
+      fence()
+      const current = this.materialActor(binding)
+      if (current.schoolId !== actor.schoolId) throw new ExperimentError(409, 'MATERIAL_IDENTITY_CHANGED', '素材库账号归属已变化。')
+      return { items: page.items.map(item => ({ materialId: item.id, sha256: item.sha256, theme: item.theme, purpose: item.purpose,
+        kind: item.kind, width: item.width, height: item.height, tags: [...item.tags], ...(item.style === undefined ? {} : { style: item.style }) })) }
+    })())
+  }
+  useMaterial(input: QuestionMaterialSelection): Promise<QuestionAssetDescriptor> {
+    return this.trackAsset((async () => {
+      const binding = this.assetBinding(input), fence = this.assetFence(input, binding, input.signal), actor = this.materialActor(binding)
+      const library = this.options.visualMaterials
+      if (library === undefined) throw new ExperimentError(503, 'MATERIAL_UNAVAILABLE', '素材库尚未就绪。')
+      fence()
+      const selected = await library.select(actor, input.materialId, input.sha256, input.signal)
+      fence()
+      if (this.materialActor(binding).schoolId !== actor.schoolId) throw new ExperimentError(409, 'MATERIAL_IDENTITY_CHANGED', '素材库账号归属已变化。')
+      return this.imageAssets.useMaterial(binding, { bytes: selected.bytes, kind: selected.descriptor.kind, model: selected.descriptor.model,
+        id: selected.descriptor.id, revision: selected.descriptor.revision, sha256: selected.descriptor.sha256 })
+    })())
   }
   assetManifest(input: QuestionAssetScope): QuestionAssetDescriptor[] { return this.imageAssets.manifest(this.assetBinding(input)) }
   assetFallback(input: QuestionAssetScope): QuestionAssetFallback | undefined { return this.imageAssets.nativeFallback(this.assetBinding(input)) }
@@ -978,17 +1085,17 @@ export class QuestionCodeArtifactService implements QuestionCodeArtifacts {
     if (input.generationId !== undefined) {
       const binding = this.assetBinding({ ownerSessionId: input.ownerSessionId, generationId: input.generationId, scene })
       const hasImages = this.imageAssets.manifest(binding).length > 0
-      if (!hasImages && !this.imageAssets.nativeFallback(binding)) throw new ExperimentError(400, 'IMAGE_REQUIRED', '请先生成本题实验素材。')
+      if (!hasImages && !this.options.allowNativeAssets && !this.imageAssets.nativeFallback(binding)) throw new ExperimentError(400, 'IMAGE_REQUIRED', '请先生成本题实验素材。')
       if (!hasImages) {
         try { await this.checkSyntax(source.rendererJs); syntaxChecked = true }
         catch (error) { throw invalidSource(error instanceof DrawingValidationError ? error.reason : undefined) }
       }
-      const generated = this.imageAssets.files(binding, source.rendererJs, source.stylesheet)
+      const generated = this.imageAssets.files(binding, source.rendererJs, source.stylesheet, this.options.allowNativeAssets === true)
       for (const [name, bytes] of generated) files.set(name, bytes)
       if (generated.size) {
         const licenses: unknown = JSON.parse(files.get('ASSET-LICENSES.json')?.toString('utf8') ?? '[]')
         if (!Array.isArray(licenses)) throw invalidSource()
-        files.set('ASSET-LICENSES.json', Buffer.from(JSON.stringify([...(licenses as unknown[]), { path: 'dist/assets/generated/*', name: 'Question-specific generated appearance assets', source: 'https://image.haqiuhaqiu.xyz', license: 'LicenseRef-Generated-Provider-Terms', notice: 'dist/assets/generated/provenance.json' }], null, 2)))
+        files.set('ASSET-LICENSES.json', Buffer.from(JSON.stringify([...(licenses as unknown[]), { path: 'dist/assets/generated/*', name: 'Question-specific generated appearance assets', source: 'https://physics.dongsiwei.com', license: 'LicenseRef-Generated-Provider-Terms', notice: 'dist/assets/generated/provenance.json' }], null, 2)))
       }
     } else if (/assets\/generated\//.test(source.rendererJs + source.stylesheet)) throw invalidSource()
     files.set('public/assets/platform-base.css', Buffer.from(independentStylesheet))

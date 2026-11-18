@@ -108,6 +108,8 @@ services:
       # passed to the CLI as --trusted-host above. Without it the connection
       # layer treats the domain as untrusted and 403s every /api request.
       PHYSICOS_TRUSTED_HOSTS: ${PHYSICOS_TRUSTED_HOSTS:-physics.dongsiwei.com}
+      # Canonical public origin for authenticated material mutations and public links.
+      PHYSICSOS_PUBLIC_URL: ${PHYSICSOS_PUBLIC_URL:-https://physics.dongsiwei.com}
       # 审核结果通知的 SMTP 出口（QQ 邮箱）。账号与授权码是凭据，走 secret
       # 文件挂载，不写进 compose 的 environment 明文。未配置时审核仍然生效，
       # 只是把「未发信」记在待审核注册行上。
