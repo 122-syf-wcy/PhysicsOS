@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import re
+import selectors
 import shutil
 import signal
 import stat
@@ -23,10 +24,17 @@ os.umask(0o077)
 
 TEACHING_TOOLS_ENV = 'PHYSICSOS_TEACHING_TOOLS_MODE'
 TEACHING_TOOLS_CAPABILITY = 'teaching-tools-bridge-v1'
+ACTIVITY_CAPACITY_ENV = 'PHYSICSOS_ACTIVITY_QUERY_CAPACITY_VERIFIED'
+ACTIVITY_CAPACITY_BASELINE_FIELDS = {
+    'PHYSICSOS_ACTIVITY_BASE_DAILY_USERS', 'PHYSICSOS_ACTIVITY_EVENTS_PER_USER_DAY',
+    'PHYSICSOS_ACTIVITY_BASE_ROSTER_USERS', 'PHYSICSOS_ACTIVITY_BASE_SCHOOLS',
+}
+ACTIVITY_CAPACITY_MAX_BYTES = 1024 * 1024
 TEACHING_TOOLS_FIELDS = {
     'task', 'root', 'databaseContainer', 'databaseOwner', 'databaseUser', 'databaseName',
     'databasePasswordFile', 'databaseDataRoot', 'schema', 'username', 'httpPort', 'modelPoolPort',
-    'requireIsolatedNetwork', 'network', 'validationWorker', 'searchCompanion', 'teachingToolsMode', '_configFile',
+    'requireIsolatedNetwork', 'network', 'validationWorker', 'searchCompanion', 'teachingToolsMode',
+    'activityCapacity', '_configFile',
 }
 
 
@@ -38,7 +46,13 @@ class CandidateError(RuntimeError):
 
 
 def teaching_tools_mode(config):
-    """One opt-in scalar, not a general environment/configuration override."""
+    """Closed opt-in mode and proof reference, never an environment override."""
+    if 'activityQueryCapacityVerified' in config or ACTIVITY_CAPACITY_ENV in config:
+        raise CandidateError('CANDIDATE_TEACHING_FIELDS_INVALID')
+    if 'activityCapacity' in config:
+        if config.get('teachingToolsMode') != 'enabled':
+            raise CandidateError('CANDIDATE_ACTIVITY_CAPACITY_MODE_REQUIRED')
+        validate_activity_capacity_reference(config['activityCapacity'])
     if 'teachingToolsMode' not in config:
         return None
     mode = config['teachingToolsMode']
@@ -55,10 +69,113 @@ def teaching_tools_mode(config):
     return mode
 
 
-def apply_teaching_tools_mode(config, environment):
+def validate_activity_capacity_reference(reference):
+    if not isinstance(reference, dict) or set(reference) != {'path', 'sha256'}:
+        raise CandidateError('CANDIDATE_ACTIVITY_CAPACITY_REFERENCE_INVALID')
+    raw = reference['path']
+    if (not isinstance(raw, str) or any(char in raw for char in ['\x00', '\r', '\n'])
+            or (path := Path(raw)).anchor != '/' or str(path) != raw or '..' in path.parts or not path.name
+            or not isinstance(reference['sha256'], str) or not re.fullmatch(r'[a-f0-9]{64}', reference['sha256'])):
+        raise CandidateError('CANDIDATE_ACTIVITY_CAPACITY_REFERENCE_INVALID')
+
+
+def unique_json_fields(pairs):
+    value = dict(pairs)
+    if len(value) != len(pairs):
+        raise ValueError('Duplicate JSON field')
+    return value
+
+
+@contextlib.contextmanager
+def nofollow_directory(path):
+    # Anchor each component separately so races cannot redirect through links.
+    if path.anchor != '/' or '..' in path.parts:
+        raise ValueError('Expected an absolute directory without traversal')
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    fd = os.open('/', flags)
+    try:
+        for part in path.parts[1:]:
+            next_fd = os.open(part, flags, dir_fd=fd)
+            os.close(fd)
+            fd = next_fd
+        yield fd
+    finally:
+        os.close(fd)
+
+
+def read_activity_capacity_file(path):
+    try:
+        with nofollow_directory(path.parent) as parent_fd:
+            if not stat.S_ISREG(os.stat(path.name, dir_fd=parent_fd, follow_symlinks=False).st_mode):
+                raise CandidateError('CANDIDATE_ACTIVITY_CAPACITY_FILE_PRIVATE')
+            fd = os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent_fd)
+            with os.fdopen(fd, 'rb') as file:
+                before = os.fstat(file.fileno())
+                if (not stat.S_ISREG(before.st_mode) or before.st_uid not in {0, os.getuid()} or before.st_nlink != 1
+                        or stat.S_IMODE(before.st_mode) not in {0o400, 0o600}
+                        or not 0 < before.st_size <= ACTIVITY_CAPACITY_MAX_BYTES):
+                    raise CandidateError('CANDIDATE_ACTIVITY_CAPACITY_FILE_PRIVATE')
+                data = file.read(ACTIVITY_CAPACITY_MAX_BYTES + 1)
+                after = os.fstat(file.fileno())
+                if len(data) != before.st_size or after.st_ctime_ns != before.st_ctime_ns:
+                    raise CandidateError('CANDIDATE_ACTIVITY_CAPACITY_FILE_PRIVATE')
+                return data
+    except (OSError, ValueError):
+        raise CandidateError('CANDIDATE_ACTIVITY_CAPACITY_FILE_PRIVATE') from None
+
+
+def verify_activity_capacity(reference, teaching_image):
+    """Admit the private PostgreSQL runner's 1x/10x result for this cold source only."""
+    if reference is None:
+        return False
+    validate_activity_capacity_reference(reference)
+    # The caller supplies the cold verifier's output, never the live production
+    # revision, an image tag, or values taken from the capacity result itself.
+    if (not isinstance(teaching_image, dict)
+            or any(not isinstance(teaching_image.get(key), str) or not re.fullmatch(pattern, teaching_image[key])
+                   for key, pattern in [('revision', r'[a-f0-9]{40}'), ('sourceDigest', r'[a-f0-9]{64}')])):
+        raise CandidateError('CANDIDATE_ACTIVITY_CAPACITY_UNVERIFIED')
+    data = read_activity_capacity_file(Path(reference['path']))
+    if hashlib.sha256(data).hexdigest() != reference['sha256']:
+        raise CandidateError('CANDIDATE_ACTIVITY_CAPACITY_DIGEST_CHANGED')
+    try:
+        result = json.loads(data, object_pairs_hook=unique_json_fields)
+    except (ValueError, RecursionError):
+        raise CandidateError('CANDIDATE_ACTIVITY_CAPACITY_UNVERIFIED') from None
+    expected = {'scope': 'capacity', 'revision': teaching_image['revision'], 'sourceDigest': teaching_image['sourceDigest'],
+                'exitCode': 0, 'passed': True, 'passedTests': 2, 'failedTests': 0, 'pendingTests': 0}
+    if (not isinstance(result, dict)
+            or any(type(result.get(key)) is not type(value) or result[key] != value for key, value in expected.items())):
+        raise CandidateError('CANDIDATE_ACTIVITY_CAPACITY_UNVERIFIED')
+    inputs = result.get('inputs')
+    # Same numerical envelope as activity-capacity.spec.ts. The projected
+    # baseline is supplied by the runner and will move with actual demand.
+    if (not isinstance(inputs, dict) or set(inputs) != ACTIVITY_CAPACITY_BASELINE_FIELDS | {'PHYSICSOS_ACTIVITY_RUN_CAPACITY'}
+            or inputs['PHYSICSOS_ACTIVITY_RUN_CAPACITY'] != '1'
+            or any(not isinstance(inputs[key], str) or not re.fullmatch(r'[1-9][0-9]{0,5}', inputs[key])
+                   or int(inputs[key]) > 100_000 for key in ACTIVITY_CAPACITY_BASELINE_FIELDS)
+            or int(inputs['PHYSICSOS_ACTIVITY_BASE_DAILY_USERS']) > int(inputs['PHYSICSOS_ACTIVITY_BASE_ROSTER_USERS'])):
+        raise CandidateError('CANDIDATE_ACTIVITY_CAPACITY_UNVERIFIED')
+    cpu = result.get('cpuProfile')
+    if (not isinstance(cpu, dict) or set(cpu) != {'referenceContainer', 'reference', 'runner'}
+            or cpu['referenceContainer'] != 'physicsos-app-1'):
+        raise CandidateError('CANDIDATE_ACTIVITY_CAPACITY_UNVERIFIED')
+    cpu_ints = {'NanoCpus', 'CpuPeriod', 'CpuQuota'}
+    for profile in [cpu['reference'], cpu['runner']]:
+        if (not isinstance(profile, dict) or set(profile) != cpu_ints | {'CpusetCpus'}
+                or any(type(profile[key]) is not int for key in cpu_ints) or not isinstance(profile['CpusetCpus'], str)):
+            raise CandidateError('CANDIDATE_ACTIVITY_CAPACITY_UNVERIFIED')
+    if cpu['reference'] != cpu['runner']:
+        raise CandidateError('CANDIDATE_ACTIVITY_CAPACITY_UNVERIFIED')
+    return True
+
+
+def apply_teaching_tools_mode(config, environment, teaching_image=None):
     mode = teaching_tools_mode(config)
     if mode is not None:
+        capacity_verified = verify_activity_capacity(config.get('activityCapacity'), teaching_image)
         environment[TEACHING_TOOLS_ENV] = mode
+        environment[ACTIVITY_CAPACITY_ENV] = 'true' if capacity_verified else 'false'
 
 
 def private_candidate_record(config, path):
@@ -68,7 +185,7 @@ def private_candidate_record(config, path):
     if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
             or stat.S_IMODE(info.st_mode) & 0o077):
         raise CandidateError('CANDIDATE_TEACHING_RECORD_PRIVATE')
-    return json.loads(path.read_text())
+    return json.loads(path.read_text(), object_pairs_hook=unique_json_fields)
 
 
 def candidate_fingerprint(spec):
@@ -139,13 +256,20 @@ def validate_teaching_tools_spec(config, details, spec):
                 'home': str(root / 'home'), 'schema': config['schema'], 'port': config['httpPort'],
                 'username': config['username'], 'network': config['network'], 'isolatedNetwork': True, 'teachingToolsMode': mode,
                 **{key: config[key] for key in ['modelPoolPort', 'databaseContainer', 'databaseDataRoot', 'databaseName', 'databaseUser']}}
+    environment = spec.get('environment', {})
+    teaching_image = details.get('teachingToolsImage', {})
     if (any(details.get(key) != value for key, value in expected.items()) or spec.get('metadata') != details
-            or spec.get('network') != config['network'] or spec.get('environment', {}).get(TEACHING_TOOLS_ENV) != mode
-            or spec.get('environment', {}).get('PHYSICSOS_MODEL_POOL_PORT') != str(config['modelPoolPort'])
+            or spec.get('network') != config['network'] or environment.get(TEACHING_TOOLS_ENV) != mode
+            or environment.get('PHYSICSOS_MODEL_POOL_PORT') != str(config['modelPoolPort'])
             or not re.fullmatch(r'[a-f0-9]{32}', details.get('candidateInstance', ''))
             or details.get('fingerprint') != candidate_fingerprint(spec)
-            or details.get('teachingToolsImage', {}).get('image') != details.get('image')):
+            or teaching_image.get('image') != details.get('image')):
         raise CandidateError('CANDIDATE_TEACHING_BINDING_CHANGED')
+    capacity = config.get('activityCapacity')
+    if (('activityCapacity' in spec) != (capacity is not None) or spec.get('activityCapacity') != capacity
+            or environment.get(ACTIVITY_CAPACITY_ENV) != ('true' if capacity is not None else 'false')):
+        raise CandidateError('CANDIDATE_ACTIVITY_CAPACITY_BINDING_CHANGED')
+    verify_activity_capacity(capacity, teaching_image)
 
 
 def read_teaching_tools_spec(config):
@@ -175,6 +299,7 @@ def guard_teaching_tools(config, current, spec=None, allow_unrecorded=False):
 
     External refresh helpers must call this, not duplicate label-only ownership.
     Config.Env is compared in memory, including duplicate/extra/secret entries.
+    For teaching candidates return only the verified effective capacity flag.
     """
     if teaching_tools_mode(config) is None:
         # No new parsing/rules for old candidates, even if production gains Env.
@@ -184,9 +309,11 @@ def guard_teaching_tools(config, current, spec=None, allow_unrecorded=False):
                 or record.is_file() and 'teachingToolsMode' in json.loads(record.read_text())):
             raise CandidateError('CANDIDATE_TEACHING_MODE_REQUIRED')
         return
-    spec = read_teaching_tools_spec(config) if spec is None else spec
+    if spec is None:
+        spec = read_teaching_tools_spec(config)
+    else:
+        validate_teaching_tools_spec(config, spec['metadata'], spec)
     details = spec['metadata']
-    validate_teaching_tools_spec(config, details, spec)
     labels = current.get('Config', {}).get('Labels') or {}
     identity = current.get('Id', '')
     if (not re.fullmatch(r'[a-f0-9]{64}', identity) or current.get('Name') != '/' + details['container']
@@ -222,6 +349,7 @@ def guard_teaching_tools(config, current, spec=None, allow_unrecorded=False):
             or current.get('HostConfig', {}).get('PortBindings') != {
                 str(config['httpPort']) + '/tcp': [{'HostIp': '127.0.0.1', 'HostPort': str(config['httpPort'])}]}):
         raise CandidateError('CANDIDATE_TEACHING_RESOURCES_CHANGED')
+    return spec['environment'][ACTIVITY_CAPACITY_ENV] == 'true'
 
 
 def metadata(kind, name):
@@ -240,7 +368,9 @@ def private_json(path, value):
 
 def load(file):
     path = Path(file)
-    value = json.loads(path.read_text())
+    value = json.loads(path.read_text(), object_pairs_hook=unique_json_fields)
+    if not isinstance(value, dict):
+        raise CandidateError('CANDIDATE_CONFIG_INVALID')
     if teaching_tools_mode(value) is not None:
         info = path.lstat()
         if ('_configFile' in value or not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
@@ -990,6 +1120,9 @@ def seed_profile_file(source, destination):
 
 def prepare(config, image_name):
     mode = teaching_tools_mode(config)
+    # No new candidate can borrow a positive capacity declaration from the
+    # production container, its own image defaults, or a persisted profile.
+    teaching_environment = {ACTIVITY_CAPACITY_ENV: 'false'}
     app = metadata('container', 'physicsos-app-1')
     pg = metadata('container', config['databaseContainer'])
     production_pg = metadata('container', 'physicsos-postgres-1')
@@ -1029,6 +1162,7 @@ def prepare(config, image_name):
         if production_ports & {config['httpPort'], config['modelPoolPort']}:
             raise CandidateError('CANDIDATE_TEACHING_PRODUCTION_PORT')
         teaching_image = verify_teaching_tools_image(image)
+        apply_teaching_tools_mode(config, teaching_environment, teaching_image)
     isolated = None
     if config.get('network'):
         isolated, pg = check_isolated_resources(config, create=True, connect=True)
@@ -1112,7 +1246,7 @@ def prepare(config, image_name):
     environment = {name: redirect_pool(value, old_pool_port, config['modelPoolPort']) for name, value in environment.items()}
     environment['REDIS_URL_FILE'] = ''
     environment.update({'DSH_HOME': '/var/lib/physicsos', 'DSH_TELEMETRY_DISABLED': '1', 'PHYSICSOS_STORAGE_BACKEND': 'postgres', 'PHYSICSOS_STORAGE_SCHEMA': config['schema'], 'DATABASE_URL_FILE': '/run/secrets/database_url', 'DEEPSEEK_BASE_URL': f"http://127.0.0.1:{config['modelPoolPort']}/v1", 'PHYSICSOS_ADMIN_PASSWORD_FILE': '/run/secrets/admin_password', 'PHYSICSOS_ADMIN_USERNAME': config['username'], 'PHYSICSOS_SHARED_STATE_BACKEND': 'memory', 'PHYSICSOS_MODEL_POOL_PORT': str(config['modelPoolPort']), 'PHYSICOS_TRUSTED_HOSTS': f'physicsos-validation.invalid:{port}', 'PHYSICOS_TRUSTED_PROXIES': '', 'PHYSICSOS_SESSIONS_ROOT': '/var/lib/physicsos/sessions', 'PHYSICSOS_REGISTRATION_MODE': 'open', 'PHYSICSOS_SMTP_USER_FILE': '', 'PHYSICSOS_SMTP_PASSWORD_FILE': ''})
-    apply_teaching_tools_mode(config, environment)
+    environment.update(teaching_environment)
     if search_configuration(config) is not None:
         environment.update({'PHYSICSOS_RESEARCH_SEARXNG_URL': SEARCH_URL, 'PHYSICSOS_RESEARCH_SEARXNG_KEY_FILE': ''})
     if isolated:
@@ -1139,6 +1273,10 @@ def prepare(config, image_name):
                         **{key: config[key] for key in ['modelPoolPort', 'databaseContainer', 'databaseDataRoot', 'databaseName', 'databaseUser']}})
     spec = {'metadata': details, 'command': rewritten, 'environment': environment, 'mounts': mounts, 'network': network}
     if mode is not None:
+        if 'activityCapacity' in config:
+            # Fingerprint the exact reference, but keep its private path out of
+            # returned metadata, Docker arguments, labels and acceptance output.
+            spec['activityCapacity'] = dict(config['activityCapacity'])
         details['fingerprint'] = candidate_fingerprint(spec)
         validate_teaching_tools_spec(config, details, spec)
     private_json(root / 'metadata.json', details); private_json(paths['state'] / 'launch-spec.json', spec)
@@ -1154,6 +1292,110 @@ def record_teaching_tools_container(config, spec, current):
     private_json(root / 'state/launch-spec.json', spec)
 
 
+BROWSER_URL_FILE = 'auth-url'
+BROWSER_ATTACH_TIMEOUT = 180
+BROWSER_ATTACH_MAX_BYTES = 1024 * 1024
+
+
+def primary_browser_url(line, port):
+    # The reviewed Harness emits a 32-byte unpadded base64url token. Accept
+    # its canonical primary URL only; the optional LAN URL is never selected.
+    if len(line) > 256: return None
+    port = str(port).encode('ascii')
+    match = re.fullmatch(rb'dsh web: (http://127\.0\.0\.1:' + port
+                         + rb'/\?token=([A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]))'
+                         + rb'(?: \(LAN: http://[A-Za-z0-9.:\[\]-]{1,80}:' + port + rb'/\?token=\2\))?',
+                         line.removesuffix(b'\r'))
+    return match[1] if match else None
+
+
+def read_attached_browser_url(client, port, cancelled):
+    deadline = time.monotonic() + BROWSER_ATTACH_TIMEOUT
+    total, pending = 0, b''
+    with selectors.DefaultSelector() as streams:
+        streams.register(client.stdout, selectors.EVENT_READ, data=True)
+        streams.register(client.stderr, selectors.EVENT_READ, data=False)
+        while streams.get_map():
+            if cancelled[0]: raise CandidateError('CANDIDATE_BROWSER_URL_CANCELLED')
+            remaining = deadline - time.monotonic()
+            if remaining <= 0: raise CandidateError('CANDIDATE_BROWSER_URL_TIMEOUT')
+            for key, _ in streams.select(min(remaining, 0.25)):
+                chunk = os.read(key.fd, 4096)
+                if not chunk:
+                    streams.unregister(key.fileobj)
+                    continue
+                total += len(chunk)
+                if total > BROWSER_ATTACH_MAX_BYTES:
+                    raise CandidateError('CANDIDATE_BROWSER_URL_OUTPUT_LIMIT')
+                if key.data:  # Official console.log is stdout; drain, never parse or log stderr.
+                    lines = (pending + chunk).split(b'\n'); pending = lines.pop()
+                    for line in lines:
+                        url = primary_browser_url(line, port)
+                        if url is not None: return url
+    raise CandidateError('CANDIDATE_BROWSER_URL_MISSING')
+
+
+@contextlib.contextmanager
+def attached_browser_url(container_id, port, cancelled):
+    if not re.fullmatch(r'[a-f0-9]{64}', container_id):
+        raise CandidateError('CANDIDATE_TEACHING_CREATE_ID_INVALID')
+    try:
+        client = subprocess.Popen(['docker', 'start', '--attach', container_id], stdin=subprocess.DEVNULL,
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+        try:
+            yield read_attached_browser_url(client, port, cancelled)
+        finally:
+            try:
+                # SIGKILL cannot be proxied to the already-owned app by Docker.
+                # Do not terminate the process group or send SIGTERM/SIGINT.
+                client.kill()
+                client.wait(timeout=5)
+            finally:
+                client.stdout.close(); client.stderr.close()
+    except (OSError, subprocess.SubprocessError):
+        raise CandidateError('CANDIDATE_BROWSER_URL_CAPTURE_FAILED') from None
+
+
+def clear_browser_url(config, expected_inode=None):
+    try:
+        with nofollow_directory(Path(config['root']) / 'state') as directory:
+            try: info = os.stat(BROWSER_URL_FILE, dir_fd=directory, follow_symlinks=False)
+            except FileNotFoundError: return
+            if expected_inode is not None and (info.st_dev, info.st_ino) != expected_inode:
+                return  # Failure cleanup may remove only this launch's published inode.
+            if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_uid != os.getuid()
+                    or stat.S_IMODE(info.st_mode) not in {0o400, 0o600}):
+                raise CandidateError('CANDIDATE_BROWSER_URL_FILE_PRIVATE')
+            os.unlink(BROWSER_URL_FILE, dir_fd=directory)
+    except (OSError, ValueError):
+        raise CandidateError('CANDIDATE_BROWSER_URL_FILE_PRIVATE') from None
+
+
+def publish_browser_url(config, url):
+    temporary = '.auth-url.partial-' + os.urandom(8).hex()
+    try:
+        with nofollow_directory(Path(config['root']) / 'state') as directory:
+            fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=directory)
+            linked = False
+            try:
+                with os.fdopen(fd, 'wb') as file:
+                    info = os.fstat(file.fileno())
+                    if info.st_uid != os.getuid(): raise CandidateError('CANDIDATE_BROWSER_URL_FILE_PRIVATE')
+                    os.fchmod(file.fileno(), 0o600)
+                    file.write(url); file.flush(); os.fsync(file.fileno())
+                # Publish only a fully written file without replacing a raced target.
+                os.link(temporary, BROWSER_URL_FILE, src_dir_fd=directory, dst_dir_fd=directory, follow_symlinks=False)
+                linked = True
+            finally:
+                try: os.unlink(temporary, dir_fd=directory)
+                except OSError:
+                    if linked: os.unlink(BROWSER_URL_FILE, dir_fd=directory)
+                    raise
+            return info.st_dev, info.st_ino
+    except (OSError, ValueError):
+        raise CandidateError('CANDIDATE_BROWSER_URL_FILE_PRIVATE') from None
+
+
 def remove_owned(config, pending_spec=None):
     name = 'physicsos-validation-' + config['task']
     container = metadata('container', name)
@@ -1161,7 +1403,8 @@ def remove_owned(config, pending_spec=None):
         labels = container['Config'].get('Labels', {})
         if labels.get('io.physicsos.task') != config['task'] or labels.get('io.physicsos.role') != 'validation':
             raise RuntimeError('Refusing to stop an unowned service')
-        if teaching_tools_mode(config) is not None:
+        mode = teaching_tools_mode(config)
+        if mode is not None:
             if pending_spec is not None:
                 record_teaching_tools_container(config, pending_spec, container)
             guard_teaching_tools(config, container)
@@ -1170,13 +1413,18 @@ def remove_owned(config, pending_spec=None):
             guard_teaching_tools(config, container)
         subprocess.run(['docker', 'rm', '-f', name], check=True, stdout=subprocess.DEVNULL,
                        stderr=subprocess.DEVNULL, start_new_session=True)
+        if mode is not None and pending_spec is None:
+            clear_browser_url(config)
 
 
-def start_owned(config, image):
+def start_owned(config, image, capture_browser_url=False):
     # Caller holds the lifecycle lock; refresh uses this exact creation path.
     mode = teaching_tools_mode(config)
+    if capture_browser_url and mode is None:
+        raise CandidateError('CANDIDATE_BROWSER_URL_MODE_REQUIRED')
     if metadata('container', 'physicsos-validation-' + config['task']): raise RuntimeError('Owned candidate already exists')
     paths, spec, _ = prepare(config, image)
+    if mode is not None: clear_browser_url(config)  # Never reuse a previous process token.
     name, port = spec['metadata']['container'], config['httpPort']
     args = ['docker', 'create', '--name', name, '--log-driver', 'none', '--label', 'io.physicsos.task=' + config['task'], '--label', 'io.physicsos.role=validation', '--network', spec['network'], '--publish', f'127.0.0.1:{port}:{port}', '--memory', '1536m', '--cpus', '2']
     args.extend(['--health-cmd', f'node scripts/healthcheck.mjs http://127.0.0.1:{port}/readyz'])
@@ -1188,6 +1436,7 @@ def start_owned(config, image):
         args.extend(['--mount', 'type=bind,src=' + mount['Source'] + ',dst=' + mount['Destination'] + (',readonly' if mount['ReadOnly'] else '')])
     for key, value in spec['environment'].items(): args.extend(['--env', key + '=' + value])
     args.extend([spec['metadata']['image'], *spec['command']])
+    captured_inode = None
     with settle_mutations() as cancelled:
         try:
             if mode is None:
@@ -1203,14 +1452,24 @@ def start_owned(config, image):
                 record_teaching_tools_container(config, spec, actual)
                 name = identity
             if cancelled[0]: raise RuntimeError('Candidate start cancelled')
-            subprocess.run(['docker', 'start', name], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
-            actual = metadata('container', name)
-            if cancelled[0] or not actual or not actual['State']['Running'] or actual['Image'] != spec['metadata']['image']:
-                raise RuntimeError('Candidate did not acknowledge startup')
-            if config.get('network'): check_isolated_resources(config, spec['metadata'], actual)
+            attachment = attached_browser_url(name, port, cancelled) if capture_browser_url else contextlib.nullcontext()
+            with attachment as browser_url:
+                if not capture_browser_url:
+                    subprocess.run(['docker', 'start', name], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+                actual = metadata('container', name)
+                if cancelled[0] or not actual or not actual['State']['Running'] or actual['Image'] != spec['metadata']['image']:
+                    raise RuntimeError('Candidate did not acknowledge startup')
+                if config.get('network'): check_isolated_resources(config, spec['metadata'], actual)
+                if capture_browser_url:
+                    if cancelled[0]: raise CandidateError('CANDIDATE_BROWSER_URL_CANCELLED')
+                    captured_inode = publish_browser_url(config, browser_url)
+            if capture_browser_url and cancelled[0]: raise CandidateError('CANDIDATE_BROWSER_URL_CANCELLED')
         except BaseException as error:
             try:
-                remove_owned(config, pending_spec=spec if mode is not None else None)
+                try:
+                    if captured_inode is not None: clear_browser_url(config, expected_inode=captured_inode)
+                finally:
+                    remove_owned(config, pending_spec=spec if mode is not None else None)
             except Exception:
                 if mode is not None:
                     raise CandidateError('CANDIDATE_TEACHING_CLEANUP_REFUSED') from None
@@ -1221,9 +1480,11 @@ def start_owned(config, image):
     return {**spec['metadata'], 'containerId': actual['Id'], 'url': f'http://physicsos-validation.invalid:{port}', 'logDriver': 'none'}
 
 
-def start(config, image):
+def start(config, image, capture_browser_url=False):
+    if capture_browser_url and teaching_tools_mode(config) is None:
+        raise CandidateError('CANDIDATE_BROWSER_URL_MODE_REQUIRED')
     with lifecycle(Path(config['root'])):
-        return start_owned(config, image)
+        return start_owned(config, image, capture_browser_url=capture_browser_url)
 
 
 def refresh(config, image):
@@ -1241,7 +1502,8 @@ def refresh(config, image):
         candidate_image = metadata('image', image)
         if not candidate_image:
             raise CandidateError('CANDIDATE_TEACHING_IMAGE_UNVERIFIED')
-        verify_teaching_tools_image(candidate_image)  # Before touching the old candidate.
+        teaching_image = verify_teaching_tools_image(candidate_image)
+        verify_activity_capacity(config.get('activityCapacity'), teaching_image)  # Before touching the old candidate.
         with settle_mutations() as cancelled:
             if cancelled[0]: raise CandidateError('CANDIDATE_TEACHING_REFRESH_CANCELLED')
             remove_owned(config)
@@ -1256,44 +1518,76 @@ def stop(config):
     return {'stopped': True, 'preservedHome': str(root / 'home'), 'preservedSchema': config['schema']}
 
 
-def check_teaching_tools_capabilities(config, capabilities):
-    mode = teaching_tools_mode(config)
-    if mode is not None and (capabilities.get('schemaVersion') != 1 or capabilities.get('lifecycleBridge') is not True
-            or capabilities.get('teachingToolsMode') != mode
-            or capabilities.get('lifecycleWritesEnabled') is not (mode == 'enabled')
-            or capabilities.get('productStateEnabled') is not (mode == 'enabled')
-            or capabilities.get('minimumRollbackCapability') != (TEACHING_TOOLS_CAPABILITY if mode == 'enabled' else None)):
+def check_teaching_tools_capabilities(mode, learning, activity, capacity_verified):
+    enabled = mode == 'enabled'
+    if (not isinstance(learning, dict) or type(learning.get('schemaVersion')) is not int or learning['schemaVersion'] != 1
+            or learning.get('lifecycleBridge') is not True or learning.get('teachingToolsMode') != mode
+            or learning.get('lifecycleWritesEnabled') is not enabled or learning.get('productStateEnabled') is not enabled
+            or learning.get('activityQueryCapacityVerified') is not capacity_verified
+            or learning.get('minimumRollbackCapability') != (TEACHING_TOOLS_CAPABILITY if enabled else None)):
         raise CandidateError('CANDIDATE_TEACHING_CAPABILITY_CHANGED')
+    if (not isinstance(activity, dict) or type(activity.get('schemaVersion')) is not int or activity['schemaVersion'] != 1
+            or activity.get('mode') != mode or activity.get('collectionEnabled') is not enabled
+            or activity.get('queryCapacityVerified') is not capacity_verified):
+        raise CandidateError('CANDIDATE_ACTIVITY_CAPABILITY_CHANGED')
+
+
+class CandidateNoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
 
 
 def check_owned(config):
     root = Path(config['root']); details = json.loads((root / 'metadata.json').read_text()); base = f"http://127.0.0.1:{config['httpPort']}"
-    if teaching_tools_mode(config) is not None:
+    mode = teaching_tools_mode(config)
+    if mode is not None:
         current = metadata('container', details['container'])
         if current is None: raise CandidateError('CANDIDATE_TEACHING_OWNERSHIP_CHANGED')
-        guard_teaching_tools(config, current)
+        capacity_verified = guard_teaching_tools(config, current)
         check_isolated_resources(config, details, current)
-    cookie = http.cookiejar.CookieJar(); client = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cookie)); authority = f"physicsos-validation.invalid:{config['httpPort']}"
+    handlers = [urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())]
+    if mode is not None:
+        # All authenticated requests must stay on the guarded loopback port.
+        handlers.extend([urllib.request.ProxyHandler({}), CandidateNoRedirect()])
+    client = urllib.request.build_opener(*handlers)
+    authority = f"physicsos-validation.invalid:{config['httpPort']}"
+
+    def request_json(request, timeout, require_json=True):
+        try:
+            with client.open(request, timeout=timeout) as response:
+                if require_json and (response.status != 200 or response.headers.get_content_type() != 'application/json'):
+                    raise RuntimeError('Expected successful candidate JSON')
+                data = json.load(response, object_pairs_hook=unique_json_fields if mode is not None else None)
+                if mode is not None and not isinstance(data, dict):
+                    raise RuntimeError('Expected a candidate JSON object')
+                return data
+        except Exception:
+            if mode is not None:
+                # Never include HTTP error reasons, bodies, headers or requests.
+                raise CandidateError('CANDIDATE_TEACHING_HTTP_FAILED') from None
+            raise
+
     def get(path):
-        with client.open(urllib.request.Request(base + path, headers={'host': authority, 'accept': 'application/json'}), timeout=10) as response:
-            if response.status != 200 or response.headers.get_content_type() != 'application/json': raise RuntimeError('Expected successful candidate JSON')
-            return json.load(response)
+        return request_json(urllib.request.Request(base + path, method='GET', headers={'host': authority, 'accept': 'application/json'}), 10)
+
     if get('/readyz').get('status') != 'ready': raise RuntimeError('Candidate is not ready')
     password = (root / 'secrets/admin_password').read_text().strip()
     request = urllib.request.Request(base + '/physicsos/auth/login', method='POST', headers={'content-type': 'application/json', 'host': authority, 'origin': 'http://' + authority}, data=json.dumps({'schoolId': 'PHYSICSOS-OPEN', 'username': config['username'], 'password': password}).encode())
-    with client.open(request, timeout=20) as response: data = json.load(response)
+    data = request_json(request, 20, require_json=mode is not None)
     if data.get('user', {}).get('role') != 'SUPER_ADMIN': raise RuntimeError('Unexpected candidate login role')
     me = get('/physicsos/auth/me')
     if me.get('user', {}).get('username') != config['username'] or me.get('user', {}).get('schoolId') != 'PHYSICSOS-OPEN': raise RuntimeError('Candidate account scope changed')
     get('/physicsos/admin/dashboard')
-    if teaching_tools_mode(config) is not None:
-        check_teaching_tools_capabilities(config, get('/physicsos/learning/capabilities'))
+    if mode is not None:
+        check_teaching_tools_capabilities(mode, get('/physicsos/learning/capabilities'),
+                                          get('/physicsos/activity/v1/capabilities'), capacity_verified)
     current = metadata('container', details['container'])
     if not current or current['Image'] != details['image'] or not current['State']['Running']: raise RuntimeError('Candidate identity changed')
     if config.get('network'): check_isolated_resources(config, details, current)
     result = {'verified': True, 'image': details['image'], 'readyJson': True, 'login': True, 'accountScope': True, 'protectedRead': True, 'port': config['httpPort']}
-    if teaching_tools_mode(config) is not None:
+    if mode is not None:
         result.update({key: details[key] for key in ['teachingToolsMode', 'teachingToolsImage', 'fingerprint', 'containerId']})
+        result.update(activityQueryCapacityVerified=capacity_verified, activityCollectionEnabled=mode == 'enabled')
     protected = [mount for name in ['physicsos-app-1', 'physicsos-postgres-1', 'physicsos-redis-1'] for source in [metadata('container', name)] if source for mount in source['Mounts'] if mount.get('Destination', '').startswith(('/var/lib/physicsos', '/var/lib/postgresql', '/data'))]
     owned_path(root, root / 'state/acceptance.json', protected)
     private_json(root / 'state/acceptance.json', result)
@@ -1319,7 +1613,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('action', choices=['network', 'search', 'start', 'refresh', 'stop', 'check'])
     parser.add_argument('--config', required=True); parser.add_argument('--image')
-    args = parser.parse_args(); config = load(args.config)
+    parser.add_argument('--capture-browser-url', action='store_true', help='Capture private Harness bootstrap URL for an explicit teaching start')
+    args = parser.parse_args()
+    if args.capture_browser_url and args.action != 'start':
+        raise CandidateError('CANDIDATE_BROWSER_URL_START_REQUIRED')
+    config = load(args.config)
     if args.action == 'search':
         if args.image: raise ValueError('Search image must be pinned by full ID in searchCompanion')
         result = prepare_search(config)
@@ -1328,7 +1626,8 @@ def main():
     elif args.action == 'check': result = check(config)
     else:
         if not args.image: raise ValueError('Candidate image is required')
-        result = refresh(config, args.image) if args.action == 'refresh' else start(config, args.image)
+        result = (refresh(config, args.image) if args.action == 'refresh'
+                  else start(config, args.image, capture_browser_url=args.capture_browser_url))
     print(json.dumps(result)); return 0
 
 

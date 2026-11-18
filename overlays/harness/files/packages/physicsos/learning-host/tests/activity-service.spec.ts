@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { activityBucketWire, activityDomain, activityClientWire } from '../src/activity-domain.ts'
+import { activityBucketWire, activityDomain, activityClientWire, activityReceiptWire } from '../src/activity-domain.ts'
 import { usageDomain, usageEventWire } from '../src/usage-domain.ts'
 import { ACTIVITY_AVATARS, activityDayOf } from '../src/activity-service.ts'
 import type { ActivityRoster } from '../src/activity-types.ts'
@@ -110,6 +110,45 @@ describe('activity v1 on real persistent KV', () => {
     expect(activityBucketWire.safeParse({ ...row, dedup: {}, sealedAt: '2026-11-23T16:00:00.000Z' }).success).toBe(true)
     expect(activityBucketWire.safeParse({ ...row, sealedAt: '2026-11-24T00:00:00.000Z' }).success).toBe(false) // sealed cannot retain live proof map
     expect(activityBucketWire.safeParse({ ...row, dedup: {} }).success).toBe(false) // open cannot lose proof while keeping counts
+  })
+  it('copies all persisted hash pairs and keeps strict count and digest validation', () => {
+    const digest = 'a'.repeat(64)
+    const dedup = Object.fromEntries(Array.from({ length: 256 }, (_, index) => [index.toString(16).padStart(64, '0'), digest]))
+    const row = { schoolId: alice.schoolId, userKey: alice.userKey, day: '2026-11-16', shard: 0,
+      visits: 0, opens: 0, uses: 256, modules: [{ module: 'lab', visits: 0, opens: 0, uses: 256 }], dedup }
+    const imported = activityDomain.tables.buckets.valueSchema
+    const parsed = imported.parse(row)
+    expect(parsed).toEqual(activityBucketWire.parse(row))
+    expect(parsed.dedup).not.toBe(dedup)
+    expect(parsed.modules[0]).not.toBe(row.modules[0])
+    const rejected = [
+      { ...row, dedup: { ...dedup, [digest]: digest } },
+      { ...row, dedup: { ...dedup, ['0'.repeat(64)]: digest.toUpperCase() } },
+      { ...row, day: '2026-02-30' }, { ...row, unexpected: true },
+      { ...row, modules: [...row.modules, { ...row.modules[0], uses: 0 }] },
+      ...[-1, 0.5, Infinity, NaN, Number.MAX_SAFE_INTEGER + 1].map(uses => ({ ...row, uses })),
+    ]
+    for (const invalid of rejected) {
+      expect(activityBucketWire.safeParse(invalid).success).toBe(false)
+      expect(() => imported.parse(invalid)).toThrow()
+    }
+    const withHidden = Object.defineProperty({ ...dedup }, 'non-enumerable', { value: 'ignored' })
+    const sealed = { ...row, dedup: {}, sealedAt: '2026-11-24T00:00:00.000Z' }
+    for (const valid of [{ ...row, dedup: withHidden }, sealed, { ...row, sealedAt: undefined }]) {
+      expect(imported.parse(valid)).toEqual(activityBucketWire.parse(valid))
+    }
+  })
+  it('preserves every durable receipt state and rejects altered immutable fields on import', () => {
+    const imported = activityDomain.tables.receipts.valueSchema
+    const base = { schoolId: alice.schoolId, userKey: alice.userKey, source: 'canvas-edit',
+      requestHash: 'b'.repeat(64), operationHash: 'a'.repeat(64), occurredAt: '2026-11-16T08:00:00.000+08:00' }
+    for (const state of ['pending', 'applied', 'expired']) {
+      const row = { ...base, state, ...(state === 'expired' ? { expiredAt: '2026-11-24T00:00:00.000Z' } : {}) }
+      expect(imported.parse(row)).toEqual(activityReceiptWire.parse(row))
+      expect(() => imported.parse({ ...row, occurredAt: '2026-11-16T24:00:00Z' })).toThrow()
+      expect(() => imported.parse({ ...row, source: 'client-event' })).toThrow()
+      expect(() => imported.parse({ ...row, requestHash: 'b' })).toThrow()
+    }
   })
   it('does not backfill pre-collection events or invent history outside the 90-day window', async () => {
     const f = await activityFixture()

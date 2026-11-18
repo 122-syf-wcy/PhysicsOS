@@ -32,6 +32,7 @@ const numberInput = (name: string): number => {
 describe.skipIf(!enabled || database === undefined)('activity 90-day + ten-times real PostgreSQL capacity release gate', () => {
   for (const scale of [1, 10]) it(`measures full loadAll, grouping, cache and heap at ${scale}x configured demand`, async () => {
     if (database === undefined) throw new Error('Isolated PostgreSQL URL required')
+    // Scaling users at a fixed per-user rate multiplies total event pressure by scale, not scale squared.
     const baseUsers = numberInput('PHYSICSOS_ACTIVITY_BASE_DAILY_USERS'), eventsPerDay = numberInput('PHYSICSOS_ACTIVITY_EVENTS_PER_USER_DAY'), users = baseUsers * scale
     const rosterUsers = numberInput('PHYSICSOS_ACTIVITY_BASE_ROSTER_USERS') * scale, schoolCount = numberInput('PHYSICSOS_ACTIVITY_BASE_SCHOOLS') * scale
     const gc = (globalThis as { gc?: () => void }).gc
@@ -134,6 +135,7 @@ describe.skipIf(!enabled || database === undefined)('activity 90-day + ten-times
     expect(coldMs).toBeLessThanOrEqual(DEFAULT_ACTIVITY_LIMITS.maxColdStartMs)
     expect(coldHeapBytes).toBeLessThanOrEqual(512 * 1024 * 1024)
     const diagnosticBefore = opened.diagnostics(), samples: number[] = []
+    expect(diagnosticBefore).toMatchObject({ rows: seededRows, storedBytes: seededBytes })
     const queryHeapBefore = process.memoryUsage().heapUsed
     for (let sample = 0; sample < 20; sample += 1) {
       clock = new Date(clock.getTime() + DEFAULT_ACTIVITY_LIMITS.cacheTtlMs + 1)

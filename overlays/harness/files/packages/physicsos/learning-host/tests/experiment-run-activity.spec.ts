@@ -1,4 +1,4 @@
-/** Cross-domain recovery test source only; NOT executed. Business commit -> sink loss -> original-time replay. */
+/** Cross-domain recovery: business commit -> sink loss -> original-time replay. */
 import { describe, expect, it } from 'vitest'
 import { activityFixture, alice, admin } from './activity-fixture.ts'
 import { experimentRunFixture, runAlice, runBody } from './experiment-run-fixture.ts'
@@ -15,9 +15,11 @@ describe('experiment run durable capsule -> activity v1 recovery', () => {
     const body = runBody(run.service), permit = await run.service.prepare(runAlice, body)
     await run.service.record(runAlice, { ...body, permit: permit.permit })
     expect(await activity.service.userDetail(admin, { schoolId: alice.schoolId, username: alice.username })).toMatchObject({ uses: 0 })
+    // Both services share wall time in production. The source must see the replay window's end too.
+    const replayAt = '2026-11-16T00:00:02.000Z'
+    run.setNow(replayAt); activity.setNow(replayAt)
     await run.restart({ mode: 'bridge' })
     // New source object comes from the reopened business domain; it does not use the dead service's memory index.
-    activity.setNow('2026-11-16T00:00:02.000Z')
     await activity.restart({ replaySources: [run.service.activityReplaySource] })
     await activity.service.recover()
     const first = await activity.service.userDetail(admin, { schoolId: alice.schoolId, username: alice.username }, { days: 1 })

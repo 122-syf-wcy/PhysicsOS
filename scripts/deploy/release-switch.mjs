@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import process from 'node:process'
 import console from 'node:console'
-import { lstat, mkdir, open, readFile, rename, rm, statfs } from 'node:fs/promises'
-import { dirname, join, resolve } from 'node:path'
+import { constants as fsConstants } from 'node:fs'
+import { lstat, mkdir, open, readFile, realpath, rename, rm, statfs } from 'node:fs/promises'
+import { basename, dirname, join, resolve } from 'node:path'
 import { createHash, randomBytes } from 'node:crypto'
 import { request as httpRequest } from 'node:http'
 import { isIP } from 'node:net'
@@ -23,7 +24,19 @@ const WORKER_OPERATION_LABEL = 'io.physicsos.release.operation'
 const WORKER_CREATE_LABEL = 'io.physicsos.release.create'
 const WORKER_OWNERSHIP_FORMAT = 'physicsos-validation-worker/1'
 const DOCKER_SOCKET = '/var/run/docker.sock'
+const TEACHING_TOOLS_CAPABILITY = 'teaching-tools-bridge-v1'
+const TEACHING_TOOLS_LABEL = 'physicsos.teaching-tools.bridge'
+const TEACHING_MODE_ENV = 'PHYSICSOS_TEACHING_TOOLS_MODE'
+const ACTIVITY_CAPACITY_ENV = 'PHYSICSOS_ACTIVITY_QUERY_CAPACITY_VERIFIED'
+const ACTIVITY_CAPACITY_PROVED = Symbol('activityCapacityProved')
+const TEACHING_ENV_KEYS = [TEACHING_MODE_ENV, ACTIVITY_CAPACITY_ENV]
+const ACTIVITY_PROOF_MAX_BYTES = 1024 * 1024
+const ACTIVITY_BASELINE_KEYS = ['PHYSICSOS_ACTIVITY_BASE_DAILY_USERS', 'PHYSICSOS_ACTIVITY_EVENTS_PER_USER_DAY',
+  'PHYSICSOS_ACTIVITY_BASE_ROSTER_USERS', 'PHYSICSOS_ACTIVITY_BASE_SCHOOLS']
+const CPU_KEYS = ['NanoCpus', 'CpuPeriod', 'CpuQuota', 'CpusetCpus']
 const aborted = signal => signal?.throwIfAborted()
+const exactFields = (record, fields) => !!record && typeof record === 'object' && !Array.isArray(record) &&
+  Reflect.ownKeys(record).length === fields.length && fields.every(field => Object.hasOwn(record, field))
 
 function jsonDigest(value) {
   const ordered = item => Array.isArray(item) ? item.map(ordered) : item && typeof item === 'object'
@@ -119,7 +132,7 @@ function acceptanceOrigin(options) {
 }
 
 /** Authenticate through the declared origin; credentials and cookies never leave memory. */
-export async function verifyAuthenticatedRead(options, dependencies = {}) {
+export async function verifyAuthenticatedRead(options, dependencies = {}, expectedActivityCapacity) {
   try {
     const origin = acceptanceOrigin(options)
     const username = await privateText(options.usernameFile)
@@ -158,8 +171,16 @@ export async function verifyAuthenticatedRead(options, dependencies = {}) {
         capabilities.lifecycleWritesEnabled !== (options.expectedTeachingToolsMode === 'enabled') ||
         capabilities.productStateEnabled !== (options.expectedTeachingToolsMode === 'enabled')) throw new Error('Teaching tools runtime mode differs from release plan')
     }
+    if (expectedActivityCapacity !== undefined) {
+      const mode = options.expectedTeachingToolsMode
+      if (mode === undefined || expectedActivityCapacity !== (mode === 'enabled')) throw new Error('Invalid activity acceptance binding')
+      const capabilities = await json(await request('/physicsos/activity/v1/capabilities', { headers }))
+      if (capabilities.schemaVersion !== 1 || capabilities.mode !== mode || capabilities.collectionEnabled !== (mode === 'enabled') ||
+        capabilities.queryCapacityVerified !== expectedActivityCapacity) throw new Error('Activity runtime capabilities differ from release plan')
+    }
     return { readyJson: true, root: true, login: true, accountScope: true, protectedRead: true,
-      ...(options.expectedTeachingToolsMode === undefined ? {} : { teachingToolsMode: options.expectedTeachingToolsMode }) }
+      ...(options.expectedTeachingToolsMode === undefined ? {} : { teachingToolsMode: options.expectedTeachingToolsMode }),
+      ...(expectedActivityCapacity === undefined ? {} : { activityQueryCapacityVerified: expectedActivityCapacity }) }
   } catch {
     throw new Error('Release authentication/readiness acceptance failed')
   }
@@ -175,10 +196,13 @@ async function atomicRecord(file, value) {
   } finally { await rm(temporary, { force: true }) }
 }
 
-async function preallocate(file, content, mode = 0o600) {
-  const handle = await open(file, 'wx', mode)
-  try { await handle.writeFile(content); await handle.sync() }
-  finally { await handle.close() }
+async function preallocate(file, content, mode) {
+  const handle = await open(file, 'wx', mode ?? 0o600)
+  try {
+    if (mode !== undefined) await handle.chmod(mode)
+    await handle.writeFile(content)
+    await handle.sync()
+  } finally { await handle.close() }
 }
 
 function envWithImage(prior, image) {
@@ -207,27 +231,53 @@ export function envWithBoundAppImage(prior, image, expectedOldImage) {
   return Buffer.from(content)
 }
 
-/** An explicit teaching-tools plan may change only this public mode assignment. */
-export function envWithTeachingToolsMode(prior, mode) {
-  if (!['bridge', 'enabled'].includes(mode)) throw new Error('Invalid teaching tools release mode')
+/** Change one public value, preserving its assignment style and all other bytes. */
+function envWithTeachingAssignment(prior, key, setting) {
   let count = 0
   const text = prior.toString('utf8')
   if (!Buffer.from(text).equals(prior)) throw new Error('Release env must be UTF-8')
-  let content = text.replace(/^([ \t]*(?:export[ \t]+)?PHYSICSOS_TEACHING_TOOLS_MODE[ \t]*=[ \t]*)([^\r\n]*)/gm, (_, prefix, value) => {
+  const assignment = new RegExp(`^([ \\t]*(?:export[ \\t]+)?${key}[ \\t]*[=:][ \\t]*)([^\\r\\n]*)`, 'gm')
+  let content = text.replace(assignment, (_, prefix, value) => {
     count++
-    return prefix + mode + value.match(/[ \t]*$/)[0]
+    return prefix + setting + value.match(/[ \t]+#[^\r\n]*$|[ \t]*$/)[0]
   })
-  if (count > 1) throw new Error('Teaching tools mode must have at most one env assignment')
+  if (count > 1) throw new Error(`${key} must have at most one env assignment`)
   if (!count) {
     const newline = text.includes('\r\n') ? '\r\n' : '\n'
-    content += (content && !content.endsWith('\n') ? newline : '') + `PHYSICSOS_TEACHING_TOOLS_MODE=${mode}` + newline
+    content += (content && !content.endsWith('\n') ? newline : '') + `${key}=${setting}` + newline
   }
   return Buffer.from(content)
 }
-const teachingModeEnv = (bytes, plan, rollback = false) => plan.teachingTools === undefined
-  ? bytes : envWithTeachingToolsMode(bytes, rollback ? 'bridge' : plan.teachingTools.stage)
 
-// Worker updates are two bound image assignments; an explicit lifecycle plan may also bind the public mode.
+export function envWithTeachingToolsMode(prior, mode) {
+  if (!['bridge', 'enabled'].includes(mode)) throw new Error('Invalid teaching tools release mode')
+  return envWithTeachingAssignment(prior, TEACHING_MODE_ENV, mode)
+}
+
+function teachingBindings(plan, image) {
+  if (plan.teachingTools === undefined) return undefined
+  const mode = image === plan.candidateImage ? plan.teachingTools.stage : 'bridge'
+  if (mode === 'enabled' && plan[ACTIVITY_CAPACITY_PROVED] !== true) throw new Error('Enabled activity queries require a verified capacity result')
+  return { [TEACHING_MODE_ENV]: mode, [ACTIVITY_CAPACITY_ENV]: mode === 'enabled' ? 'true' : 'false' }
+}
+
+function teachingEnvBytes(bytes, plan, image) {
+  const bindings = teachingBindings(plan, image)
+  if (!bindings) return bytes
+  const withMode = envWithTeachingToolsMode(bytes, bindings[TEACHING_MODE_ENV])
+  return envWithTeachingAssignment(withMode, ACTIVITY_CAPACITY_ENV, bindings[ACTIVITY_CAPACITY_ENV])
+}
+
+function composeDefaultEnv(plan) {
+  if (plan.teachingTools === undefined) return process.env
+  const env = { ...process.env }
+  // Intentional release overrides are supplied separately. Plain Compose reads
+  // must see the bound file, not a stale invoking-shell setting for these keys.
+  for (const key of TEACHING_ENV_KEYS) delete env[key]
+  return Object.freeze(env)
+}
+
+// Worker updates are two bound image assignments; lifecycle releases also bind the two public settings.
 function envWithWorkerImages(prior, appImage, workerImage, expectedWorker) {
   const text = prior.toString('utf8'), counts = { PHYSICSOS_APP_IMAGE: 0, PHYSICSOS_VALIDATION_IMAGE: 0 }
   if (!Buffer.from(text).equals(prior)) throw new Error('Release env must be UTF-8')
@@ -412,7 +462,7 @@ async function inspectOriginalWorker(plan, source, docker, requireHealthy = true
   if (oldHash !== rollbackHash) {
     // A previously created tag spelling is not used for up/pull. Prove that only
     // this bound image field explains its hash while the actual full ID is old.
-    const env = { ...process.env, PHYSICSOS_VALIDATION_IMAGE: container.Config.Image }
+    const env = { ...composeDefaultEnv(plan), PHYSICSOS_VALIDATION_IMAGE: container.Config.Image }
     const previous = jsonOf(await docker([...compose, 'config', '--format', 'json'], { env })), expected = structuredClone(source.config)
     delete previous.services[WORKER_SERVICE].image
     delete expected.services[WORKER_SERVICE].image
@@ -446,10 +496,10 @@ async function inspectValidationWorker(plan, source, docker) {
     oldImage.RootFS?.Type !== 'layers' || candidate.RootFS?.Type !== 'layers' || !Array.isArray(layers) || !layers.length || !Array.isArray(nextLayers) ||
     nextLayers.length !== layers.length + 1 || nextLayers.some(layer => typeof layer !== 'string' || !imageId.test(layer)) || layers.some((layer, index) => layer !== nextLayers[index]))
     throw new Error('Worker candidate must inherit the old image configuration and layers plus one frozen-input layer')
-  const envPath = join(plan.projectDir, '.env'), info = await lstat(envPath), prior = await readFile(envPath)
-  const mode = info.mode & 0o7777
-  if (!info.isFile() || ![0o400, 0o600].includes(mode)) throw new Error('Worker release env must be a private regular file')
-  const env = { prior, mode, next: teachingModeEnv(envWithWorkerImages(prior, plan.candidateImage, candidate.Id, oldImage.Id), plan), rollback: teachingModeEnv(envWithWorkerImages(prior, plan.expectedOldImage, oldImage.Id, oldImage.Id), plan, true) }
+  const { prior, mode } = await privateReleaseEnv(plan)
+  const env = { prior, mode,
+    next: teachingEnvBytes(envWithWorkerImages(prior, plan.candidateImage, candidate.Id, oldImage.Id), plan, plan.candidateImage),
+    rollback: teachingEnvBytes(envWithWorkerImages(prior, plan.expectedOldImage, oldImage.Id, oldImage.Id), plan, plan.expectedOldImage) }
   const paths = new Set([join(plan.projectDir, 'compose.yml'), ...Object.values(source.config.secrets).map(secret => resolve(plan.projectDir, secret.file)),
     ...container.Mounts.filter(mount => mount.Type === 'bind').map(mount => mount.Source)])
   for (const option of source.config.services[WORKER_SERVICE].security_opt ?? []) {
@@ -466,35 +516,60 @@ async function inspectValidationWorker(plan, source, docker) {
     networking: workerNetworking(source, container), template: workerRequestFromContainer(source, container) }
 }
 
+async function privateReleaseEnv(plan) {
+  const file = join(plan.projectDir, '.env'), info = await lstat(file)
+  const mode = info.mode & 0o7777
+  if (!info.isFile() || ![0o400, 0o600].includes(mode)) throw new Error('Release env must be a private regular file')
+  return { prior: await readFile(file), mode }
+}
+
+async function guardReleaseEnv(plan, expected, stage) {
+  const { prior: current, mode } = await privateReleaseEnv(plan)
+  const allowed = stage === 'switching' ? [expected.prior, expected.next] : [expected[stage]]
+  if (mode !== expected.mode || !allowed.some(value => value.equals(current))) throw new Error('Release env changed outside the bound assignments')
+}
+
 async function guardWorkerFiles(plan, source, switched, envRestored = false) {
-  const worker = source.validationWorker, file = join(plan.projectDir, '.env'), info = await lstat(file), current = await readFile(file)
-  const allowed = envRestored ? [worker.env.rollback] : switched ? [worker.env.prior, worker.env.next] : [worker.env.prior]
-  if (!info.isFile() || (info.mode & 0o7777) !== worker.env.mode || !allowed.some(value => value.equals(current))) throw new Error('Release env changed outside the paired image assignments')
+  const worker = source.validationWorker
+  await guardReleaseEnv(plan, worker.env, envRestored ? 'rollback' : switched ? 'switching' : 'prior')
   for (const expected of worker.files) {
     const stat = await lstat(expected.file)
     if (!stat.isFile() || (stat.mode & 0o7777) !== expected.mode || stat.uid !== expected.uid || stat.gid !== expected.gid || await sha256(expected.file) !== expected.sha256) throw new Error('Release configuration or secret input changed')
   }
 }
 
-function normalizeTeachingToolsMode(plan, expected, actual) {
+function normalizeTeachingToolsEnv(plan, expected, actual, envRestored) {
   if (plan.teachingTools === undefined) return
-  const key = 'PHYSICSOS_TEACHING_TOOLS_MODE'
-  const before = expected.services?.app?.environment?.[key]
-  const after = actual.services?.app?.environment?.[key]
-  const allowed = actual.services?.app?.image === plan.candidateImage ? [plan.teachingTools.stage] : [before, 'bridge']
-  if (!allowed.includes(after)) throw new Error('Teaching tools Compose mode differs from the bound release stage')
-  if (before === undefined) delete actual.services.app.environment?.[key]
-  else actual.services.app.environment[key] = before
+  const before = expected.services.app, app = actual.services?.app, image = app?.image
+  const matches = bindings => TEACHING_ENV_KEYS.every(key => app?.environment?.[key] === bindings?.[key])
+  // A failed .env rename can leave the exact prior tuple. It cannot leave a
+  // mix of prior and rollback values, or the prior tuple on a candidate image.
+  const prior = !envRestored && image === before.image && image !== plan.candidateImage && matches(before.environment)
+  const bound = image === plan.expectedOldImage || (!envRestored && image === plan.candidateImage)
+  if (!prior && !(bound && matches(teachingBindings(plan, image))))
+    throw new Error('Teaching tools Compose mode or capacity flag differs from the bound release stage')
+  for (const key of TEACHING_ENV_KEYS) {
+    if (!Object.hasOwn(before.environment ?? {}, key)) delete app.environment?.[key]
+    else app.environment[key] = before.environment[key]
+  }
 }
 
-function guardWorkerConfiguration(plan, source, current) {
+function guardAppConfiguration(plan, source, current, envRestored = false) {
+  const expected = structuredClone(source.config), actual = structuredClone(current)
+  normalizeTeachingToolsEnv(plan, expected, actual, envRestored)
+  delete expected.services.app.image
+  delete actual.services.app.image
+  if (JSON.stringify(expected) !== JSON.stringify(actual)) throw new Error('Recovery configuration changed')
+}
+
+function guardWorkerConfiguration(plan, source, current, envRestored = false) {
   guardWorkerMacSupport(source.config)
   guardWorkerMacSupport(current)
   const expected = structuredClone(source.config), actual = structuredClone(current)
   if (![plan.validationWorker.expectedOldImage, plan.validationWorker.candidateImage].includes(actual.services?.[WORKER_SERVICE]?.image) ||
     ![source.config.services.app.image, plan.expectedOldImage, plan.candidateImage].includes(actual.services?.app?.image))
     throw new Error('Recovery configuration contains an unbound image')
-  normalizeTeachingToolsMode(plan, expected, actual)
+  normalizeTeachingToolsEnv(plan, expected, actual, envRestored)
   delete expected.services.app.image
   delete actual.services.app.image
   delete expected.services[WORKER_SERVICE].image
@@ -519,24 +594,79 @@ function hookArgs(hook, operation, projectDir, recovery) {
   })
 }
 
-const TEACHING_TOOLS_CAPABILITY = 'teaching-tools-bridge-v1'
-const TEACHING_TOOLS_LABEL = 'physicsos.teaching-tools.bridge'
+function validateTeachingToolsPlan(plan) {
+  const input = plan.teachingTools
+  if (input === undefined) return undefined
+  const fields = ['capability', 'stage', 'rollbackImage', ...(input?.stage === 'enabled' ? ['activityCapacity'] : [])]
+  if (!exactFields(input, fields) || input.capability !== TEACHING_TOOLS_CAPABILITY || plan.expectedOldImage === plan.candidateImage ||
+    !['bridge', 'enabled'].includes(input.stage) || input.rollbackImage !== plan.expectedOldImage || plan.acceptance?.expectedTeachingToolsMode !== input.stage)
+    throw new Error('Teaching tools require exact compatible images, enabled-only capacity evidence and mode-bound authenticated acceptance')
+  if (input.stage === 'bridge') return Object.freeze({ ...input })
+  const reference = input.activityCapacity
+  if (!exactFields(reference, ['path', 'sha256']) || typeof reference.path !== 'string' || resolve(reference.path) !== reference.path ||
+    basename(reference.path) !== 'result.json' || /[\0\r\n]/.test(reference.path) || typeof reference.sha256 !== 'string' || !digest.test(reference.sha256))
+    throw new Error('Enabled teaching tools require an exact capacity result.json path and SHA-256')
+  return Object.freeze({ ...input, activityCapacity: Object.freeze({ ...reference }) })
+}
+
+async function readCapacityResult({ path, sha256: expectedDigest }) {
+  let handle
+  try {
+    const named = await lstat(path)
+    if (!named.isFile() || named.uid !== process.getuid() || ![0o400, 0o600].includes(named.mode & 0o7777) ||
+      named.size < 1 || named.size > ACTIVITY_PROOF_MAX_BYTES || await realpath(path) !== path) throw new Error()
+    // Check and read the same descriptor; neither a symlink swap nor concurrent
+    // growth after the stat may turn this into an unbounded read.
+    const sameFile = info => ['dev', 'ino', 'uid', 'gid', 'mode', 'size', 'mtimeMs', 'ctimeMs'].every(key => info[key] === named[key])
+    handle = await open(path, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW | fsConstants.O_NONBLOCK)
+    if (!sameFile(await handle.stat())) throw new Error()
+    const bytes = Buffer.alloc(named.size + 1)
+    const { bytesRead } = await handle.read(bytes, 0, bytes.length, 0)
+    if (bytesRead !== named.size || !sameFile(await lstat(path)) || await realpath(path) !== path) throw new Error()
+    const body = bytes.subarray(0, bytesRead)
+    const text = body.toString('utf8')
+    if (createHash('sha256').update(body).digest('hex') !== expectedDigest || !Buffer.from(text).equals(body)) throw new Error()
+    return JSON.parse(text)
+  } catch {
+    throw new Error('Activity capacity result.json must be private, operator-owned and match its exact SHA-256')
+  } finally { await handle?.close() }
+}
+
+/** Bind the successful isolated capacity gate to this frozen source and the live app's CPU settings. */
+export async function verifyActivityCapacityProof(plan, app) {
+  const tools = validateTeachingToolsPlan(plan)
+  if (tools?.stage !== 'enabled') return false
+  const result = await readCapacityResult(tools.activityCapacity)
+  if (result?.scope !== 'capacity' || !commit.test(plan.revision ?? '') || !digest.test(plan.sourceDigest ?? '') ||
+    result.revision !== plan.revision || result.sourceDigest !== plan.sourceDigest || result.exitCode !== 0 || result.passed !== true ||
+    result.passedTests !== 2 || result.failedTests !== 0 || result.pendingTests !== 0)
+    throw new Error('Activity capacity result must pass both tests for this exact source without skips')
+  const inputs = result.inputs, optIn = 'PHYSICSOS_ACTIVITY_RUN_CAPACITY'
+  const validBaseline = value => typeof value === 'string' && /^[1-9][0-9]{0,5}$/.test(value) && Number(value) <= 100_000
+  if (!exactFields(inputs, [optIn, ...ACTIVITY_BASELINE_KEYS]) || inputs[optIn] !== '1' || ACTIVITY_BASELINE_KEYS.some(key => !validBaseline(inputs[key])) ||
+    Number(inputs.PHYSICSOS_ACTIVITY_BASE_ROSTER_USERS) < Number(inputs.PHYSICSOS_ACTIVITY_BASE_DAILY_USERS))
+    throw new Error('Activity capacity result must record the opt-in and bounded daily, event, roster and school baselines')
+  const profile = result.cpuProfile
+  const validCpu = values => exactFields(values, CPU_KEYS) && CPU_KEYS.every(key => key === 'CpusetCpus'
+    ? typeof values[key] === 'string' : Number.isSafeInteger(values[key]) && values[key] >= (key === 'CpuQuota' ? -1 : 0))
+  if (!exactFields(profile, ['referenceContainer', 'reference', 'runner']) || typeof profile.referenceContainer !== 'string' ||
+    !/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(profile.referenceContainer) || app?.Name !== `/${profile.referenceContainer}` ||
+    !validCpu(profile.reference) || !validCpu(profile.runner) || CPU_KEYS.some(key =>
+      profile.reference[key] !== profile.runner[key] || profile.reference[key] !== app.HostConfig?.[key]))
+    throw new Error('Activity runner CPU profile must match the live production app')
+  return true
+}
 
 /** New lifecycle rows require a compatible image rollback floor, never a data restore. */
 export function guardTeachingToolsCompatibility(plan, oldImage, candidate) {
   const before = oldImage.Config?.Labels?.[TEACHING_TOOLS_LABEL]
   const after = candidate.Config?.Labels?.[TEACHING_TOOLS_LABEL]
-  const input = plan.teachingTools
+  const input = validateTeachingToolsPlan(plan)
   if (input === undefined) {
     if (before || after) throw new Error('Teaching tools images require an explicit lifecycle compatibility plan')
     return null
   }
-  const fields = ['capability', 'stage', 'rollbackImage']
-  if (!input || typeof input !== 'object' || Array.isArray(input) || Reflect.ownKeys(input).length !== fields.length ||
-    fields.some(field => !Object.hasOwn(input, field)) || input.capability !== TEACHING_TOOLS_CAPABILITY || plan.expectedOldImage === plan.candidateImage ||
-    !['bridge', 'enabled'].includes(input.stage) || input.rollbackImage !== plan.expectedOldImage ||
-    oldImage.Id !== plan.expectedOldImage || candidate.Id !== plan.candidateImage || after !== TEACHING_TOOLS_CAPABILITY ||
-    plan.acceptance?.expectedTeachingToolsMode !== input.stage)
+  if (oldImage.Id !== plan.expectedOldImage || candidate.Id !== plan.candidateImage || after !== TEACHING_TOOLS_CAPABILITY)
     throw new Error('Teaching tools require exact compatible images and mode-bound authenticated acceptance')
   if (input.stage === 'enabled' && before !== TEACHING_TOOLS_CAPABILITY)
     throw new Error('Enabled lifecycle writes cannot roll back to an image without the teaching tools bridge')
@@ -596,7 +726,7 @@ async function guardRecoverySource(plan, source, docker, compose, switched, work
     if (source.validationWorker) {
       await guardWorkerFiles(plan, source, false)
       current.validationWorker = { container: await inspectOriginalWorker(plan, current, docker, false) }
-    }
+    } else if (source.teachingEnv) await guardReleaseEnv(plan, source.teachingEnv, 'prior')
     guardCapturedSource(source, current)
     return
   }
@@ -605,17 +735,14 @@ async function guardRecoverySource(plan, source, docker, compose, switched, work
   const current = jsonOf(await docker([...compose, 'config', '--format', 'json']))
   if (source.validationWorker) {
     await guardWorkerFiles(plan, source, true, workerState.envRestored)
-    guardWorkerConfiguration(plan, source, current)
+    guardWorkerConfiguration(plan, source, current, workerState.envRestored)
     if (workerState.creates.some(create => create.submitted && !create.containerId && !create.resolvedEmpty)) throw new Error('Recovery has an unresolved worker create')
     const workers = await workerContainers(docker, compose, source)
     if (workers.length > 2 || (!workers.length && !workerState.removalAttempted)) throw new Error('Recovery worker inventory changed')
     for (const worker of workers) guardOwnedWorker(plan, source, worker, workerState)
   } else {
-    const expectedConfig = structuredClone(source.config), currentConfig = structuredClone(current)
-    normalizeTeachingToolsMode(plan, expectedConfig, currentConfig)
-    delete expectedConfig.services.app.image
-    delete currentConfig.services.app.image
-    if (JSON.stringify(expectedConfig) !== JSON.stringify(currentConfig)) throw new Error('Recovery configuration changed')
+    if (source.teachingEnv) await guardReleaseEnv(plan, source.teachingEnv, workerState.envRestored ? 'rollback' : 'switching')
+    guardAppConfiguration(plan, source, current, workerState.envRestored)
   }
   for (const service of ['postgres', 'redis']) {
     const item = jsonOf(await docker(['inspect', source.containers[service].Id]))[0]
@@ -677,21 +804,39 @@ export async function releaseSwitch(input, dependencies = {}) {
   const workerState = { attempted: false, removalAttempted: false, owned: new Map(), creates: [], operationNonce: randomBytes(32).toString('hex'), envRestored: false }
   const createWorker = dependencies.createWorker ?? createValidationWorker
   const attempted = []
-  const docker = dependencies.docker ?? dockerCommand
+  const invokeDocker = dependencies.docker ?? dockerCommand
+  const composeEnv = plan.teachingTools === undefined ? undefined : composeDefaultEnv(plan)
+  const docker = (args, options = {}) => invokeDocker(args, composeEnv && args[0] === 'compose' && !options.env ? { ...options, env: composeEnv } : options)
   const invoke = dependencies.run ?? runCommand
   const run = (command, args, options = {}) => invoke(command, args, { cwd: plan.projectDir, ...options })
   const compose = composeArgs(plan.projectDir)
-  const receipt = { oldImage: plan.expectedOldImage, newImage: plan.candidateImage, revision: plan.revision, checkoutRevision: plan.checkoutRevision ?? plan.revision, sourceDigest: plan.sourceDigest, ...(plan.codeDigest ? { codeDigest: plan.codeDigest } : {}),
-    ...(plan.teachingTools === undefined ? {} : { teachingTools: { ...plan.teachingTools, imageOnlyRollback: true, dataRestoreAllowed: false } }) }
+  const receipt = { oldImage: plan.expectedOldImage, newImage: plan.candidateImage, revision: plan.revision, checkoutRevision: plan.checkoutRevision ?? plan.revision, sourceDigest: plan.sourceDigest, ...(plan.codeDigest ? { codeDigest: plan.codeDigest } : {}) }
   const runHook = async (hook, operation) => {
     await validateHook(hook)
     const args = hookArgs(hook, operation, plan.projectDir, recovery)
     // Finish a submitted mutation before handling cancellation; its snapshot then defines recovery.
     await run(args[0], args.slice(1))
   }
-  const releaseEnv = (appImage, workerImage) => ({ ...process.env, PHYSICSOS_APP_IMAGE: appImage,
-    ...(source?.validationWorker ? { PHYSICSOS_VALIDATION_IMAGE: workerImage } : {}),
-    ...(plan.teachingTools === undefined ? {} : { PHYSICSOS_TEACHING_TOOLS_MODE: appImage === plan.candidateImage ? plan.teachingTools.stage : 'bridge' }) })
+  const releaseEnv = (appImage, workerImage) => ({ ...(composeEnv ?? process.env), PHYSICSOS_APP_IMAGE: appImage,
+    ...(source?.validationWorker ? { PHYSICSOS_VALIDATION_IMAGE: workerImage } : {}), ...teachingBindings(plan, appImage) })
+  const boundEnv = () => source.validationWorker?.env ?? source.teachingEnv
+  const guardTeachingProjection = async (appImage, workerImage, stagedEnvPath, env) => {
+    const args = stagedEnvPath ? [...compose, '--env-file', stagedEnvPath] : compose
+    const projected = jsonOf(await docker([...args, 'config', '--format', 'json'], { env }))
+    const rollback = appImage === plan.expectedOldImage
+    if (source.validationWorker) guardWorkerConfiguration(plan, source, projected, rollback)
+    else guardAppConfiguration(plan, source, projected, rollback)
+    if (projected.services.app.image !== appImage || (source.validationWorker && projected.services[WORKER_SERVICE].image !== workerImage))
+      throw new Error('Teaching tools env does not bind the intended service images')
+  }
+  const recreateApp = async (appImage, workerImage) => {
+    const env = releaseEnv(appImage, workerImage)
+    if (plan.teachingTools) {
+      await guardReleaseEnv(plan, boundEnv(), appImage === plan.candidateImage ? 'next' : 'rollback')
+      await guardTeachingProjection(appImage, workerImage, undefined, env)
+    }
+    await docker([...compose, 'up', '-d', '--no-build', '--no-deps', '--pull', 'never', '--force-recreate', 'app'], { env })
+  }
   const saveWorkerJournal = async () => {
     receipt.validationWorker.ownedContainerIds = [...workerState.owned.keys()]
     receipt.validationWorker.removalAttempted = workerState.removalAttempted
@@ -800,7 +945,7 @@ export async function releaseSwitch(input, dependencies = {}) {
     await guardOriginalWorkerOwnership(plan, source, worker)
     await guardWorkerFiles(plan, source, switched, workerState.envRestored)
     const current = jsonOf(await docker([...compose, 'config', '--format', 'json']))
-    guardWorkerConfiguration(plan, source, current)
+    guardWorkerConfiguration(plan, source, current, workerState.envRestored)
     if (current.services[WORKER_SERVICE].image !== expected) throw new Error('Validation worker Compose image differs from the running image')
     return worker.Id
   }
@@ -868,7 +1013,14 @@ export async function releaseSwitch(input, dependencies = {}) {
       } catch { return false }
     }
     if (switched) {
-      try { await rename(rollbackEnv, join(plan.projectDir, '.env')); workerState.envRestored = true } catch { return false }
+      try {
+        await rename(rollbackEnv, join(plan.projectDir, '.env'))
+        workerState.envRestored = true
+        if (plan.teachingTools !== undefined) {
+          await guardReleaseEnv(plan, boundEnv(), 'rollback')
+          await guardTeachingProjection(plan.expectedOldImage, plan.validationWorker?.expectedOldImage)
+        }
+      } catch { return false }
     }
     if (source.validationWorker) {
       if (workerState.attempted) {
@@ -884,7 +1036,7 @@ export async function releaseSwitch(input, dependencies = {}) {
     }
     try { await docker([...compose, 'start', 'redis']) } catch { /* Always attempt app recovery too. */ }
     try {
-      if (switched) await docker([...compose, 'up', '-d', '--no-build', '--no-deps', '--pull', 'never', '--force-recreate', 'app'], { env: releaseEnv(plan.expectedOldImage, plan.validationWorker?.expectedOldImage) })
+      if (switched) await recreateApp(plan.expectedOldImage, plan.validationWorker?.expectedOldImage)
       else await docker([...compose, 'start', 'app'])
     } catch { /* Inspect the daemon result even when the CLI returned failure. */ }
     try {
@@ -906,6 +1058,11 @@ export async function releaseSwitch(input, dependencies = {}) {
     validateValidationWorker(plan)
     if (!imageId.test(plan.expectedOldImage) || !imageId.test(plan.candidateImage) || !commit.test(plan.revision) || !commit.test(plan.checkoutRevision ?? plan.revision) || !digest.test(plan.sourceDigest) || !digest.test(plan.codeDigest) || plan.rollbackCompatible !== true)
       throw new Error('Release requires immutable identities and explicit rollback compatibility')
+    plan.teachingTools = validateTeachingToolsPlan(plan)
+    if (plan.teachingTools) {
+      plan.acceptance = Object.freeze({ ...plan.acceptance })
+      receipt.teachingTools = { ...plan.teachingTools, imageOnlyRollback: true, dataRestoreAllowed: false }
+    }
     if (!['paired', 'full'].includes(plan.backup.mode) || (plan.backup.mode === 'full' && (!plan.backup.output || !plan.backup.keyFile)) || !plan.acceptance) throw new Error('Release requires paired recovery and authenticated acceptance')
     acceptanceOrigin(plan.acceptance)
     if (!Number.isInteger(plan.timeoutMs ?? 150_000) || (plan.timeoutMs ?? 150_000) < 1 || (plan.timeoutMs ?? 150_000) > 300_000 || !Number.isInteger(plan.intervalMs ?? 1000) || (plan.intervalMs ?? 1000) < 1) throw new Error('Invalid release timeout')
@@ -922,6 +1079,10 @@ export async function releaseSwitch(input, dependencies = {}) {
     source = await inspectBackupSource(plan, { docker })
     phase = 'preflight-identity'
     await guardIdentity(plan, source, docker, run)
+    if (plan.teachingTools?.stage === 'enabled') {
+      phase = 'preflight-activity-capacity'
+      plan[ACTIVITY_CAPACITY_PROVED] = await verifyActivityCapacityProof(plan, source.containers.app)
+    }
     if (plan.validationWorker) {
       phase = 'preflight-validation-worker'
       source.validationWorker = await inspectValidationWorker(plan, source, docker)
@@ -941,6 +1102,11 @@ export async function releaseSwitch(input, dependencies = {}) {
         throw new Error('Paired image env assignments do not bind the intended services')
       source.validationWorker.configHashes.new = await workerConfigHash(docker, compose, releaseEnv(plan.candidateImage, plan.validationWorker.candidateImage))
       receipt.validationWorker.configHashes = { ...source.validationWorker.configHashes }
+    } else if (plan.teachingTools) {
+      phase = 'preflight-teaching-env'
+      const { prior, mode } = await privateReleaseEnv(plan)
+      const appEnv = image => teachingEnvBytes(envWithBoundAppImage(prior, image, plan.expectedOldImage), plan, image)
+      source.teachingEnv = { prior, mode, next: appEnv(plan.candidateImage), rollback: appEnv(plan.expectedOldImage) }
     }
     phase = 'preflight-writer-lease'
     await writerLease(source, docker, compose, 1)
@@ -953,16 +1119,21 @@ export async function releaseSwitch(input, dependencies = {}) {
       await mkdir(recovery, { mode: 0o700 })
     })
     if (source.validationWorker) await guardWorkerFiles(plan, source, false)
-    const prior = await readFile(join(plan.projectDir, '.env'))
+    else if (source.teachingEnv) await guardReleaseEnv(plan, source.teachingEnv, 'prior')
+    const binding = boundEnv()
+    const prior = binding?.prior ?? await readFile(join(plan.projectDir, '.env'))
     await preallocate(join(recovery, '.env.before'), prior)
     await preallocate(join(recovery, 'compose.before.yml'), await readFile(join(plan.projectDir, 'compose.yml')))
     nextEnv = join(plan.projectDir, `.physicsos-release-next-${stamp}`)
     rollbackEnv = join(plan.projectDir, `.physicsos-release-rollback-${stamp}`)
-    const envMode = source.validationWorker?.env.mode ?? (plan.teachingTools === undefined ? undefined : (await lstat(join(plan.projectDir, '.env'))).mode & 0o7777)
-    if (plan.teachingTools !== undefined && ![0o400, 0o600].includes(envMode)) throw new Error('Teaching tools release env must be a private regular file')
-    const appEnv = image => plan.teachingTools === undefined ? envWithImage(prior, image) : envWithBoundAppImage(prior, image, plan.expectedOldImage)
-    await preallocate(nextEnv, source.validationWorker?.env.next ?? teachingModeEnv(appEnv(plan.candidateImage), plan), envMode)
-    await preallocate(rollbackEnv, source.validationWorker?.env.rollback ?? teachingModeEnv(appEnv(plan.expectedOldImage), plan, true), envMode)
+    await preallocate(nextEnv, binding?.next ?? envWithImage(prior, plan.candidateImage), binding?.mode)
+    await preallocate(rollbackEnv, binding?.rollback ?? envWithImage(prior, plan.expectedOldImage), binding?.mode)
+    if (plan.teachingTools) {
+      phase = 'preflight-teaching-env'
+      // Render the actual staged files, not just overrides, before any stop.
+      await guardTeachingProjection(plan.candidateImage, plan.validationWorker?.candidateImage, nextEnv)
+      await guardTeachingProjection(plan.expectedOldImage, plan.validationWorker?.expectedOldImage, rollbackEnv)
+    }
     reserve = join(recovery, '.rollback-space')
     await preallocate(reserve, Buffer.alloc(8 * 1024 * 1024))
     receipt.rollbackTag = `physicsos:rollback-${stamp}`
@@ -992,7 +1163,15 @@ export async function releaseSwitch(input, dependencies = {}) {
       await guardWorkerFiles(plan, source, false)
       checkedSource.validationWorker = { container: await inspectOriginalWorker(plan, checkedSource, docker) }
       guardCapturedSource(source, checkedSource)
+    } else if (source.teachingEnv) {
+      await guardReleaseEnv(plan, source.teachingEnv, 'prior')
+      guardCapturedSource(source, checkedSource)
     }
+    if (plan.teachingTools?.stage === 'enabled') {
+      phase = 'preflight-activity-capacity'
+      await verifyActivityCapacityProof(plan, checkedSource.containers.app)
+    }
+    aborted(plan.signal)
     phase = 'capture'
     stopAttempted = true
     await docker([...compose, 'stop', '--timeout', '60', 'app', 'redis'])
@@ -1021,7 +1200,7 @@ export async function releaseSwitch(input, dependencies = {}) {
       await guardRecoverySource(plan, source, docker, compose, false, workerState)
       await guardDataWriters(source, docker)
       await writerLease(source, docker, compose, 0)
-    }
+    } else if (source.teachingEnv) await guardReleaseEnv(plan, source.teachingEnv, 'prior')
     switched = true
     await rename(nextEnv, join(plan.projectDir, '.env'))
     if (source.validationWorker) {
@@ -1039,10 +1218,12 @@ export async function releaseSwitch(input, dependencies = {}) {
     }
     await docker([...compose, 'start', 'redis'])
     aborted(plan.signal)
-    await docker([...compose, 'up', '-d', '--no-build', '--no-deps', '--pull', 'never', '--force-recreate', 'app'], { env: releaseEnv(plan.candidateImage, plan.validationWorker?.candidateImage) })
+    await recreateApp(plan.candidateImage, plan.validationWorker?.candidateImage)
     await waitForImage(plan.candidateImage, plan.signal, plan.validationWorker?.candidateImage)
     phase = 'acceptance'
-    const checks = await verifyAuthenticatedRead({ ...plan.acceptance, signal: plan.signal }, dependencies)
+    const capacity = teachingBindings(plan, plan.candidateImage)?.[ACTIVITY_CAPACITY_ENV]
+    const checks = await verifyAuthenticatedRead({ ...plan.acceptance, signal: plan.signal }, dependencies,
+      capacity === undefined ? undefined : capacity === 'true')
     if (source.validationWorker) await verifiedWorker(plan.validationWorker.candidateImage)
     await atomicRecord(join(recovery, 'success.json'), { ...receipt, checks, completedAt: new Date().toISOString() })
     return { deployed: true, image: plan.candidateImage, revision: plan.revision, recovery, backup, checks,

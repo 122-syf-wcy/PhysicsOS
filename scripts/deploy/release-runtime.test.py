@@ -270,6 +270,17 @@ import "node:fs"; require("path"); import "./chunk.js";
             'fixture-client-helper', 'fixture-optional',
         ]))
 
+    def test_real_inventory_hashes_static_client_css_and_still_scans_commonjs_requests(self):
+        css = '.badge { display: inline-flex; color: #fff }'
+        result = inventory_fixture({'index.js': 'import styles from "./Badge.module.css"; require("./required.css");',
+                                    'Badge.module.css': css, 'required.css': 'require("fixture-executable-request")'}, mode='client')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        inventory = json.loads(result.stdout)
+        self.assertEqual(inventory['files']['packages/request-fixture/lib/Badge.module.css']['sha256'], sha(css))
+        self.assertEqual(inventory['packages']['packages/request-fixture']['nodeRequests'], ['fixture-executable-request'])
+        rejected = inventory_fixture({'index.js': 'import "./Badge.module.css";', 'Badge.module.css': css})
+        self.assertNotEqual(rejected.returncode, 0)
+
     def test_real_inventory_refuses_invalid_javascript_instead_of_silently_missing_requests(self):
         result = inventory_fixture({'index.js': 'export const broken = /unterminated'})
         self.assertNotEqual(result.returncode, 0)

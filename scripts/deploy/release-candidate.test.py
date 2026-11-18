@@ -1,8 +1,11 @@
 import importlib.util
 import copy
 import hashlib
+import io
 import json
+from email.message import Message
 from pathlib import Path
+from urllib.response import addinfourl
 import tempfile
 import unittest
 import os
@@ -10,7 +13,7 @@ import contextlib
 import shlex
 import traceback
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 spec = importlib.util.spec_from_file_location('candidate', Path(__file__).with_name('release-candidate.py'))
 candidate = importlib.util.module_from_spec(spec)
@@ -852,8 +855,22 @@ class CandidateSearchCompanion(unittest.TestCase):
 
 
 class CandidateTeachingTools(unittest.TestCase):
+    def capacity_result(self, binding):
+        cpu = {'NanoCpus': 0, 'CpuPeriod': 0, 'CpuQuota': 0, 'CpusetCpus': ''}
+        return {'scope': 'capacity', 'revision': binding['revision'], 'sourceDigest': binding['sourceDigest'],
+                'exitCode': 0, 'passed': True, 'passedTests': 2, 'failedTests': 0, 'pendingTests': 0,
+                'inputs': {'PHYSICSOS_ACTIVITY_RUN_CAPACITY': '1', 'PHYSICSOS_ACTIVITY_BASE_DAILY_USERS': '6',
+                           'PHYSICSOS_ACTIVITY_EVENTS_PER_USER_DAY': '73', 'PHYSICSOS_ACTIVITY_BASE_ROSTER_USERS': '80',
+                           'PHYSICSOS_ACTIVITY_BASE_SCHOOLS': '70'},
+                'cpuProfile': {'referenceContainer': 'physicsos-app-1', 'reference': dict(cpu), 'runner': dict(cpu)}}
+
+    def pin_capacity(self, config, path, result):
+        raw = result if isinstance(result, bytes) else json.dumps(result).encode()
+        path.write_bytes(raw); path.chmod(0o600)
+        config['activityCapacity'] = {'path': str(path), 'sha256': hashlib.sha256(raw).hexdigest()}
+
     @contextlib.contextmanager
-    def fixture(self, mode='bridge', existing=True):
+    def fixture(self, mode='bridge', existing=True, capacity=False):
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp).resolve(); root = base / ('teaching-' + mode)
             for name in ['home', 'state', 'tools', 'secrets', 'database-data']:
@@ -868,12 +885,17 @@ class CandidateTeachingTools(unittest.TestCase):
             (root / 'owner').write_text(config['task'])
             password = base / 'fixture-password'; password.write_text('fake-private-db-material')
             config['databasePasswordFile'] = str(password)
-            image = {'Id': 'sha256:' + 'd' * 64, 'Config': {'Env': ['PATH=/usr/bin'], 'Entrypoint': [], 'Labels': {
-                'physicsos.manifest.digest': 'e' * 64, 'physicsos.teaching-tools.bridge': candidate.TEACHING_TOOLS_CAPABILITY}}}
+            image = {'Id': 'sha256:' + 'd' * 64, 'Config': {'Env': ['PATH=/usr/bin', candidate.ACTIVITY_CAPACITY_ENV + '=true'],
+                     'Entrypoint': [], 'Labels': {'physicsos.manifest.digest': 'e' * 64,
+                                                  'physicsos.teaching-tools.bridge': candidate.TEACHING_TOOLS_CAPABILITY}}}
             binding = {'image': image['Id'], 'revision': 'a' * 40, 'sourceDigest': 'b' * 64, 'codeDigest': 'c' * 64,
                        'manifestSha256': 'e' * 64, 'capabilitySha256': 'f' * 64, 'capability': candidate.TEACHING_TOOLS_CAPABILITY}
             image['Config']['Labels'].update({'org.opencontainers.image.revision': binding['revision'],
                                                'physicsos.source.digest': binding['sourceDigest'], 'physicsos.code.digest': binding['codeDigest']})
+            if capacity:
+                self.assertEqual(mode, 'enabled')
+                proof_dir = base / 'operator-only'; proof_dir.mkdir(mode=0o700)
+                self.pin_capacity(config, proof_dir / 'result.json', self.capacity_result(binding))
             details = {'task': config['task'], 'container': 'physicsos-validation-' + config['task'], 'image': image['Id'],
                        'port': config['httpPort'], 'schema': config['schema'], 'root': str(root), 'home': str(root / 'home'),
                        'username': config['username'], 'network': config['network'], 'networkId': '5' * 64,
@@ -881,12 +903,14 @@ class CandidateTeachingTools(unittest.TestCase):
                        'candidateInstance': '6' * 32, 'databaseContainerId': '8' * 64,
                        **{key: config[key] for key in ['modelPoolPort', 'databaseContainer', 'databaseDataRoot', 'databaseName', 'databaseUser']}}
             environment = {'PATH': '/usr/bin', candidate.TEACHING_TOOLS_ENV: mode,
+                           candidate.ACTIVITY_CAPACITY_ENV: 'true' if capacity else 'false',
                            'PHYSICSOS_MODEL_POOL_PORT': str(config['modelPoolPort']),
                            'DEEPSEEK_BASE_URL': f"http://127.0.0.1:{config['modelPoolPort']}/v1",
                            'DATABASE_URL_FILE': '/run/secrets/database_url', 'PRESERVED_FILE': '/run/secrets/fixture'}
             spec = {'metadata': details, 'environment': environment, 'network': config['network'],
                     'command': ['node', 'scripts/docker-entrypoint.mjs', 'node', 'vendor/deepseek-harness/apps/cli/lib/bin.js', '--port', str(config['httpPort'])],
                     'mounts': [{'Source': str(root / 'home'), 'Destination': '/var/lib/physicsos', 'ReadOnly': False}]}
+            if capacity: spec['activityCapacity'] = dict(config['activityCapacity'])
             details['fingerprint'] = candidate.candidate_fingerprint(spec)
             if existing: details['containerId'] = '7' * 64
             container = {'Id': '7' * 64, 'Name': '/' + details['container'], 'Image': image['Id'], 'State': {'Running': True},
@@ -912,7 +936,8 @@ class CandidateTeachingTools(unittest.TestCase):
             (source / 'cordis.patch.yml').write_text('plugins-from-postgres: true\n')
             production[0]['Config'].update({'Cmd': [*spec['command'][:-2], '--port', '3080', '--patch', '/production.patch.yml'],
                                            'Env': ['PATH=/usr/bin', 'DEEPSEEK_BASE_URL=http://127.0.0.1:3972/v1',
-                                                   'PHYSICSOS_MODEL_POOL_PORT=3972', 'UNAPPROVED_SECRET=fake-production-material']})
+                                                   'PHYSICSOS_MODEL_POOL_PORT=3972', 'UNAPPROVED_SECRET=fake-production-material',
+                                                   candidate.ACTIVITY_CAPACITY_ENV + '=true']})
             pg = {'Id': '8' * 64, 'State': {'Running': True}, 'Config': {'Labels': {'io.physicsos.task': config['task']}},
                   'Mounts': [{'Source': str(root / 'database-data'), 'Destination': '/var/lib/postgresql/data', 'RW': True}],
                   'NetworkSettings': {'Networks': {config['network']: {'NetworkID': '5' * 64, 'IPAddress': '172.30.0.2'}}}}
@@ -971,6 +996,89 @@ class CandidateTeachingTools(unittest.TestCase):
                 file.chmod(0o644)
                 with self.assertRaisesRegex(candidate.CandidateError, 'CONFIG_PRIVATE'): candidate.load(file)
 
+    def test_capacity_reference_requires_private_enabled_config_with_exact_fields(self):
+        with self.fixture('enabled', capacity=True) as f:
+            file = f.root / 'config.json'; candidate.private_json(file, f.config)
+            reference = f.config['activityCapacity']
+            self.assertEqual(candidate.load(file)['activityCapacity'], reference)
+            for mode in [None, 'bridge', 'off']:
+                config = {**f.config, 'teachingToolsMode': mode}
+                if mode is None: config.pop('teachingToolsMode')
+                with self.subTest(mode=mode), self.assertRaisesRegex(candidate.CandidateError, 'CAPACITY_MODE_REQUIRED'):
+                    candidate.teaching_tools_mode(config)
+            for invalid in [None, True, {'path': reference['path']}, {**reference, 'override': True},
+                            {**reference, 'path': 'relative/result.json'}, {**reference, 'path': '/opt/../result.json'},
+                            {**reference, 'sha256': 'short'}]:
+                with self.subTest(reference=invalid), self.assertRaisesRegex(candidate.CandidateError, 'REFERENCE_INVALID'):
+                    candidate.teaching_tools_mode({**f.config, 'activityCapacity': invalid})
+            file.write_text(json.dumps(f.config)[:-1] + ', "activityCapacity": null}')
+            with self.assertRaisesRegex(ValueError, 'Duplicate JSON field'): candidate.load(file)
+
+    def test_capacity_pass_requires_exact_source_results_inputs_and_matching_cpu_profiles(self):
+        with self.fixture('enabled', existing=False, capacity=True) as f:
+            path = Path(f.config['activityCapacity']['path'])
+            valid = self.capacity_result(f.binding)
+            input_names = valid['inputs']
+            cpu = valid['cpuProfile']
+            changes = [dict(scope='postgres'), dict(revision='0' * 40), dict(sourceDigest='0' * 64),
+                       dict(exitCode=1), dict(exitCode=False), dict(passed=False), dict(passed=1),
+                       dict(passedTests=1), dict(passedTests=2.0), dict(failedTests=1), dict(pendingTests=1),
+                       dict(inputs={key: value for key, value in input_names.items() if key != 'PHYSICSOS_ACTIVITY_RUN_CAPACITY'}),
+                       dict(inputs={**input_names, 'PHYSICSOS_ACTIVITY_RUN_CAPACITY': 1}),
+                       dict(inputs={**input_names, 'PHYSICSOS_ACTIVITY_BASE_DAILY_USERS': '81'}),
+                       dict(inputs={**input_names, 'PHYSICSOS_ACTIVITY_EVENTS_PER_USER_DAY': '0'}),
+                       dict(inputs={**input_names, 'PHYSICSOS_ACTIVITY_BASE_ROSTER_USERS': '100001'}),
+                       dict(inputs={**input_names, 'PHYSICSOS_ACTIVITY_BASE_SCHOOLS': '7e1'}),
+                       dict(cpuProfile={**cpu, 'referenceContainer': 'other'}),
+                       dict(cpuProfile={**cpu, 'runner': {**cpu['runner'], 'NanoCpus': 1_000_000_000}}),
+                       dict(cpuProfile={**cpu, 'runner': {**cpu['runner'], 'CpuQuota': False}}),
+                       dict(cpuProfile={**cpu, 'reference': {**cpu['reference'], 'CpusetCpus': []}}),
+                       dict(cpuProfile={**cpu, 'runner': {**cpu['runner'], 'extra': 0}})]
+            for index, invalid in enumerate([{**valid, **change} for change in changes] +
+                                             [b'not JSON', (json.dumps(valid)[:-1] + ', "passed": true}').encode()]):
+                with self.subTest(case=index), self.assertRaisesRegex(candidate.CandidateError, '^CANDIDATE_ACTIVITY_CAPACITY_UNVERIFIED$'):
+                    self.pin_capacity(f.config, path, invalid)
+                    candidate.verify_activity_capacity(f.config['activityCapacity'], f.binding)
+            profile = {**cpu['reference'], 'NanoCpus': 1_500_000_000, 'CpusetCpus': '0-2'}
+            self.pin_capacity(f.config, path, {**valid, 'inputs': {**input_names, 'PHYSICSOS_ACTIVITY_BASE_DAILY_USERS': '9'},
+                                              'cpuProfile': {**cpu, 'reference': profile, 'runner': profile}, 'otherReceiptField': 'allowed'})
+            self.assertTrue(candidate.verify_activity_capacity(f.config['activityCapacity'], f.binding))
+
+    def test_capacity_file_must_be_private_owned_regular_nonsymlink_and_digest_pinned(self):
+        with self.fixture('enabled', capacity=True) as f:
+            reference = f.config['activityCapacity']; path = Path(reference['path'])
+            for permissions in [0o400, 0o600]:
+                path.chmod(permissions)
+                self.assertTrue(candidate.verify_activity_capacity(reference, f.binding))
+            path.chmod(0o644)
+            with self.assertRaisesRegex(candidate.CandidateError, 'FILE_PRIVATE'):
+                candidate.verify_activity_capacity(reference, f.binding)
+            path.chmod(0o600)
+            stat_fd = os.fstat
+            def owner(uid):
+                def inspect(fd):
+                    info = stat_fd(fd)
+                    return SimpleNamespace(st_uid=uid, st_mode=info.st_mode, st_nlink=info.st_nlink,
+                                           st_size=info.st_size, st_ctime_ns=info.st_ctime_ns)
+                return inspect
+            with patch.object(candidate.os, 'fstat', side_effect=owner(0)):
+                self.assertTrue(candidate.verify_activity_capacity(reference, f.binding))
+            with patch.object(candidate.os, 'fstat', side_effect=owner(os.getuid() + 1)):
+                with self.assertRaisesRegex(candidate.CandidateError, 'FILE_PRIVATE'):
+                    candidate.verify_activity_capacity(reference, f.binding)
+            link = path.with_name('symlink'); link.symlink_to(path)
+            dir_link = f.root.parent / 'operator-alias'; dir_link.symlink_to(path.parent, target_is_directory=True)
+            fifo = path.with_name('fifo'); os.mkfifo(fifo, 0o600)
+            for target in [link, dir_link / path.name, path.parent, fifo, path.with_name('missing')]:
+                with self.subTest(target=target.name), self.assertRaisesRegex(candidate.CandidateError, 'FILE_PRIVATE'):
+                    candidate.verify_activity_capacity({**reference, 'path': str(target)}, f.binding)
+            hardlink = path.with_name('hardlink'); os.link(path, hardlink)
+            with self.assertRaisesRegex(candidate.CandidateError, 'FILE_PRIVATE'):
+                candidate.verify_activity_capacity(reference, f.binding)
+            hardlink.unlink(); path.write_bytes(path.read_bytes() + b'\n')
+            with self.assertRaisesRegex(candidate.CandidateError, '^CANDIDATE_ACTIVITY_CAPACITY_DIGEST_CHANGED$'):
+                candidate.verify_activity_capacity(reference, f.binding)
+
     def test_bridge_and_enabled_use_independent_schema_appdata_network_database_and_ports(self):
         with self.fixture('bridge') as bridge, self.fixture('enabled') as enabled:
             for key in ['task', 'root', 'schema', 'network', 'databaseContainer', 'databaseDataRoot', 'httpPort', 'modelPoolPort']:
@@ -988,17 +1096,15 @@ class CandidateTeachingTools(unittest.TestCase):
             candidate.guard_teaching_tools(config, {'Config': {'Env': ['LEGACY=value', 'LEGACY=duplicate']}})
             verify.assert_not_called()
 
-    def test_explicit_mode_changes_only_the_public_mode_key_not_other_env_or_secret_routes(self):
+    def test_explicit_mode_sets_capacity_false_without_proof_and_preserves_other_env(self):
         for mode in ['bridge', 'enabled']:
             with self.subTest(mode=mode), self.fixture(mode) as f:
                 environment = {candidate.TEACHING_TOOLS_ENV: 'enabled' if mode == 'bridge' else 'bridge',
-                               'UNCHANGED_SECRET': 'fake-private-material', 'UNCHANGED_KEY_FILE': '/run/secrets/fixture',
-                               'PHYSICSOS_VALIDATION_URL': 'http://127.0.0.1:13187'}
+                               candidate.ACTIVITY_CAPACITY_ENV: 'true', 'UNCHANGED_SECRET': 'fake-private-material',
+                               'UNCHANGED_KEY_FILE': '/run/secrets/fixture', 'PHYSICSOS_VALIDATION_URL': 'http://127.0.0.1:13187'}
                 before = dict(environment)
                 candidate.apply_teaching_tools_mode(f.config, environment)
-                self.assertEqual(environment.pop(candidate.TEACHING_TOOLS_ENV), mode)
-                before.pop(candidate.TEACHING_TOOLS_ENV)
-                self.assertEqual(environment, before)
+                self.assertEqual(environment, {**before, candidate.TEACHING_TOOLS_ENV: mode, candidate.ACTIVITY_CAPACITY_ENV: 'false'})
 
     def test_mode_requires_new_private_data_scope_and_refuses_production(self):
         with self.fixture() as f:
@@ -1012,14 +1118,16 @@ class CandidateTeachingTools(unittest.TestCase):
             legacy_config = {k: v for k, v in f.config.items() if k != 'teachingToolsMode'}
             with self.assertRaisesRegex(candidate.CandidateError, 'MODE_REQUIRED'): candidate.remove_owned(legacy_config)
 
-    def test_prepare_injects_mode_in_real_env_without_mutating_production_secrets_or_profiles(self):
-        for mode in ['bridge', 'enabled']:
-            with self.subTest(mode=mode), self.fixture(mode, existing=False) as f:
+    def test_prepare_injects_mode_and_proven_capacity_without_mutating_production_secrets_or_profiles(self):
+        for mode, capacity in [('bridge', False), ('enabled', False), ('enabled', True)]:
+            with self.subTest(mode=mode, capacity=capacity), self.fixture(mode, existing=False, capacity=capacity) as f:
                 before = copy.deepcopy(f.production), f.password.read_bytes(), f.password.stat().st_ino
                 source = Path(f.production[0]['Mounts'][0]['Source']) / 'profiles/web/cordis.patch.yml'
                 original_profile = source.read_bytes(), source.stat().st_ino
-                # Even a persisted profile setting cannot select the opposite mode.
-                source.write_text('teachingToolsMode: ' + ('enabled' if mode == 'bridge' else 'bridge') + '\n')
+                # Production/image Env and the persisted profile all try to
+                # declare true, but the candidate uses only its verified proof.
+                source.write_text('teachingToolsMode: ' + ('enabled' if mode == 'bridge' else 'bridge') +
+                                  '\nactivityQueryCapacityVerified: true\n')
                 opposite_profile = source.read_bytes()
                 with patch.object(candidate, 'check_isolated_resources', return_value=(f.network, f.pg)), \
                         patch.object(candidate.os, 'chown'), patch.object(candidate.subprocess, 'check_output', return_value='# health fixture\n'), \
@@ -1027,6 +1135,9 @@ class CandidateTeachingTools(unittest.TestCase):
                     _, spec, _ = candidate.prepare(f.config, 'candidate-image')
                     run.assert_not_called()
                 self.assertEqual(spec['environment'][candidate.TEACHING_TOOLS_ENV], mode)
+                self.assertEqual(spec['environment'][candidate.ACTIVITY_CAPACITY_ENV], 'true' if capacity else 'false')
+                self.assertEqual(spec.get('activityCapacity'), f.config.get('activityCapacity'))
+                self.assertNotIn('activityCapacity', spec['metadata'])
                 self.assertNotIn('UNAPPROVED_SECRET', spec['environment'])
                 self.assertEqual(spec['metadata']['teachingToolsMode'], mode)
                 self.assertEqual(spec['metadata']['teachingToolsImage'], f.binding)
@@ -1035,6 +1146,16 @@ class CandidateTeachingTools(unittest.TestCase):
                 self.assertEqual(source.read_bytes(), opposite_profile)
                 self.assertEqual(source.stat().st_ino, original_profile[1])
                 self.assertEqual((f.root / 'home/retained').read_text(), 'owned fixture data')
+
+    def test_prepare_refuses_stale_capacity_before_network_database_or_candidate_writes(self):
+        with self.fixture('enabled', existing=False, capacity=True) as f, \
+                patch.object(candidate, 'verify_teaching_tools_image', return_value={**f.binding, 'revision': '0' * 40}), \
+                patch.object(candidate, 'check_isolated_resources') as resources, \
+                patch.object(candidate.subprocess, 'run') as run, patch.object(candidate, 'private_json') as write:
+            with self.assertRaisesRegex(candidate.CandidateError, 'CAPACITY_UNVERIFIED'):
+                candidate.prepare(f.config, 'candidate-image')
+            resources.assert_not_called(); run.assert_not_called(); write.assert_not_called()
+            self.assertFalse((f.root / 'secrets/database_url').exists())
 
     def test_production_port_and_root_are_refused_before_any_write_or_docker_mutation(self):
         for changed in [{'httpPort': 3080}, {'modelPoolPort': 3972}]:
@@ -1068,6 +1189,33 @@ class CandidateTeachingTools(unittest.TestCase):
                 self.assertNotIn('do-not-print-this', str(raised.exception)); run.assert_not_called()
         with self.fixture('enabled') as f: candidate.guard_teaching_tools(f.config, f.current)
 
+    def test_guard_binds_capacity_reference_receipt_and_effective_environment(self):
+        with self.fixture('enabled', capacity=True) as f:
+            candidate.guard_teaching_tools(f.config, f.current)
+            reference = f.config['activityCapacity']
+            for changed in [None, {**reference, 'path': reference['path'] + '.new'}, {**reference, 'sha256': '0' * 64}]:
+                config = {**f.config, 'activityCapacity': changed}
+                if changed is None: config.pop('activityCapacity')
+                with self.subTest(changed=changed), self.assertRaisesRegex(candidate.CandidateError, 'CAPACITY_BINDING_CHANGED'):
+                    candidate.guard_teaching_tools(config, f.current)
+            for key, value in [('path', reference['path'] + '.new'), ('sha256', '0' * 64)]:
+                spec = copy.deepcopy(f.spec); spec['activityCapacity'][key] = value
+                self.assertNotEqual(candidate.candidate_fingerprint(spec), f.spec['metadata']['fingerprint'])
+            spec = copy.deepcopy(f.spec); spec['environment'][candidate.ACTIVITY_CAPACITY_ENV] = 'false'
+            spec['metadata']['fingerprint'] = candidate.candidate_fingerprint(spec)
+            with self.assertRaisesRegex(candidate.CandidateError, 'CAPACITY_BINDING_CHANGED'):
+                candidate.validate_teaching_tools_spec(f.config, spec['metadata'], spec)
+            f.current['Config']['Env'].remove(candidate.ACTIVITY_CAPACITY_ENV + '=true')
+            with self.assertRaisesRegex(candidate.CandidateError, 'TEACHING_ENV_CHANGED'):
+                candidate.guard_teaching_tools(f.config, f.current)
+            f.current['Config']['Env'].append(candidate.ACTIVITY_CAPACITY_ENV + '=true')
+            Path(reference['path']).write_text('changed bytes\n')
+            with patch.object(candidate, 'check_owned') as auth, patch.object(candidate.subprocess, 'run') as run:
+                for action in [candidate.check, candidate.stop]:
+                    with self.subTest(action=action.__name__), self.assertRaisesRegex(candidate.CandidateError, 'DIGEST_CHANGED'):
+                        action(f.config)
+                auth.assert_not_called(); run.assert_not_called()
+
     def test_fingerprint_binds_mode_environment_source_code_and_manifests(self):
         with self.fixture() as f:
             initial = candidate.candidate_fingerprint(f.spec)
@@ -1083,9 +1231,9 @@ class CandidateTeachingTools(unittest.TestCase):
             spec = copy.deepcopy(f.spec); spec['metadata'].pop('containerId')
             self.assertEqual(candidate.candidate_fingerprint(spec), initial)
 
-    def test_start_both_modes_persists_full_id_before_start_and_preserves_nonmode_env(self):
-        for mode in ['bridge', 'enabled']:
-            with self.subTest(mode=mode), self.fixture(mode, existing=False) as f, \
+    def test_start_persists_full_id_before_start_and_passes_only_the_effective_activity_flag(self):
+        for mode, capacity in [('bridge', False), ('enabled', False), ('enabled', True)]:
+            with self.subTest(mode=mode, capacity=capacity), self.fixture(mode, existing=False, capacity=capacity) as f, \
                     patch.object(candidate, 'prepare', return_value=({}, f.spec, [])), \
                     patch.object(candidate, 'check_isolated_resources'), \
                     patch.object(candidate.subprocess, 'run', side_effect=self.docker(f)) as run:
@@ -1094,9 +1242,111 @@ class CandidateTeachingTools(unittest.TestCase):
                 self.assertEqual(result['containerId'], '7' * 64)
                 create = run.call_args_list[0].args[0]
                 self.assertIn(candidate.TEACHING_TOOLS_ENV + '=' + mode, create)
+                self.assertIn(candidate.ACTIVITY_CAPACITY_ENV + ('=true' if capacity else '=false'), create)
                 self.assertIn('PRESERVED_FILE=/run/secrets/fixture', create)
+                if capacity:
+                    for value in f.config['activityCapacity'].values():
+                        self.assertNotIn(value, json.dumps(result))
+                        self.assertFalse(any(value in arg for arg in create))
                 self.assertEqual(run.call_args_list[1].args[0], ['docker', 'start', '7' * 64])
                 candidate.guard_teaching_tools(f.config, f.current)
+
+    def test_browser_url_parser_accepts_only_the_official_primary_loopback_root_url(self):
+        port = 14188; token = b'a' * 42 + b'A'
+        exact = b'http://127.0.0.1:14188/?token=' + token
+        line = b'dsh web: ' + exact
+        lan = b' (LAN: http://172.30.0.3:14188/?token=' + token + b')'
+        self.assertEqual(candidate.primary_browser_url(line, port), exact)
+        self.assertEqual(candidate.primary_browser_url(line + lan + b'\r', port), exact)
+        for invalid in [b'log ' + line, b'dsh web:' + lan, line.replace(b'127.0.0.1', b'localhost'),
+                        line.replace(b'http:', b'https:'), line.replace(b'14188', b'13188'),
+                        line.replace(b'/?', b'/index.html?'), line.replace(b'127.0.0.1', b'user@127.0.0.1'),
+                        line + b'&token=' + token, line + b'#fragment', line + b'a', line[:-1], line[:-1] + b'B']:
+            with self.subTest(invalid=invalid): self.assertIsNone(candidate.primary_browser_url(invalid, port))
+
+    def mock_browser_attachment(self, f, output, errors=b'', on_kill=None):
+        def pipe(data):
+            read, write = os.pipe()
+            with os.fdopen(write, 'wb') as stream: stream.write(data)
+            return os.fdopen(read, 'rb')
+        client = SimpleNamespace(kill=Mock(side_effect=on_kill), wait=Mock())
+        def attach(args, **options):
+            self.assertEqual(args, ['docker', 'start', '--attach', f.current['Id']])
+            self.assertTrue(options['start_new_session'])
+            self.assertEqual(options['stdin'], candidate.subprocess.DEVNULL)
+            self.assertEqual((options['stdout'], options['stderr']), (candidate.subprocess.PIPE, candidate.subprocess.PIPE))
+            self.assertEqual(json.loads((f.root / 'metadata.json').read_text())['containerId'], f.current['Id'])
+            f.current['State']['Running'] = True
+            client.stdout, client.stderr = pipe(output), pipe(errors)
+            return client
+        return client, patch.object(candidate.subprocess, 'Popen', side_effect=attach)
+
+    def test_owned_start_captures_private_primary_url_and_detaches_only_client_then_stop_clears_it(self):
+        with self.fixture('enabled', existing=False, capacity=True) as f, \
+                patch.object(candidate, 'prepare', return_value=({}, f.spec, [])), \
+                patch.object(candidate, 'check_isolated_resources'), \
+                patch.object(candidate.subprocess, 'run', side_effect=self.docker(f)) as run:
+            auth_file = f.root / 'state/auth-url'; auth_file.write_bytes(b'stale URL')
+            token = b'a' * 42 + b'A'
+            exact = f"http://127.0.0.1:{f.config['httpPort']}/?token=".encode() + token
+            def verify_published_before_client_kill():
+                self.assertEqual(auth_file.read_bytes(), exact)
+                self.assertEqual(auth_file.stat().st_mode & 0o777, 0o600)
+                self.assertEqual(auth_file.stat().st_uid, os.getuid())
+                self.assertEqual(auth_file.stat().st_nlink, 1)
+            client, attach = self.mock_browser_attachment(f, b'private startup\ndsh web: ' + exact + b'\n',
+                                                         b'private stderr', verify_published_before_client_kill)
+            with attach: result = candidate.start(f.config, 'candidate-image', capture_browser_url=True)
+            client.kill.assert_called_once_with(); client.wait.assert_called_once_with(timeout=5)
+            self.assertTrue(client.stdout.closed and client.stderr.closed)
+            self.assertEqual([call.args[0][:2] for call in run.call_args_list], [['docker', 'create']])
+            self.assertNotIn(token.decode(), json.dumps(result))
+            self.assertEqual(result['fingerprint'], f.spec['metadata']['fingerprint'])
+            self.assertEqual(list(auth_file.parent.glob('.auth-url.partial-*')), [])
+            candidate.stop(f.config)
+            self.assertFalse(auth_file.exists())
+            self.assertEqual(run.call_args.args[0], ['docker', 'rm', '-f', '7' * 64])
+
+    def test_browser_capture_failure_leaks_no_output_and_removes_only_owned_container(self):
+        for case, code in [('stderr-only', 'MISSING'), ('over-limit', 'OUTPUT_LIMIT'), ('publish', 'FILE_PRIVATE')]:
+            with self.subTest(case=case), self.fixture(existing=False) as f, \
+                    patch.object(candidate, 'prepare', return_value=({}, f.spec, [])), \
+                    patch.object(candidate, 'check_isolated_resources'), \
+                    patch.object(candidate.subprocess, 'run', side_effect=self.docker(f)) as run:
+                auth_file = f.root / 'state/auth-url'; auth_file.write_bytes(b'stale URL')
+                token = b'b' * 42 + b'A'
+                line = f"dsh web: http://127.0.0.1:{f.config['httpPort']}/?token=".encode() + token + b'\n'
+                client, attach = self.mock_browser_attachment(f, b'' if case == 'stderr-only' else line, line)
+                limit = patch.object(candidate, 'BROWSER_ATTACH_MAX_BYTES', 10) if case == 'over-limit' else contextlib.nullcontext()
+                def collide(*args, **kwargs):
+                    auth_file.write_bytes(b'raced-in file')
+                    raise FileExistsError('private path must not print')
+                publish = patch.object(candidate.os, 'link', side_effect=collide) if case == 'publish' else contextlib.nullcontext()
+                with attach, limit, publish, self.assertRaisesRegex(candidate.CandidateError, '^CANDIDATE_BROWSER_URL_' + code + '$') as raised:
+                    candidate.start(f.config, 'candidate-image', capture_browser_url=True)
+                diagnostics = ''.join(traceback.format_exception(type(raised.exception), raised.exception, raised.exception.__traceback__))
+                self.assertNotIn(token.decode(), diagnostics)
+                self.assertNotIn('private path must not print', diagnostics)
+                client.kill.assert_called_once_with()
+                self.assertEqual(run.call_args.args[0], ['docker', 'rm', '-f', '7' * 64])
+                self.assertEqual(list(auth_file.parent.glob('.auth-url.partial-*')), [])
+                if case == 'publish': self.assertEqual(auth_file.read_bytes(), b'raced-in file')
+                else: self.assertFalse(auth_file.exists())
+
+    def test_browser_capture_option_is_restricted_to_explicit_teaching_start(self):
+        with self.fixture(existing=False) as f, patch.object(candidate, 'load', return_value=f.config) as load, \
+                patch.object(candidate, 'start', return_value={}) as start, patch('builtins.print'):
+            cli = ['release-candidate.py', '--config', '/private/config.json', '--image', 'candidate-image', '--capture-browser-url']
+            for action in ['refresh', 'stop', 'check', 'network', 'search']:
+                with patch.object(candidate.sys, 'argv', [*cli, action]), self.assertRaisesRegex(candidate.CandidateError, 'START_REQUIRED'):
+                    candidate.main()
+            load.assert_not_called(); start.assert_not_called()
+            with patch.object(candidate.sys, 'argv', [*cli, 'start']): self.assertEqual(candidate.main(), 0)
+            start.assert_called_once_with(f.config, 'candidate-image', capture_browser_url=True)
+        with patch.object(candidate, 'lifecycle') as lifecycle:
+            with self.assertRaisesRegex(candidate.CandidateError, 'MODE_REQUIRED'):
+                candidate.start(CandidateSafety().config(Path('/legacy')), 'test-image', capture_browser_url=True)
+            lifecycle.assert_not_called()
 
     def test_failed_create_or_start_removes_only_exact_owned_id_without_secret_diagnostics(self):
         for failure in ['create', 'start']:
@@ -1129,6 +1379,15 @@ class CandidateTeachingTools(unittest.TestCase):
                 with self.assertRaises(candidate.CandidateError): candidate.refresh({**f.config, **changed}, 'candidate-image')
                 run.assert_not_called()
 
+    def test_refresh_refuses_new_cold_source_without_matching_capacity_before_removal(self):
+        with self.fixture('enabled', capacity=True) as f, patch.object(candidate, 'check_isolated_resources'), \
+                patch.object(candidate, 'verify_teaching_tools_image', return_value={**f.binding, 'sourceDigest': '0' * 64}), \
+                patch.object(candidate, 'start_owned') as start, patch.object(candidate.subprocess, 'run') as run:
+            with self.assertRaisesRegex(candidate.CandidateError, 'CAPACITY_UNVERIFIED'):
+                candidate.refresh(f.config, 'candidate-image')
+            start.assert_not_called(); run.assert_not_called()
+            self.assertIs(f.current, f.container)
+
     def test_guard_refuses_before_http_authentication_and_stop_refuses_mode_drift(self):
         with self.fixture() as f, patch.object(candidate, 'check_owned') as auth, patch.object(candidate.subprocess, 'run') as run:
             f.current['Config']['Env'].append(candidate.TEACHING_TOOLS_ENV + '=enabled')
@@ -1136,17 +1395,86 @@ class CandidateTeachingTools(unittest.TestCase):
             with self.assertRaises(candidate.CandidateError): candidate.stop(f.config)
             auth.assert_not_called(); run.assert_not_called()
 
-    def test_authenticated_capabilities_must_match_real_runtime_mode(self):
-        for mode in ['bridge', 'enabled']:
-            with self.subTest(mode=mode), self.fixture(mode) as f:
-                capabilities = {'schemaVersion': 1, 'teachingToolsMode': mode, 'lifecycleBridge': True,
-                                'lifecycleWritesEnabled': mode == 'enabled', 'productStateEnabled': mode == 'enabled',
-                                'minimumRollbackCapability': candidate.TEACHING_TOOLS_CAPABILITY if mode == 'enabled' else None}
-                candidate.check_teaching_tools_capabilities(f.config, capabilities)
+    def capabilities(self, mode, capacity):
+        enabled = mode == 'enabled'
+        learning = {'schemaVersion': 1, 'teachingToolsMode': mode, 'lifecycleBridge': True, 'lifecycleWritesEnabled': enabled,
+                    'productStateEnabled': enabled, 'activityQueryCapacityVerified': capacity,
+                    'minimumRollbackCapability': candidate.TEACHING_TOOLS_CAPABILITY if enabled else None}
+        activity = {'schemaVersion': 1, 'mode': mode, 'collectionEnabled': enabled, 'queryCapacityVerified': capacity}
+        return learning, activity
+
+    def test_capabilities_require_exact_mode_and_boolean_query_collection_flags(self):
+        for mode, capacity in [('bridge', False), ('enabled', False), ('enabled', True)]:
+            with self.subTest(mode=mode, capacity=capacity):
+                learning, activity = self.capabilities(mode, capacity)
+                candidate.check_teaching_tools_capabilities(mode, learning, activity, capacity)
                 for key, wrong in [('teachingToolsMode', 'off'), ('lifecycleBridge', False),
-                                   ('lifecycleWritesEnabled', mode != 'enabled'), ('productStateEnabled', mode != 'enabled')]:
-                    with self.subTest(key=key), self.assertRaisesRegex(candidate.CandidateError, 'CAPABILITY_CHANGED'):
-                        candidate.check_teaching_tools_capabilities(f.config, {**capabilities, key: wrong})
+                                   ('lifecycleWritesEnabled', mode != 'enabled'), ('productStateEnabled', mode != 'enabled'),
+                                   ('activityQueryCapacityVerified', not capacity)]:
+                    with self.subTest(key=key), self.assertRaisesRegex(candidate.CandidateError, 'TEACHING_CAPABILITY_CHANGED'):
+                        candidate.check_teaching_tools_capabilities(mode, {**learning, key: wrong}, activity, capacity)
+                for key, wrong in [('mode', 'off'), ('collectionEnabled', mode != 'enabled'),
+                                   ('queryCapacityVerified', not capacity), ('queryCapacityVerified', int(capacity)), ('schemaVersion', True)]:
+                    with self.subTest(key=key), self.assertRaisesRegex(candidate.CandidateError, 'ACTIVITY_CAPABILITY_CHANGED'):
+                        candidate.check_teaching_tools_capabilities(mode, learning, {**activity, key: wrong}, capacity)
+                with self.assertRaisesRegex(candidate.CandidateError, 'ACTIVITY_CAPABILITY_CHANGED'):
+                    candidate.check_teaching_tools_capabilities(mode, learning, {'schemaVersion': 1, 'mode': mode}, capacity)
+
+    def mock_candidate_http(self, f, learning, activity, activity_status=200):
+        port = f.config['httpPort']; password = 'mock-candidate-password'; cookie = 'session=mock-candidate-cookie'
+        (f.root / 'secrets/admin_password').write_text(password + '\n')
+        identity = {'user': {'username': f.config['username'], 'schoolId': 'PHYSICSOS-OPEN', 'role': 'SUPER_ADMIN'}}
+        values = {'/readyz': {'status': 'ready'}, '/physicsos/auth/login': identity, '/physicsos/auth/me': identity,
+                  '/physicsos/admin/dashboard': {}, '/physicsos/learning/capabilities': learning,
+                  '/physicsos/activity/v1/capabilities': activity}
+        seen = []
+        def http_open(_handler, request):
+            parsed = candidate.urllib.parse.urlsplit(request.full_url)
+            self.assertEqual((parsed.scheme, parsed.netloc, parsed.query), ('http', '127.0.0.1:' + str(port), ''))
+            self.assertEqual(request.get_header('Host'), 'physicsos-validation.invalid:' + str(port))
+            path = parsed.path; method = request.get_method(); seen.append((method, path))
+            headers = Message(); headers['Content-Type'] = 'application/json'
+            if path == '/physicsos/auth/login':
+                self.assertEqual(method, 'POST')
+                self.assertEqual(json.loads(request.data), {'username': f.config['username'], 'schoolId': 'PHYSICSOS-OPEN', 'password': password})
+                headers['Set-Cookie'] = cookie + '; Path=/; HttpOnly'
+            else:
+                self.assertEqual(method, 'GET')
+                self.assertEqual(request.get_header('Cookie'), None if path == '/readyz' else cookie)
+            status = activity_status if path == '/physicsos/activity/v1/capabilities' else 200
+            if status == 302: headers['Location'] = 'http://outside.invalid/'
+            response = addinfourl(io.BytesIO(json.dumps(values[path]).encode()), headers, request.full_url, code=status)
+            response.msg = password + ' ' + cookie + ' ' + candidate.ACTIVITY_CAPACITY_ENV + '=true'
+            return response
+        return seen, patch.object(candidate.urllib.request.HTTPHandler, 'http_open', autospec=True, side_effect=http_open)
+
+    def test_check_uses_authenticated_activity_get_and_reports_only_effective_flags(self):
+        for mode, capacity in [('bridge', False), ('enabled', False), ('enabled', True)]:
+            with self.subTest(mode=mode, capacity=capacity), self.fixture(mode, capacity=capacity) as f, \
+                    patch.object(candidate, 'check_isolated_resources'):
+                seen, transport = self.mock_candidate_http(f, *self.capabilities(mode, capacity))
+                with transport: result = candidate.check(f.config)
+                self.assertEqual(seen, [('GET', '/readyz'), ('POST', '/physicsos/auth/login'), ('GET', '/physicsos/auth/me'),
+                                        ('GET', '/physicsos/admin/dashboard'), ('GET', '/physicsos/learning/capabilities'),
+                                        ('GET', '/physicsos/activity/v1/capabilities')])
+                self.assertIs(result['activityQueryCapacityVerified'], capacity)
+                self.assertIs(result['activityCollectionEnabled'], mode == 'enabled')
+                self.assertNotIn('activityCapacity', result)
+                self.assertEqual(json.loads((f.root / 'state/acceptance.json').read_text()), result)
+
+    def test_check_refuses_activity_http_errors_redirects_and_wrong_flags_without_diagnostics(self):
+        for status, code in [(302, 'TEACHING_HTTP_FAILED'), (503, 'TEACHING_HTTP_FAILED'), (200, 'ACTIVITY_CAPABILITY_CHANGED')]:
+            with self.subTest(status=status), self.fixture('enabled', capacity=True) as f, \
+                    patch.object(candidate, 'check_isolated_resources'):
+                learning, activity = self.capabilities('enabled', True)
+                seen, transport = self.mock_candidate_http(f, learning, {**activity, 'queryCapacityVerified': False}, status)
+                with transport, self.assertRaisesRegex(candidate.CandidateError, '^CANDIDATE_' + code + '$') as raised:
+                    candidate.check(f.config)
+                self.assertEqual(seen[-1], ('GET', '/physicsos/activity/v1/capabilities'))
+                self.assertFalse((f.root / 'state/acceptance.json').exists())
+                diagnostics = ''.join(traceback.format_exception(type(raised.exception), raised.exception, raised.exception.__traceback__))
+                for private in ['mock-candidate-password', 'mock-candidate-cookie', candidate.ACTIVITY_CAPACITY_ENV + '=true']:
+                    self.assertNotIn(private, diagnostics)
 
     def test_image_binding_reuses_cold_verifier_and_rejects_handmade_labels(self):
         with self.fixture() as f:

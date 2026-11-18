@@ -530,10 +530,11 @@ const requests=(code,file)=>{
   const ts=parser??=require(require.resolve('typescript',{paths:[process.cwd(),'/app/vendor/deepseek-harness']}));
   const source=ts.createSourceFile(file,code,ts.ScriptTarget.Latest,true,ts.ScriptKind.JS);
   if(source.parseDiagnostics.length)throw Error('Invalid JavaScript in runtime dependency inventory: '+file+': '+ts.flattenDiagnosticMessageText(source.parseDiagnostics[0].messageText,' '));
-  const out=new Set();
-  const add=node=>{if(node&&(ts.isStringLiteral(node)||ts.isNoSubstitutionTemplateLiteral(node)))out.add(node.text);};
+  const out=new Map();
+  const add=(node,staticImport=false)=>{if(node&&(ts.isStringLiteral(node)||ts.isNoSubstitutionTemplateLiteral(node)))out.set(node.text,staticImport&&(out.get(node.text)??true));};
   const walk=node=>{
-    if(ts.isImportDeclaration(node)||ts.isExportDeclaration(node))add(node.moduleSpecifier);
+    if(ts.isImportDeclaration(node))add(node.moduleSpecifier,true);
+    else if(ts.isExportDeclaration(node))add(node.moduleSpecifier);
     else if(ts.isCallExpression(node)){
       let callee=node.expression;
       while(ts.isParenthesizedExpression(callee))callee=callee.expression;
@@ -547,13 +548,22 @@ const requests=(code,file)=>{
 const external=n=>!n.startsWith('.')&&!p.isAbsolute(n)&&!builtinModules.includes(n.replace(/^node:/,''));
 for(const [path,m]of Object.entries(packages)){
   const req=createRequire(p.join(root,path,'package.json')),node=new Set(),client=new Set(),seen=new Set(),origins={},unsafe=new Set();
-  const follow=n=>{if(seen.has(n)||!f.existsSync(n))return;seen.add(n);for(const name of requests(f.readFileSync(n,'utf8'),n)){
+  const follow=n=>{if(seen.has(n)||!f.existsSync(n))return;seen.add(n);for(const [name,staticImport] of requests(f.readFileSync(n,'utf8'),n)){
     if(p.isAbsolute(name)||/^[A-Za-z][A-Za-z0-9+.-]*:/.test(name)&&!name.startsWith('node:'))unsafe.add(name);
     if(external(name)){node.add(name);(origins[name]??=new Set()).add(p.relative(root,n));}
-    else if(name.startsWith('.')){const next=p.resolve(p.dirname(n),name);if(!next.startsWith(root+'/'))unsafe.add(name);if(next.startsWith(p.join(root,path,'lib')+'/'))follow(next);}
+    else if(name.startsWith('.')){
+      const next=p.resolve(p.dirname(n),name);
+      if(!next.startsWith(root+'/'))unsafe.add(name);
+      if(next.startsWith(p.join(root,path,'lib')+'/')){
+        // Client ESM can refer to emitted CSS modules. Their exact bytes stay
+        // in the file inventory; CommonJS/dynamic requests still get audited.
+        if(m.mode==='client'&&staticImport&&next.endsWith('.css')&&Object.hasOwn(files,p.relative(root,next)))continue;
+        follow(next);
+      }
+    }
   }};
   if(!['source','files'].includes(m.mode))for(const name of ['index.js','invariant.js','startup.js'])follow(p.join(root,path,'lib',name));
-  if(m.mode==='client')for(const [name]of Object.entries(files))if(name.startsWith(path+'/lib/')&&/^\/(?:client(?:\.[^/]+)?|optional-[^/]+)\.js$/.test(name.slice((path+'/lib').length)))for(const request of requests(f.readFileSync(p.join(root,name),'utf8'),name))if(external(request))client.add(request);
+  if(m.mode==='client')for(const [name]of Object.entries(files))if(name.startsWith(path+'/lib/')&&/^\/(?:client(?:\.[^/]+)?|optional-[^/]+)\.js$/.test(name.slice((path+'/lib').length)))for(const [request] of requests(f.readFileSync(p.join(root,name),'utf8'),name))if(external(request))client.add(request);
   m.nodeRequests=[...node].sort();m.nodeRequestOrigins=Object.fromEntries(Object.entries(origins).sort().map(([n,v])=>[n,[...v].sort()]));m.unsafeNodeRequests=[...unsafe].sort();m.clientRequests=[...client].sort();m.resolvedBare={};
   for(const name of m.nodeRequests){const bare=name.startsWith('@')?name.split('/').slice(0,2).join('/'):name.split('/')[0];if(bare in workspace)continue;try{let file;try{file=req.resolve(bare+'/package.json')}catch{let dir=p.dirname(f.realpathSync(req.resolve(name)));while(!f.existsSync(p.join(dir,'package.json'))){const parent=p.dirname(dir);if(parent===dir)throw Error('External dependency manifest absent');dir=parent;}file=p.join(dir,'package.json');}const meta=JSON.parse(f.readFileSync(file));m.resolvedBare[name]={name:meta.name,version:meta.version};}catch{m.resolvedBare[name]=null;}}
 }

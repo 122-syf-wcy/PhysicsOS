@@ -40,7 +40,7 @@ class CoursewareProxyTests(unittest.TestCase):
             self.assertEqual(first.count('# BEGIN PhysicsOS courseware locations'), 1)
             block = first.split('# BEGIN PhysicsOS courseware locations', 1)[1].split('# END PhysicsOS courseware locations', 1)[0]
             delivery, api = block.split('location /physicsos/courseware {', 1)
-            self.assertIn('location ~ ^/physicsos/courseware/(?:embed|content)/[A-Za-z0-9_-]{43}$', delivery)
+            self.assertIn('location ~ "^/physicsos/courseware/(?:embed|content)/[A-Za-z0-9_-]{43}$" {', delivery)
             self.assertIn('proxy_set_header Cookie "";', delivery)
             self.assertIn('proxy_set_header Authorization "";', delivery)
             self.assertIn('proxy_hide_header Set-Cookie;', delivery)

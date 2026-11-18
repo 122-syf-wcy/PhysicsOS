@@ -163,7 +163,7 @@ block = [
     "}",
     "# END PhysicsOS experiment locations",
     "# BEGIN PhysicsOS courseware locations",
-    "location ~ ^/physicsos/courseware/(?:embed|content)/[A-Za-z0-9_-]{43}$ {",
+    'location ~ "^/physicsos/courseware/(?:embed|content)/[A-Za-z0-9_-]{43}$" {',
     "    proxy_pass http://127.0.0.1:3080;",
     "    proxy_http_version 1.1;",
     "    proxy_set_header Host $host;",

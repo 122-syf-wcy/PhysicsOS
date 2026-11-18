@@ -116,7 +116,7 @@ KV `DomainFacility.open` 仍会先整表 `loadAll`，`entries()` 仍会复制整
 - 20 次无缓存全范围归组 p95 ≤2秒、增量查询 heap ≤128 MiB；每次仅一次 buckets.entries 和一次 receipts.entries，不能按学校增加扫描次数。
 - 缓存项/字节全局不越界，十倍负载不通过时明确失败，不偷偷只测前一页或只提高 timeout。
 
-`activity-capacity.spec.ts` 为显式 opt-in 服务器隔离 PostgreSQL lane：要求 `PHYSICSOS_ACTIVITY_RUN_CAPACITY=1`、仅测试库 `PHYSICSOS_TEST_POSTGRES_URL`、明确 `PHYSICSOS_ACTIVITY_BASE_DAILY_USERS`、`PHYSICSOS_ACTIVITY_EVENTS_PER_USER_DAY`、`PHYSICSOS_ACTIVITY_BASE_ROSTER_USERS`、`PHYSICSOS_ACTIVITY_BASE_SCHOOLS`，以及可测 GC 的隔离进程。日桶负载按 DAU 生成，查询同时包含完整注册用户及学校目录，再将四项输入整体放大十倍；不能只查单校或把注册目录缩成 DAU。它不读取通用 DATABASE_URL、不生成线上数字；无显式输入则跳过/拒绝，不据此声称通过。
+`activity-capacity.spec.ts` 为显式 opt-in 服务器隔离 PostgreSQL lane：要求 `PHYSICSOS_ACTIVITY_RUN_CAPACITY=1`、仅测试库 `PHYSICSOS_TEST_POSTGRES_URL`、明确 `PHYSICSOS_ACTIVITY_BASE_DAILY_USERS`、`PHYSICSOS_ACTIVITY_EVENTS_PER_USER_DAY`、`PHYSICSOS_ACTIVITY_BASE_ROSTER_USERS`、`PHYSICSOS_ACTIVITY_BASE_SCHOOLS`，以及可测 GC 的隔离进程。日桶负载按 DAU 生成，查询同时包含完整注册用户及学校目录。十倍档保持每用户事件率，将 DAU、注册用户及学校目录放大十倍，因此全站每日事件总量也恰好十倍；不把 DAU 和人均速率同时乘十（那会变成百倍总事件量）。冷启动核对完整行数与精确编码字节；不能只查单校或把注册目录缩成 DAU。它不读取通用 DATABASE_URL、不生成线上数字；无显式输入则跳过/拒绝，不据此声称通过。
 
 ## 接线（入口由主代理集成）
 
