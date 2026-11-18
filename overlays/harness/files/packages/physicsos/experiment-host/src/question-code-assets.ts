@@ -609,7 +609,7 @@ export class QuestionCodeAssets {
   async generate(input: GenerateQuestionAssetInput): Promise<QuestionAssetDescriptor> {
     const isAborted = (): boolean => input.signal.aborted
     if (isAborted()) throw failure('IMAGE_ABORTED')
-    if (!['environment', 'material'].includes(input.kind) || !input.prompt.trim() || input.prompt.length > 5000) throw failure('IMAGE_INPUT_INVALID')
+    if (!['environment', 'material'].includes(input.kind) || !input.prompt.trim() || input.prompt.length > 5000 || input.prompt.includes('\0')) throw failure('IMAGE_INPUT_INVALID')
     const job = this.job(input, true)
     if (!job) throw failure('IMAGE_BINDING_INVALID')
     this.options.assertBinding?.(input)

@@ -38,7 +38,7 @@ export function createQuestionCodeImageAssets(options: QuestionCodeImageChannelO
           kind: input.kind, model: image.model, theme: input.theme ?? '物理实验外观',
           purpose: input.purpose ?? (input.kind === 'environment' ? '教学场景背景' : '实验器材外观'),
           tags: input.tags ?? [input.kind], ...(input.style === undefined ? {} : { style: input.style }),
-          prompt: image.prompt, sourceJobId: input.generationId,
+          prompt: input.prompt, sourceJobId: input.generationId,
           ...(image.channelId === undefined ? {} : { generationChannelId: image.channelId }),
           ...(image.configRevision === undefined ? {} : { generationConfigRevision: image.configRevision }),
           ...(image.usage === undefined ? {} : { generationUsage: image.usage }),
