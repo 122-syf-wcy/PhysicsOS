@@ -16664,10 +16664,9 @@ index bfe5cc6c53..5ca48d64ce 100644
  ```text
  // Owning package, once:
 diff --git a/packages/storage/storage-domain/src/index.ts b/packages/storage/storage-domain/src/index.ts
-index 7e0be5e151..7c08fdfafa 100644
 --- a/packages/storage/storage-domain/src/index.ts
 +++ b/packages/storage/storage-domain/src/index.ts
-@@ -20,7 +20,7 @@ export { DomainError } from './error.ts'
+@@ -20,7 +20,7 @@
  export type { DomainErrorCode, DomainErrorOptions, InvalidRecordDetail } from './error.ts'
  export { defineDomain, domainTable, descriptorOf } from './spec.ts'
  export type {
@@ -16676,6 +16675,26 @@ index 7e0be5e151..7c08fdfafa 100644
    TableKeyOf, TableValueOf, GlobalValueOf,
  } from './spec.ts'
  export type { DomainChanged } from './events.ts'
+@@ -120,7 +120,18 @@
+         const tables = new Map<string, Map<string, unknown>>()
+         for (const [table, tableSpec] of Object.entries(spec.tables)) {
+           const records = new Map<string, unknown>()
+-          for (const [key, raw] of Object.entries(snapshot.tables[table] ?? {})) {
++          const stored = snapshot.tables[table] ?? {}
++          const keys: string[] = [], values: unknown[] = []
++          // Capture every enumerable value before parsing or asynchronous salvage.
++          // Parallel arrays retain Object.entries semantics without per-row pairs.
++          for (const key of Reflect.ownKeys(stored)) {
++            if (typeof key === 'string' && Object.prototype.propertyIsEnumerable.call(stored, key)) {
++              keys.push(key)
++              values.push(stored[key])
++            }
++          }
++          for (let index = 0; index < keys.length; index++) {
++            const key = keys[index]!, raw = values[index]
+             let parsed: unknown
+             try {
+               parsed = parseRecord(spec.name, table, key, () => tableSpec.valueSchema.parse(raw))
 diff --git a/packages/storage/storage-domain/src/spec.ts b/packages/storage/storage-domain/src/spec.ts
 index f0eea2d4b2..211ce78507 100644
 --- a/packages/storage/storage-domain/src/spec.ts
@@ -20813,3 +20832,112 @@ diff --git a/packages/client/ui-primitives/src/useModalLayer.ts b/packages/clien
        const first = items[0] ?? element
        const last = items.at(-1) ?? element
        const atEdge = event.shiftKey ? document.activeElement === first : document.activeElement === last
+diff --git a/packages/storage/storage-domain/tests/import-snapshot.spec.ts b/packages/storage/storage-domain/tests/import-snapshot.spec.ts
+new file mode 100644
+--- /dev/null
++++ b/packages/storage/storage-domain/tests/import-snapshot.spec.ts
+@@ -0,0 +1,104 @@
++import { afterEach, describe, expect, it, vi } from 'vitest'
++import { Context } from '@deepseek-ai/cordis'
++import { z } from 'zod'
++import Storage from '@deepseek-ai/dsh-storage'
++import { defineDomain, domainTable, DomainFacility, type DomainValueSchema } from '../src/index.ts'
++
++const disposers: (() => Promise<void>)[] = []
++afterEach(async () => { for (const dispose of disposers.splice(0).reverse()) await dispose() })
++
++async function open(records: Record<string, unknown>, parser: DomainValueSchema<number> = z.number(), backup?: (table: string, key: string) => Promise<string>) {
++  const ctx = new Context()
++  await ctx.plugin(Storage)
++  const close = vi.fn(async () => {})
++  const loadAll = vi.fn(async () => ({ tables: { items: records }, global: null }))
++  ctx.storage.backend.register('snapshot', {
++    kv: { open: async () => ({ loadAll, close, putRecord: async () => {}, deleteRecord: async () => {}, setGlobal: async () => {}, ...(backup === undefined ? {} : { backupRecord: backup }) }) },
++    close: async () => {},
++  })
++  const facility = new DomainFacility(ctx, { backend: 'snapshot' })
++  ctx.storage.mount('domain', facility)
++  disposers.push(async () => { await facility.closeAll(); await ctx.fiber.dispose() })
++  const domain = await facility.open(defineDomain({
++    name: 'import_snapshot', version: 0,
++    tables: { items: domainTable<string, number>(parser) },
++    ...(backup === undefined ? {} : { invalidRecords: 'backup-and-skip' as const }),
++  }))
++  return { domain, loadAll, close }
++}
++
++function accessorRecords(events: string[]) {
++  const ordered = Object.create({ inherited: 90 }) as Record<string | symbol, unknown>
++  Object.defineProperty(ordered, 'first', { enumerable: true, configurable: true, get() {
++    ordered.second = 7
++    delete ordered.third
++    Object.defineProperty(ordered, 'fourth', { enumerable: false })
++    ordered.later = 8
++    return 1
++  } })
++  Object.assign(ordered, { second: 2, third: 3, fourth: 4 })
++  Object.defineProperty(ordered, 'hidden', { value: 50, enumerable: false })
++  ordered[Symbol.for('import-hidden')] = 60
++  return new Proxy(ordered, {
++    ownKeys(target) { events.push('keys'); return Reflect.ownKeys(target) },
++    getOwnPropertyDescriptor(target, key) { events.push('descriptor:' + String(key)); return Reflect.getOwnPropertyDescriptor(target, key) },
++    get(target, key, receiver) { events.push('get:' + String(key)); return Reflect.get(target, key, receiver) },
++  }) as Record<string, unknown>
++}
++
++describe('DomainFacility import key/value snapshots', () => {
++  it('matches Object.entries access, ordering and enumerable checks before parsing', async () => {
++    const expectedEvents: string[] = []
++    const expected = Object.entries(accessorRecords(expectedEvents))
++    const actualEvents: string[] = []
++    const { domain } = await open(accessorRecords(actualEvents))
++    expect([...domain.table('items').entries()]).toEqual(expected)
++    expect(actualEvents).toEqual(expectedEvents)
++    expect(domain.table('items').get('inherited')).toBeUndefined()
++    expect(domain.table('items').get('hidden')).toBeUndefined()
++    expect(domain.table('items').get('later')).toBeUndefined()
++  })
++
++  it('retains the captured values when a validator mutates later backend records', async () => {
++    const records: Record<string, unknown> = { first: 1, second: 2, third: 3 }
++    const parser = z.number().transform(value => {
++      if (value === 1) { records.second = 99; delete records.third; records.added = 4 }
++      return value
++    })
++    const { domain } = await open(records, parser)
++    expect([...domain.table('items').entries()]).toEqual([['first', 1], ['second', 2], ['third', 3]])
++  })
++
++  it('retains the snapshot across asynchronous backup-and-skip mutations', async () => {
++    const records: Record<string, unknown> = { bad: 'invalid', second: 2, third: 3 }
++    const backup = vi.fn(async (_table: string, _key: string) => {
++      records.second = 99
++      delete records.third
++      await Promise.resolve()
++      return '/retained/import-bad'
++    })
++    const { domain } = await open(records, z.number(), backup)
++    expect(backup).toHaveBeenCalledWith('items', 'bad')
++    expect([...domain.table('items').entries()]).toEqual([['second', 2], ['third', 3]])
++  })
++
++  it('loads and validates every stored record once without reducing the inventory', async () => {
++    const records = Object.fromEntries(Array.from({ length: 4096 }, (_, index) => ['key-' + index, index]))
++    const parse = vi.fn((value: unknown) => z.number().parse(value))
++    const schema = { parse, safeParse: (value: unknown) => z.number().safeParse(value) }
++    const ctx = new Context(); await ctx.plugin(Storage)
++    const loadAll = vi.fn(async () => ({ tables: { items: records }, global: null }))
++    ctx.storage.backend.register('complete', { kv: { open: async () => ({ loadAll, close: async () => {}, putRecord: async () => {}, deleteRecord: async () => {}, setGlobal: async () => {} }) }, close: async () => {} })
++    const facility = new DomainFacility(ctx, { backend: 'complete' }); ctx.storage.mount('domain', facility)
++    disposers.push(async () => { await facility.closeAll(); await ctx.fiber.dispose() })
++    const domain = await facility.open(defineDomain({ name: 'complete_import', version: 0, tables: { items: domainTable<string, number>(schema) } }))
++    expect(loadAll).toHaveBeenCalledTimes(1)
++    expect(parse).toHaveBeenCalledTimes(4096)
++    expect(domain.table('items').size).toBe(4096)
++    expect(domain.table('items').get('key-4095')).toBe(4095)
++  })
++
++  it('keeps invalid-record location and unit teardown instead of skipping rejected data', async () => {
++    await expect(open({ valid: 1, bad: 'invalid' })).rejects.toMatchObject({ code: 'invalid-record', detail: { table: 'items', key: 'bad' } })
++  })
++})
