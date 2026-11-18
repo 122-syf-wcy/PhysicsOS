@@ -227,7 +227,8 @@ def workspace_updates(candidate, base, workspace_paths, registry_reuse=None):
     if registry_reuse is not None:
         validate_registry_reuse_proof(registry_reuse)
         additions = registry_additions(candidate, base, workspace_paths)
-        rows = registry_reuse.get('requests', [])
+        retained = {tuple(pair) for pair in registry_reuse.get('retainedRequests', [])}
+        rows = [row for row in registry_reuse['requests'] if (row['from'], row['request']) not in retained]
         if [{key: row.get(key) for key in ['from', 'request', 'name', 'specifier', 'resolved']} for row in rows] != additions:
             raise ValueError('Audited registry reuse does not match actual Node additions')
         for row in rows:
@@ -269,7 +270,20 @@ def workspace_updates(candidate, base, workspace_paths, registry_reuse=None):
             links[link] = {'link': link, 'target': path, 'force': True}
         if actual and any(bare_name(name) not in workspace_paths for name in set(package.get('clientRequests', [])) - set(before.get('clientRequests', []))):
             raise ValueError('New client module-table external is unverified; a full runtime build is required')
-        checks.append({'from': path, 'dependencies': sorted(names)})
+        imports, dependencies = [], []
+        for request in sorted(names):
+            entries = (package.get('resolvedBare', {}).get(request) or {}).get('importEntries')
+            if not entries:
+                dependencies.append(request)
+                continue
+            if sorted(row.get('owner', '') for row in entries) != package['nodeRequestOrigins'].get(request):
+                raise ValueError('ESM-only resolution must cover every compiled request origin')
+            for row in entries:
+                owner = safe_code_path(row['owner'])
+                if not owner.startswith(path + '/lib/') or not HEX64.fullmatch(row.get('sha256', '')):
+                    raise ValueError('Invalid ESM-only compiled request proof')
+                imports.append({'request': request, 'owner': owner, 'path': safe_relative(row['path']), 'sha256': row['sha256']})
+        checks.append({'from': path, 'dependencies': dependencies, **({'imports': imports} if imports else {})})
     return {'links': list(links.values()), 'checks': checks}
 
 
@@ -511,9 +525,36 @@ for(const e of manifest.entries){if(c.createHash('sha256').update(f.readFileSync
 console.log(JSON.stringify({verified:true,entries:manifest.entries.length,publicKeySha256:c.createHash('sha256').update(pub).digest('hex')}));});
 '''
 
-INVENTORY_JS = r'''
-const f=require('fs'),p=require('path'),c=require('crypto'),{createRequire,builtinModules}=require('module');let s='';process.stdin.on('data',b=>s+=b);process.stdin.on('end',()=>{
-const doc=JSON.parse(s),root=doc.root||'/app',files={},packages={},workspace={};
+# Resolve conditional ESM exports without importing the target modules. Node's
+# parent-URL resolver needs the flag; batch all requests in one clean process.
+IMPORT_RESOLUTION_JS = r'''
+function resolveImportEntries(root, rows){
+  if(!rows.length)return [];
+  const code=`import {readFileSync} from 'node:fs';import {pathToFileURL,fileURLToPath} from 'node:url';
+    const rows=JSON.parse(readFileSync(0,'utf8'));
+    console.log(JSON.stringify(rows.map(([request,owner])=>{try{
+      return fileURLToPath(import.meta.resolve(request,pathToFileURL(owner).href));
+    }catch{return null;}})));`;
+  const result=spawnSync(process.execPath,['--experimental-import-meta-resolve','--input-type=module','-e',code],{
+    input:JSON.stringify(rows.map(({request,owner})=>[request,p.join(root,owner)])),encoding:'utf8',env:{},maxBuffer:8*1024*1024,timeout:30000,
+  });
+  if(result.status!==0)throw Error('Unable to resolve audited ESM entries');
+  const resolved=JSON.parse(result.stdout);
+  if(!Array.isArray(resolved)||resolved.length!==rows.length)throw Error('Incomplete ESM resolution inventory');
+  return resolved.map(file=>{
+    if(typeof file!=='string')return null;
+    try {
+      const real=f.realpathSync(file);
+      if(!real.startsWith(root+'/')||!f.statSync(real).isFile())return null;
+      return {path:p.relative(root,real),sha256:c.createHash('sha256').update(f.readFileSync(real)).digest('hex')};
+    }catch{return null;}
+  });
+}
+'''
+
+INVENTORY_JS = IMPORT_RESOLUTION_JS + r'''
+const f=require('fs'),p=require('path'),c=require('crypto'),{createRequire,isBuiltin}=require('module'),{spawnSync}=require('child_process');let s='';process.stdin.on('data',b=>s+=b);process.stdin.on('end',()=>{
+const doc=JSON.parse(s),root=f.realpathSync(doc.root||'/app'),files={},packages={},workspace={};
 const safe=n=>{if(!n||p.isAbsolute(n)||n.split('/').includes('..')||/[\\\0\r\n]/.test(n))throw Error('Unsafe inventory path');return n;};
 const repositoryDocs=new Set(['CLAUDE.md','packages/CLAUDE.md','vendor/CLAUDE.md'].map(n=>'vendor/deepseek-harness/'+n));
 const skip=n=>repositoryDocs.has(n)||n.startsWith('vendor/deepseek-harness/snapshots/')||n.split('/').some(x=>['.agents','.claude','.cursor','node_modules','.git','tests','test','__tests__','fixtures','__fixtures__','__snapshots__','.home','.ssh','secrets','.turbo','.vite','__pycache__','preview'].includes(x)||x==='.env'||x.startsWith('.env.'))||/\.(?:pem|key|p12|pfx|log|pid|tsbuildinfo|map|spec\.ts|test\.ts|spec\.tsx|test\.tsx)$/.test(n);
@@ -531,33 +572,50 @@ const requests=(code,file)=>{
   const source=ts.createSourceFile(file,code,ts.ScriptTarget.Latest,true,ts.ScriptKind.JS);
   if(source.parseDiagnostics.length)throw Error('Invalid JavaScript in runtime dependency inventory: '+file+': '+ts.flattenDiagnosticMessageText(source.parseDiagnostics[0].messageText,' '));
   const out=new Map();
-  const add=(node,staticImport=false)=>{if(node&&(ts.isStringLiteral(node)||ts.isNoSubstitutionTemplateLiteral(node)))out.set(node.text,staticImport&&(out.get(node.text)??true));};
+  const add=(node,kind)=>{if(node&&(ts.isStringLiteral(node)||ts.isNoSubstitutionTemplateLiteral(node))){
+    if(!out.has(node.text))out.set(node.text,new Set());
+    out.get(node.text).add(kind);
+  }};
   const walk=node=>{
-    if(ts.isImportDeclaration(node))add(node.moduleSpecifier,true);
-    else if(ts.isExportDeclaration(node))add(node.moduleSpecifier);
+    if(ts.isImportDeclaration(node))add(node.moduleSpecifier,'static');
+    else if(ts.isExportDeclaration(node))add(node.moduleSpecifier,'import');
     else if(ts.isCallExpression(node)){
       let callee=node.expression;
       while(ts.isParenthesizedExpression(callee))callee=callee.expression;
-      if(callee.kind===ts.SyntaxKind.ImportKeyword||ts.isIdentifier(callee)&&['require','__require'].includes(callee.text))add(node.arguments[0]);
+      if(callee.kind===ts.SyntaxKind.ImportKeyword)add(node.arguments[0],'import');
+      else if(ts.isIdentifier(callee)&&['require','__require'].includes(callee.text))add(node.arguments[0],'require');
     }
     ts.forEachChild(node,walk);
   };
   walk(source);
   return [...out];
 };
-const external=n=>!n.startsWith('.')&&!p.isAbsolute(n)&&!builtinModules.includes(n.replace(/^node:/,''));
+const external=n=>!n.startsWith('.')&&!p.isAbsolute(n)&&!isBuiltin(n);
+const bareName=n=>n.startsWith('@')?n.split('/').slice(0,2).join('/'):n.split('/')[0];
+function packageAt(entry,bare){
+  const file=f.realpathSync(entry);
+  if(!file.startsWith(root+'/')||!f.statSync(file).isFile())throw Error('Resolved entry escaped application files');
+  for(let dir=p.dirname(file);dir.startsWith(root+'/');dir=p.dirname(dir)){
+    const manifest=p.join(dir,'package.json');
+    if(!f.existsSync(manifest))continue;
+    const meta=JSON.parse(f.readFileSync(manifest));
+    if(meta.name===bare&&typeof meta.version==='string')return {name:meta.name,version:meta.version};
+  }
+  throw Error('External entry has no matching package manifest');
+}
+const pendingImports=[];
 for(const [path,m]of Object.entries(packages)){
-  const req=createRequire(p.join(root,path,'package.json')),node=new Set(),client=new Set(),seen=new Set(),origins={},unsafe=new Set();
-  const follow=n=>{if(seen.has(n)||!f.existsSync(n))return;seen.add(n);for(const [name,staticImport] of requests(f.readFileSync(n,'utf8'),n)){
+  const req=createRequire(p.join(root,path,'package.json')),node=new Set(),client=new Set(),seen=new Set(),origins=Object.create(null),unsafe=new Set(),required=new Set();
+  const follow=n=>{if(seen.has(n)||!f.existsSync(n))return;seen.add(n);for(const [name,kinds] of requests(f.readFileSync(n,'utf8'),n)){
     if(p.isAbsolute(name)||/^[A-Za-z][A-Za-z0-9+.-]*:/.test(name)&&!name.startsWith('node:'))unsafe.add(name);
-    if(external(name)){node.add(name);(origins[name]??=new Set()).add(p.relative(root,n));}
+    if(external(name)){node.add(name);(origins[name]??=new Set()).add(p.relative(root,n));if(kinds.has('require'))required.add(name);}
     else if(name.startsWith('.')){
       const next=p.resolve(p.dirname(n),name);
       if(!next.startsWith(root+'/'))unsafe.add(name);
       if(next.startsWith(p.join(root,path,'lib')+'/')){
         // Client ESM can refer to emitted CSS modules. Their exact bytes stay
         // in the file inventory; CommonJS/dynamic requests still get audited.
-        if(m.mode==='client'&&staticImport&&next.endsWith('.css')&&Object.hasOwn(files,p.relative(root,next)))continue;
+        if(m.mode==='client'&&kinds.size===1&&kinds.has('static')&&next.endsWith('.css')&&Object.hasOwn(files,p.relative(root,next)))continue;
         follow(next);
       }
     }
@@ -565,7 +623,26 @@ for(const [path,m]of Object.entries(packages)){
   if(!['source','files'].includes(m.mode))for(const name of ['index.js','invariant.js','startup.js'])follow(p.join(root,path,'lib',name));
   if(m.mode==='client')for(const [name]of Object.entries(files))if(name.startsWith(path+'/lib/')&&/^\/(?:client(?:\.[^/]+)?|optional-[^/]+)\.js$/.test(name.slice((path+'/lib').length)))for(const [request] of requests(f.readFileSync(p.join(root,name),'utf8'),name))if(external(request))client.add(request);
   m.nodeRequests=[...node].sort();m.nodeRequestOrigins=Object.fromEntries(Object.entries(origins).sort().map(([n,v])=>[n,[...v].sort()]));m.unsafeNodeRequests=[...unsafe].sort();m.clientRequests=[...client].sort();m.resolvedBare={};
-  for(const name of m.nodeRequests){const bare=name.startsWith('@')?name.split('/').slice(0,2).join('/'):name.split('/')[0];if(bare in workspace)continue;try{let file;try{file=req.resolve(bare+'/package.json')}catch{let dir=p.dirname(f.realpathSync(req.resolve(name)));while(!f.existsSync(p.join(dir,'package.json'))){const parent=p.dirname(dir);if(parent===dir)throw Error('External dependency manifest absent');dir=parent;}file=p.join(dir,'package.json');}const meta=JSON.parse(f.readFileSync(file));m.resolvedBare[name]={name:meta.name,version:meta.version};}catch{m.resolvedBare[name]=null;}}
+  for(const name of m.nodeRequests){
+    const bare=bareName(name);
+    if(Object.hasOwn(workspace,bare))continue;
+    try{m.resolvedBare[name]=packageAt(req.resolve(name),bare);}
+    catch{
+      m.resolvedBare[name]=null;
+      if(!required.has(name))pendingImports.push({package:m,request:name,bare,origins:m.nodeRequestOrigins[name]});
+    }
+  }
+}
+const resolved=resolveImportEntries(root,pendingImports.flatMap(group=>group.origins.map(owner=>({request:group.request,owner}))));
+let offset=0;
+for(const group of pendingImports){
+  const entries=resolved.slice(offset,offset+=group.origins.length);
+  if(entries.some(entry=>entry===null))continue;
+  try{
+    const meta=entries.map(entry=>packageAt(p.join(root,entry.path),group.bare));
+    if(meta.some(entry=>entry.version!==meta[0].version))continue;
+    group.package.resolvedBare[group.request]={...meta[0],importEntries:entries.map((entry,index)=>({owner:group.origins[index],...entry}))};
+  }catch{/* The unresolved dependency remains a release refusal. */}
 }
 console.log(JSON.stringify({files,packages,workspace}));});
 '''
@@ -605,18 +682,29 @@ REGISTRY_ORIGIN_JS = REGISTRY_CODE + r'''
 let input='';process.stdin.on('data',b=>input+=b);process.stdin.on('end',()=>{const d=JSON.parse(input);checkRegistryOrigins(f.realpathSync(d.root||'/app'),d.proof);console.log(JSON.stringify({checkedOrigins:d.proof.origins.length}));});
 '''
 
-UPDATE_JS = REGISTRY_CODE + r'''
+UPDATE_JS = REGISTRY_CODE + IMPORT_RESOLUTION_JS + r'''
 function applyRuntimeUpdate(root,doc){root=f.realpathSync(root);
 const safe=n=>{if(typeof n!=='string'||!n||p.isAbsolute(n)||n.split('/').some(x=>x==='..'||x==='.'||!x||x==='.env'||x.startsWith('.env.'))||/[\\\0\r\n]/.test(n)||/\.(?:pem|key|p12|pfx)$/.test(n))throw Error('Unsafe runtime update path');return p.join(root,n);};
 const parent=abs=>{const dir=f.realpathSync(p.dirname(abs));if(dir!==root&&!dir.startsWith(root+'/'))throw Error('Runtime update parent escaped app');};
 for(const row of doc.deleted){const abs=safe(row.path);if(!(row.path.startsWith('packages/')||row.path.startsWith('scripts/')||row.path.startsWith('vendor/deepseek-harness/')||row.path==='classroom-runtime-links.cjs'||row.path==='classroom-runtime-links.json'||row.path==='overlays/harness/files/packages/physicsos/health-host/deployment.patch.yml'))throw Error('Unowned runtime deletion');parent(abs);if(!f.existsSync(abs))continue;const st=f.lstatSync(abs);if(!st.isFile()||c.createHash('sha256').update(f.readFileSync(abs)).digest('hex')!==row.sha256)throw Error('Owned deleted file changed');}
 if(doc.registryReuse)checkRegistry(root,doc.registryReuse,'before');
-const registryLinks=new Map((doc.registryReuse?.requests||[]).map(row=>[(row.from?row.from+'/':'')+'node_modules/'+row.name,row]));
+const keptRegistryRequests=new Set((doc.registryReuse?.retainedRequests||[]).map(key=>JSON.stringify(key)));
+const registryLinks=new Map((doc.registryReuse?.requests||[]).filter(row=>!keptRegistryRequests.has(JSON.stringify([row.from,row.request]))).map(row=>[(row.from?row.from+'/':'')+'node_modules/'+row.name,row]));
 for(const row of doc.links){const abs=safe(row.link),target=safe(row.target);if(!row.link.includes('/node_modules/')&&!row.link.startsWith('node_modules/'))throw Error('Not a runtime dependency link');if(row.registry){const proof=registryLinks.get(row.link);if(!proof||proof.target!==row.target||registryJSON(proof.beforeLink)!==registryJSON(row.before))throw Error('Registry link has no matching physical proof');registryRelative(root,target);}else if(row.target.split('/').includes('node_modules'))throw Error('Workspace link cannot admit an unverified registry artifact');if(!f.existsSync(p.join(target,'package.json')))throw Error('Runtime link target absent');let current;try{current=f.lstatSync(abs)}catch(error){if(error.code!=='ENOENT')throw error}if(current&&!current.isSymbolicLink())throw Error('Refusing real workspace dependency directory');if(!row.registry){let dir=p.dirname(abs);while(dir!==root){let st;try{st=f.lstatSync(dir)}catch(error){if(error.code!=='ENOENT')throw error}if(st&&!st.isDirectory())throw Error('Runtime link parent escaped app');dir=p.dirname(dir);}}}
 if([...registryLinks.keys()].some(link=>!doc.links.some(row=>row.registry&&row.link===link)))throw Error('Audited registry link plan is incomplete');
 for(const row of doc.deleted){const abs=safe(row.path);if(f.existsSync(abs))f.unlinkSync(abs);}
 for(const row of doc.links){const abs=safe(row.link),target=safe(row.target);f.mkdirSync(p.dirname(abs),{recursive:true,mode:493});parent(abs);let exists=false;try{f.lstatSync(abs);exists=true}catch(error){if(error.code!=='ENOENT')throw error}if(exists)f.unlinkSync(abs);f.symlinkSync(p.relative(p.dirname(abs),target),abs,'dir');try{f.lchownSync(abs,999,999)}catch{}}
-for(const row of doc.checks){const req=createRequire(safe((row.from?row.from+'/':'')+'package.json'));for(const dep of row.dependencies)req.resolve(dep);}
+const imports=[];
+for(const row of doc.checks){
+  const req=createRequire(safe((row.from?row.from+'/':'')+'package.json'));
+  for(const dep of row.dependencies)req.resolve(dep);
+  for(const entry of row.imports||[]){
+    if(!entry.owner.startsWith(row.from+'/lib/'))throw Error('ESM-only import origin differs');
+    parent(safe(entry.owner));safe(entry.path);
+    imports.push(entry);
+  }
+}
+if(registryJSON(resolveImportEntries(root,imports))!==registryJSON(imports.map(({path,sha256})=>({path,sha256}))))throw Error('ESM-only runtime entry failed path/byte verification');
 if(doc.registryReuse)checkRegistry(root,doc.registryReuse,'after');
 }
 module.exports={applyRuntimeUpdate};
@@ -790,10 +878,25 @@ def collect_registry_reuse(args, source, plan, base, candidate, before, baseline
         raise ValueError('Only actual harness bare Node additions support registry reuse')
     files, old_files = reuse_source_files(source), reuse_source_files(baseline)
     policies = sorted(n for n in set(files) | set(old_files) if registry_policy_path(n))
-    candidate_proof = node_operation(args.builder, REGISTRY_AUDIT_JS, {'root': '/app', 'phase': 'after', 'requests': additions, 'policies': policies}, builder=True)
+    retained = validate_manifest_registry(base)
+    retained_rows = retained['artifacts']['requests'] if retained else []
+    retained_keys = {(row['from'], row['request']) for row in retained_rows}
+    if retained_keys & {(row['from'], row['request']) for row in additions}:
+        raise ValueError('A retained registry request cannot be reintroduced as a new link')
+    candidate_proof = node_operation(args.builder, REGISTRY_AUDIT_JS, {'root': '/app', 'phase': 'after', 'requests': additions + retained_rows, 'policies': policies}, builder=True)
     physical = validate_registry_artifacts(candidate_proof['artifacts'])
     requests = physical['requests']
-    origins = [{'from': row['from'], 'request': row['request'], 'name': row['name'], 'specifier': row['specifier'], 'resolved': row['resolved'], 'target': row['target'], 'owner': origin} for row in requests for origin in candidate['packages'][row['from']]['nodeRequestOrigins'][row['request']]]
+    origins = []
+    for row in requests:
+        owner, request = row['from'], row['request']
+        if owner in candidate['packages']:
+            paths = candidate['packages'][owner]['nodeRequestOrigins'].get(request, [])
+        else:
+            # Outside the export selection the published importer is inherited verbatim.
+            paths = [origin['owner'] for origin in retained['origins'] if origin['from'] == owner and origin['request'] == request] if retained else []
+        if not paths:
+            raise ValueError('Retained or new registry request has no audited compiled origin')
+        origins.extend({**{key: row[key] for key in ['from', 'request', 'name', 'specifier', 'resolved', 'target']}, 'owner': path} for path in paths)
     node_operation(args.builder, REGISTRY_ORIGIN_JS, {'root': '/app', 'proof': {'origins': origins, 'requests': requests}}, builder=True)
     base_proof = node_operation(args.base_image, REGISTRY_AUDIT_JS, {'root': '/app', 'phase': 'before', 'requests': requests, 'policies': policies})
     validate_registry_artifacts(base_proof['artifacts'])
@@ -816,11 +919,10 @@ def collect_registry_reuse(args, source, plan, base, candidate, before, baseline
         # A complete base filesystem proof must not be dropped by a delta. This
         # audited path deliberately supports the existing code-owned base only.
         raise ValueError('Complete-filesystem base requires reviewed full runtime transport')
-    retained = base.get('registryReuse')
     if retained:
-        validate_manifest_registry(base)
-        if not set(retained['artifacts']['entries']) <= set(physical['entries']) or any(physical['entries'][name] != item for name, item in retained['artifacts']['entries'].items()) or not {(row['from'], row['request']) for row in retained['requests']} <= {(row['from'], row['request']) for row in physical['requests']}:
-            raise ValueError('Existing audited registry inventory cannot be dropped; a full runtime build is required')
+        current = {(row['from'], row['request']): row for row in requests}
+        if any(physical['entries'].get(name) != item for name, item in retained['artifacts']['entries'].items()) or any(current.get((row['from'], row['request'])) != row for row in retained_rows):
+            raise ValueError('Existing audited registry inventory cannot be changed or dropped; a full runtime build is required')
     requests = [{**row, 'beforeLink': base_proof['links'][index]['state']} for index, row in enumerate(requests)]
     for row in requests:
         if row['beforeLink'].get('type') not in ('absent', 'symlink') or row['beforeLink'].get('type') == 'symlink' and row['beforeLink'].get('realpath') != row['target']:
@@ -833,6 +935,8 @@ def collect_registry_reuse(args, source, plan, base, candidate, before, baseline
              'policies': {'base': base_proof['policies'], 'candidate': candidate_proof['policies']},
              'requests': requests, 'origins': origins, 'artifacts': physical, 'artifactDigest': sha(canonical(physical)),
              'publicKeySha256': signed_candidate['publicKeySha256']}
+    if retained:
+        proof.update(retainedProofDigest=retained['proofDigest'], retainedRequests=[list(key) for key in sorted(retained_keys)])
     proof['proofDigest'] = sha(canonical(proof))
     # Re-read marker and identities after the bounded synchronous scan. The
     # builder is mutable; the proof is never an authority for later exports.
@@ -872,6 +976,11 @@ def validate_registry_reuse_proof(proof, actual=None):
         state = row.get('beforeLink', {})
         if state.get('type') not in ('absent', 'symlink') or state['type'] == 'symlink' and state.get('realpath') != row['target']:
             raise ValueError('Registry reuse base link state differs')
+    if 'retainedRequests' in proof:
+        retained = proof['retainedRequests']
+        preserved = {(row['from'], row['request']) for row in proof['requests'] if row['beforeLink']['type'] == 'symlink'}
+        if not HEX64.fullmatch(proof.get('retainedProofDigest', '')) or not isinstance(retained, list) or not retained or any(not isinstance(key, list) or len(key) != 2 or not all(isinstance(part, str) for part in key) or tuple(key) not in preserved for key in retained) or len({tuple(key) for key in retained}) != len(retained):
+            raise ValueError('Retained registry request/link identity differs')
     if actual is not None and proof != actual:
         raise ValueError('Registry reuse proof differs from freshly verified images/source/resolution/content; re-audit or perform a full runtime build')
     return proof
@@ -886,6 +995,7 @@ def copy_registry_binding(retained, args, source, plan, base):
     for row in proof['requests']:
         link = (row['from'] + '/' if row['from'] else '') + 'node_modules/' + row['name']
         row['beforeLink'] = {'type': 'symlink', 'target': posixpath.relpath(row['target'], posixpath.dirname(link)), 'realpath': row['target']}
+    proof['retainedRequests'] = [[row['from'], row['request']] for row in proof['requests']]
     proof['proofDigest'] = sha(canonical({key: value for key, value in proof.items() if key != 'proofDigest'}))
     return validate_registry_reuse_proof(proof)
 
@@ -1001,7 +1111,10 @@ def export_runtime(args):
     update_document = {**updates, 'deleted': [{'path': n, 'sha256': base_files[n]} for n in provisional['deleted']]}
     if reuse:
         update_document['registryReuse'] = reuse
+        retained_keys = {tuple(key) for key in reuse.get('retainedRequests', [])}
         for row in reuse['requests']:
+            if (row['from'], row['request']) in retained_keys:
+                continue
             link = (row['from'] + '/' if row['from'] else '') + 'node_modules/' + row['name']
             if not any(item['link'] == link for item in update_document['links']):
                 update_document['links'].append({'link': link, 'target': row['target'], 'registry': True, 'before': row['beforeLink']})

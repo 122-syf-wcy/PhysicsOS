@@ -198,6 +198,46 @@ class RuntimeDeltaTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(json.loads(result.stdout)['packages'][prefix]['resolvedBare']['fixture-library'], {'name': 'fixture-library', 'version': '1.0.0'})
 
+    def test_import_only_exports_and_prefix_only_builtins_are_checked_without_execution(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary).resolve()
+            prefix = 'packages/a'
+            library = root / prefix / 'node_modules/fixture-esm'
+            origin = root / prefix / 'lib/index.js'
+            library.mkdir(parents=True)
+            origin.parent.mkdir()
+            (root / prefix / 'package.json').write_text(json.dumps({'name': 'a', 'dependencies': {'fixture-esm': '1.0.0'}}))
+            (library / 'package.json').write_text(json.dumps({'name': 'fixture-esm', 'version': '1.0.0', 'exports': {'import': './index.mjs'}}))
+            code = 'throw Error("dependency code must not execute")'
+            (library / 'index.mjs').write_text(code)
+            request = {'root': str(root), 'selections': [{'root': prefix, 'mode': 'host', 'items': ['lib', 'package.json']}]}
+
+            def scan(source):
+                origin.write_text(source)
+                result = subprocess.run(['node', '-e', runtime.INVENTORY_JS], input=json.dumps(request), text=True, capture_output=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                return json.loads(result.stdout)['packages'][prefix]
+
+            source = 'export * from "fixture-esm"; import("fixture-esm"); import("node:sqlite");'
+            meta = scan(source)
+            entries = [{'owner': prefix + '/lib/index.js', 'path': prefix + '/node_modules/fixture-esm/index.mjs', 'sha256': sha(code)}]
+            self.assertEqual(meta['nodeRequests'], ['fixture-esm'])
+            self.assertEqual(meta['resolvedBare']['fixture-esm'], {'name': 'fixture-esm', 'version': '1.0.0', 'importEntries': entries})
+            update = runtime.workspace_updates({prefix: meta}, {prefix: meta}, {})
+            updater = root / 'update.cjs'; updater.write_text(runtime.UPDATE_JS)
+            driver = 'require(process.argv[1]).applyRuntimeUpdate(process.argv[2],JSON.parse(require("fs").readFileSync(0,"utf8")))'
+            args = ['node', '-e', driver, str(updater), str(root)]
+            update['deleted'] = []
+            result = subprocess.run(args, input=json.dumps(update), text=True, capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            (library / 'index.mjs').write_text(code + ';')
+            changed = subprocess.run(args, input=json.dumps(update), text=True, capture_output=True)
+            self.assertNotEqual(changed.returncode, 0)
+            self.assertIn('ESM-only runtime entry failed path/byte verification', changed.stderr)
+            with self.assertRaisesRegex(ValueError, 'Resolved external dependency version changed'):
+                runtime.workspace_updates({prefix: scan(source)}, {prefix: meta}, {})
+            self.assertIsNone(scan(source + 'require("fixture-esm");')['resolvedBare']['fixture-esm'])
+
     def test_inlined_client_library_absent_from_base_is_not_a_node_runtime_dependency(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)
@@ -432,6 +472,31 @@ class RegistryReuseTests(unittest.TestCase):
         self.assertEqual(update['links'], [{'link': self.prefix + '/node_modules/fixture-native', 'target': self.target,
                                            'registry': True, 'before': {'type': 'absent'}}])
         self.assertIn('fixture-native', update['checks'][0]['dependencies'])
+
+    def test_new_registry_links_do_not_overwrite_inherited_audited_links(self):
+        candidate, base = self.inventories()
+        proof = self.proof()
+        inherited = runtime.HARNESS + '/node_modules/.pnpm/zod@4.4.3/node_modules/zod'
+        artifact = proof['artifacts']
+        artifact['entries'][inherited] = {'type': 'dir', 'mode': 0o755}
+        artifact['entries'][inherited + '/package.json'] = {'type': 'file', 'mode': 0o644, 'bytes': 10, 'sha256': sha('inherited manifest')}
+        entry = {'path': inherited + '/index.cjs', 'sha256': sha('inherited')}
+        artifact['entries'][entry['path']] = {'type': 'file', 'mode': 0o644, 'bytes': 9, 'sha256': entry['sha256']}
+        row = {'from': self.prefix, 'request': 'zod', 'name': 'zod', 'specifier': '4.4.3', 'target': inherited,
+               'resolved': {'name': 'zod', 'version': '4.4.3'}, 'entries': {'require': entry, 'import': entry}}
+        artifact['requests'].append(row)
+        proof['requests'].append({**row, 'beforeLink': {'type': 'symlink', 'realpath': inherited, 'target': '../retained-zod'}})
+        proof['origins'].append({**row, 'owner': self.prefix + '/lib/index.js'})
+        proof.update(retainedProofDigest=sha('prior manifest proof'), retainedRequests=[[self.prefix, 'zod']])
+        proof['artifactDigest'] = sha(runtime.canonical(artifact))
+        proof['proofDigest'] = sha(runtime.canonical({k: v for k, v in proof.items() if k != 'proofDigest'}))
+        update = runtime.workspace_updates(candidate, base, {}, proof)
+        self.assertEqual([link['link'] for link in update['links']], [self.prefix + '/node_modules/fixture-native'])
+        self.assertEqual(update['checks'][0]['dependencies'], ['fixture-native', 'zod'])
+        proof['requests'][1]['beforeLink'] = {'type': 'absent'}
+        proof['proofDigest'] = sha(runtime.canonical({k: v for k, v in proof.items() if k != 'proofDigest'}))
+        with self.assertRaisesRegex(ValueError, 'Retained registry request/link'):
+            runtime.workspace_updates(candidate, base, {}, proof)
 
     def test_existing_spec_version_removal_client_external_and_root_escape_stay_rejected(self):
         candidate, base = self.inventories()
