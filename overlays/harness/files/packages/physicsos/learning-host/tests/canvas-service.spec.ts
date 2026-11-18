@@ -390,6 +390,21 @@ describe('CanvasService on the actual domain write chain and JSON medium', () =>
     expect(recovered.receipt.status).toBe('verified')
   })
 
+  it('still verifies the private blob on every open of a previously validated large manifest', async () => {
+    const { service, root } = await fixture()
+    const id = 'cached-manifest'
+    const created = await service.create(actor, { id, title: 'Cached manifest', mutationId: 'create-cache-case' })
+    const metadata = { evidence: 'x'.repeat(70 * 1024) }
+    const manifest = { ...created.manifest, metadata }
+    const digest = await upload(service, id, manifest)
+    await service.commit(actor, id, { expectedVersion: created.head.version, expectedGeneration: created.head.generation, manifestDigest: digest, mutationId: 'commit-cache-case' })
+    expect((await service.open(actor, id)).manifest.metadata).toEqual(metadata)
+    const path = join(root, 'physicsos', 'canvases', 'v1', 'accounts', canvasScopeKey(actor.schoolId, actor.userKey), 'documents', canvasScopeKey(id), 'objects', digest.slice(0, 2), digest)
+    await unlink(path)
+    await writeFile(path, canonicalBytes({ ...manifest, metadata: { evidence: 'y'.repeat(70 * 1024) } }), { flag: 'wx', mode: 0o600 })
+    await expect(service.open(actor, id)).rejects.toMatchObject({ code: 'BLOB_CORRUPT' })
+  })
+
   it('refuses to rerun a ready server attempt whose immutable file was lost', async () => {
     const { service, domain, faults, root } = await fixture()
     await service.create(actor, { id: 'verify-corrupt', title: 'Verify corrupt', mutationId: 'create-verify-corrupt' })

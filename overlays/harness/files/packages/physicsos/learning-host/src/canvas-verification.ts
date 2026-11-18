@@ -3,7 +3,7 @@ import type { SimulationPlan, SimulationRequest, SimulationResult, SimulationSta
 import { ENGINES, getSimulationPlan, simulateScene } from '@physicsos/physics-runtime'
 import { canonicalValue } from '@physicsos/physics-units'
 import { conditionsFromScene, createSnapshotObject, datasetFromSimulationResult } from '@physicsos/physics-workbench/data'
-import { jsonObject, jsonValue } from '@physicsos/physics-workbench/json'
+import { jsonObject, jsonValue, pointer } from '@physicsos/physics-workbench/json'
 import type { CanvasVerificationReceipt } from '@physicsos/physics-workbench/protocol'
 import type { DatasetObject, JsonValue, SceneObject, SnapshotObject } from '@physicsos/physics-workbench/types'
 import type { CanvasLimits } from './canvas-config.ts'
@@ -25,7 +25,6 @@ export interface CanvasVerificationInput {
 }
 
 interface Difference { readonly path: string; readonly reason: string; readonly expected: JsonValue; readonly actual: JsonValue }
-const pointer = (path: string, key: string | number): string => `${path}/${String(key).replace(/~/g, '~0').replace(/\//g, '~1')}`
 const jsonRecord = (value: JsonValue): value is { readonly [key: string]: JsonValue } => value !== null && typeof value === 'object' && !Array.isArray(value)
 
 /** Stop at the first actual mismatch; acceptance requires every raw field to match. */
@@ -187,7 +186,6 @@ export function verifyCanvasCapture(
     }),
   }
   const sourceRef = { kind: 'scene' as const, digest: input.sceneDigest }
-  const datasets = datasetFromSimulationResult(result, { sourceScene: sourceRef, conditions: conditionsFromScene(source.scene) })
   const snapshot = createSnapshotObject({
     scene: source.scene, sceneRef: sourceRef, instanceId: capture.instanceId,
     instanceEditRevision: capture.instanceEditRevision, capturedAt: input.checkedAt,
@@ -197,5 +195,7 @@ export function verifyCanvasCapture(
     ...(heldState === undefined ? {} : { state: heldState }),
     metadata: { originalCaptureDigest: input.captureDigest, verificationReceiptId: input.id },
   })
+  // The snapshot already holds a detached, validated copy of this exact replay.
+  const datasets = datasetFromSimulationResult(snapshot.result ?? result, { sourceScene: sourceRef, conditions: conditionsFromScene(source.scene) })
   return { receipt, snapshot, datasets }
 }

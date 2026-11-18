@@ -117,6 +117,23 @@ describe('owned saved-canvas assistant jobs', () => {
     await expect(f.assistant.create(a, 'lesson', { ...body, selectedNodeIds: ['foreign-node'] })).rejects.toMatchObject({ status: 400 })
     expect(f.calls).toBe(0); expect(f.receipts).toEqual([])
   })
+  it('rejects a delete-and-restore during image preparation even when the manifest is unchanged', async () => {
+    let resume!: () => void; let entered!: () => void
+    const preparing = new Promise<void>(resolve => { entered = resolve })
+    const waiting = new Promise<void>(resolve => { resume = resolve })
+    const f = await fixture({ prepareImage: async () => { entered(); await waiting; return { attachment: { id: 'admitted-image' } } } })
+    const body = await input(f)
+    const creating = f.assistant.create(a, 'lesson', { ...body, image: { base64: 'AQ==', mimeType: 'image/png' } })
+    const stale = expect(creating).rejects.toMatchObject({ status: 409, code: 'ASSISTANT_STALE' })
+    try {
+      await preparing
+      const deleted = await f.canvas.delete(a, 'lesson', { expectedVersion: body.expectedVersion, expectedGeneration: body.expectedGeneration, mutationId: 'delete-during-image' })
+      const restored = await f.canvas.restore(a, 'lesson', { expectedVersion: deleted.head.version, expectedGeneration: deleted.head.generation, mutationId: 'restore-during-image' })
+      expect(restored.head.manifestDigest).toBe(body.manifestDigest)
+    } finally { resume() }
+    await stale
+    expect(f.calls).toBe(0); expect(f.receipts).toEqual([])
+  })
   it('does not expose a ready candidate after the saved canvas head changes', async () => {
     const f = await fixture(); const body = await input(f); const job = await f.assistant.create(a, 'lesson', body); await settled(f.assistant, job.id)
     await f.canvas.rename(a, 'lesson', { expectedVersion: body.expectedVersion, expectedGeneration: body.expectedGeneration, mutationId: 'rename', title: '新课堂' })

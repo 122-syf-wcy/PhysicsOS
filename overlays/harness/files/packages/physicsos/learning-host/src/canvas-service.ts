@@ -14,6 +14,7 @@ import {
   canonicalByteLength,
   canonicalBytes,
   canonicalStringify,
+  copyCanonicalData,
   jsonObject,
   WorkbenchDataError,
 } from '@physicsos/physics-workbench/json'
@@ -180,6 +181,8 @@ export class CanvasService {
   get activityReplaySource(): ActivityReplaySource { return this.activityReplay.source }
   private readonly requests = new Set<Promise<unknown>>()
   private readonly requestContext = new AsyncLocalStorage<RequestContext>()
+  // Hold at most one moderately sized parsed object; never cache a disk integrity check.
+  private recentObject: { readonly key: string; readonly limits: string; readonly parsed: Omit<PreparedObject, 'bytes'> } | undefined
   private readonly now: () => Date
   private closing = false
   private disposal: Promise<void> | undefined
@@ -840,6 +843,7 @@ export class CanvasService {
     this.disposal ??= (async () => {
       await Promise.allSettled([...this.requests])
       await Promise.all([...this.queues.values()])
+      this.recentObject = undefined
       await this.blobs.close()
     })()
     return this.disposal
@@ -954,7 +958,7 @@ export class CanvasService {
     if (!parsed.ok) throw new CanvasError(400, 'BAD_OBJECT', 'Canvas object fields are invalid.', { details: jsonObject({ issues: parsed.issues }) })
     const value = parsed.value
     const canonical = canonicalBytes(value)
-    if (canonical.byteLength !== bytes.byteLength || Buffer.compare(Buffer.from(canonical), Buffer.from(bytes)) !== 0) {
+    if (canonical.byteLength !== bytes.byteLength || Buffer.compare(canonical, bytes) !== 0) {
       throw new CanvasError(400, 'NON_CANONICAL_OBJECT', 'Object bytes must be the complete canonical JSON encoding.')
     }
     if (canvasHash(bytes) !== digest) throw new CanvasError(400, 'DIGEST_MISMATCH', 'Object bytes do not match the requested SHA-256.')
@@ -1018,9 +1022,25 @@ export class CanvasService {
   private async readStored(actor: IdentityActor, canvasId: string, digest: string): Promise<CanvasStoredValue> {
     const row = this.requireObject(actor, canvasId, canvasDigest(digest))
     const bytes = await this.blobs.read(this.scope(actor, canvasId), digest, row.bytes, this.config.limits.maxObjectBytes, this.signal())
+    // Small dependencies should not evict the manifest on every graph read.
+    const cacheable = bytes.byteLength >= 64 * 1024 && bytes.byteLength <= 2 * 1024 * 1024
+    if (!cacheable) {
+      const prepared = this.prepareBytes(bytes, digest, canvasId, false)
+      this.checkObjectMetadata(actor, canvasId, row, prepared)
+      return prepared.value
+    }
+    const key = this.objectKey(actor, canvasId, digest)
+    const limits = canonicalStringify(this.config.limits)
+    const cached = this.recentObject
+    if (cached?.key === key && cached.limits === limits) {
+      this.checkObjectMetadata(actor, canvasId, row, { ...cached.parsed, bytes })
+      return cached.parsed.value
+    }
     const prepared = this.prepareBytes(bytes, digest, canvasId, false)
     this.checkObjectMetadata(actor, canvasId, row, prepared)
-    return prepared.value
+    const value = copyCanonicalData(prepared.value)
+    this.recentObject = { key, limits, parsed: { value, digest, kind: prepared.kind, refs: prepared.refs } }
+    return value
   }
   private async readGraph(actor: IdentityActor, canvasId: string, manifestDigest: string): Promise<CanvasGraph> {
     const root = await this.readStored(actor, canvasId, manifestDigest)

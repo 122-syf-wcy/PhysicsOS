@@ -47,6 +47,12 @@ describe('canonical JSON and safe plain data', () => {
     expect(() => jsonValue(hidden)).toThrow(WorkbenchDataError)
   })
 
+  it('preserves the exact JSON pointer for nested failures', () => {
+    expect(parseJsonObject({ 'a~/b': [{ '': Infinity }] })).toMatchObject({
+      ok: false, issues: [{ path: '/a~0~1b/0/', code: 'finite' }],
+    })
+  })
+
   it('rejects cycles and unsafe property names without losing the source', () => {
     const cyclic: { value: number; child?: object } = { value: 4 }
     cyclic.child = cyclic

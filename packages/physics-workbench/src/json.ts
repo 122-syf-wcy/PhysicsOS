@@ -11,18 +11,25 @@ export class WorkbenchDataError extends Error {
 }
 
 /** JSON Pointer paths make errors and merge conflicts unambiguous even for keys containing '/'. */
-export const pointer = (path: string, key: string | number): string =>
-  `${path}/${String(key).replace(/~/g, '~0').replace(/\//g, '~1')}`
+export const pointer = (path: string, key: string | number): string => {
+  if (typeof key === 'number') return `${path}/${key}`
+  const segment = key.includes('~') || key.includes('/') ? key.replace(/~/g, '~0').replace(/\//g, '~1') : key
+  return `${path}/${segment}`
+}
 
 export function fail(path: string, code: string, message: string): never {
   throw new WorkbenchDataError([{ path, code, message }])
 }
+
+// A caller's Object.freeze never grants canonical reuse.
+const canonicalData = new WeakSet<object>()
 
 /** Rejects objects whose reading could execute code or silently discard non-JSON state. */
 export const record = (value: unknown, path: string): Record<string, unknown> => {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     return fail(path, 'object', 'Expected a plain JSON object.')
   }
+  if (canonicalData.has(value)) return value as Record<string, unknown>
   const prototype: unknown = Object.getPrototypeOf(value)
   if (prototype !== Object.prototype && prototype !== null) {
     return fail(path, 'prototype', 'Only plain JSON objects are accepted.')
@@ -31,7 +38,8 @@ export const record = (value: unknown, path: string): Record<string, unknown> =>
     return fail(path, 'symbol', 'Symbol properties are not JSON data.')
   }
   const descriptors = Object.getOwnPropertyDescriptors(value)
-  for (const [key, descriptor] of Object.entries(descriptors)) {
+  for (const key of Object.keys(descriptors)) {
+    const descriptor = descriptors[key]!
     if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
       return fail(pointer(path, key), 'unsafe-key', 'This property name is not accepted in JSON data.')
     }
@@ -99,6 +107,7 @@ export const oneOf = <T extends string>(value: unknown, choices: readonly T[], p
 }
 export const array = (value: unknown, path: string): readonly unknown[] => {
   if (!Array.isArray(value)) return fail(path, 'array', 'Expected an array.')
+  if (canonicalData.has(value)) return value
   if (Object.getPrototypeOf(value) !== Array.prototype) return fail(path, 'prototype', 'Only plain JSON arrays are accepted.')
   if (Object.getOwnPropertySymbols(value).length > 0) return fail(path, 'symbol', 'Array symbols are not JSON data.')
   const names = Object.getOwnPropertyNames(value)
@@ -156,8 +165,6 @@ export const unique = <T>(values: readonly T[], key: (value: T) => string, path:
   })
 }
 
-// Provenance is private: Object.freeze on caller data never grants canonical reuse.
-const canonicalData = new WeakSet<object>()
 const canonicalText = new WeakMap<object, string>()
 export interface CanonicalJsonStats {
   readonly bytes: number
@@ -199,10 +206,11 @@ const copyJson = (
     const input = record(value, path)
     const output: Record<string, JsonValue> = {}
     for (const key of Object.keys(input)) {
-      unicodeString(key, pointer(path, key))
+      const childPath = pointer(path, key)
+      unicodeString(key, childPath)
       const entry = input[key]
       if (omitAbsent && entry === undefined) continue
-      output[key] = copyJson(entry, pointer(path, key), ancestors, depth + 1, omitAbsent, reuseCanonical)
+      output[key] = copyJson(entry, childPath, ancestors, depth + 1, omitAbsent, reuseCanonical)
     }
     return output
   } finally {
