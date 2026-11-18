@@ -59,6 +59,17 @@ class RuntimeDeltaTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             runtime.validate_image_labels({**metadata, 'labels': {**labels, runtime.TEACHING_TOOLS_LABEL: ''}}, record)
 
+    def test_updated_signed_plugin_manifest_is_an_exact_export_even_in_a_build_scope(self):
+        manifest = runtime.DEFAULT_TRUST['manifestPath']
+        plan = {'packageScopes': [{'path': 'packages/physicsos/plugin-center', 'mode': 'host'}],
+                'changed': [manifest], 'deleted': []}
+        selections, exact = runtime.selections_for(plan)
+        self.assertEqual(exact, [manifest])
+        self.assertTrue(runtime.selected_path(manifest, selections, exact))
+        for base in (True, False):
+            self.assertIn(manifest, runtime.inventory_request(plan, base=base)['exact'])
+        self.assertNotIn(runtime.DEFAULT_TRUST['publicKeyPath'], exact)
+
     def test_incremental_build_replaces_inherited_manifest_byte_label(self):
         with tempfile.TemporaryDirectory() as temporary:
             output = pathlib.Path(temporary)

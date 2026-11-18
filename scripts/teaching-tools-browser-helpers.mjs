@@ -19,7 +19,7 @@ function sortJson(value) {
 export const operationId = () => randomUUID()
 export const identityFields = ['id', 'schoolId', 'schoolName', 'username', 'role']
 export const STAGES = Object.freeze(['avatar', 'recent', 'canvas', 'whiteboard', 'workspace', 'layout', 'statistics', 'roles'])
-export const AUTHORIZATION_VERSION = 'teaching-tools-owned-rpc-v3-startup-readonly'
+export const AUTHORIZATION_VERSION = 'teaching-tools-owned-rpc-v4-workspace-follow'
 // Source-verified Connection/Gateway templates; runtime packets and server admission remain candidate evidence.
 const COOKIE_SCOPED_HTTP_READS = Object.freeze({
   'session/list': { args: { _request: {} } },
@@ -36,6 +36,23 @@ const REFERENCE_RPC_VERBS = new Set(['retain', 'release', 'addreference', 'remov
 const RPC_KINDS = new Set(['actor', 'workspace', 'session', 'canvas', 'whiteboard', 'recent'])
 function rpcVerb(operation) { return operation.split(/[.:/]/).at(-1).replace(/[-_]/g, '').toLowerCase() }
 function exactKeys(value, allowed) { return !!value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).every(key => allowed.includes(key)) }
+function closedKeys(value, keys) { return exactKeys(value, keys) && keys.every(key => Object.hasOwn(value, key)) }
+const WORKSPACE_FOLLOW = 'workspace-follow-v1'
+const WORKSPACE_VIEW_KEYS = ['workspaceId', 'path', 'title', 'sessionIds', 'createdAt', 'updatedAt']
+const isIsoInstant = value => typeof value === 'string' && /^\d{4}-\d\d-\d\dT/.test(value) && Number.isFinite(Date.parse(value))
+export const PENDULUM_SCENE = /^mechanics-simple-pendulum-[0-9a-z]+-[0-9a-z]+$/
+const PENDULUM = 'simple-pendulum', RUN_API = '/physicsos/experiment-runs/v1', RUN_CAPABILITY = 'experiment-run-v1'
+const RUN_REQUEST_KEYS = ['runId', 'experimentId', 'expectedCapabilityGeneration']
+const isRunId = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+const isRunPermit = value => typeof value === 'string' && /^[A-Za-z0-9_-]{43}$/.test(value)
+const runProvenance = value => value.provenance === 'client-observed' && value.boundary === 'platform-engine-first-step' && value.scope === 'lab-workspace'
+const runOwnerHeader = 'x-physicsos-experiment-run-owner'
+function exactPendulumPage(value, origin, sceneId) {
+  try {
+    const page = new URL(value), route = new URL(page.hash.slice(1), page.origin)
+    return page.origin === origin && page.pathname === '/' && !page.search && route.origin === origin && route.pathname === `/experiments/${PENDULUM}` && route.searchParams.size === 1 && route.searchParams.get('scene') === sceneId && !route.hash
+  } catch { return false }
+}
 function bindings(template, result = []) {
   if (!template || typeof template !== 'object') return result
   if (Object.hasOwn(template, '$bound')) { result.push(template); return result }
@@ -126,8 +143,13 @@ function validateState(state, origin, label) {
     assert.ok(Array.isArray(entry.localStorage) && Object.keys(entry).every(key => ['origin', 'localStorage'].includes(key)), `${label} must not restore IndexedDB or stale document caches`)
   }
 }
-function validateNativeProbe(probe) {
-  if (!probe) return
+function validateNativeProbe(probe, kind) {
+  if (probe === undefined) return
+  assert.ok(exactKeys(probe, ['stream', 'path', 'recordPointer', 'idPointer']), 'Native probes must be explicit JSON objects')
+  if (Object.hasOwn(probe, 'stream')) {
+    assert.ok(kind === 'workspace' && closedKeys(probe, ['stream']) && probe.stream === WORKSPACE_FOLLOW, 'The only native stream probe is the closed workspace-follow-v1 contract on a teacher workspace')
+    return
+  }
   assert.ok(typeof probe.path === 'string' && /^\/(?:api\/(?:workspaces?|sessions?)(?:[./?]|$)|physicsos\/learning\/)/.test(probe.path) && !/[\r\n]/.test(probe.path), 'Native probes must be explicit read-only workspace/session/learning API paths')
   assert.ok(typeof probe.recordPointer === 'string' && (probe.recordPointer === '' || probe.recordPointer.startsWith('/')), 'Native probe must identify the complete record, not a synthetic subset')
   assert.ok(typeof probe.idPointer === 'string' && probe.idPointer.startsWith('/'), 'Native probe must identify the exact record ID')
@@ -177,9 +199,9 @@ async function bindCheckpointInput(config, env) {
   for (const value of config.footprint.recentScenes ?? []) assert.ok(identities.has(`recent:${value.sceneId}`), 'Checkpoint cannot omit footprint recent resources')
   for (const workspace of config.footprint.workspaces ?? []) {
     const retained = checkpoint.resources.find(value => value.kind === 'workspace' && value.id === workspace.workspaceId)
-    assert.ok(retained, 'Checkpoint cannot omit the original native workspace')
-    const materialIds = new Set(retained.snapshot?.materials?.map(value => `${value.kind}:${value.id}`))
-    assert.ok(materialIds.size === workspace.materials.length && workspace.materials.every(value => materialIds.has(`${value.kind}:${value.id}`)), 'Checkpoint must cover the entire original native/material ID set')
+    assert.ok(retained && workspace.nativeProbe && canonical(retained.nativeProbe) === canonical(workspace.nativeProbe), 'Checkpoint must retain the original declared native workspace probe')
+    const materialDescriptors = materials => materials.map(({ kind, id, title, nativeProbe }) => ({ kind, id, title, nativeProbe }))
+    assert.ok(Array.isArray(retained.snapshot.materials) && canonical(materialDescriptors(retained.snapshot.materials)) === canonical(materialDescriptors(workspace.materials)), 'Checkpoint must cover the entire original material set and probe contracts')
   }
   assert.equal(checkpoint.expectedAppContainerId, before.candidate?.externallyAttestedAppContainerId, 'Before application CID is bound to the original report')
   assert.equal(checkpoint.expectedDatabaseContainerId, before.candidate?.externallyAttestedDatabaseContainerId, 'Before database pin is bound to the original report')
@@ -261,14 +283,23 @@ export async function teachingConfig(root, env) {
   for (const scene of recentScenes) {
     text(scene.sceneId, 'Allowed recent scene ID'); text(scene.title, 'Allowed recent scene title')
     assert.equal(scene.kind, 'experiment', 'Use existing physical experiments, not question/code/AI fixtures')
+    if (scene.recordExperimentRun !== undefined) {
+      assert.ok(typeof scene.recordExperimentRun === 'boolean' && PENDULUM_SCENE.test(scene.sceneId) && ['单摆', 'Simple pendulum'].includes(scene.title), 'Run recording opt-in is only for an exact declared simple-pendulum fixture')
+    }
   }
+  assert.ok(recentScenes.filter(scene => scene.recordExperimentRun === true).length <= 1, 'A run may authorize only one declared simple-pendulum fixture')
+  const workspaceIds = new Set()
   for (const workspace of workspaces) {
     text(workspace.workspaceId, 'Allowed native workspace ID'); text(workspace.title, 'Allowed native workspace title')
-    validateNativeProbe(workspace.nativeProbe)
+    assert.ok(!workspaceIds.has(workspace.workspaceId), 'Workspace probe IDs cannot repeat'); workspaceIds.add(workspace.workspaceId)
+    validateNativeProbe(workspace.nativeProbe, 'workspace')
     assert.ok(Array.isArray(workspace.materials), 'Workspace footprint must enumerate every original material to preserve')
+    const materialIds = new Set()
     for (const material of workspace.materials) {
       assert.ok(['canvas', 'session'].includes(material.kind), 'Preserved materials must be real canvas/session IDs')
-      text(material.id, 'Original material ID'); text(material.title, 'Original material title'); validateNativeProbe(material.nativeProbe)
+      text(material.id, 'Original material ID'); text(material.title, 'Original material title'); validateNativeProbe(material.nativeProbe, material.kind)
+      const key = `${material.kind}:${material.id}`
+      assert.ok(!materialIds.has(key), 'Workspace material IDs cannot repeat within a kind'); materialIds.add(key)
     }
   }
   const phase = env.TEACHING_TOOLS_PHASE ?? 'core'
@@ -343,11 +374,11 @@ export function makeHarness(config, browser) {
   const report = { schemaVersion: 1, scope: 'teaching-tools-selected-core-stages', fullAcceptance: false, coreAcceptance: false,
     fixtureKey: config.fixtureKey, phase: config.phase, candidate: { origin: config.origin, expectedRevision: config.footprint.revision, externallyAttestedAppContainerId: config.footprint.appContainerId, externallyAttestedDatabaseContainerId: config.footprint.databaseContainerId, containerInspectionPerformed: false },
     startedAt: new Date().toISOString(), requestedStages: config.selectedStages, stages: [], checks: [], unverified: [], errors: [],
-    modelRequests: [], externalRequests: [], forbiddenMutations: [], activityAcks: [], networkFailures: [], httpErrors: [], expectedDenials: [], resources: [],
+    modelRequests: [], externalRequests: [], forbiddenMutations: [], activityAcks: [], experimentRunAcks: [], networkFailures: [], httpErrors: [], expectedDenials: [], resources: [],
     cleanup: { policy: 'retain fixtures and failure state; close owned contexts only', ownedContexts: [], resourcesRemoved: false },
     evidence: { successfulBodiesMocked: false, serverCommandsExecuted: false, browserClosed: false, existingContextsTouched: false, authorizationVersion: AUTHORIZATION_VERSION, outputIsolatedBeforeFirstWrite: true, nativeRpcRules: config.rpc.http.length + Object.keys(COOKIE_SCOPED_HTTP_READS).length + READONLY_STREAM_ENDPOINTS.size, startupReadonlySourceVerified: true, startupReadonlyPacketVerified: false, cookieScopedHttpReads: Object.keys(COOKIE_SCOPED_HTTP_READS), readonlyStreamEndpoints: [...READONLY_STREAM_ENDPOINTS], nativeWorkspaceWritesSupported: false, modelGuardScope: 'browser HTTP inference triggers and exact authorized outbound Harness WebSocket envelopes; not server-to-provider packet capture' } }
   const contexts = new Map(), canvases = new Set(), boards = new Set(), allowedRecent = new Set(config.footprint.recentScenes?.map(value => value.sceneId) ?? []), allowedWorkspaces = new Set(config.footprint.workspaces?.map(value => value.workspaceId) ?? [])
-  const nativeProbePaths = new Set((config.footprint.workspaces ?? []).flatMap(workspace => [workspace.nativeProbe, ...workspace.materials.map(material => material.nativeProbe)]).filter(Boolean).map(probe => probe.path))
+  const nativeProbePaths = new Set((config.footprint.workspaces ?? []).flatMap(workspace => [workspace.nativeProbe, ...workspace.materials.map(material => material.nativeProbe)]).map(probe => probe?.path).filter(path => typeof path === 'string'))
   let currentStage = 'preflight', writeQueue = Promise.resolve()
   const reportFile = join(config.output, 'report.json')
   const flush = () => {
@@ -407,6 +438,30 @@ export function makeHarness(config, browser) {
     return endpoint && Object.hasOwn(COOKIE_SCOPED_HTTP_READS, endpoint) && exactKeys(payload, ['type', 'rpcId', 'method', 'payload']) && payload.type === 'client-request' && payload.method === endpoint && opaqueCorrelation(payload.rpcId) && canonical(payload.payload) === canonical(COOKIE_SCOPED_HTTP_READS[endpoint])
   }
   const bridgeOwned = (kind, id) => config.phase === 'bridge' && config.checkpointProof?.resourceManifest.some(value => value.kind === kind && value.id === id)
+  const experimentRunAllowed = async (ui, request, url, payload) => {
+    const run = ui.experimentRun
+    const live = () => ui.experimentRun === run && fixtureVerified(ui) && exactPendulumPage(ui.page.url(), config.origin, run.sceneId)
+    const record = url.pathname === `${RUN_API}/record`
+    if (!run || ui.role !== 'teacher' || !live() || url.origin !== config.origin || url.search || request.method() !== 'POST' || request.redirectedFrom()) return false
+    try { if (request.frame() !== ui.page.mainFrame()) return false } catch { return false }
+    if (!closedKeys(payload, record ? [...RUN_REQUEST_KEYS, 'permit'] : RUN_REQUEST_KEYS) || !isRunId(payload.runId) || payload.experimentId !== PENDULUM || payload.expectedCapabilityGeneration !== run.generation) return false
+    const [owner, capability, origin, authorization, contentType] = await Promise.all([runOwnerHeader, 'x-physicsos-experiment-run-capability', 'origin', 'authorization', 'content-type'].map(name => request.headerValue(name)))
+    try {
+      const actor = ui.actor
+      if (canonical(JSON.parse(decodeURIComponent(owner))) !== canonical({ schoolId: actor.schoolId, username: actor.username })) return false
+    } catch { return false }
+    if (!live() || capability !== RUN_CAPABILITY || origin !== config.origin || authorization !== null || contentType?.split(';', 1)[0].trim().toLowerCase() !== 'application/json') return false
+    if (!record) {
+      if (run.prepareRequest) return false
+      run.prepareRequest = request; run.id = payload.runId
+      return true
+    }
+    if (!run.prepareRequest || run.recordRequest || payload.runId !== run.id || !isRunPermit(payload.permit)) return false
+    const prepared = await run.prepared.catch(() => undefined)
+    if (!prepared || !live() || run.recordRequest || Date.now() >= prepared.expiresAt || digest(payload.permit) !== prepared.permitSha256) return false
+    run.recordRequest = request
+    return true
+  }
   const allowedMutation = (ui, request, payload) => {
     const url = new URL(request.url()), path = url.pathname, method = request.method()
     if (path.startsWith('/api/')) {
@@ -417,6 +472,7 @@ export function makeHarness(config, browser) {
       return rpcAllowed(ui, url, method, payload, 'http')
     }
     if (['GET', 'HEAD', 'OPTIONS'].includes(method)) return true
+    if (path === `${RUN_API}/prepare` || path === `${RUN_API}/record`) return experimentRunAllowed(ui, request, url, payload)
     if (path === '/physicsos/auth/login') return method === 'POST' && ui.transportOnly && ui.guestVerified && !!config.credentials && exactKeys(payload, ['username', 'password', 'rememberDevice']) && payload.username === config.expected.teacher.username && payload.password === config.credentials.password
     if (!ui.verified || ui.transportOnly) return false
     if (path === '/physicsos/auth/me/avatar') return method === 'POST' && ui.role === 'teacher' && config.footprint.avatarSave === true && exactKeys(payload, ['avatarId']) && AVATAR_IDS.includes(payload.avatarId)
@@ -424,11 +480,13 @@ export function makeHarness(config, browser) {
     if (path === '/physicsos/activity/v1/events') return method === 'POST' && exactKeys(payload, ['kind', 'id', 'pageInstanceId', 'module']) && ['visit', 'open'].includes(payload.kind) && ['id', 'pageInstanceId', 'module'].every(key => typeof payload[key] === 'string' && payload[key].length > 0 && payload[key].length <= 256)
     if (path === '/physicsos/usage/events') return method === 'POST' && exactKeys(payload, ['id', 'kind', 'surface', 'action']) && typeof payload.id === 'string' && typeof payload.surface === 'string' && (payload.kind === 'visit' || payload.kind === 'use' && payload.action === 'view')
     if (ui.role !== 'teacher') return false
-    const fence = (keys, version) => exactKeys(payload, keys) && Number.isInteger(payload[version]) && payload[version] > 0 && Number.isInteger(payload.expectedGeneration) && payload.expectedGeneration > 0 && typeof (payload.mutationId ?? payload.operationId) === 'string' && (payload.mutationId ?? payload.operationId).length > 0
+    const fence = (keys, version, min = 1) => exactKeys(payload, keys) && Number.isInteger(payload[version]) && payload[version] >= min && Number.isInteger(payload.expectedGeneration) && payload.expectedGeneration >= min && typeof (payload.mutationId ?? payload.operationId) === 'string' && (payload.mutationId ?? payload.operationId).length > 0
     let match = path.match(/^\/physicsos\/learning\/product-state\/(recent-scenes|projects)\/([^/]+)$/)
     if (match) {
       const kind = match[1] === 'recent-scenes' ? 'recent' : 'workspace', id = decodeURIComponent(match[2]), owned = kind === 'recent' ? allowedRecent.has(id) : allowedWorkspaces.has(id)
-      return method === 'POST' && fence(['action', 'expectedVersion', 'expectedGeneration', 'operationId'], 'expectedVersion') && (owned && config.footprint.existingWrites === true && ['delete', 'restore', 'archive', 'unarchive', 'reopen'].includes(payload.action) || bridgeOwned(kind, id) && payload.action === 'archive')
+      // A newly claimed native project has a real 0/0 lifecycle head before its first organization write.
+      const firstWorkspaceDelete = kind === 'workspace' && payload?.action === 'delete' && payload.expectedVersion === 0 && payload.expectedGeneration === 0 && config.footprint.workspaces?.some(workspace => workspace.workspaceId === id && workspace.nativeProbe?.stream === WORKSPACE_FOLLOW)
+      return method === 'POST' && !url.search && fence(['action', 'expectedVersion', 'expectedGeneration', 'operationId'], 'expectedVersion', firstWorkspaceDelete ? 0 : 1) && (owned && config.footprint.existingWrites === true && ['delete', 'restore', 'archive', 'unarchive', 'reopen'].includes(payload.action) || bridgeOwned(kind, id) && payload.action === 'archive')
     }
     if (path === '/physicsos/learning/canvases') return method === 'POST' && config.footprint.createCanvas === true && ui.creation?.kind === 'canvas' && exactKeys(payload, ['id', 'title', 'manifestDigest', 'mutationId']) && payload.title === ui.creation.title && typeof payload.id === 'string' && typeof payload.mutationId === 'string'
     if (path === '/physicsos/whiteboards') return method === 'POST' && config.footprint.createWhiteboard === true && ui.creation?.kind === 'whiteboard' && exactKeys(payload, ['title', 'operationId']) && payload.title === ui.creation.title && typeof payload.operationId === 'string'
@@ -488,7 +546,7 @@ export function makeHarness(config, browser) {
       const model = isModelInferenceRequest(request) ? 'shared-inference-predicate' : modelOperation(url.pathname, request.method(), payload)
       if (model) { report.modelRequests.push({ stage: currentStage, role: ui.role, transport: 'http', method: request.method(), url: publicUrl(url.href), kind: model }); await route.abort('blockedbyclient'); return }
       if (['http:', 'https:'].includes(url.protocol) && url.origin !== config.origin) { report.externalRequests.push({ stage: currentStage, role: ui.role, url: publicUrl(url.href) }); await route.abort('blockedbyclient'); return }
-      if (!allowedMutation(ui, request, payload)) { report.forbiddenMutations.push({ stage: currentStage, role: ui.role, method: request.method(), url: publicUrl(url.href) }); await route.abort('blockedbyclient'); return }
+      if (!await allowedMutation(ui, request, payload)) { report.forbiddenMutations.push({ stage: currentStage, role: ui.role, method: request.method(), url: publicUrl(url.href) }); await route.abort('blockedbyclient'); return }
       await route.continue()
     })
     assert.equal(typeof context.routeWebSocket, 'function', 'The runner must support real WebSocket interception')
@@ -535,12 +593,13 @@ export function makeHarness(config, browser) {
   }
   const api = async (ui, path, { method = 'GET', data, expectDenied = false } = {}) => {
     assert.ok(path.startsWith('/') && new URL(path, config.origin).origin === config.origin, 'API reads/writes must remain candidate-relative')
-    assert.ok(/^\/(?:physicsos\/(?:auth|learning|whiteboards|activity|admin\/activity)|healthz|readyz)(?:\/|\?|$)/.test(path) || method === 'GET' && nativeProbePaths.has(path), 'No arbitrary server API or model endpoint is exposed by this helper')
+    assert.ok(/^\/(?:physicsos\/(?:auth|learning|whiteboards|activity|admin\/activity)|healthz|readyz)(?:\/|\?|$)/.test(path) || method === 'GET' && (nativeProbePaths.has(path) || path === `${RUN_API}/capabilities`), 'No arbitrary server API or model endpoint is exposed by this helper')
     assert.ok(!(path === '/physicsos/activity/v1/events' && method !== 'GET'), 'A verifier must never manufacture visit/open/use business events')
     const actor = config.expected[ui.role], owner = { schoolId: actor.schoolId, username: actor.username }, headers = {}
     if (path.startsWith('/physicsos/learning/canvases') || path.startsWith('/physicsos/whiteboards')) headers['x-physicsos-canvas-owner'] = encodeURIComponent(JSON.stringify(owner))
     else if (path.startsWith('/physicsos/learning')) headers['x-physicsos-learning-owner'] = encodeURIComponent(JSON.stringify(owner))
     else if (path.startsWith('/physicsos/admin/activity')) headers['x-physicsos-activity-owner'] = encodeURIComponent(JSON.stringify(owner))
+    else if (path === `${RUN_API}/capabilities`) headers[runOwnerHeader] = encodeURIComponent(JSON.stringify(owner))
     if (path === '/physicsos/auth/me/avatar') headers['x-physicsos-expected-owner'] = encodeURIComponent(JSON.stringify({ id: actor.id, ...owner }))
     const denialKey = `${method} ${new URL(path, config.origin).pathname}`
     if (expectDenied) ui.expectedDenials.add(denialKey)
@@ -556,11 +615,111 @@ export function makeHarness(config, browser) {
     } finally { if (expectDenied) ui.expectedDenials.delete(denialKey) }
   }
   const read = async (ui, path) => { const result = await api(ui, path); check(`real GET ${path.split('?')[0]}`, result.ok, { status: result.status }); return result.body }
+  const recordPendulumRun = async (ui, fixture, playback) => {
+    if (!fixture.recordExperimentRun) return playback()
+    check('Run recording is armed only for one declared owned pendulum presentation in the enabled recent stage', currentStage === 'recent' && ['core', 'before-restart'].includes(config.phase) && config.footprint.existingWrites === true
+      && ui.role === 'teacher' && fixtureVerified(ui) && config.footprint.recentScenes.includes(fixture) && !ui.experimentRun && !report.experimentRunAcks.length && exactPendulumPage(ui.page.url(), config.origin, fixture.sceneId))
+    const caps = await read(ui, `${RUN_API}/capabilities`)
+    check('Experiment recording capabilities match the closed real wire contract', closedKeys(caps, ['schemaVersion', 'capability', 'mode', 'recordingEnabled', 'capabilityGeneration', 'provenance', 'boundary', 'scope', 'permitTtlMs'])
+      && caps.schemaVersion === 1 && caps.capability === RUN_CAPABILITY && ['enabled', 'bridge', 'off'].includes(caps.mode) && typeof caps.recordingEnabled === 'boolean'
+      && (caps.mode === 'enabled' || !caps.recordingEnabled) && isRunId(caps.capabilityGeneration) && runProvenance(caps) && Number.isSafeInteger(caps.permitTtlMs) && caps.permitTtlMs > 0 && caps.permitTtlMs <= 300000)
+    if (!caps.recordingEnabled) {
+      unverified('experiment-run-durable-ack', 'Actual run recording is disabled; native playback is not counted as a durable lab use')
+      return playback()
+    }
+    const run = { sceneId: fixture.sceneId, generation: caps.capabilityGeneration }
+    ui.experimentRun = run
+    const responseFor = key => ui.page.waitForResponse(response => response.request() === run[key], { timeout: 15000 })
+    const runJson = async response => {
+      try { return await response.json() } catch { throw new Error('Experiment-run ACK was not valid JSON') }
+    }
+    try {
+      run.prepared = responseFor('prepareRequest').then(async response => {
+        const value = await runJson(response)
+        check('Real prepare ACK binds the declared experiment, fresh capability and outbound run ID', response.status() === 200 && closedKeys(value, [...RUN_REQUEST_KEYS, 'permit', 'expiresAt'])
+          && value.runId === run.id && value.experimentId === PENDULUM && value.expectedCapabilityGeneration === run.generation && isRunPermit(value.permit) && isIsoInstant(value.expiresAt))
+        return { permitSha256: digest(value.permit), expiresAt: Date.parse(value.expiresAt) } // Permit is never journaled or replayed.
+      })
+      const recorded = responseFor('recordRequest')
+      void run.prepared.catch(() => {}); void recorded.catch(() => {})
+      await playback()
+      const response = await recorded, receipt = await runJson(response)
+      check('Real non-replayed experiment-run ACK matches the authorized prepare/record pair and first engine step', response.status() === 200
+        && closedKeys(receipt, ['runId', 'experimentId', 'recordedAt', 'provenance', 'boundary', 'scope', 'replayed']) && receipt.runId === run.id
+        && receipt.experimentId === PENDULUM && isIsoInstant(receipt.recordedAt) && runProvenance(receipt) && receipt.replayed === false)
+      report.experimentRunAcks.push({ stage: currentStage, role: ui.role, sceneId: fixture.sceneId, ...receipt })
+    } finally { ui.experimentRun = undefined }
+  }
+  const noCredentials = value => {
+    if (typeof value === 'string') return ![...secrets].some(secret => [secret, encodeURIComponent(secret)].some(form => value.includes(form)))
+      && !/(?:^|\s)Bearer\s+\S|:\/\/[^/\s]*@|[?&#](?:password|token|api[_-]?key|secret|code)=/i.test(value)
+    return !value || typeof value !== 'object' || Object.entries(value).every(([key, child]) => !/^(?:password|cookies?|authorization|secret|permit|(?:api|access|refresh|session)[_-]?(?:key|token)|token)$/i.test(key) && noCredentials(child))
+  }
+  const followWorkspace = async (ui, fixture) => {
+    // An inert page in the verified teacher's guarded context: normal browser cookies, no app cache or SDK state.
+    const page = await ui.context.newPage()
+    let record
+    try {
+      const health = await page.goto(`${config.origin}/healthz`, { waitUntil: 'domcontentloaded', timeout: 10000 })
+      check('Native probe starts from the exact candidate inert page', health?.ok() && page.url() === `${config.origin}/healthz`)
+      record = await page.evaluate(({ origin, streamId, workspaceId }) => new Promise((resolve, reject) => {
+        if (location.origin !== origin) { reject(new Error('Native probe candidate origin mismatch')); return }
+        const url = new URL('/api/remote.mux', origin)
+        url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+        const socket = new WebSocket(url)
+        let opened = false, settled = false
+        const finish = (error, row) => {
+          if (settled) return
+          settled = true
+          clearTimeout(deadline)
+          try { if (opened && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'cancel', streamId })) } catch { error ??= 'Native workspace stream cancellation failed' }
+          socket.close()
+          if (error) reject(new Error(error))
+          else resolve(row)
+        }
+        const deadline = setTimeout(() => finish('Native workspace baseline timed out'), 10000)
+        socket.onopen = () => {
+          opened = true
+          socket.send(JSON.stringify({ type: 'open', streamId, endpoint: 'workspace/follow', payload: { args: {} } }))
+        }
+        socket.onerror = socket.onclose = () => finish('Native workspace stream closed before its baseline')
+        const closed = (value, keys) => !!value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key))
+        socket.onmessage = event => {
+          if (settled) return
+          if (typeof event.data !== 'string' || event.data.length > 1024 * 1024) { finish('Native workspace baseline exceeded its text/size budget'); return }
+          let frame
+          try { frame = JSON.parse(event.data) } catch { finish('Native workspace baseline is not JSON'); return }
+          if (!closed(frame, ['type', 'streamId', 'value']) || frame.type !== 'item' || frame.streamId !== streamId || !closed(frame.value, ['type', 'value']) || frame.value.type !== 'baseline') {
+            finish('Native workspace stream did not return its correlated opening baseline'); return
+          }
+          const baseline = frame.value.value
+          if (!closed(baseline, ['items', 'archivedSessionIds', 'pinnedSessionIds']) || ![baseline.items, baseline.archivedSessionIds, baseline.pinnedSessionIds].every(value => Array.isArray(value) && value.length <= 1024)) {
+            finish('Native workspace baseline has an invalid or unbounded shape'); return
+          }
+          const rows = baseline.items.filter(item => item?.workspaceId === workspaceId)
+          if (rows.length !== 1) { finish('Native workspace baseline must contain the exact owned workspace once'); return }
+          finish(undefined, rows[0]) // Do not export the rest of the teacher's roster or frames.
+        }
+      }), { origin: config.origin, streamId: randomUUID(), workspaceId: fixture.workspaceId })
+    } finally { await page.close() }
+    const expectedSessions = fixture.materials.filter(material => material.kind === 'session').map(material => material.id).sort()
+    check('Native workspace/follow returns the complete exact declared WorkspaceView', closedKeys(record, WORKSPACE_VIEW_KEYS) && record.workspaceId === fixture.workspaceId && record.title === fixture.title
+      && typeof record.path === 'string' && (isAbsolute(record.path) || /^[A-Za-z]:[\\/]/.test(record.path)) && record.path.length <= 4096 && !/[\x00-\x1f\x7f]/.test(record.path)
+      && Array.isArray(record.sessionIds) && record.sessionIds.every(opaqueCorrelation) && canonical([...record.sessionIds].sort()) === canonical(expectedSessions)
+      && isIsoInstant(record.createdAt) && isIsoInstant(record.updatedAt) && Date.parse(record.updatedAt) >= Date.parse(record.createdAt))
+    check('Native fixture snapshots contain no credential material', noCredentials(record))
+    return record
+  }
   const nativeProbe = async (ui, probe, expectedId) => {
+    assert.ok(ui.role === 'teacher' && fixtureVerified(ui), 'Native reads require the exact authenticated teacher fixture')
+    if (probe?.stream === WORKSPACE_FOLLOW) {
+      const fixture = config.footprint.workspaces?.find(value => value.workspaceId === expectedId)
+      assert.ok(closedKeys(probe, ['stream']) && fixture?.nativeProbe?.stream === WORKSPACE_FOLLOW, 'No undeclared workspace stream probe can be used')
+      return followWorkspace(ui, fixture)
+    }
     assert.ok(probe && nativeProbePaths.has(probe.path), 'No undeclared native read probe can be used')
     const record = jsonPointer(await read(ui, probe.path), probe.recordPointer)
     check('Real native API returns the exact complete declared workspace/material record', !!record && typeof record === 'object' && jsonPointer(record, probe.idPointer) === expectedId)
-    const noCredentials = value => !value || typeof value !== 'object' || Object.entries(value).every(([key, child]) => !/^(?:password|cookies?|authorization|apiKey|apiToken|token)$/i.test(key) && noCredentials(child))
     check('Native fixture snapshots contain no credential material', noCredentials(record))
     return record
   }
@@ -665,7 +824,7 @@ export function makeHarness(config, browser) {
     entry.finishedAt = new Date().toISOString(); entry.checkCount = report.checks.length - checkStart; await flush()
     return entry.status
   }
-  return { config, report, reportFile, safeError, check, unverified, resources, api, read, nativeProbe, assertActor, createUi, closeUi, closeOwned, poll, hit, click, ack, capture, stage, flush,
+  return { config, report, reportFile, safeError, check, unverified, resources, api, read, nativeProbe, recordPendulumRun, assertActor, createUi, closeUi, closeOwned, poll, hit, click, ack, capture, stage, flush,
     finish: async () => { report.finishedAt = new Date().toISOString(); report.coreAcceptance = report.stages.length > 0 && report.stages.every(value => value.status === 'passed') && !report.errors.length && !report.modelRequests.length && !report.externalRequests.length && !report.forbiddenMutations.length && !report.networkFailures.length && !report.httpErrors.length && !report.cleanup.unconfirmedWrites?.length && contexts.size === 0; await flush(); return report.coreAcceptance ? 0 : report.stages.some(value => value.status === 'failed') || report.errors.length || report.networkFailures.length || report.httpErrors.length ? 1 : 2 } }
 }
 

@@ -275,7 +275,7 @@ class IsolatedCandidateNetwork(unittest.TestCase):
             with self.subTest(url=url), self.assertRaisesRegex(RuntimeError, 'production'):
                 candidate.reject_production_model_routes(config, [url], production, network, 3972)
 
-    def test_check_revalidates_isolation_before_http_authentication(self):
+    def test_legacy_check_requires_a_published_loopback_and_isolation_before_authentication(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / 'candidate'; root.mkdir()
             config = CandidateSafety().config(root)
@@ -283,8 +283,17 @@ class IsolatedCandidateNetwork(unittest.TestCase):
             (root / 'metadata.json').write_text(json.dumps({'container': 'candidate', 'image': 'candidate-image'}))
             current = {'State': {'Running': True}, 'Image': 'candidate-image', 'Config': {'Labels': {'io.physicsos.task': config['task'], 'io.physicsos.role': 'validation'}},
                        'NetworkSettings': {'Ports': {'13188/tcp': [{'HostIp': '127.0.0.1', 'HostPort': '13188'}]}}}
-            with patch.object(candidate, 'lifecycle', return_value=contextlib.nullcontext()), patch.object(candidate, 'metadata', return_value=current), patch.object(candidate, 'check_isolated_resources', side_effect=RuntimeError('foreign network')), patch.object(candidate, 'check_owned') as http:
+            with patch.object(candidate, 'lifecycle', return_value=contextlib.nullcontext()), patch.object(candidate, 'metadata', return_value=current), \
+                    patch.object(candidate, 'check_isolated_resources', side_effect=RuntimeError('foreign network')) as isolation, \
+                    patch.object(candidate, 'check_owned') as http:
                 with self.assertRaisesRegex(RuntimeError, 'foreign network'): candidate.check(config)
+                http.assert_not_called()
+                isolation.side_effect = None
+                candidate.check(config)
+                http.assert_called_once_with(config)
+                http.reset_mock()
+                current['NetworkSettings']['Ports'] = None
+                with self.assertRaisesRegex(RuntimeError, 'endpoint identity'): candidate.check(config)
                 http.assert_not_called()
 
     def test_network_only_preparation_cannot_start_candidate_or_database(self):
@@ -870,7 +879,7 @@ class CandidateTeachingTools(unittest.TestCase):
         config['activityCapacity'] = {'path': str(path), 'sha256': hashlib.sha256(raw).hexdigest()}
 
     @contextlib.contextmanager
-    def fixture(self, mode='bridge', existing=True, capacity=False):
+    def fixture(self, mode='bridge', existing=True, capacity=False, internal=False):
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp).resolve(); root = base / ('teaching-' + mode)
             for name in ['home', 'state', 'tools', 'secrets', 'database-data']:
@@ -938,16 +947,26 @@ class CandidateTeachingTools(unittest.TestCase):
                                            'Env': ['PATH=/usr/bin', 'DEEPSEEK_BASE_URL=http://127.0.0.1:3972/v1',
                                                    'PHYSICSOS_MODEL_POOL_PORT=3972', 'UNAPPROVED_SECRET=fake-production-material',
                                                    candidate.ACTIVITY_CAPACITY_ENV + '=true']})
-            pg = {'Id': '8' * 64, 'State': {'Running': True}, 'Config': {'Labels': {'io.physicsos.task': config['task']}},
+            pg = {'Id': '8' * 64, 'Name': '/' + config['databaseContainer'], 'State': {'Running': True},
+                  'Config': {'Labels': {'io.physicsos.task': config['task'], 'io.physicsos.role': 'validation-database'}},
                   'Mounts': [{'Source': str(root / 'database-data'), 'Destination': '/var/lib/postgresql/data', 'RW': True}],
                   'NetworkSettings': {'Networks': {config['network']: {'NetworkID': '5' * 64, 'IPAddress': '172.30.0.2'}}}}
-            network = {'Id': '5' * 64, 'IPAM': {'Config': []}}
+            network = {'Id': '5' * 64, 'Name': config['network'], 'Driver': 'bridge', 'Scope': 'local', 'Internal': internal,
+                       'Labels': {'io.physicsos.task': config['task'], 'io.physicsos.role': 'validation-network'},
+                       'IPAM': {'Config': [{'Subnet': '172.30.0.0/16', 'Gateway': '172.30.0.1'}]},
+                       'Containers': {pg['Id']: {'Name': config['databaseContainer'], 'IPv4Address': '172.30.0.2/16'}}}
+            if existing:
+                network['Containers'][container['Id']] = {'Name': details['container'], 'IPv4Address': '172.30.0.3/16'}
+            if internal:
+                container['NetworkSettings']['Ports'] = {str(config['httpPort']) + '/tcp': None, '3080/tcp': None}
+                container['NetworkSettings']['Networks'][config['network']].update(IPPrefixLen=16, Gateway='')
             f = SimpleNamespace(config=config, root=root, image=image, binding=binding, spec=spec, container=container,
                                 current=container if existing else None, production=production, pg=pg, network=network, password=password)
             if existing: self.persist(f)
             def inspect(kind, name):
+                if kind == 'network': return network if name == config['network'] else None
                 if kind == 'image': return image if name in {image['Id'], 'candidate-image'} else None
-                if name == config['databaseContainer']: return pg
+                if name in {config['databaseContainer'], pg['Id']}: return pg
                 if f.current is not None and name in {f.current['Id'], details['container']}: return f.current
                 return next((p for p in production if name in {p['Id'], p['Name'].lstrip('/')}), None)
             with patch.object(candidate, 'metadata', side_effect=inspect), \
@@ -1420,7 +1439,7 @@ class CandidateTeachingTools(unittest.TestCase):
                 with self.assertRaisesRegex(candidate.CandidateError, 'ACTIVITY_CAPABILITY_CHANGED'):
                     candidate.check_teaching_tools_capabilities(mode, learning, {'schemaVersion': 1, 'mode': mode}, capacity)
 
-    def mock_candidate_http(self, f, learning, activity, activity_status=200):
+    def mock_candidate_http(self, f, learning, activity, activity_status=200, *, address='127.0.0.1'):
         port = f.config['httpPort']; password = 'mock-candidate-password'; cookie = 'session=mock-candidate-cookie'
         (f.root / 'secrets/admin_password').write_text(password + '\n')
         identity = {'user': {'username': f.config['username'], 'schoolId': 'PHYSICSOS-OPEN', 'role': 'SUPER_ADMIN'}}
@@ -1430,9 +1449,9 @@ class CandidateTeachingTools(unittest.TestCase):
         seen = []
         def http_open(_handler, request):
             parsed = candidate.urllib.parse.urlsplit(request.full_url)
-            self.assertEqual((parsed.scheme, parsed.netloc, parsed.query), ('http', '127.0.0.1:' + str(port), ''))
-            self.assertEqual(request.get_header('Host'), 'physicsos-validation.invalid:' + str(port))
             path = parsed.path; method = request.get_method(); seen.append((method, path))
+            self.assertEqual((parsed.scheme, parsed.netloc, parsed.query), ('http', f'{address}:{port}', ''))
+            self.assertEqual(request.get_header('Host'), 'physicsos-validation.invalid:' + str(port))
             headers = Message(); headers['Content-Type'] = 'application/json'
             if path == '/physicsos/auth/login':
                 self.assertEqual(method, 'POST')
@@ -1449,10 +1468,13 @@ class CandidateTeachingTools(unittest.TestCase):
         return seen, patch.object(candidate.urllib.request.HTTPHandler, 'http_open', autospec=True, side_effect=http_open)
 
     def test_check_uses_authenticated_activity_get_and_reports_only_effective_flags(self):
-        for mode, capacity in [('bridge', False), ('enabled', False), ('enabled', True)]:
-            with self.subTest(mode=mode, capacity=capacity), self.fixture(mode, capacity=capacity) as f, \
-                    patch.object(candidate, 'check_isolated_resources'):
-                seen, transport = self.mock_candidate_http(f, *self.capabilities(mode, capacity))
+        cases = [('bridge', False, False), ('enabled', False, False), ('enabled', True, False),
+                 ('bridge', False, True), ('enabled', True, True)]
+        for mode, capacity, internal in cases:
+            with self.subTest(mode=mode, capacity=capacity, internal=internal), self.fixture(mode, capacity=capacity, internal=internal) as f, \
+                    patch.object(candidate.urllib.request, 'getproxies', side_effect=AssertionError('Must not consult proxies')):
+                address = '172.30.0.3' if internal else '127.0.0.1'
+                seen, transport = self.mock_candidate_http(f, *self.capabilities(mode, capacity), address=address)
                 with transport: result = candidate.check(f.config)
                 self.assertEqual(seen, [('GET', '/readyz'), ('POST', '/physicsos/auth/login'), ('GET', '/physicsos/auth/me'),
                                         ('GET', '/physicsos/admin/dashboard'), ('GET', '/physicsos/learning/capabilities'),
@@ -1463,11 +1485,13 @@ class CandidateTeachingTools(unittest.TestCase):
                 self.assertEqual(json.loads((f.root / 'state/acceptance.json').read_text()), result)
 
     def test_check_refuses_activity_http_errors_redirects_and_wrong_flags_without_diagnostics(self):
-        for status, code in [(302, 'TEACHING_HTTP_FAILED'), (503, 'TEACHING_HTTP_FAILED'), (200, 'ACTIVITY_CAPABILITY_CHANGED')]:
-            with self.subTest(status=status), self.fixture('enabled', capacity=True) as f, \
-                    patch.object(candidate, 'check_isolated_resources'):
+        cases = [(302, 'TEACHING_HTTP_FAILED', False), (302, 'TEACHING_HTTP_FAILED', True),
+                 (503, 'TEACHING_HTTP_FAILED', False), (200, 'ACTIVITY_CAPABILITY_CHANGED', False)]
+        for status, code, internal in cases:
+            with self.subTest(status=status, internal=internal), self.fixture('enabled', capacity=True, internal=internal) as f:
                 learning, activity = self.capabilities('enabled', True)
-                seen, transport = self.mock_candidate_http(f, learning, {**activity, 'queryCapacityVerified': False}, status)
+                address = '172.30.0.3' if internal else '127.0.0.1'
+                seen, transport = self.mock_candidate_http(f, learning, {**activity, 'queryCapacityVerified': False}, status, address=address)
                 with transport, self.assertRaisesRegex(candidate.CandidateError, '^CANDIDATE_' + code + '$') as raised:
                     candidate.check(f.config)
                 self.assertEqual(seen[-1], ('GET', '/physicsos/activity/v1/capabilities'))
@@ -1475,6 +1499,51 @@ class CandidateTeachingTools(unittest.TestCase):
                 diagnostics = ''.join(traceback.format_exception(type(raised.exception), raised.exception, raised.exception.__traceback__))
                 for private in ['mock-candidate-password', 'mock-candidate-cookie', candidate.ACTIVITY_CAPACITY_ENV + '=true']:
                     self.assertNotIn(private, diagnostics)
+
+    def test_internal_check_rejects_unverified_endpoints_before_authentication(self):
+        def endpoint(f): return f.current['NetworkSettings']['Networks'][f.config['network']]
+        def member(f): return f.network['Containers'][f.current['Id']]
+        def change_ip(f, ip):
+            endpoint(f)['IPAddress'] = ip
+            member(f)['IPv4Address'] = ip + '/16'
+        cases = {
+            'external bridge': lambda f: f.network.update(Internal=False),
+            'truthy internal flag': lambda f: f.network.update(Internal='true'),
+            'missing Ports field': lambda f: f.current['NetworkSettings'].pop('Ports'),
+            'wrong suppressed port': lambda f: f.current['NetworkSettings'].update(Ports={'13189/tcp': None}),
+            'unexpected extra port': lambda f: f.current['NetworkSettings'].update(Ports={'13188/tcp': None, '13189/tcp': None}),
+            'wrong configured bind': lambda f: f.current['HostConfig']['PortBindings']['13188/tcp'][0].update(HostIp='0.0.0.0'),
+            'network receipt mismatch': lambda f: f.network.update(Id='9' * 64),
+            'missing full CID': lambda f: f.network['Containers'].pop(f.current['Id']),
+            'different IP': lambda f: member(f).update(IPv4Address='172.30.0.9/16'),
+            'different netmask': lambda f: member(f).update(IPv4Address='172.30.0.3/24'),
+            'default gateway': lambda f: endpoint(f).update(Gateway='172.30.0.1'),
+            'link-local address': lambda f: change_ip(f, '169.254.0.3'),
+            'noncanonical IPv4': lambda f: change_ip(f, '172.30.0.03'),
+        }
+        for name, change in cases.items():
+            with self.subTest(case=name), self.fixture(internal=True) as f, patch.object(candidate, 'check_owned') as auth:
+                change(f)
+                with self.assertRaises(RuntimeError): candidate.check(f.config)
+                auth.assert_not_called()
+
+    def test_internal_endpoint_requires_strict_port(self):
+        with self.fixture(internal=True) as f:
+            for port in [True, '13188', 13188.0, 1023, 65536]:
+                with self.subTest(port=port), self.assertRaisesRegex(candidate.CandidateError, 'INTERNAL_ENDPOINT_INVALID'):
+                    candidate.internal_candidate_address({**f.config, 'httpPort': port}, f.spec['metadata'], f.current, f.network)
+
+    def test_internal_check_revalidates_the_returned_network_id(self):
+        with self.fixture(internal=True) as f, patch.object(candidate, 'check_owned') as auth, \
+                patch.object(candidate, 'ensure_isolated_network', side_effect=[f.network, {**f.network, 'Id': '9' * 64}]):
+            with self.assertRaisesRegex(candidate.CandidateError, 'INTERNAL_ENDPOINT_INVALID'): candidate.check(f.config)
+            auth.assert_not_called()
+
+    def test_internal_check_refuses_a_stale_address_before_opening_http(self):
+        with self.fixture(internal=True) as f, patch.object(candidate.urllib.request, 'build_opener') as client:
+            with self.assertRaisesRegex(candidate.CandidateError, 'INTERNAL_ENDPOINT_CHANGED'):
+                candidate.check_owned(f.config, expected_internal_address='172.30.0.9')
+            client.assert_not_called()
 
     def test_image_binding_reuses_cold_verifier_and_rejects_handmade_labels(self):
         with self.fixture() as f:

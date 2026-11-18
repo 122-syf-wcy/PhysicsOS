@@ -1,5 +1,5 @@
 /** Real UI + authority reads for the selected core stages; no AI/chat invocation or success mocks. */
-import { AVATAR_IDS, avatarPath, canonical, catalog, digest, home, idPath, lifecycleUi, listPages, operationId, xpathLiteral } from './teaching-tools-browser-helpers.mjs'
+import { AVATAR_IDS, PENDULUM_SCENE, avatarPath, canonical, catalog, digest, home, idPath, lifecycleUi, listPages, operationId, xpathLiteral } from './teaching-tools-browser-helpers.mjs'
 
 const DENIAL = [403, 409, 410]
 const withoutRecentMetadata = entry => Object.fromEntries(Object.entries(entry).filter(([key]) => !['recentGeneration', 'recentVersion', 'recentState', 'recentRestoreState', 'updatedAt'].includes(key)))
@@ -198,13 +198,32 @@ export async function recentStage(h) {
       const second = await mutate('delete', async () => { await h.click(row.getByRole('button', { name: `移除 · ${fixture.title}`, exact: true })); await h.click(ui.page.getByRole('dialog', { name: '移除最近记录', exact: true }).getByRole('button', { name: '确认移除', exact: true })) }, restored)
       await mutate('restore', () => h.click(root.getByRole('button', { name: '撤销', exact: true })), second)
       await filter.selectOption('live'); row = exactElement(root, 'data-recent-scene', fixture.sceneId)
-      await h.click(row.getByRole('button').first())
-      const play = fixture.playButtonName ? ui.page.getByRole('button', { name: fixture.playButtonName, exact: true }) : ui.page.getByRole('button', { name: /^(播放|Play)$/ })
-      if (await play.count() === 1 && await play.isVisible()) {
+      await h.click(row.locator(':scope > button'))
+      const pendulum = PENDULUM_SCENE.test(fixture.sceneId)
+      if (pendulum) await ui.page.waitForFunction(sceneId => {
+        const route = new URL(location.hash.slice(1), location.origin)
+        return route.pathname === '/experiments/simple-pendulum' && route.searchParams.get('scene') === sceneId
+      }, fixture.sceneId, { timeout: 10000 })
+      const labSelector = `[data-physicsos-surface="lab"][data-physicsos-timeline="true"]${pendulum ? '[data-physicsos-domain="mechanics"]' : ''}`
+      const lab = ui.page.locator(labSelector), playName = /^(播放 \/ 暂停|Play \/ pause)$/
+      const play = lab.getByRole('button', { name: playName }), timeline = lab.getByRole('slider', { name: /^(时间轴|Timeline)$/ })
+      if (pendulum) await lab.locator('[data-community-status="ready"] iframe, [data-workbench-viewport] svg[role="img"]').waitFor({ state: 'visible', timeout: 10000 })
+      await play.waitFor({ state: 'visible', timeout: 10000 })
+      h.check('The exact physical experiment has one enabled, initially paused playback toggle and real timeline', await play.count() === 1 && await play.isEnabled() && await play.getAttribute('aria-pressed') === 'false' && await lab.getAttribute('data-physicsos-running') === 'false' && Number(await timeline.getAttribute('max')) > 0)
+      const initial = Number(await timeline.inputValue())
+      h.check('The real timeline starts at a finite value', Number.isFinite(initial))
+      await h.recordPendulumRun(ui, fixture, async () => {
         await h.click(play)
-        const pause = ui.page.getByRole('button', { name: /^(暂停|Pause)$/ })
-        await pause.waitFor({ state: 'visible' }); h.check('Existing physical experiment enters its real running UI without AI/chat', await pause.isVisible()); await h.click(pause)
-      } else h.unverified('existing-experiment-playback', 'The fixture must identify an unambiguous real physical playback control; no generation button is substituted')
+        await ui.page.waitForFunction(({ selector, start }) => {
+          const lab = document.querySelector(`${selector}[data-physicsos-running="true"]`)
+          return Number(lab?.querySelector('input[type="range"][aria-label="时间轴"], input[type="range"][aria-label="Timeline"]')?.value) > start
+        }, { selector: labSelector, start: initial }, { timeout: 10000 })
+        h.check('The actual timeline advances while the same toggle is pressed and the lab is running', await play.getAttribute('aria-pressed') === 'true')
+        await h.click(play)
+        const paused = ui.page.locator(`${labSelector}[data-physicsos-running="false"]`).getByRole('button', { name: playName }).and(ui.page.locator('[aria-pressed="false"]'))
+        await paused.waitFor({ state: 'visible', timeout: 10000 })
+        h.check('The same actual toggle returns the lab to paused', await paused.count() === 1)
+      })
       await home(h, ui); await h.capture(ui, `recent-restored-${fixture.sceneId}`)
       const fresh = await h.createUi('teacher')
       try { h.check('Recovered recent state survives a new cache-free context', (await h.read(fresh, path)).state?.recentState === 'live') } finally { await h.closeUi(fresh) }
@@ -321,46 +340,58 @@ export async function whiteboardStage(h) {
   })
 }
 
+export async function workspaceContent(h, ui, fixture) {
+  const native = await h.nativeProbe(ui, fixture.nativeProbe, fixture.workspaceId), materials = []
+  for (const material of fixture.materials) {
+    const snapshot = material.kind === 'canvas' ? await canvasSnapshot(h, ui, material.id) : await h.nativeProbe(ui, material.nativeProbe, material.id)
+    if (fixture.nativeProbe.stream === 'workspace-follow-v1' && material.kind === 'canvas') {
+      h.check('Complete declared canvas material is bound to the exact native project', snapshot.head.title === material.title && snapshot.manifest.metadata?.studyProjectId === fixture.workspaceId)
+    }
+    materials.push({ kind: material.kind, id: material.id, title: material.title, ...(material.nativeProbe ? { nativeProbe: material.nativeProbe } : {}), snapshot })
+  }
+  return { native, materials }
+}
+
 export async function workspaceStage(h) {
   const fixtures = h.config.footprint.workspaces ?? []
   if (!fixtures.length || h.config.footprint.existingWrites !== true) { h.unverified('workspace-lifecycle-material-integrity', 'Explicit native workspace/material IDs and existingWrites authorization are required'); return }
   if (fixtures.some(value => !value.nativeProbe || value.materials.some(item => item.kind === 'session' && !item.nativeProbe))) { h.unverified('workspace-native-integrity', 'A real read-only nativeProbe contract is required before any destructive workspace action; no native backend response is invented'); return }
   await withUi(h, async ui => {
     for (const fixture of fixtures) {
-      const baseline = await h.nativeProbe(ui, fixture.nativeProbe, fixture.workspaceId)
-      const materialRecords = new Map()
-      for (const material of fixture.materials) materialRecords.set(material.id, material.kind === 'canvas' ? await canvasSnapshot(h, ui, material.id) : await h.nativeProbe(ui, material.nativeProbe, material.id))
       const path = `/physicsos/learning/product-state/projects/${idPath(fixture.workspaceId)}`, original = (await h.read(ui, path)).state
-      h.check('Workspace has a real live personal lifecycle head', original?.projectId === fixture.workspaceId && original.state === 'live')
-      h.resources('workspace', fixture.workspaceId, fixture.title, { createdByThisRun: false, state: 'live', nativeSnapshotSha256: digest(baseline), materialIds: fixture.materials.map(value => value.id) }); await h.flush()
+      h.check('Workspace has a real owned live personal lifecycle head', original?.projectId === fixture.workspaceId && original.state === 'live' && Number.isSafeInteger(original.version) && Number.isSafeInteger(original.generation))
+      const baseline = await workspaceContent(h, ui, fixture)
+      h.resources('workspace', fixture.workspaceId, fixture.title, { createdByThisRun: false, state: 'live', nativeSnapshotSha256: digest(baseline.native), materialIds: fixture.materials.map(value => value.id), workspaceContentSha256: digest(baseline) }); await h.flush()
       const open = async () => {
         await h.click(ui.page.getByRole('button', { name: /^我的工作区(?: · .+)?$/ }).first())
         const panel = ui.page.locator('[data-physicsos-workspace-panel]'); await panel.waitFor({ state: 'visible' }); return panel
       }
-      const validateRetained = async () => {
-        const value = await h.nativeProbe(ui, fixture.nativeProbe, fixture.workspaceId)
-        for (const key of ['id', 'workspaceId', 'title', 'name', 'path']) if (key in baseline) h.check(`Native workspace ${key} is retained`, canonical(value[key]) === canonical(baseline[key]))
-        for (const material of fixture.materials) {
-          const after = material.kind === 'canvas' ? await canvasSnapshot(h, ui, material.id) : await h.nativeProbe(ui, material.nativeProbe, material.id)
-          h.check('Complete original material survives workspace organization', canonical(after) === canonical(materialRecords.get(material.id)))
-        }
+      const validateRetained = async (target = ui) => {
+        const value = await workspaceContent(h, target, fixture)
+        h.check('Every field of the complete native workspace survives project organization', canonical(value.native) === canonical(baseline.native))
+        h.check('The entire original material set, associations, and native snapshots survive workspace organization', canonical(value.materials) === canonical(baseline.materials))
+      }
+      const mutate = async (action, state, before, actionUi) => {
+        h.resources('workspace', fixture.workspaceId, fixture.title, { state: `${action}-ack-pending` }); await h.flush()
+        const { body, requestData } = await h.ack(ui, path, 'POST', actionUi), after = body?.state
+        h.resources('workspace', fixture.workspaceId, fixture.title, { state: after?.state ?? 'unknown', observedHead: after }); await h.flush()
+        h.check('Workspace organization uses the exact action and original fences', requestData?.action === action && requestData.expectedVersion === before.version && requestData.expectedGeneration === before.generation)
+        h.check('Workspace organization has a durable exact workspace/generation/version ACK', after?.projectId === fixture.workspaceId && after.state === state && after.version === before.version + 1 && after.generation === before.generation + 1)
+        h.check('Workspace organization ACK agrees with the fresh owned lifecycle read', canonical((await h.read(ui, path)).state) === canonical(after))
+        await validateRetained()
+        return after
       }
       let panel = await open(), filter = panel.getByRole('combobox', { name: '工作区状态', exact: true })
       await filter.selectOption('live')
       let row = exactElement(panel, 'data-workspace-id', fixture.workspaceId)
       h.check('Native header row is the explicitly named workspace', (await row.textContent()).includes(fixture.title))
-      const remove = async before => {
-        h.resources('workspace', fixture.workspaceId, fixture.title, { state: 'delete-ack-pending' }); await h.flush()
+      const remove = before => mutate('delete', 'deleted', before, async () => {
         await h.click(row.getByRole('button', { name: `删除 · ${fixture.title}`, exact: true }))
-        const ack = await h.ack(ui, path, 'POST', () => h.click(panel.getByRole('button', { name: '确认删除工作区', exact: true })))
-        const after = ack.body?.state; h.resources('workspace', fixture.workspaceId, fixture.title, { state: after?.state ?? 'unknown', observedHead: after }); await h.flush()
-        h.check('Header delete has a durable exact-generation ACK', after?.projectId === fixture.workspaceId && after.state === 'deleted' && after.version === before.version + 1 && after.generation === before.generation + 1)
-        await validateRetained(); return after
-      }
+        await h.click(panel.getByRole('button', { name: '确认删除工作区', exact: true }))
+      })
       let head = await remove(original)
-      let ack = await h.ack(ui, path, 'POST', () => h.click(panel.getByRole('button', { name: '撤销删除', exact: true })))
-      h.check('Header undo genuinely restores the original workspace lifecycle', ack.body?.state?.state === 'live' && ack.body.state.version === head.version + 1)
-      head = ack.body.state; await filter.selectOption('live'); row = exactElement(panel, 'data-workspace-id', fixture.workspaceId); head = await remove(head)
+      head = await mutate('restore', 'live', head, () => h.click(panel.getByRole('button', { name: '撤销删除', exact: true })))
+      await filter.selectOption('live'); row = exactElement(panel, 'data-workspace-id', fixture.workspaceId); head = await remove(head)
       await ui.page.keyboard.press('Escape'); await panel.waitFor({ state: 'hidden' })
       await h.click(ui.page.locator('[data-physicsos-navigation]').getByRole('button', { name: '项目', exact: true }))
       const projects = ui.page.locator('[data-physicsos-projects]'); await projects.waitFor({ state: 'visible' })
@@ -371,26 +402,19 @@ export async function workspaceStage(h) {
         await h.hit(entry); h.check('Original material remains accessible under Unassigned, not deleted with the workspace', await entry.isEnabled())
       }
       panel = await open(); filter = panel.getByRole('combobox', { name: '工作区状态', exact: true }); await filter.selectOption('deleted'); row = exactElement(panel, 'data-workspace-id', fixture.workspaceId)
-      ack = await h.ack(ui, path, 'POST', () => h.click(row.getByRole('button', { name: `恢复工作区 · ${fixture.title}`, exact: true })))
-      h.check('Recycle-bin restore is a real new authority head', ack.body?.state?.state === 'live' && ack.body.state.version === head.version + 1)
-      await validateRetained(); await ui.page.keyboard.press('Escape')
+      head = await mutate('restore', 'live', head, () => h.click(row.getByRole('button', { name: `恢复工作区 · ${fixture.title}`, exact: true })))
+      await ui.page.keyboard.press('Escape'); await panel.waitFor({ state: 'hidden' })
       await h.click(ui.page.locator('[data-physicsos-navigation]').getByRole('button', { name: '项目', exact: true }))
-      await h.click(projects.locator('aside').getByRole('button', { name: new RegExp(`^${escapeRegex(fixture.title)}`) }))
-      head = (await h.read(ui, path)).state
-      ack = await h.ack(ui, path, 'POST', () => h.click(projects.getByRole('button', { name: '归档项目', exact: true })))
-      h.check('Project archive is server-confirmed, not a local folder flag', ack.body?.state?.state === 'archived' && ack.body.state.version === head.version + 1)
+      const project = projects.locator('aside').getByRole('button', { name: new RegExp(`^${escapeRegex(fixture.title)}`) })
+      await h.click(project)
+      head = await mutate('archive', 'archived', head, () => h.click(projects.getByRole('button', { name: '归档项目', exact: true })))
       await projects.getByRole('combobox').selectOption('archived')
-      await h.click(projects.locator('aside').getByRole('button', { name: new RegExp(`^${escapeRegex(fixture.title)}`) }))
-      ack = await h.ack(ui, path, 'POST', () => h.click(projects.getByRole('button', { name: '取消归档', exact: true })))
-      h.check('Project unarchive returns a live real head', ack.body?.state?.state === 'live')
-      const durable = (await h.read(ui, path)).state
-      h.check('Final unarchive ACK matches a fresh durable product-state GET', durable?.projectId === fixture.workspaceId && durable.state === 'live' && canonical(durable) === canonical(ack.body.state))
-      await validateRetained()
+      await h.click(project)
+      const durable = await mutate('unarchive', 'live', head, () => h.click(projects.getByRole('button', { name: '取消归档', exact: true })))
       const fresh = await h.createUi('teacher')
       try {
-        const restored = (await h.read(fresh, path)).state
-        h.check('Independent context verifies full final project identity/state/version/generation', restored?.projectId === fixture.workspaceId && restored.state === 'live' && restored.version === ack.body.state.version && restored.generation === ack.body.state.generation && canonical(restored) === canonical(ack.body.state))
-        h.check('Native workspace survives a new context after restore', !!await h.nativeProbe(fresh, fixture.nativeProbe, fixture.workspaceId))
+        h.check('Independent context verifies full final project identity/state/version/generation', canonical((await h.read(fresh, path)).state) === canonical(durable))
+        await validateRetained(fresh)
       } finally { await h.closeUi(fresh) }
       h.resources('workspace', fixture.workspaceId, fixture.title, { state: 'live-retained', observedHead: durable }); await h.flush(); await h.capture(ui, `workspace-retained-${fixture.workspaceId}`)
     }

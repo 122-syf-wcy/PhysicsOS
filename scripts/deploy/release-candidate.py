@@ -6,6 +6,7 @@ import fcntl
 import hashlib
 import http.cookiejar
 import importlib.util
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -1537,17 +1538,60 @@ class CandidateNoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def check_owned(config):
-    root = Path(config['root']); details = json.loads((root / 'metadata.json').read_text()); base = f"http://127.0.0.1:{config['httpPort']}"
-    mode = teaching_tools_mode(config)
+def suppressed_internal_publish(ports, port):
+    # Docker may also list the app image's fixed 3080/tcp as unbound.
+    # These empty bindings never confer permission to dial an address.
+    return (ports is None or isinstance(ports, dict) and f'{port}/tcp' in ports
+            and set(ports) <= {f'{port}/tcp', '3080/tcp'} and all(value is None for value in ports.values()))
+
+
+def internal_candidate_address(config, details, current, network):
+    # Used only after the teaching and isolation guards.
+    settings = current['NetworkSettings']
+    endpoint = container_networks(current)[config['network']]
+    member = (network.get('Containers') or {}).get(current['Id'], {})
+    network_id = network.get('Id', '')
+    ip, prefix, port = endpoint.get('IPAddress'), endpoint.get('IPPrefixLen'), config['httpPort']
+    error = 'CANDIDATE_TEACHING_INTERNAL_ENDPOINT_INVALID'
+    # IPAM can still assign a gateway to the host bridge, not to the container.
+    if (network.get('Internal') is not True or network.get('Name') != config['network']
+            or not re.fullmatch(r'[a-f0-9]{64}', network_id)
+            or network_id != details['networkId'] or endpoint.get('NetworkID') != network_id
+            or not suppressed_internal_publish(settings.get('Ports', {}), port) or current['State']['Running'] is not True
+            or any(values.get(key, '') != '' for values in (endpoint, settings) for key in ('Gateway', 'IPv6Gateway'))
+            or type(port) is not int or not 1024 <= port <= 65535
+            or type(prefix) is not int or not 1 <= prefix <= 32
+            or not isinstance(ip, str) or member.get('Name') != details['container']
+            or member.get('IPv4Address') != f'{ip}/{prefix}'):
+        raise CandidateError(error)
+    try:
+        address = ipaddress.IPv4Address(ip)
+    except ValueError:
+        raise CandidateError(error) from None
+    if str(address) != ip or not any(address in ipaddress.IPv4Network(block)
+                                    for block in ('10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16')):
+        raise CandidateError(error)
+    return ip
+
+
+def check_owned(config, *, expected_internal_address=None):
+    root = Path(config['root']); details = json.loads((root / 'metadata.json').read_text())
+    address, mode = '127.0.0.1', teaching_tools_mode(config)
+    if expected_internal_address is not None and mode is None:
+        raise CandidateError('CANDIDATE_TEACHING_MODE_REQUIRED')
     if mode is not None:
         current = metadata('container', details['container'])
         if current is None: raise CandidateError('CANDIDATE_TEACHING_OWNERSHIP_CHANGED')
         capacity_verified = guard_teaching_tools(config, current)
-        check_isolated_resources(config, details, current)
+        isolated = check_isolated_resources(config, details, current)
+        if expected_internal_address is not None:
+            address = internal_candidate_address(config, details, current, isolated[0])
+            if address != expected_internal_address:
+                raise CandidateError('CANDIDATE_TEACHING_INTERNAL_ENDPOINT_CHANGED')
+    base = f"http://{address}:{config['httpPort']}"
     handlers = [urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())]
     if mode is not None:
-        # All authenticated requests must stay on the guarded loopback port.
+        # All authenticated requests must stay on the guarded candidate endpoint.
         handlers.extend([urllib.request.ProxyHandler({}), CandidateNoRedirect()])
     client = urllib.request.build_opener(*handlers)
     authority = f"physicsos-validation.invalid:{config['httpPort']}"
@@ -1583,7 +1627,10 @@ def check_owned(config):
                                           get('/physicsos/activity/v1/capabilities'), capacity_verified)
     current = metadata('container', details['container'])
     if not current or current['Image'] != details['image'] or not current['State']['Running']: raise RuntimeError('Candidate identity changed')
-    if config.get('network'): check_isolated_resources(config, details, current)
+    if config.get('network'):
+        isolated = check_isolated_resources(config, details, current)
+        if expected_internal_address is not None and internal_candidate_address(config, details, current, isolated[0]) != address:
+            raise CandidateError('CANDIDATE_TEACHING_INTERNAL_ENDPOINT_CHANGED')
     result = {'verified': True, 'image': details['image'], 'readyJson': True, 'login': True, 'accountScope': True, 'protectedRead': True, 'port': config['httpPort']}
     if mode is not None:
         result.update({key: details[key] for key in ['teachingToolsMode', 'teachingToolsImage', 'fingerprint', 'containerId']})
@@ -1601,12 +1648,22 @@ def check(config):
         details = json.loads((root / 'metadata.json').read_text())
         current = metadata('container', details['container'])
         labels = current['Config'].get('Labels', {}) if current else {}
-        bindings = current['NetworkSettings'].get('Ports', {}).get(f"{config['httpPort']}/tcp") or [] if current else []
-        if not current or not current['State']['Running'] or current['Image'] != details['image'] or labels.get('io.physicsos.task') != config['task'] or labels.get('io.physicsos.role') != 'validation' or not any(binding.get('HostIp') == '127.0.0.1' and binding.get('HostPort') == str(config['httpPort']) for binding in bindings):
+        ports = (current or {}).get('NetworkSettings', {}).get('Ports', {})
+        port = str(config['httpPort'])
+        bindings = ports.get(port + '/tcp') if isinstance(ports, dict) else None
+        loopback = isinstance(bindings, list) and any(
+            isinstance(binding, dict) and binding.get('HostIp') == '127.0.0.1' and binding.get('HostPort') == port
+            for binding in bindings)
+        if (not current or not current['State']['Running'] or current['Image'] != details['image']
+                or labels.get('io.physicsos.task') != config['task'] or labels.get('io.physicsos.role') != 'validation'
+                or (not loopback and (not suppressed_internal_publish(ports, port) or teaching_tools_mode(config) is None))):
             raise RuntimeError('Owned candidate endpoint identity must match before authentication')
         guard_teaching_tools(config, current)
-        if config.get('network'): check_isolated_resources(config, details, current)
-        return check_owned(config)
+        isolated = check_isolated_resources(config, details, current) if config.get('network') else None
+        if loopback:
+            return check_owned(config)
+        address = internal_candidate_address(config, details, current, isolated[0])
+        return check_owned(config, expected_internal_address=address)
 
 
 def main():

@@ -798,6 +798,9 @@ def selections_for(plan):
     if plan.get('vite'):
         selections.append({'root': HARNESS + '/apps/web/dist', 'items': ['.'], 'ownedItems': ['.']})
     startup = {'overlays/harness/files/packages/physicsos/health-host/deployment.patch.yml', 'package.json', TEACHING_TOOLS_MARKER, 'scripts/docker-entrypoint.mjs', 'scripts/healthcheck.mjs', 'scripts/deploy/wait-for-ready.mjs', 'scripts/deploy/migrate-json-postgres.mjs'}
+    # The signed manifest lives beside src/lib, in the plugin-center plugins
+    # directory. It must travel with changed signed entries even in a build scope.
+    startup.update(DEFAULT_TRUST[key] for key in ('manifestPath', 'publicKeyPath'))
     exact.extend(sorted(startup & set(plan.get('changed', []) + plan.get('deleted', []))))
     return selections, exact
 

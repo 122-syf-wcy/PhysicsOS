@@ -3,7 +3,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { isAbsolute, join } from 'node:path'
 import { AVATAR_IDS, avatarPath, canonical, checkpointManifest, digest, identityFields, listPages, privateJson, operationId } from './teaching-tools-browser-helpers.mjs'
-import { canvasHead, canvasSnapshot, whiteboardSnapshot } from './teaching-tools-core.browser.mjs'
+import { canvasHead, canvasSnapshot, whiteboardSnapshot, workspaceContent } from './teaching-tools-core.browser.mjs'
 
 const fileDigest = bytes => createHash('sha256').update(bytes).digest('hex')
 const query = values => new URLSearchParams(Object.entries(values).filter(([, value]) => value !== undefined).map(([key, value]) => [key, String(value)])).toString()
@@ -133,9 +133,14 @@ async function reconcileStatistics(h) {
     }
     for (const module of ['home', 'projects', 'profile', 'app']) h.check(`${module} management/view intentions do not become effective uses`, (modules.get(module)?.uses ?? 0) === (original.get(module)?.uses ?? 0))
     const labDelta = (modules.get('lab')?.uses ?? 0) - (original.get('lab')?.uses ?? 0)
-    if (labDelta > 0) h.unverified('experiment-run-receipt-correlation', 'Real lab uses increased, but this core delivery does not enumerate their durable experiment-run receipt IDs; playback intent is not called a receipt')
-    const provenUses = Object.values(verifiedSources).reduce((sum, value) => sum + value.durableEditingSessions, 0)
-    const otherUseDeltas = [...new Set([...modules.keys(), ...original.keys()])].filter(module => !['canvas', 'whiteboard'].includes(module)).map(module => ({ module, delta: (modules.get(module)?.uses ?? 0) - (original.get(module)?.uses ?? 0) }))
+    const labAcks = h.report.experimentRunAcks, pendingLabFixture = h.config.footprint.recentScenes?.find(scene => scene.recordExperimentRun === true)
+    if (labAcks.length) {
+      h.check('The real lab receipt is unique, within the statistics window, and bound to the authorized teacher scene', labAcks.length === 1 && labAcks.every(value => value.role === 'teacher' && value.stage === 'recent' && value.sceneId === pendingLabFixture?.sceneId && Date.parse(value.recordedAt) >= Date.parse(current.from) && Date.parse(value.recordedAt) < Date.parse(current.to)))
+      h.check('Lab use delta equals the actual non-replayed durable experiment-run ACK count', labDelta === labAcks.length, { actualUsesDelta: labDelta })
+      verifiedSources.lab = { durableRunIds: labAcks.map(value => value.runId), actualUsesDelta: labDelta }
+    } else if (labDelta !== 0 || pendingLabFixture) h.unverified('experiment-run-receipt-correlation', 'No matching durable experiment-run ACK was observed; playback intent does not prove a lab use')
+    const provenUses = Object.values(verifiedSources).reduce((sum, value) => sum + (value.durableEditingSessions ?? value.durableRunIds.length), 0)
+    const otherUseDeltas = [...new Set([...modules.keys(), ...original.keys()])].filter(module => !Object.hasOwn(verifiedSources, module)).map(module => ({ module, delta: (modules.get(module)?.uses ?? 0) - (original.get(module)?.uses ?? 0) }))
     const userAggregateProven = otherUseDeltas.every(value => value.delta === 0) && provenUses > 0
     if (userAggregateProven) h.check('Aggregate user uses advances only by the proven successful durable-source sessions', current.uses - before.uses === provenUses, { provenUses, actualDelta: current.uses - before.uses })
     else h.unverified('aggregate-user-uses-source-coverage', 'Aggregate user uses cannot be called verified while another source has an uncorrelated delta or no durable source was proven')
@@ -235,6 +240,12 @@ export async function rolesStage(h) {
 
 function sameTeacher(h, actual) { for (const field of identityFields) h.check(`Checkpoint teacher ${field} is exact`, actual[field] === h.config.expected.teacher[field]) }
 function sourceFixtureKey(h, origin) { return digest({ origin, identities: Object.fromEntries(Object.keys(h.config.states).sort().map(key => [key, Object.fromEntries(identityFields.map(field => [field, h.config.expected[key][field]]))])) }) }
+async function workspaceAuthority(h, ui, fixture) {
+  h.check('Workspace checkpoint requires a declared complete native and material probe contract', !!fixture?.nativeProbe && fixture.materials.every(material => material.kind === 'canvas' || !!material.nativeProbe))
+  const state = await h.read(ui, `/physicsos/learning/product-state/projects/${encodeURIComponent(fixture.workspaceId)}`)
+  h.check('Workspace checkpoint includes the exact owned lifecycle head', state.state?.projectId === fixture.workspaceId && Number.isSafeInteger(state.state.version) && Number.isSafeInteger(state.state.generation))
+  return { state, ...await workspaceContent(h, ui, fixture) }
+}
 async function snapshots(h, ui) {
   const result = []
   for (const resource of h.report.resources) {
@@ -247,10 +258,14 @@ async function snapshots(h, ui) {
     h.check('Restart checkpoint includes the full original physical scene, not only recent metadata', native?.title === recent.title && native.kind === 'experiment')
     result.push({ kind: 'recent', id: recent.sceneId, snapshot: { state: (await h.read(ui, `/physicsos/learning/product-state/recent-scenes/${encodeURIComponent(recent.sceneId)}`)).state, native } })
   }
-  for (const workspace of h.config.footprint.workspaces ?? []) if (workspace.nativeProbe) {
-    const materialSnapshots = []
-    for (const material of workspace.materials) materialSnapshots.push({ ...material, snapshot: material.kind === 'canvas' ? await canvasSnapshot(h, ui, material.id) : await h.nativeProbe(ui, material.nativeProbe, material.id) })
-    result.push({ kind: 'workspace', id: workspace.workspaceId, nativeProbe: workspace.nativeProbe, snapshot: { state: await h.read(ui, `/physicsos/learning/product-state/projects/${encodeURIComponent(workspace.workspaceId)}`), native: await h.nativeProbe(ui, workspace.nativeProbe, workspace.workspaceId), materials: materialSnapshots } })
+  for (const workspace of h.config.footprint.workspaces ?? []) {
+    const snapshot = await workspaceAuthority(h, ui, workspace)
+    const journal = h.report.resources.find(resource => resource.kind === 'workspace' && resource.id === workspace.workspaceId)
+    if (journal) {
+      h.check('The restart baseline still equals the original full native and material data from before delete', digest({ native: snapshot.native, materials: snapshot.materials }) === journal.workspaceContentSha256)
+      h.check('The restart baseline still has the exact final lifecycle head from the workspace stage', canonical(snapshot.state.state) === canonical(journal.observedHead))
+    }
+    result.push({ kind: 'workspace', id: workspace.workspaceId, nativeProbe: workspace.nativeProbe, snapshot })
   }
   return result
 }
@@ -274,9 +289,9 @@ async function reread(h, ui, resource, retained = false) {
     return { state: (await h.read(ui, `/physicsos/learning/product-state/recent-scenes/${encodeURIComponent(resource.id)}`)).state, native }
   }
   if (resource.kind === 'workspace') {
-    const materials = []
-    for (const material of resource.snapshot.materials) materials.push({ ...material, snapshot: material.kind === 'canvas' ? await canvasSnapshot(h, ui, material.id) : await h.nativeProbe(ui, material.nativeProbe, material.id) })
-    return { state: await h.read(ui, `/physicsos/learning/product-state/projects/${encodeURIComponent(resource.id)}`), native: await h.nativeProbe(ui, resource.nativeProbe, resource.id), materials }
+    const fixture = h.config.footprint.workspaces?.find(value => value.workspaceId === resource.id)
+    h.check('Workspace reread is bound to the current declared footprint, not checkpoint-supplied dispatch', !!fixture && canonical(fixture.nativeProbe) === canonical(resource.nativeProbe))
+    return workspaceAuthority(h, ui, fixture)
   }
   h.check('Checkpoint never selects an unknown resource kind', false)
 }
