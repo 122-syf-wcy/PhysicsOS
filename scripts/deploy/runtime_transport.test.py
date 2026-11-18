@@ -20,11 +20,13 @@ class FullTransportContracts(unittest.TestCase):
         self.assertEqual(set(layout['copies']), set(t.COPY_PATHS))
         self.assertNotIn('\nCOPY ', layout['dockerfile'])
         self.assertIn('HEALTHCHECK', layout['dockerfile'])
+        self.assertIn(t.TEACHING_BRIDGE_LABEL, layout['dockerfile'].splitlines())
         self.assertIn('CMD ["node", "scripts/docker-entrypoint.mjs"', layout['dockerfile'])
         original_runs = [line for line in source[source.index('FROM ${NODE_IMAGE} AS runtime'):].replace('\\\n', '').splitlines() if line.startswith('RUN ')]
         self.assertEqual([line for line in layout['dockerfile'].splitlines() if line.startswith('RUN ')], original_runs)
         for changed in [source.replace('COPY --from=builder --chown=physicsos:physicsos /app/node_modules ./node_modules', 'COPY /private ./node_modules'),
-                        source + '\nADD secret /app/secret\n', source + '\nCOPY --from=builder --chown=physicsos:physicsos /app/extra ./extra\n']:
+                        source + '\nADD secret /app/secret\n', source + '\nCOPY --from=builder --chown=physicsos:physicsos /app/extra ./extra\n',
+                        source + '\n' + t.TEACHING_BRIDGE_LABEL + '\n', source.replace(t.TEACHING_BRIDGE_LABEL, 'LABEL physicsos.unreviewed="true"')]:
             with self.assertRaises(ValueError): t.config_only_dockerfile(changed)
 
     def test_runtime_configuration_comparison_ignores_only_approved_labels_and_never_echoes_env(self):

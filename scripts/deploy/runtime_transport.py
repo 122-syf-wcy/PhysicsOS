@@ -14,6 +14,7 @@ COPY_PATHS = ['package.json', 'node_modules', 'packages', 'vendor/deepseek-harne
               'scripts/deploy/wait-for-ready.mjs', 'scripts/deploy/migrate-json-postgres.mjs',
               'scripts/docker-entrypoint.mjs']
 METADATA = ['physicsos-runtime-manifest.json', 'canvas-source-manifest.json']
+TEACHING_BRIDGE_LABEL = 'LABEL physicsos.teaching-tools.bridge="teaching-tools-bridge-v1"'
 
 
 def canonical(value):
@@ -48,6 +49,9 @@ def config_only_dockerfile(source):
         elif instruction in allowed:
             if instruction == 'FROM' and (kept or text != 'FROM ${NODE_IMAGE} AS runtime'):
                 raise ValueError('Additional runtime stages are not transportable')
+            kept.append(line)
+        elif text == TEACHING_BRIDGE_LABEL and not any(row.strip() == text for row in kept):
+            # This capability is part of the runtime config proof, not an ignored transport label.
             kept.append(line)
         else:
             raise ValueError('Unsupported runtime instruction for verified transport')
