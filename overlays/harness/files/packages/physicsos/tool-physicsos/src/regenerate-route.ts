@@ -54,6 +54,8 @@ export interface IdentityLike {
   sessionOwnerKey(sessionId: string): string | undefined
 }
 
+export type GenerationAdmission = (state: Extract<CodeVisualizationState, { status: 'generating' }>) => void
+
 /** The generation entry the plugin body exposes to this route. */
 export type GenerateForAgent = (
   host: { agent: Agent; signal: AbortSignal },
@@ -61,6 +63,7 @@ export type GenerateForAgent = (
   experimentId: string | undefined,
   instructions: string | undefined,
   force: boolean,
+  onAdmitted: GenerationAdmission,
 ) => Promise<CodeVisualizationState>
 
 class RouteError extends Error {
@@ -145,7 +148,9 @@ const statusOfGenerationError = (code: string): number => {
   switch (code) {
     case 'SCENE_NOT_FOUND': return 404
     case 'SESSION_OWNER_REQUIRED': return 403
-    case 'GENERATION_DEPTH_LIMIT': return 409
+    case 'GENERATION_DEPTH_LIMIT':
+    case 'STALE_GENERATION':
+    case 'GENERATION_RECEIPT_MISMATCH': return 409
     case 'SESSION_REQUIRED': return 503
     default: return 500
   }
@@ -182,14 +187,19 @@ export function regenerateHandler(
       if ('error' in resolved) {
         throw new RouteError(409, resolved.error.code ?? 'SESSION_UNAVAILABLE', resolved.error.message)
       }
+      const currentIdentity = lookup('physicsosIdentity') as IdentityLike | undefined
+      if (String(resolved.agent.id) !== input.sessionId || currentIdentity?.sessionOwnerKey(input.sessionId) !== actor.userKey) {
+        throw new RouteError(404, 'NOT_FOUND', '当前账号没有这个学习会话。')
+      }
       /* The request's own abort must not cancel the generation: the browser
          gets its answer immediately and the job keeps its 600 s budget. */
       const signal = new AbortController().signal
+      const admission = Promise.withResolvers<CodeVisualizationState>()
       let state: CodeVisualizationState
       try {
         state = await Promise.race([
-          generate({ agent: resolved.agent, signal }, input.sceneId, input.experimentId, input.instructions, true),
-          startedStateOf(resolved.agent, input.sceneId),
+          generate({ agent: resolved.agent, signal }, input.sceneId, input.experimentId, input.instructions, true, admission.resolve),
+          admission.promise,
         ])
       } catch (error) {
         if (error instanceof HarnessError) {
@@ -207,29 +217,6 @@ export function regenerateHandler(
     }
   }
 }
-
-/**
- * Resolve as soon as the generation has published its `generating` snapshot,
- * so the HTTP answer does not wait for the child agent. The generation
- * appends that snapshot before its first await; this looks for it right after
- * the current microtasks drain and otherwise keeps waiting on the generation
- * itself (whose early refusals reject through the race).
- */
-const startedStateOf = (agent: Agent, sceneId: string): Promise<CodeVisualizationState> =>
-  new Promise<CodeVisualizationState>((resolve) => {
-    const probe = (): void => {
-      // oxlint-disable-next-line typescript/no-deprecated -- same log the generation publishes to; a projection may be absent.
-      const events = agent.session.snapshotEvents()
-      for (let index = events.length - 1; index >= 0; index--) {
-        const event = events[index]
-        if (event?.type !== 'physics/scene' || event.data.sceneId !== sceneId) continue
-        const state = event.data.visualization
-        if (state?.status === 'generating') resolve(state)
-        return
-      }
-    }
-    setTimeout(probe, 0)
-  })
 
 /**
  * Mount the route when a web server is composed. Headless assemblies without

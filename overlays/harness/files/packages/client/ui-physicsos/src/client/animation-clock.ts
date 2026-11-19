@@ -6,23 +6,12 @@ const MAX_FRAME_DELTA_SECONDS = 0.1
  * 0.01x stretches a 40 Hz wave cycle to 2.5 seconds for close observation. */
 export const PLAYBACK_RATES: readonly number[] = [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2]
 
-/** One magnetic orbit at 1x is presented over this many wall-clock seconds. */
-export const MAGNETIC_CYCLE_WALL_SECONDS = 5
+export { MAGNETIC_CYCLE_WALL_SECONDS, magneticPhysicalDelta } from './physics/magnetic-clock.ts'
 
 /** Fraction of the visible window each 单步 / step-forward advances. Shared by
     the Lab timeline and Question Space step so the two playback systems cannot
     drift apart. */
 export const STEP_FRACTION = 0.1
-
-/** Convert display time into the microscopic physical time consumed by the engine.
- * @param wallSeconds - elapsed wall-clock seconds from the frame clock.
- * @param periodSeconds - physical seconds covered by one visible window.
- * @returns physical seconds to advance; clamps negatives/non-finite to 0.
- */
-export const magneticPhysicalDelta = (wallSeconds: number, periodSeconds: number): number =>
-  periodSeconds > 0 && Number.isFinite(wallSeconds)
-    ? Math.max(0, wallSeconds) * periodSeconds / MAGNETIC_CYCLE_WALL_SECONDS
-    : 0
 
 /** A charged-particle run lasts nanoseconds–microseconds of physical time; at 1x
     the whole visible window is presented over this many wall-clock seconds. */

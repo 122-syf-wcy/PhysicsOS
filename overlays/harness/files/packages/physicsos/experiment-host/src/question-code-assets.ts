@@ -233,9 +233,15 @@ function validateNativeAssets(source: string): void {
     const depth: number = tokens[index]!.depth
     for (let at = index + 1; at < tokens.length; ) {
       if (tokens[at]?.kind !== 'word') break
+      const loopEnd = value(index) === 'const' && value(index - 2) === 'for' && value(index - 1) === '(' && value(at + 1) === 'of'
+        ? closes.get(index - 1) : undefined
+      const loopBody = loopEnd !== undefined && value(loopEnd + 1) === '{' && value(at + 2) === '[' && closes.get(at + 2) === loopEnd - 1 ? loopEnd + 1 : undefined
       const end = value(at + 1) === '=' ? expressionEnd(at + 2, depth) : at + 1
-      addBinding({ name: value(at)!, index: at, scope: scopeAt[at] ?? -1,
-        initial: value(index) === 'const' && value(at + 1) === '=' ? tokens.slice(at + 2, end) : undefined, changed: false, writes: [] })
+      // Literal tuple iteration retains data provenance only within this loop.
+      // The entire iterable, including every element, must still prove safe.
+      addBinding({ name: value(at)!, index: at, scope: loopBody ?? scopeAt[at] ?? -1,
+        initial: loopBody !== undefined ? tokens.slice(at + 2, loopEnd)
+          : value(index) === 'const' && value(at + 1) === '=' ? tokens.slice(at + 2, end) : undefined, changed: false, writes: [] })
       if (value(end) !== ',' || tokens[end]?.depth !== depth) break
       at = end + 1
     }
@@ -318,8 +324,30 @@ function validateNativeAssets(source: string): void {
     if (!ignoreWrites && binding.writes.length && (origin.kind === 'json' || binding.writes.some(write => !safeOrigin(readExpression(write.value, binding.index, next))))) return unknown
     return origin
   }
-  const readExpression = (expression: AssetToken[], index: number, seen = new Set<ReadBinding>()): ReadOrigin => {
-    const origins: ReadOrigin[] = [], collection = ['[', '{'].includes(expression[0]?.value ?? '')
+  const readingFunctions = new Set<ReadFunction>()
+  const readExpression = (expression: AssetToken[], index: number, seen = new Set<ReadBinding>(), branches = 0): ReadOrigin => {
+    if (branches >= 64) return unknown
+    let start = 0, end = expression.length
+    while (expression[start]?.value === '(' && closes.get(tokenPositions.get(expression[start]!)!) === tokenPositions.get(expression[end - 1]!)) { start++; end-- }
+    if (start) expression = expression.slice(start, end)
+    const first = expression[0], depth = first?.depth
+    // A ternary's result comes from its two branches, never from its guard.
+    // Keep function-valued expressions unknown, including expression arrows.
+    const arrow = expression.some((token, at) => token.value === '=' && expression[at + 1]?.value === '>')
+    if (arrow) return unknown
+    let question = -1, nested = 0
+    for (let at = 0; at < expression.length; at++) {
+      const token = expression[at]!
+      if (token.depth !== depth) continue
+      if (token.value === '?' && !['.', '?'].includes(expression[at + 1]?.value ?? '') && expression[at - 1]?.value !== '?') {
+        if (question < 0) question = at
+        else nested++
+      } else if (token.value === ':' && question >= 0) {
+        if (nested) nested--
+        else return joinOrigins([readExpression(expression.slice(question + 1, at), index, seen, branches + 1), readExpression(expression.slice(at + 1), index, seen, branches + 1)])
+      }
+    }
+    const origins: ReadOrigin[] = [], collection = ['[', '{'].includes(first?.value ?? '')
     for (let at = 0; at < expression.length; at++) {
       const token = expression[at]!, name = token.value
       if (token.kind === 'string' || token.kind === 'number' || ['true', 'false', 'null', 'undefined'].includes(name)) { origins.push(scalar); continue }
@@ -361,8 +389,14 @@ function validateNativeAssets(source: string): void {
           }
           else if (!binding && end === at + 1 && functions.has(name)) {
             const fn = functions.get(name)!, returned: ReadOrigin[] = []
-            for (let position = fn.scope + 1; position < fn.end; position++) if (value(position) === 'return') returned.push(readExpression(tokens.slice(position + 1, expressionEnd(position + 1, tokens[position]!.depth)), position, seen))
-            origin = returned.length ? joinOrigins(returned) : unknown
+            if (readingFunctions.has(fn)) origin = unknown
+            else {
+              readingFunctions.add(fn)
+              try {
+                for (let position = fn.scope + 1; position < fn.end; position++) if (value(position) === 'return') returned.push(readExpression(tokens.slice(position + 1, expressionEnd(position + 1, tokens[position]!.depth)), position, seen))
+                origin = returned.length ? joinOrigins(returned) : unknown
+              } finally { readingFunctions.delete(fn) }
+            }
           } else origin = unknown
           end = offset + 1
         } else break
@@ -390,7 +424,7 @@ function validateNativeAssets(source: string): void {
         && argument.slice(2, -1).every(token => token.kind === 'word' || token.kind === 'string' || token.kind === 'number' || ['.', '[', ']'].includes(token.value))))
   }
   const tags = new Set(['canvas', 'svg', 'g', 'path', 'line', 'polyline', 'polygon', 'circle', 'ellipse', 'rect', 'text', 'tspan', 'defs', 'lineargradient', 'radialgradient', 'stop', 'clippath', 'mask', 'marker', 'pattern', 'title', 'desc'])
-  const attributes = new Set(['cx', 'cy', 'x', 'y', 'r', 'rx', 'ry', 'width', 'height', 'x1', 'y1', 'x2', 'y2', 'd', 'points', 'transform', 'viewbox', 'preserveaspectratio', 'id', 'class', 'opacity', 'fill-opacity', 'stroke-opacity', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-dasharray', 'stroke-dashoffset', 'vector-effect', 'font-size', 'font-family', 'font-weight', 'text-anchor', 'dominant-baseline', 'offset', 'stop-color', 'stop-opacity', 'gradientunits', 'gradienttransform', 'patternunits', 'patterncontentunits', 'markerwidth', 'markerheight', 'refx', 'refy', 'orient', 'xmlns'])
+  const attributes = new Set(['cx', 'cy', 'x', 'y', 'r', 'rx', 'ry', 'width', 'height', 'x1', 'y1', 'x2', 'y2', 'd', 'points', 'transform', 'viewbox', 'preserveaspectratio', 'id', 'class', 'role', 'aria-label', 'opacity', 'fill-opacity', 'stroke-opacity', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-dasharray', 'stroke-dashoffset', 'vector-effect', 'font-size', 'font-family', 'font-weight', 'text-anchor', 'dominant-baseline', 'offset', 'stop-color', 'stop-opacity', 'gradientunits', 'gradienttransform', 'patternunits', 'patterncontentunits', 'markerwidth', 'markerheight', 'refx', 'refy', 'orient', 'xmlns'])
   const paintAttributes = new Set(['fill', 'stroke', 'filter', 'clip-path', 'mask', 'marker-start', 'marker-mid', 'marker-end'])
   const styleProperties = new Set(['width', 'height', 'minwidth', 'minheight', 'maxwidth', 'maxheight', 'position', 'inset', 'left', 'right', 'top', 'bottom', 'display', 'margin', 'padding', 'boxsizing', 'opacity', 'color', 'backgroundcolor', 'font', 'fontsize', 'fontfamily', 'fontweight', 'textalign', 'lineheight', 'overflow', 'pointerevents'])
   const forbidden = new Set(['Image', 'HTMLImageElement', 'SVGImageElement', 'SVGUseElement', 'ImageBitmap', 'createImageBitmap', 'drawImage', 'createPattern', 'DOMParser', 'Document', 'CSSStyleSheet', 'eval', 'Function', 'setTimeout', 'setInterval', 'insertAdjacentHTML', 'createContextualFragment', 'setHTML', 'setHTMLUnsafe', 'attachShadow', 'insertRule'])

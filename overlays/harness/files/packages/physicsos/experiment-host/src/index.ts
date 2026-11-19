@@ -127,6 +127,9 @@ export async function apply(ctx: Context, config: Config = {}): Promise<() => Pr
     })
     yield () => questionCodes.close()
     await questionCodes.initialize()
+    // The real writer/domain is acquired and frozen rows checked. Reconcile
+    // once before producers or HTTP requests can acquire any new leases.
+    await questionJobs.initialize()
     const currentSource = (binding: ValidationSourceBinding) => currentCandidateSource(binding, {
       lookup: ctx.get.bind(ctx) as (key: string) => unknown, identity: questionIdentity,
     })

@@ -22,7 +22,7 @@ import {
 import type { LabCanvasViewModel, LabFieldDirection, LabObservableId, LabTreeNode } from '../lab-view-model.ts'
 import type { PhysicsScene } from '@physicsos/physics-scene'
 import type { CapturedResult } from '@physicsos/physics-workbench/types'
-import { magneticPhysicalDelta } from '../animation-clock.ts'
+import { magneticPhysicalDelta } from './magnetic-clock.ts'
 import type { WorkspaceRuntime, WorkspaceSnapshot } from './workspace-runtime.ts'
 import { emptyVisualModel } from './scene-visual-model.ts'
 import type {

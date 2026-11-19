@@ -125,9 +125,10 @@ export async function evaluateCandidate(
   let frames = request.frames, changedFrame = request.changedFrame
   let validationProfile = MECHANICS_VALIDATION_PROFILE as QuestionCodeValidationProfile
   let parameter: { readonly id: string; readonly from: number; readonly to: number } | undefined
-  // Static NEVER accepts pinned child frames. Always plan independently from
-  // the canonical scene via the real domain runtime in the worker image.
-  if (frames === undefined || changedFrame === undefined || requestedProfile.id === 'optics-thin-lens-real-static') {
+  // Concrete optics/magnetic policies never accept pinned child frames.
+  // Replan independently from the canonical scene through the real runtime.
+  if (frames === undefined || changedFrame === undefined || requestedProfile.id === 'optics-thin-lens-real-static'
+    || requestedProfile.id === 'magnetic-uniform-circular-native-motion') {
     if (request.scene === undefined || typeof request.experimentId !== 'string'
       || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(request.experimentId)) return rejectedProfile(requestedProfile)
     if (planner === undefined) throw Object.assign(new Error('frame planner unavailable'), { status: 503 })
@@ -170,6 +171,7 @@ export async function evaluateCandidate(
     const verdict = evaluateObservation({
       ...result,
       validationProfile,
+      ...(parameter === undefined ? {} : { parameter }),
       candidateSha256: request.expected.candidateSha256,
       expectedSceneSha256: request.expected.sceneSha256,
       candidateSceneSha256: request.expected.sceneSha256,
@@ -295,13 +297,14 @@ export async function startValidationWorker(options: WorkerOptions): Promise<{ s
  * needs mechanics never loads the rest, and a missing module degrades that
  * domain (503 for planning) instead of breaking the worker.
  */
-function workspaceRuntimeLoader(root: string): (scene: Record<string, unknown>) => Promise<((scene: Record<string, unknown>) => import('./frame-plan.ts').FrameSource | null) | null> {
+export function workspaceRuntimeLoader(root: string): (scene: Record<string, unknown>) => Promise<((scene: Record<string, unknown>) => import('./frame-plan.ts').FrameSource | null) | null> {
   /* One module per engine family. Persisted scenes carry no domain field, so
      the engine that accepts the scene decides which runtime to use — the same
      decision the Lab makes (physics-runtime `pickEngine`/`domainOfEngine`). */
   const modules: Record<string, { readonly path: string; readonly factory: string }> = {
-    mechanics: { path: 'viewport/mechanics-workspace-runtime.js', factory: 'createMechanicsWorkspaceRuntime' },
-    optics: { path: 'viewport/optics-workspace-runtime.js', factory: 'createOpticsWorkspaceRuntime' },
+    mechanics: { path: 'viewport/physics/mechanics-workspace-runtime.js', factory: 'createMechanicsWorkspaceRuntime' },
+    optics: { path: 'viewport/physics/optics-workspace-runtime.js', factory: 'createOpticsWorkspaceRuntime' },
+    magnetic: { path: 'viewport/physics/magnetic-workspace-runtime.js', factory: 'createMagneticWorkspaceRuntime' },
   }
   const cache = new Map<string, ((scene: Record<string, unknown>) => import('./frame-plan.ts').FrameSource | null) | null>()
   const base = `file://${root.endsWith('/') ? root : root + '/'}`
@@ -321,9 +324,9 @@ function workspaceRuntimeLoader(root: string): (scene: Record<string, unknown>) 
       return null
     }
     if (domain === undefined) return null
-    /* Profiles exist only for native mechanics and the concrete imaging
-       runtime. An absent compiled module remains a configuration gap. */
-    const moduleEntry = domain === 'mechanics' ? modules.mechanics : domain === 'optics' ? modules.optics : undefined
+    /* Only these concrete native policies have compiled viewport modules.
+       An absent module remains a configuration gap, never a static fallback. */
+    const moduleEntry = modules[domain]
     if (moduleEntry === undefined) {
       console.error(JSON.stringify({ level: 'warn', phase: 'runtime-loader', domain, error: 'no viewport module for this domain' }))
       return null

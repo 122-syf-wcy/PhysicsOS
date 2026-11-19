@@ -18,9 +18,9 @@ import { searchPublicPhysics } from './public-search.ts'
 export { searchPublicPhysics, publicSearchSources } from './public-search.ts'
 import { createResearchService, researchConfigFromEnv, researchFailureMessage, type ResearchService } from './research-service.ts'
 import { ResearchError } from '@physicsos/web-research'
-import { generateQuestionCode, isQuestionCodeGenerationActive, questionCodeRequestSha256, type CodeStyleContext } from './code-generation.ts'
+import { generateQuestionCode, questionCodeRequestSha256, type CodeStyleContext } from './code-generation.ts'
 import { codeStyleFor } from './code-style-selection.ts'
-import { registerRegenerateRoute } from './regenerate-route.ts'
+import { registerRegenerateRoute, type GenerationAdmission } from './regenerate-route.ts'
 import { sameTurnVisualization, solveSummaryOf, solveTraceOf } from './solve-publication.ts'
 import type {} from '@deepseek-ai/dsh-subagent'
 import type { CodeExperimentRef, CodeVisualizationSource, CodeVisualizationState } from '@physicsos/agent-tools'
@@ -360,8 +360,9 @@ export function apply(ctx: Context, config: Config): void {
    * turn already produced; a user-initiated regeneration (`force`) starts a
    * new job unless one is still running for the same scene revision.
    */
+  const activeGenerations = new Map<string, { ownerKey: string; matches: (current: PhysicsSceneSnapshot) => boolean }>()
   const generate = async (
-    exec: GenerationHost, sceneId: string, experimentId?: string, instructions?: string, force = false,
+    exec: GenerationHost, sceneId: string, experimentId?: string, instructions?: string, force = false, onAdmitted?: GenerationAdmission,
   ): Promise<CodeVisualizationState> => {
     const parent = exec.agent
     if (parent === undefined) throw new HarnessError('题目代码实验需要当前对话。', 'SESSION_REQUIRED')
@@ -374,13 +375,23 @@ export function apply(ctx: Context, config: Config): void {
     if (snapshot === undefined) throw new HarnessError('当前对话没有这个题目场景。', 'SCENE_NOT_FOUND')
     const turn = currentTurnOf(exec)
     const selected = codeStyleFor(snapshot, experimentId)
-    const requestSha256 = questionCodeRequestSha256({ ownerSessionId, snapshot, experimentId: selected, instructions })
+    const requestOf = (current: PhysicsSceneSnapshot): string =>
+      questionCodeRequestSha256({ ownerSessionId, snapshot: current, experimentId: selected, instructions })
+    const requestSha256 = requestOf(snapshot)
+    const plainRecovery = force && experimentId === undefined && instructions === undefined
     const existing = snapshot.visualization
     const reusable = existing !== undefined && existing.ownerSessionId === ownerSessionId
       && existing.sceneId === sceneId && existing.sceneRevision === snapshot.revision
-    /* A durable marker without matching work in this process is an interrupted job. */
-    const live = reusable && existing.status === 'generating'
-      && isQuestionCodeGenerationActive(ownerSessionId, snapshot, requestSha256)
+    // Keep the exact request live through terminal publication, not just through the child run.
+    const liveMarker = (current: PhysicsSceneSnapshot): current is PhysicsSceneSnapshot & { visualization: Extract<CodeVisualizationState, { status: 'generating' }> } => {
+      const marker = current.visualization
+      if (marker?.status !== 'generating' || marker.ownerSessionId !== ownerSessionId
+        || marker.sceneId !== current.sceneId || marker.sceneRevision !== current.revision
+        || !plainRecovery && marker.requestSha256 !== requestSha256 || (marker.deadlineAt ?? 0) <= Date.now()) return false
+      const active = activeGenerations.get(marker.jobId)
+      return active?.ownerKey === ownerKey && active.matches(current)
+    }
+    const live = liveMarker(snapshot)
     if (reusable && (force ? live : existing.status === 'generating' ? live
       : snapshot.turn === turn || existing.status === 'ready' && existing.requestSha256 === requestSha256)) return existing
     type Artifacts = {
@@ -400,12 +411,16 @@ export function apply(ctx: Context, config: Config): void {
     /* Durable execution record. Written before the child starts so a restart
        or crash leaves an auditable job instead of an orphaned projection; the
        chat-facing `generating/ready/failed` states are unchanged. */
+    type JobSource = { id: string; ownerSessionId: string; ownerKey: string; sceneId: string; sceneRevision: number; sceneSha256: string; requestSha256?: string }
     type Jobs = {
-      submit(input: { id: string; ownerSessionId: string; ownerKey: string; sceneId: string; sceneRevision: number; sceneSha256: string; requestSha256?: string }): Promise<unknown>
-      finish(id: string, epoch: number, input: { status: 'rejected'; code?: string; message?: string }): Promise<unknown>
+      submit(input: JobSource): Promise<unknown>
+      get(id: string, ownerKey: string): { leaseEpoch: number; status: string; attempts: readonly { candidateSha256?: string }[] }
+      finish(id: string, epoch: number, input: { status: 'rejected' | 'infrastructure-failed'; code?: string; message?: string }): Promise<unknown>
       claim(id: string): Promise<{ epoch: number } | undefined>
       recordCandidate(id: string, epoch: number, candidate: { candidateSha256: string }): Promise<unknown>
-      cancel(id: string, ownerKey: string, reason?: string): Promise<unknown>
+      supersede(id: string, reason: string, expectedEpoch?: number): Promise<unknown>
+      publishGeneration(input: JobSource, epoch: number, append: () => void, candidate?: { artifactId: string; sha256: string }): Promise<void>
+      recoverFrozenGeneration(input: JobSource): Promise<{ epoch: number; artifactId: string; sha256: string; experimentId: string } | undefined>
       issueTicket(id: string, epoch: number): { readonly token?: string }
     }
     /* Isolated acceptance: absent configuration keeps candidates unaccepted. */
@@ -417,77 +432,143 @@ export function apply(ctx: Context, config: Config): void {
       }): Promise<unknown>
     }
     const jobs = lookup('questionCodeJobs') as Jobs | undefined
-    /* Reuse the id only while that generation is actually live: the browser
-       follows /physicsos/question-code/jobs/<id>, and an orphaned marker must
-       be replaced by a new job rather than resumed under the old identity. */
-    const jobId = (live && existing !== undefined ? existing.jobId : undefined)
-      ?? `gen_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`
-    if (jobs !== undefined) {
-      await jobs.submit({
-        id: jobId,
-        ownerSessionId,
-        ownerKey,
-        sceneId,
-        sceneRevision: snapshot.revision,
-        sceneSha256: createHash('sha256').update(canonicalJson(snapshot.scene)).digest('hex'),
-        requestSha256,
-      }).catch(() => undefined)
+    if (jobs === undefined) throw new HarnessError('题目实验任务服务尚未就绪。', 'JOBS_UNAVAILABLE')
+    const sceneSha256 = createHash('sha256').update(canonicalJson(snapshot.scene)).digest('hex')
+    const sourceOf = (id: string, request = requestSha256): JobSource => ({ id, ownerSessionId, ownerKey, sceneId,
+      sceneRevision: snapshot.revision, sceneSha256, requestSha256: request })
+    const latestSceneId = (): string | undefined => {
+      const projected = ctx.get('sessionProjections')?.stateOf(parent.session, 'physicsScenes')
+      if (projected !== undefined) return projected.latest ?? undefined
+      // oxlint-disable-next-line typescript/no-deprecated -- Same own-session fallback as persistedScene.
+      const events = parent.session.snapshotEvents()
+      for (let index = events.length - 1; index >= 0; index--) {
+        const event = events[index]
+        if (event?.type === 'physics/scene' && parent.session.isOwnSeq(event.seq)) return event.data.sceneId
+      }
+      return undefined
+    }
+    const currentOwner = (): string | undefined =>
+      (lookup('physicsosIdentity') as typeof identity)?.sessionOwnerKey(ownerSessionId)
+    const assertCurrent = (markerJobId?: string, allowAborted = false, markerRequest = requestSha256): PhysicsSceneSnapshot => {
+      if (exec.signal.aborted && !allowAborted) throw new HarnessError('题目实验生成已取消。', 'GENERATION_ABORTED')
+      const current = persistedScene(exec, sceneId), marker = current?.visualization
+      const sessions = lookup('sessions') as { get(id: string): unknown } | undefined
+      if (currentOwner() !== ownerKey || sessions !== undefined && sessions.get(ownerSessionId) !== parent.session
+        || String(parent.session.header.id) !== ownerSessionId
+        || latestSceneId() !== sceneId || current?.sceneId !== sceneId || current.revision !== snapshot.revision
+        || createHash('sha256').update(canonicalJson(current.scene)).digest('hex') !== sceneSha256
+        || requestOf(current) !== requestSha256
+        || (markerJobId === undefined
+          ? canonicalJson(marker ?? null) !== canonicalJson(snapshot.visualization ?? null)
+          : marker?.status !== 'generating' || marker.jobId !== markerJobId || marker.ownerSessionId !== ownerSessionId
+            || marker.sceneId !== sceneId || marker.sceneRevision !== snapshot.revision || marker.requestSha256 !== markerRequest)) {
+        throw new HarnessError('题目或生成请求已更新，旧结果不会发布。', 'STALE_GENERATION')
+      }
+      return current
     }
     const artifacts = lookup('questionCodeArtifacts') as Artifacts | undefined
-    if (reusable && existing.status === 'generating' && !live && !force
-      && (existing.requestSha256 === undefined || existing.requestSha256 === requestSha256) && artifacts?.restoreGeneration !== undefined) {
-      const receipt = await artifacts.restoreGeneration({ ownerSessionId, generationId: existing.jobId, scene: snapshot.scene, experimentId: selected }, exec.signal)
-      const current = persistedScene(exec, sceneId)
-      const projected = ctx.get('sessionProjections')?.stateOf(parent.session, 'physicsScenes')
-      let latestSceneId = projected?.latest
-      if (projected === undefined) {
-        // oxlint-disable-next-line typescript/no-deprecated -- Same own-session compatibility fallback as persistedScene.
-        const events = parent.session.snapshotEvents()
-        for (let index = events.length - 1; index >= 0; index--) {
-          const event = events[index]
-          if (event?.type === 'physics/scene' && parent.session.isOwnSeq(event.seq)) { latestSceneId = event.data.sceneId; break }
+    if (reusable && existing.status === 'generating' && !live && existing.requestSha256 !== undefined
+      && (existing.requestSha256 === requestSha256 || plainRecovery) && artifacts?.restoreGeneration !== undefined) {
+      // A plain recovery click preserves the interrupted request's style and instructions.
+      // Its digest comes from the bound marker and durable job, never from the browser.
+      const markerRequest = existing.requestSha256, priorSource = sourceOf(existing.jobId, markerRequest)
+      const frozen = await jobs.recoverFrozenGeneration(priorSource)
+      if (frozen !== undefined || !force) {
+        let restoredJob: ReturnType<Jobs['get']> | undefined
+        try { restoredJob = jobs.get(existing.jobId, ownerKey) }
+        catch (error) {
+          if (!(typeof error === 'object' && error !== null && 'code' in error && error.code === 'NOT_FOUND')) throw error
         }
-      }
-      if (exec.signal.aborted) throw new HarnessError('题目实验恢复已取消。', 'GENERATION_ABORTED')
-      if (identity?.sessionOwnerKey(ownerSessionId) !== ownerKey || latestSceneId !== sceneId
-        || current?.revision !== snapshot.revision || current.visualization?.status !== 'generating'
-        || current.visualization.jobId !== existing.jobId || current.visualization.ownerSessionId !== ownerSessionId
-        || questionCodeRequestSha256({ ownerSessionId, snapshot: current, experimentId: selected, instructions }) !== requestSha256) {
-        throw new HarnessError('题目已更新，未恢复旧的生成任务。', 'STALE_GENERATION')
-      }
-      if (receipt !== undefined && (receipt.requestSha256 === undefined || receipt.requestSha256 === requestSha256)
-        && current?.visualization?.status === 'generating' && current.visualization.jobId === existing.jobId
-        && current.revision === snapshot.revision && questionCodeRequestSha256({ ownerSessionId, snapshot: current, experimentId: selected, instructions }) === requestSha256
-        && identity?.sessionOwnerKey(ownerSessionId) === ownerKey && !exec.signal.aborted) {
-        if (receipt.ownerSessionId !== ownerSessionId || receipt.sceneId !== sceneId || receipt.sceneRevision !== snapshot.revision
-          || receipt.experimentId !== selected || receipt.rendererKind !== 'independent') throw new HarnessError('题目实验回执身份不一致。', 'GENERATION_RECEIPT_MISMATCH')
-        const restored = { ...receipt, requestSha256 }
-        parent.session.append('physics/scene', { ...current, visualization: restored })
-        return restored
+        const restoreStyle = frozen?.experimentId ?? selected
+        const receipt = restoredJob === undefined ? undefined
+          : await artifacts.restoreGeneration({ ownerSessionId, generationId: existing.jobId, scene: snapshot.scene, experimentId: restoreStyle }, exec.signal)
+        if (restoredJob !== undefined) {
+          const current = jobs.get(existing.jobId, ownerKey)
+          if (current.leaseEpoch !== restoredJob.leaseEpoch || current.status !== restoredJob.status
+            || current.status === 'cancelled' || current.status === 'superseded') {
+            throw new HarnessError('生成任务已取消或被接管，旧回执不会发布。', 'STALE_GENERATION')
+          }
+        }
+        assertCurrent(existing.jobId, false, markerRequest)
+        if (frozen !== undefined && receipt === undefined) {
+          throw new HarnessError('冻结候选暂时无法读取，请重试。', 'GENERATION_RECEIPT_MISMATCH')
+        }
+        if (receipt !== undefined && restoredJob !== undefined) {
+          if (receipt.ownerSessionId !== ownerSessionId || receipt.sceneId !== sceneId || receipt.sceneRevision !== snapshot.revision
+            || receipt.sceneSha256 !== sceneSha256 || receipt.requestSha256 !== markerRequest || receipt.rendererKind !== 'independent'
+            || receipt.experimentId !== restoreStyle || frozen !== undefined && (frozen.epoch !== restoredJob.leaseEpoch
+              || frozen.artifactId !== receipt.artifactId || frozen.sha256 !== receipt.sha256)) {
+            throw new HarnessError('题目实验回执身份不一致。', 'GENERATION_RECEIPT_MISMATCH')
+          }
+          await jobs.publishGeneration(priorSource, restoredJob.leaseEpoch, () => {
+            parent.session.append('physics/scene', { ...assertCurrent(existing.jobId, false, markerRequest), visualization: receipt })
+          }, receipt)
+          return receipt
+        }
       }
     }
-    const started = await jobs?.claim(jobId).catch(() => undefined)
-    const generation = await generateQuestionCode({
+    // An orphan never resumes model work under its old generation identity.
+    const jobId = `gen_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`
+    const source = sourceOf(jobId)
+    await jobs.submit(source)
+    const started = await jobs.claim(jobId)
+    if (started === undefined) throw new HarnessError('生成任务未取得执行租约。', 'GENERATION_NOT_CLAIMED')
+    const epoch = started.epoch
+    // Another caller can land its first marker while this admission awaits IO.
+    // Retire only our unused lease before the generator's own deduplication
+    // returns that live request; never strand a second running durable job.
+    const concurrent = persistedScene(exec, sceneId)
+    if (concurrent !== undefined && liveMarker(concurrent)) {
+      await jobs.finish(jobId, epoch, { status: 'rejected', code: 'GENERATION_SUPERSEDED' })
+      const latest = persistedScene(exec, sceneId)
+      if (currentOwner() !== ownerKey || latestSceneId() !== sceneId || latest === undefined || !liveMarker(latest)) {
+        throw new HarnessError('题目或生成请求已更新。', 'STALE_GENERATION')
+      }
+      return latest.visualization
+    }
+    let publication = Promise.resolve()
+    const leaseIsCurrent = (): boolean => {
+      const current = jobs.get(jobId, ownerKey)
+      return current.leaseEpoch === epoch && (current.status === 'running' || current.status === 'candidate')
+    }
+    activeGenerations.set(jobId, {
+      ownerKey,
+      matches: current => !exec.signal.aborted && current.visualization?.requestSha256 === requestSha256
+        && requestOf(current) === requestSha256 && leaseIsCurrent(),
+    })
+    const operation = generateQuestionCode({
       ownerSessionId, snapshot, signal: exec.signal, experimentId: selected, instructions, jobId,
       current: () => persistedScene(exec, sceneId),
-      isCurrent: () => identity?.sessionOwnerKey(ownerSessionId) === ownerKey
-        && (ctx.get('sessionProjections')?.stateOf(parent.session, 'physicsScenes')?.latest ?? sceneId) === sceneId,
-      canPublishFailure: () => {
-        if (identity?.sessionOwnerKey(ownerSessionId) !== ownerKey) return false
-        const projected = ctx.get('sessionProjections')?.stateOf(parent.session, 'physicsScenes')
-        if (projected !== undefined) return projected.latest === sceneId
-        // oxlint-disable-next-line typescript/no-deprecated -- Same own-session fallback as persistedScene.
-        const events = parent.session.snapshotEvents()
-        for (let index = events.length - 1; index >= 0; index--) {
-          const event = events[index]
-          if (event?.type === 'physics/scene' && parent.session.isOwnSeq(event.seq)) return event.data.sceneId === sceneId
-        }
-        return false
-      },
+      isCurrent: () => currentOwner() === ownerKey && latestSceneId() === sceneId && leaseIsCurrent(),
+      canPublishFailure: () => currentOwner() === ownerKey && latestSceneId() === sceneId && leaseIsCurrent(),
       publish: (value) => {
-        parent.session.append('physics/scene', { ...value, ...(turn === undefined ? {} : { turn }) })
+        const visualization = value.visualization
+        if (visualization === undefined) return
+        // The generator's callback is synchronous. Retain its publication
+        // promise: admission blocks context/model work; terminal publication
+        // blocks validation and the returned receipt. Never fire and forget.
+        publication = publication.then(async () => {
+          if (visualization.status === 'ready') await jobs.recordCandidate(jobId, epoch, { candidateSha256: visualization.sha256 })
+          await jobs.publishGeneration(source, epoch, () => {
+            const current = assertCurrent(visualization.status === 'generating' ? undefined : jobId, visualization.status === 'failed')
+            if (visualization.status === 'ready' && current.visualization?.status === 'generating'
+              && (current.visualization.deadlineAt ?? 0) <= Date.now()) {
+              throw new HarnessError('题目实验生成已超时，冻结候选仍未通过验收。', 'GENERATION_TIMEOUT')
+            }
+            parent.session.append('physics/scene', { ...current, ...(turn === undefined ? {} : { turn }), visualization })
+          }, visualization.status === 'ready' ? visualization : undefined)
+          if (visualization.status === 'generating') onAdmitted?.(visualization)
+        })
+        // Observe promptly even if the generation clock wins its wait first.
+        void publication.catch(() => {})
       },
-      context: id => artifacts === undefined ? Promise.reject(Object.assign(new Error('Code artifacts unavailable'), { code: 'ARTIFACTS_UNAVAILABLE' })) : artifacts.context(id),
+      context: async id => {
+        await publication
+        assertCurrent(jobId)
+        if (!leaseIsCurrent()) throw new HarnessError('生成任务租约已结束。', 'STALE_GENERATION')
+        if (artifacts === undefined) throw Object.assign(new Error('Code artifacts unavailable'), { code: 'ARTIFACTS_UNAVAILABLE' })
+        return artifacts.context(id)
+      },
       assetManifest: generationId => artifacts?.assetManifest?.({ ownerSessionId, generationId, scene: snapshot.scene }),
       start: (request) => {
         const subagents = ctx.get('subagents')
@@ -501,36 +582,52 @@ export function apply(ctx: Context, config: Config): void {
         return artifacts.create(input, signal)
       },
     })
-    /* Close the durable attempt with what actually happened. A ready result
-       still awaits isolated acceptance before it may be published as such;
-       a projection-published failure is recorded with its code here. */
-    if (jobs !== undefined && started !== undefined) {
-      if (generation.status === 'ready') {
-        /* Generated, not accepted: the job stops at `candidate` until the
-           isolated browser worker reports on exactly this digest. The app
-           never marks its own output as passed. */
-        await jobs.recordCandidate(jobId, started.epoch, { candidateSha256: generation.sha256 }).catch(() => undefined)
-        /* Hand the candidate to the isolated worker. The worker plans its own
-           frames from the frozen scene; nothing is published unless it passes.
-           A failure here leaves the candidate unaccepted (fail closed). */
-        const validation = lookup('questionCodeValidation') as Validation | undefined
-        const ticket = jobs.issueTicket(jobId, started.epoch)
-        if (validation?.configured === true && typeof ticket.token === 'string') {
-          /* The host owns the URL layout and redeems the ticket; the tool only
-             names the job and candidate. */
-          await validation.validateCandidate({
-            jobId, epoch: started.epoch,
-            candidateSha256: generation.sha256,
-            sceneSha256: generation.sceneSha256,
-            sceneRevision: generation.sceneRevision,
-            ticket: ticket.token,
-          }).catch(() => undefined)
+    let generation: CodeVisualizationState | undefined
+    try {
+      generation = await operation
+      await publication
+    } catch (error) {
+      // Publication failure must not strand another running generation. Keep
+      // a frozen source retryable; a run without one is terminal, never queued
+      // endlessly. A newer/cancelled lease owns its own settlement.
+      const current = jobs.get(jobId, ownerKey)
+      if (current.leaseEpoch === epoch && (current.status === 'running' || current.status === 'candidate')) {
+        try {
+          if (typeof error === 'object' && error !== null && 'code' in error
+            && (error.code === 'STALE_GENERATION' || error.code === 'STALE_SOURCE')) {
+            await jobs.supersede(jobId, '题目或生成请求已更新，旧候选不能发布。', epoch)
+          } else {
+            await jobs.finish(jobId, epoch, {
+              status: generation?.status === 'ready' || current.attempts.at(-1)?.candidateSha256 !== undefined ? 'infrastructure-failed' : 'rejected',
+              code: 'GENERATION_PUBLICATION_FAILED',
+            })
+          }
+        } catch (settlement) {
+          if (!(typeof settlement === 'object' && settlement !== null && 'code' in settlement
+            && (settlement.code === 'NOT_LIVE' || settlement.code === 'STALE_LEASE'))) throw settlement
         }
-      } else {
-        await jobs.finish(jobId, started.epoch, generation.status === 'failed'
-          ? { status: 'rejected', ...(generation.code === undefined ? {} : { code: generation.code }), message: generation.message }
-          : { status: 'cancelled' }).catch(() => undefined)
       }
+      throw error
+    } finally {
+      activeGenerations.delete(jobId)
+    }
+    /* A ready projection is only an owner preview. Its durable candidate was
+       recorded before the fenced append; only isolated acceptance may mark
+       the job ready. No publication failure is swallowed to spend more model. */
+    if (generation.status === 'ready') {
+      const validation = lookup('questionCodeValidation') as Validation | undefined
+      const ticket = jobs.issueTicket(jobId, epoch)
+      if (validation?.configured === true && typeof ticket.token === 'string') {
+        await validation.validateCandidate({
+          jobId, epoch, candidateSha256: generation.sha256,
+          sceneSha256: generation.sceneSha256, sceneRevision: generation.sceneRevision,
+          ticket: ticket.token,
+        }).catch(() => undefined)
+      }
+    } else if (generation.status === 'failed') {
+      await jobs.finish(jobId, epoch, {
+        status: 'rejected', code: generation.code, message: generation.message,
+      })
     }
     return generation
   }
@@ -564,8 +661,7 @@ export function apply(ctx: Context, config: Config): void {
     },
     presentCall: args => ({ card: 'generic', title: `联网查阅「${String(args.query).slice(0, 40)}」`, kind: 'read' }),
   }))
-  registerRegenerateRoute(ctx, (host, sceneId, experimentId, instructions, force) =>
-    generate(host, sceneId, experimentId, instructions, force))
+  registerRegenerateRoute(ctx, generate)
   ctx.tools.register(defineTool({
     name: 'physics_generate_experiment',
     description: '调用专用受限代码子代理，独立绘制当前题目的Canvas/SVG实验场景和现代界面，禁止调用旧平台绘图模板。解题成功后已自动尝试；同一场景版本本轮无论已就绪、失败或正在生成，都只复用状态，不再次启动子任务。失败、旧版本升级或需调整展示请提示学生点击生成入口后在新轮次调用。只生成展示代码，不改变物理条件或答案。',
@@ -644,12 +740,17 @@ export function apply(ctx: Context, config: Config): void {
       /* Every attempt — solved or rejected — leaves a trace (see solve-publication.ts). */
       exec.agent?.session.append('physics/solve-trace', solveTraceOf(solved, currentTurnOf(exec), durationMs))
       if (solved.status === 'solved' && solved.scene !== undefined && solved.verification?.status === 'passed' && exec.agent?.ctx !== undefined) {
-        const visualization = await generate(exec, solved.scene.sceneId)
-        return { ...solved, visualization: {
-          status: visualization.status,
-          ...(visualization.status === 'ready' && visualization.rendererKind !== undefined ? { rendererKind: visualization.rendererKind } : {}),
-          ...(visualization.status === 'failed' ? { code: visualization.code } : {}),
-        } } as unknown as AnyObject
+        try {
+          const visualization = await generate(exec, solved.scene.sceneId)
+          return { ...solved, visualization: {
+            status: visualization.status,
+            ...(visualization.status === 'ready' && visualization.rendererKind !== undefined ? { rendererKind: visualization.rendererKind } : {}),
+            ...(visualization.status === 'failed' ? { code: visualization.code } : {}),
+          } } as unknown as AnyObject
+        } catch (error) {
+          // Durable visualization admission is optional to the already verified physics answer.
+          return { ...solved, visualization: { status: 'failed', code: error instanceof HarnessError ? error.code : 'GENERATION_FAILED' } } as unknown as AnyObject
+        }
       }
       return solved as unknown as AnyObject
     },

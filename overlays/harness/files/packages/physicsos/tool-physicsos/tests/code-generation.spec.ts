@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import JsonlSessionPersistence from '../../../session/session-persistence-jsonl/src/index.ts'
 import type { PhysicsScene } from '@physicsos/physics-scene'
+import { canonicalJson } from '@physicsos/agent-tools'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
@@ -19,7 +20,8 @@ import { createUserMessage, ReasoningEffortId, ToolCallId } from '@deepseek-ai/d
 import { MockAdapter, toolCallResponse, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import * as physicsTools from '../src/index.ts'
 import { PhysicsCodeProvider, CODE_PROVIDER_NAME } from '../src/code-provider.ts'
-import { CODE_TIMEOUT_MS, generateQuestionCode, type CodeGenerationDependencies } from '../src/code-generation.ts'
+import { CODE_TIMEOUT_MS, generateQuestionCode, questionCodeRequestSha256, type CodeGenerationDependencies } from '../src/code-generation.ts'
+import { mountGenerationJobs } from './generation-jobs-fixture.ts'
 import type { PhysicsSceneSnapshot } from '../src/types.ts'
 import { questionCodeContext } from '../../experiment-host/src/question-code-context.ts'
 import { PROMPT_SEED } from '../../experiment-host/src/prompt-seed.ts'
@@ -206,7 +208,7 @@ describe('bounded question visual plans', () => {
 })
 
 describe('parent question code generation', () => {
-  it.each(['revision', 'another question', 'owner', 'scene facts'].flatMap(change => [
+  it.each(['revision', 'another question', 'owner', 'scene facts', 'lease'].flatMap(change => [
     { change, hasReceipt: false }, { change, hasReceipt: true },
   ]))('preserves changed $change while a lost-response receipt lookup is delayed (ready=$hasReceipt)', async ({ change, hasReceipt }) => {
     const ctx = new Context(); contexts.push(ctx)
@@ -215,19 +217,26 @@ describe('parent question code generation', () => {
     let owner = 'school:student'
     const frozenReceipt = await h.create(); h.create.mockClear()
     const receipt = Promise.withResolvers<typeof frozenReceipt | undefined>()
+    const requestSha256 = questionCodeRequestSha256(h.deps)
     const restoreGeneration = vi.fn(() => receipt.promise), start = vi.fn(h.start)
     ctx.provide('physicsosIdentity', { sessionOwnerKey: () => owner } as never)
     ctx.provide('questionCodeArtifacts', { context: h.deps.context, create: h.deps.create, restoreGeneration } as never)
     ctx.provide('subagents', { start } as never)
+    const { jobs } = await mountGenerationJobs(ctx)
+    await jobs.submit({ id: 'delayed-receipt', ownerSessionId: 'parent', ownerKey: owner,
+      sceneId: h.original.sceneId, sceneRevision: h.original.revision,
+      sceneSha256: createHash('sha256').update(canonicalJson(h.original.scene)).digest('hex'), requestSha256 })
+    await jobs.claim('delayed-receipt')
     await ctx.plugin(physicsTools, { sceneScope: 'session', maxScenes: 64 })
     session.append('turn/start', { turn: 1 })
     session.append('physics/scene', { ...h.original, turn: 1, visualization: { status: 'generating', jobId: 'delayed-receipt',
-      ownerSessionId: 'parent', sceneId: h.original.sceneId, sceneRevision: h.original.revision } })
+      ownerSessionId: 'parent', sceneId: h.original.sceneId, sceneRevision: h.original.revision, requestSha256 } })
     const agent = { id: session.id, session } as unknown as Agent
     const work = ctx.tools.execute({ agent, signal: new AbortController().signal, callId: ToolCallId('delayed-receipt'),
       name: 'physics_generate_experiment', arguments: { sceneId: h.original.sceneId } })
     await vi.waitFor(() => expect(restoreGeneration).toHaveBeenCalledTimes(1))
     if (change === 'owner') owner = 'another:student'
+    else if (change === 'lease') await jobs.cancel('delayed-receipt', owner)
     else {
       const sceneId = change === 'another question' ? 'new-question' : h.original.sceneId
       const revision = change === 'revision' ? h.original.revision + 1 : h.original.revision
@@ -249,17 +258,25 @@ describe('parent question code generation', () => {
     const ctx = new Context(); contexts.push(ctx)
     await mountAgentLoopTestDependencies(ctx)
     const h = dependencies(), session = ctx.sessions.create(SessionId('parent'))
-    const receipt = { ...await h.create(), artifactId: 'qcode_11111111111111111111111111111111', childSessionId: 'persisted-child',
-      sceneSha256: createHash('sha256').update('{"id":"question-scene","metadata":{},"particles":[{"charge":{"unit":"C","value":3}}],"revision":2,"schemaVersion":"physics-scene/1.0"}').digest('hex') }
+    const requestSha256 = questionCodeRequestSha256(h.deps)
+    let receipt = { ...await h.create(), artifactId: 'qcode_11111111111111111111111111111111', childSessionId: 'persisted-child', requestSha256,
+      sceneSha256: createHash('sha256').update(canonicalJson(h.original.scene)).digest('hex') }
     h.create.mockClear()
     const restoreGeneration = vi.fn(async () => receipt), start = vi.fn(async () => ({ id: 'unnecessary-child', result: Promise.resolve({ stopReason: 'completed', structured: source, output: [] }), dispose: h.dispose }))
     ctx.provide('physicsosIdentity', { sessionOwnerKey: () => 'school:student' } as never)
     ctx.provide('questionCodeArtifacts', { context: h.deps.context, create: h.deps.create, restoreGeneration } as never)
     ctx.provide('subagents', { start } as never)
+    const fixture = await mountGenerationJobs(ctx)
+    await fixture.jobs.submit({ id: 'lost-parent-append', ownerSessionId: 'parent', ownerKey: 'school:student',
+      sceneId: h.original.sceneId, sceneRevision: h.original.revision, sceneSha256: receipt.sceneSha256, requestSha256 })
+    const started = await fixture.jobs.claim('lost-parent-append')
+    receipt = await fixture.freeze({ ownerSessionId: 'parent', generationId: 'lost-parent-append', scene: h.original.scene, requestSha256 }, receipt)
+    await fixture.jobs.recordCandidate('lost-parent-append', started!.epoch, { candidateSha256: receipt.sha256 })
+    await fixture.jobs.finish('lost-parent-append', started!.epoch, { status: 'infrastructure-failed', code: 'VALIDATION_INTERRUPTED' })
     await ctx.plugin(physicsTools, { sceneScope: 'session', maxScenes: 64 })
     session.append('turn/start', { turn: 1 })
     session.append('physics/scene', { ...h.original, turn: 1, visualization: { status: 'generating', jobId: 'lost-parent-append',
-      deadlineAt: Date.now() + 600_000, ownerSessionId: 'parent', sceneId: h.original.sceneId, sceneRevision: 2 } })
+      deadlineAt: Date.now() + 600_000, ownerSessionId: 'parent', sceneId: h.original.sceneId, sceneRevision: 2, requestSha256 } })
     const agent = { id: session.id, session } as unknown as Agent
     const result = await ctx.tools.execute({ agent, signal: new AbortController().signal, callId: ToolCallId('restore-receipt'),
       name: 'physics_generate_experiment', arguments: { sceneId: h.original.sceneId } })
@@ -269,6 +286,9 @@ describe('parent question code generation', () => {
     expect(restoreGeneration).toHaveBeenCalledWith(expect.objectContaining({ ownerSessionId: 'parent', generationId: 'lost-parent-append',
       scene: h.original.scene, experimentId: 'magnetic-circular' }), expect.any(AbortSignal))
     expect(ctx.sessionProjections.stateOf(session, 'physicsScenes')?.scenes[h.original.sceneId]?.visualization).toMatchObject({ status: 'ready', artifactId: 'qcode_11111111111111111111111111111111' })
+    expect(fixture.domain.table('jobs').size).toBe(1)
+    expect(fixture.jobs.get('lost-parent-append', 'school:student')).toMatchObject({ status: 'queued', leaseEpoch: started!.epoch,
+      attempts: [{ status: 'infrastructure-failed', candidateSha256: receipt.sha256 }] })
   })
   it('keeps an unchanged question generation current when a later parent turn starts', async () => {
     const ctx = new Context(); contexts.push(ctx)
@@ -278,6 +298,7 @@ describe('parent question code generation', () => {
     ctx.provide('physicsosIdentity', { sessionOwnerKey: () => 'school:student' } as never)
     ctx.provide('questionCodeArtifacts', { context: h.deps.context, create: h.deps.create } as never)
     ctx.provide('subagents', { start: async () => ({ id: 'ongoing-request-child', result: finished.promise, dispose: h.dispose }) } as never)
+    await mountGenerationJobs(ctx)
     await ctx.plugin(physicsTools, { sceneScope: 'session', maxScenes: 64 })
     session.append('turn/start', { turn: 1 })
     session.append('physics/scene', { ...h.original, turn: 1 })
@@ -303,6 +324,7 @@ describe('parent question code generation', () => {
     ctx.provide('physicsosIdentity', { sessionOwnerKey: () => 'school:student' } as never)
     ctx.provide('questionCodeArtifacts', { context: h.deps.context, create: h.deps.create } as never)
     ctx.provide('subagents', { start: async () => ({ id: 'same-request-child', result: Promise.resolve({ stopReason: 'completed', structured: source, output: [] }), dispose: h.dispose }) } as never)
+    await mountGenerationJobs(ctx)
     await ctx.plugin(physicsTools, { sceneScope: 'session', maxScenes: 64 })
     session.append('turn/start', { turn: 1 })
     session.append('physics/scene', { ...h.original, turn: 1 })
@@ -323,6 +345,7 @@ describe('parent question code generation', () => {
     ctx.provide('physicsosIdentity', { sessionOwnerKey: () => 'school:student' } as never)
     ctx.provide('questionCodeArtifacts', { context: h.deps.context, create: h.deps.create } as never)
     ctx.provide('subagents', { start: async () => ({ id: 'replacement-child', result: Promise.resolve({ stopReason: 'completed', structured: source, output: [] }), dispose: h.dispose }) } as never)
+    await mountGenerationJobs(ctx)
     await ctx.plugin(physicsTools, { sceneScope: 'session', maxScenes: 64 })
     session.append('turn/start', { turn: 1 })
     session.append('physics/scene', { ...h.original, turn: 1, visualization: {
@@ -873,6 +896,7 @@ async function presentationHost(adapter: MockAdapter, options: AgentOptions = { 
       childSessionId: input.childSessionId, title: input.source.title, createdAt: '2026-11-04T00:00:00Z',
     }),
   } as never)
+  await mountGenerationJobs(ctx)
   await ctx.plugin(physicsTools, { sceneScope: 'session', maxScenes: 64 })
   ctx.llm.registerAdapter(['mock'], adapter)
   const handle = await ctx.agents.create({
@@ -1219,6 +1243,7 @@ describe('the real code child provider', () => {
       try { return await ordinaryStart.apply(this, args) }
       catch (error) { startErrors.push(String(error)); throw error }
     })
+    await mountGenerationJobs(ctx)
     await ctx.plugin(physicsTools, { sceneScope: 'session', maxScenes: 64 })
     const handle = await ctx.agents.create({ sessionId: SessionId('parent'), agentOptions: { provider: 'mock', model: 'mock' }, setup: async (childCtx) => { await ctx.agentPresets.mount(childCtx, 'student') } })
     const question = '一个质子以 2.0×10^6 m/s 的速度，垂直进入磁感应强度为 0.50 T，方向垂直纸面向里的匀强磁场。已知：m = 1.67×10^-27 kg，q = +1.60×10^-19 C。求轨道半径。'
@@ -1275,6 +1300,7 @@ describe('the real code child provider', () => {
           }
         },
       } as never)
+      await mountGenerationJobs(ctx)
       await ctx.plugin(physicsTools, { sceneScope: 'session', maxScenes: 64 })
       ctx.llm.registerAdapter(['mock'], adapter)
       return ctx

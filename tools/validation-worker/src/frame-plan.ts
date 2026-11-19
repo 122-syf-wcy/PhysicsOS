@@ -12,6 +12,8 @@
  * the in-process runtime bridge or against the same interface in a worker.
  */
 
+import type { CapturedResult } from '../../../packages/physics-workbench/src/types.ts'
+
 export interface SnapshotLike {
   readonly domain?: string
   readonly sceneRevision?: number
@@ -29,6 +31,8 @@ export interface SnapshotLike {
   readonly clock: { readonly time: number; readonly total: number; readonly running?: boolean; readonly rate?: number }
   readonly view: {
     readonly bodies?: readonly { readonly at: { readonly x: number; readonly y: number } }[]
+    /** Magnetic bridge view coordinates (orbit-centred cm), not raw SI state. */
+    readonly particles?: readonly { readonly id: string; readonly at: { readonly x: number; readonly y: number } }[]
   }
   readonly inspector?: readonly {
     readonly id: string
@@ -56,12 +60,8 @@ export interface FrameSource {
   getSnapshot(): SnapshotLike
   seek?(time: number): SnapshotLike
   editParameter?(id: string, value: number): SnapshotLike
-  /** Raw engine identity/cursor, read server-side only for a static policy. */
-  captureRaw?(): {
-    readonly scene?: unknown
-    readonly engineInfo: { readonly id: string; readonly version: string; readonly model?: string }
-    readonly cursor: { readonly kind: string; readonly identity?: string }
-  }
+  /** Raw engine facts stay server-side; use the canonical capture DTO. */
+  captureRaw?(): Pick<CapturedResult, 'engineInfo' | 'cursor'> & Partial<CapturedResult>
 }
 
 export interface PlannedFrame {

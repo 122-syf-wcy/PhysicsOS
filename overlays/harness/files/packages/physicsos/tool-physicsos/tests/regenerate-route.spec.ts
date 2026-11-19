@@ -19,6 +19,8 @@ import { REGENERATE_ROUTE } from '../src/regenerate-route.ts'
 import type { CodeGenerationDependencies } from '../src/code-generation.ts'
 import { questionCodeContext } from '../../experiment-host/src/question-code-context.ts'
 import { PROMPT_SEED } from '../../experiment-host/src/prompt-seed.ts'
+import { fixtureArtifactId, mountGenerationJobs } from './generation-jobs-fixture.ts'
+import type { QuestionCodeJobs } from '../../experiment-host/src/question-code-jobs.ts'
 
 const source = { title: '本题轨迹', summary: '独立绘制本题引擎快照', rendererJs: `export function renderFrame(snapshot) {
   const canvas = document.createElement('canvas'); canvas.width = 800; canvas.height = 480;
@@ -72,6 +74,7 @@ async function host(adapter: MockAdapter): Promise<{ ctx: Context; parent: Agent
       }
     },
   } as never)
+  await mountGenerationJobs(ctx)
   await ctx.plugin(physicsTools, { sceneScope: 'session', maxScenes: 64 })
   ctx.llm.registerAdapter(['mock'], adapter)
   const handle = await ctx.agents.create({
@@ -163,7 +166,7 @@ describe('direct regeneration route', { timeout: 30_000 }, () => {
     expect(created).toHaveLength(2)
     const regenerated = after.at(-1)?.visualization
     expect(regenerated?.status === 'ready' ? regenerated.title : undefined).toBe('第2版')
-    expect(regenerated?.status === 'ready' ? regenerated.artifactId : undefined).toBe('private-2')
+    expect(regenerated?.status === 'ready' ? regenerated.artifactId : undefined).toBe(fixtureArtifactId('private-2'))
     /* The scene facts never change across a regeneration. */
     for (const snapshot of after) {
       expect(snapshot.scene).toEqual(original.scene)
@@ -200,6 +203,133 @@ describe('direct regeneration route', { timeout: 30_000 }, () => {
       expect(original.visualization?.status).toBe('ready')
       return { ...result, original }
     }
+
+    it('waits through durable submit/claim IO and returns its committed marker before child completion', async () => {
+      const { ctx, parent, handler, original } = await solvedHost()
+      const jobs = ctx.get('questionCodeJobs') as unknown as QuestionCodeJobs
+      const submitting = Promise.withResolvers<void>(), claiming = Promise.withResolvers<void>()
+      const releaseSubmit = Promise.withResolvers<void>(), releaseClaim = Promise.withResolvers<void>()
+      const creating = Promise.withResolvers<void>(), releaseArtifact = Promise.withResolvers<void>()
+      const submit = jobs.submit.bind(jobs), claim = jobs.claim.bind(jobs)
+      vi.spyOn(jobs, 'submit').mockImplementationOnce(async input => { submitting.resolve(); await releaseSubmit.promise; return submit(input) })
+      vi.spyOn(jobs, 'claim').mockImplementationOnce(async id => { claiming.resolve(); await releaseClaim.promise; return claim(id) })
+      const artifacts = ctx.get('questionCodeArtifacts') as unknown as { create: CodeGenerationDependencies['create'] }
+      const create = artifacts.create
+      artifacts.create = async (input, signal) => { creating.resolve(); await releaseArtifact.promise; return create(input, signal) }
+      let answered = false
+      const pending = post(handler, { sessionId: 'parent', sceneId: original.sceneId }, { 'x-test-account': 'school:student' })
+        .then(value => { answered = true; return value })
+      try {
+        await submitting.promise
+        expect(answered).toBe(false)
+        expect(scenesOf(parent).at(-1)).toEqual(original)
+        releaseSubmit.resolve()
+        await claiming.promise
+        expect(answered).toBe(false)
+        expect(scenesOf(parent).at(-1)).toEqual(original)
+        releaseClaim.resolve()
+        const response = await pending
+        expect(response.status).toBe(202)
+        const marker = scenesOf(parent).at(-1)?.visualization
+        expect(marker).toMatchObject({ status: 'generating', jobId: response.body?.state?.jobId })
+        if (marker?.status !== 'generating') throw new Error('the durable marker was not published')
+        expect(marker.jobId).not.toBe('')
+        expect(jobs.get(marker.jobId, 'school:student').status).toBe('running')
+        await creating.promise
+        expect(scenesOf(parent).at(-1)?.visualization?.status).toBe('generating')
+      } finally {
+        releaseSubmit.resolve(); releaseClaim.resolve(); releaseArtifact.resolve()
+        await pending
+        await vi.waitFor(() => { expect(scenesOf(parent).at(-1)?.visualization?.status).toBe('ready') }, { timeout: 10_000 })
+      }
+    })
+
+    it('does not acknowledge a delayed claim with another request’s marker on the same scene', async () => {
+      const { ctx, parent, handler, original, created } = await solvedHost()
+      const jobs = ctx.get('questionCodeJobs') as unknown as QuestionCodeJobs
+      const claiming = Promise.withResolvers<void>(), release = Promise.withResolvers<void>()
+      const releaseArtifact = Promise.withResolvers<void>()
+      vi.spyOn(jobs, 'claim').mockImplementationOnce(async () => { claiming.resolve(); await release.promise; return undefined })
+      const artifacts = ctx.get('questionCodeArtifacts') as unknown as { create: CodeGenerationDependencies['create'] }
+      const create = artifacts.create
+      artifacts.create = async (input, signal) => { await releaseArtifact.promise; return create(input, signal) }
+      const scene = { sessionId: 'parent', sceneId: original.sceneId }, headers = { 'x-test-account': 'school:student' }
+      const pending = post(handler, { ...scene, instructions: '第一种排版' }, headers)
+      try {
+        await claiming.promise
+        expect(scenesOf(parent).at(-1)).toEqual(original)
+        const accepted = await post(handler, { ...scene, instructions: '另一种排版' }, headers)
+        expect(accepted.status).toBe(202)
+        release.resolve()
+        const refused = await pending
+        expect(refused.status).toBe(500)
+        expect(refused.body).toMatchObject({ error: { code: 'GENERATION_NOT_CLAIMED' } })
+        expect(scenesOf(parent).at(-1)?.visualization).toMatchObject({ status: 'generating', jobId: accepted.body?.state?.jobId })
+      } finally { release.resolve(); releaseArtifact.resolve(); await pending }
+      await vi.waitFor(() => { expect(scenesOf(parent).at(-1)?.visualization?.status).toBe('ready') }, { timeout: 10_000 })
+      expect(created).toHaveLength(2)
+    })
+
+    it('checks a live customized request without replacing it with a default request', async () => {
+      const { ctx, parent, handler, original, created } = await solvedHost()
+      const artifacts = ctx.get('questionCodeArtifacts') as unknown as { create: CodeGenerationDependencies['create'] }
+      const create = artifacts.create, release = Promise.withResolvers<void>()
+      artifacts.create = async (input, signal) => { await release.promise; return create(input, signal) }
+      const headers = { 'x-test-account': 'school:student' }, scene = { sessionId: 'parent', sceneId: original.sceneId }
+      try {
+        const accepted = await post(handler, { ...scene, instructions: '只强调洛伦兹力方向' }, headers)
+        const checked = await post(handler, scene, headers)
+        expect(accepted.status).toBe(202)
+        expect(checked.status).toBe(202)
+        expect(checked.body?.state).toEqual(accepted.body?.state)
+      } finally { release.resolve() }
+      await vi.waitFor(() => { expect(scenesOf(parent).at(-1)?.visualization?.status).toBe('ready') }, { timeout: 10_000 })
+      expect(created).toHaveLength(2)
+    })
+
+    it.each([true, false])('recovers the exact customized candidate without model work (recorded digest: %s)', async recorded => {
+      const { ctx, parent, handler, original, created } = await solvedHost()
+      const jobs = ctx.get('questionCodeJobs') as unknown as QuestionCodeJobs
+      const artifacts = ctx.get('questionCodeArtifacts') as unknown as {
+        create: CodeGenerationDependencies['create']
+        restoreGeneration?: (input: { generationId: string }) => Promise<Awaited<ReturnType<CodeGenerationDependencies['create']>> | undefined>
+      }
+      const create = artifacts.create
+      let frozen: Awaited<ReturnType<CodeGenerationDependencies['create']>> | undefined, jobId = ''
+      artifacts.create = async (input, signal) => {
+        const result = await create(input, signal)
+        if (input.generationId === jobId) frozen = result
+        return result
+      }
+      const publish = jobs.publishGeneration.bind(jobs)
+      vi.spyOn(jobs, 'publishGeneration').mockImplementation(async (...args) => {
+        if (recorded && args[3] !== undefined && args[0].id === jobId) throw new Error('fixture publication interrupted')
+        return publish(...args)
+      })
+      const record = jobs.recordCandidate.bind(jobs)
+      vi.spyOn(jobs, 'recordCandidate').mockImplementation(async (...args) => {
+        if (!recorded && args[0] === jobId) throw new Error('fixture candidate recording interrupted')
+        return record(...args)
+      })
+      const headers = { 'x-test-account': 'school:student' }, scene = { sessionId: 'parent', sceneId: original.sceneId }
+      const accepted = await post(handler, { ...scene, instructions: '只强调洛伦兹力方向' }, headers)
+      expect(accepted.status).toBe(202)
+      jobId = accepted.body?.state?.jobId ?? ''
+      expect(jobId).not.toBe('')
+      await vi.waitFor(() => { expect(jobs.get(jobId, 'school:student').status).toBe('queued') }, { timeout: 10_000 })
+      expect(frozen).toBeDefined()
+      expect(jobs.get(jobId, 'school:student').attempts.at(-1)?.candidateSha256).toBe(recorded ? frozen!.sha256 : undefined)
+      vi.restoreAllMocks()
+      const restore = vi.fn(async (input: { generationId: string }) => input.generationId === jobId ? frozen : undefined)
+      artifacts.restoreGeneration = restore
+      const recovered = await post(handler, scene, headers)
+      expect(recovered.status).toBe(200)
+      expect(recovered.body?.state).toEqual(frozen)
+      expect(restore).toHaveBeenCalledOnce()
+      expect(created).toHaveLength(2)
+      expect(scenesOf(parent).at(-1)?.visualization).toEqual(frozen)
+      expect(jobs.get(jobId, 'school:student')).toMatchObject({ status: 'queued', attempts: [{ candidateSha256: frozen!.sha256 }] })
+    })
 
     it.each([
       { label: 'a missing deadline', withDeadline: false },
@@ -252,7 +382,7 @@ describe('direct regeneration route', { timeout: 30_000 }, () => {
         const latest = scenesOf(parent).at(-1)!
         expect(created).toHaveLength(2)
         expect(latest.visualization).toMatchObject({
-          status: 'ready', artifactId: 'private-2', ownerSessionId: 'parent',
+          status: 'ready', artifactId: fixtureArtifactId('private-2'), ownerSessionId: 'parent',
           sceneId: original.sceneId, sceneRevision: original.revision,
         })
         expect(latest.sceneId).toBe(original.sceneId)

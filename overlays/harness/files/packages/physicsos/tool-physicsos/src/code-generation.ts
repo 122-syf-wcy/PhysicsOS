@@ -180,7 +180,10 @@ class GenerationClock {
 export function generateQuestionCode(deps: CodeGenerationDependencies): Promise<CodeVisualizationState> {
   const requestSha256 = questionCodeRequestSha256(deps)
   const current = deps.current(), pending = activeRequests.get(requestSha256)
+  const marker = current?.visualization
+  // A producer that already claimed its own durable job cannot join another holder's operation.
   if (pending !== undefined && current !== undefined
+    && (deps.jobId === undefined || marker?.status === 'generating' && marker.jobId === deps.jobId)
     && isQuestionCodeGenerationActive(deps.ownerSessionId, current, requestSha256)) return pending
   const operation = runGeneration(deps, requestSha256, deps.jobId)
   activeRequests.set(requestSha256, operation)

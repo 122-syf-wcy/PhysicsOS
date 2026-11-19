@@ -137,6 +137,7 @@
     "packages/physics-observation/src/optics-observation.ts",
     "packages/physics-observation/src/wave-observation.ts",
     "packages/physics-runtime/src/index.ts",
+    "packages/physics-runtime/src/magnetic-motion-validation.ts",
     "packages/physics-scene/src/acoustics/acoustics-scene.ts",
     "packages/physics-scene/src/acoustics/acoustics-templates.ts",
     "packages/physics-scene/src/acoustics/noise-scene.ts",
@@ -215,7 +216,12 @@
     "tools/validation-worker/src/frame-plan.ts",
     "tools/validation-worker/src/planner.ts",
     "tools/validation-worker/src/server.ts",
-    "viewport/mechanics-workspace-runtime.ts",
-    "viewport/optics-workspace-runtime.ts"
+    "viewport/physics/mechanics-workspace-runtime.ts",
+    "viewport/physics/optics-workspace-runtime.ts",
+    "viewport/physics/magnetic-workspace-runtime.ts",
+    "viewport/physics/magnetic-clock.ts",
+    "viewport/physics-runtime-bridge.ts",
+    "viewport/lab-view-model.ts",
+    "viewport/prototype/magnetic-scene.ts"
   ]
 }

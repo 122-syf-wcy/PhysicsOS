@@ -12,7 +12,8 @@ import { createPhysicsSurfaceController } from '../src/client/surface-store.ts'
 import { buildWorkspaceRuntime } from '../src/client/physics/build-workspace-runtime.ts'
 import { SceneCardBody } from '../src/client/SceneChatCard.tsx'
 import { SceneTurnCard, type SceneTurnCardProps } from '../src/client/SceneTurnCard.tsx'
-import { questionCodeSceneSha256, withQuestionCodeVisualization } from '../src/client/experiments/question-code-api.ts'
+import { questionCodeApi, questionCodeSceneSha256, withQuestionCodeVisualization, type QuestionCodeJobView, type QuestionCodeRegenerate } from '../src/client/experiments/question-code-api.ts'
+import type { PhysicsSceneCardData } from '../src/client/scene-chat-node.ts'
 import { createQuestionCodeOwnerStore } from '../src/client/experiments/question-code-context.ts'
 import { isUniversalSnapshot, type UniversalExperimentSnapshot } from '../src/client/experiments/universal-contract.ts'
 import { zh } from '../src/client/locales.ts'
@@ -96,6 +97,199 @@ it('lets the user check and recover a generation before a restored future deadli
   fireEvent.click(check!)
   await waitFor(() => { expect(regenerateQuestionCode).toHaveBeenCalledWith(solved.sceneId) })
 })
+function generationPair(deadlineAt = Date.now() + 60_000) {
+  const solved = solvedCardData('mech-01-uniform-acceleration')
+  const questionCodeOwner = createQuestionCodeOwnerStore(); questionCodeOwner.set('generation-owner')
+  const visualization = { status: 'generating' as const, jobId: 'generation-current', ownerSessionId: 'generation-owner',
+    sceneId: solved.sceneId, sceneRevision: solved.revision, deadlineAt }
+  const data = { ...solved, visualization }
+  const regenerateQuestionCode = vi.fn<QuestionCodeRegenerate>(async () => ({ ok: true }))
+  const pair = (next: PhysicsSceneCardData = data) => <>
+    <SceneCardBody data={next} presentation="attachment" t={t} questionCodeOwner={questionCodeOwner} openSceneInLab={vi.fn()} />
+    <SceneCardBody data={next} presentation="preview" t={t} questionCodeOwner={questionCodeOwner}
+      openSceneInLab={vi.fn()} regenerateQuestionCode={regenerateQuestionCode} />
+  </>
+  const view = render(pair())
+  const job: QuestionCodeJobView = { jobId: visualization.jobId, status: 'running', sceneId: solved.sceneId,
+    sceneRevision: solved.revision, attempts: [], updatedAt: '2026-11-19T00:00:00Z' }
+  const expectStatus = (status: string): void => {
+    expect(view.container.querySelector(`[data-preview-status="${status}"]`)).not.toBeNull()
+    expect(view.container.querySelector(`[data-question-code-status="${status}"]`)).not.toBeNull()
+  }
+  return { view, data, job, pair, questionCodeOwner, regenerateQuestionCode, expectStatus }
+}
+function deferredJob() {
+  let resolve!: (job: QuestionCodeJobView | undefined) => void
+  const promise = new Promise<QuestionCodeJobView | undefined>(done => { resolve = done })
+  return { promise, resolve }
+}
+it('expires the attachment and preview together without losing the solve or the retry action', async () => {
+  vi.useFakeTimers()
+  vi.spyOn(questionCodeApi, 'job').mockResolvedValue(undefined)
+  const f = generationPair(Date.now() + 1000)
+  f.expectStatus('generating')
+  await act(async () => { await vi.advanceTimersByTimeAsync(1001) })
+  f.expectStatus('interrupted')
+  expect(f.view.getByText('解题步骤')).toBeTruthy()
+  expect(f.view.getByRole('button', { name: '重新生成本题实验' })).toBeTruthy()
+  expect(f.regenerateQuestionCode).not.toHaveBeenCalled()
+  expect(f.view.container.querySelector('iframe')).toBeNull()
+})
+it.each([false, true])('keeps a restored record interrupted despite a running job (missing deadline: %s)', async missing => {
+  vi.useFakeTimers()
+  const completion = deferredJob()
+  vi.spyOn(questionCodeApi, 'job').mockReturnValue(completion.promise)
+  const f = generationPair(Date.now() - 1)
+  if (missing) {
+    const { deadlineAt: _deadlineAt, ...visualization } = f.data.visualization
+    f.view.rerender(f.pair({ ...f.data, visualization }))
+  }
+  f.expectStatus('interrupted')
+  await act(async () => { await vi.advanceTimersByTimeAsync(800) })
+  await act(async () => { completion.resolve(f.job); await completion.promise })
+  f.expectStatus('interrupted')
+  expect(f.regenerateQuestionCode).not.toHaveBeenCalled()
+})
+it.each(['VALIDATION_INTERRUPTED', 'GENERATION_PUBLICATION_FAILED'])('offers recovery for a parked durable job (%s) before its deadline', async code => {
+  vi.useFakeTimers()
+  const completion = deferredJob()
+  vi.spyOn(questionCodeApi, 'job').mockReturnValue(completion.promise)
+  const f = generationPair()
+  await act(async () => { await vi.advanceTimersByTimeAsync(800) })
+  await act(async () => { completion.resolve({ ...f.job, status: 'queued', code }); await completion.promise })
+  f.expectStatus('interrupted')
+  expect(f.view.getByRole('button', { name: '检查并恢复生成' })).toBeTruthy()
+  expect(f.view.container.querySelector('iframe')).toBeNull()
+})
+it.each(['failed', 'cancelled', 'superseded'] as const)('reflects durable %s in both surfaces before the deadline', async status => {
+  vi.useFakeTimers()
+  const completion = deferredJob()
+  vi.spyOn(questionCodeApi, 'job').mockReturnValue(completion.promise)
+  const f = generationPair()
+  await act(async () => { await vi.advanceTimersByTimeAsync(800) })
+  await act(async () => { completion.resolve({ ...f.job, status, message: '本次任务已结束' }); await completion.promise })
+  f.expectStatus(status)
+  if (status === 'failed') expect(f.view.getAllByText('本次任务已结束')).toHaveLength(2)
+  expect(f.view.getByRole('button', { name: '重新生成本题实验' })).toBeTruthy()
+  expect(f.view.container.querySelector('iframe')).toBeNull()
+})
+it.each(['2026-11-18T23:59:59Z', '2026-11-19T00:00:00Z'])('shares the terminal result and rejects a late active snapshot dated %s', async updatedAt => {
+  vi.useFakeTimers()
+  const attachment = deferredJob(), preview = deferredJob()
+  vi.spyOn(questionCodeApi, 'job').mockReturnValueOnce(attachment.promise).mockReturnValueOnce(preview.promise)
+  const f = generationPair()
+  await act(async () => { await vi.advanceTimersByTimeAsync(800) })
+  await act(async () => { preview.resolve({ ...f.job, status: 'failed' }); await preview.promise })
+  f.expectStatus('failed')
+  // An earlier server snapshot cannot undo the terminal state shared by both consumers.
+  await act(async () => {
+    attachment.resolve({ ...f.job, updatedAt }); await attachment.promise
+  })
+  f.expectStatus('failed')
+})
+it.each(['jobId', 'sceneId', 'sceneRevision'] as const)('ignores a durable record for a different %s', async field => {
+  vi.useFakeTimers()
+  const completion = deferredJob()
+  vi.spyOn(questionCodeApi, 'job').mockReturnValue(completion.promise)
+  const f = generationPair()
+  await act(async () => { await vi.advanceTimersByTimeAsync(800) })
+  const wrong = { ...f.job, status: 'failed' as const, [field]: field === 'sceneRevision' ? f.job.sceneRevision + 1 : 'another-job-or-scene' }
+  await act(async () => { completion.resolve(wrong); await completion.promise })
+  f.expectStatus('generating')
+})
+it('ignores a previous job completing after a new retry starts', async () => {
+  vi.useFakeTimers()
+  const old = deferredJob(), current = deferredJob()
+  const read = vi.spyOn(questionCodeApi, 'job').mockImplementation(id => id === 'generation-current' ? old.promise : current.promise)
+  const f = generationPair()
+  await act(async () => { await vi.advanceTimersByTimeAsync(800) })
+  const oldSignals = read.mock.calls.map(call => call[1])
+  const next = { ...f.data, visualization: { ...f.data.visualization, jobId: 'generation-retry' } }
+  f.view.rerender(f.pair(next))
+  expect(oldSignals.every(signal => signal?.aborted)).toBe(true)
+  await act(async () => { old.resolve({ ...f.job, status: 'failed', message: '旧任务失败' }); await old.promise })
+  f.expectStatus('generating')
+  expect(f.view.queryByText('旧任务失败')).toBeNull()
+  await act(async () => { await vi.advanceTimersByTimeAsync(800) })
+  await act(async () => { current.resolve({ ...f.job, jobId: 'generation-retry', status: 'cancelled' }); await current.promise })
+  f.expectStatus('cancelled')
+})
+it('revokes both surfaces on an owner switch and discards late replies even after switching back', async () => {
+  vi.useFakeTimers()
+  const old = deferredJob(), current = deferredJob()
+  const read = vi.spyOn(questionCodeApi, 'job').mockReturnValue(old.promise)
+  const f = generationPair()
+  await act(async () => { await vi.advanceTimersByTimeAsync(800) })
+  const oldSignals = read.mock.calls.map(call => call[1])
+  act(() => { f.questionCodeOwner.set('another-owner') })
+  f.expectStatus('owner-mismatch')
+  expect(oldSignals.every(signal => signal?.aborted)).toBe(true)
+  expect(f.view.queryByRole('button', { name: '重新生成本题实验' })).toBeNull()
+  read.mockReturnValue(current.promise)
+  act(() => { f.questionCodeOwner.set('generation-owner') })
+  await act(async () => { old.resolve({ ...f.job, status: 'failed', message: '旧会话请求失败' }); await old.promise })
+  f.expectStatus('generating')
+  expect(f.view.queryByText('旧会话请求失败')).toBeNull()
+  await act(async () => { await vi.advanceTimersByTimeAsync(800) })
+  await act(async () => { current.resolve({ ...f.job, status: 'cancelled' }); await current.promise })
+  f.expectStatus('cancelled')
+})
+it('restarts observation after an owner switches away and back within one render batch', async () => {
+  vi.useFakeTimers()
+  const old = deferredJob(), current = deferredJob()
+  const read = vi.spyOn(questionCodeApi, 'job').mockReturnValue(old.promise)
+  const f = generationPair()
+  await act(async () => { await vi.advanceTimersByTimeAsync(800) })
+  read.mockReturnValue(current.promise)
+  act(() => { f.questionCodeOwner.set('another-owner'); f.questionCodeOwner.set('generation-owner') })
+  await act(async () => { old.resolve({ ...f.job, status: 'failed' }); await old.promise })
+  f.expectStatus('generating')
+  await act(async () => { await vi.advanceTimersByTimeAsync(800) })
+  await act(async () => { current.resolve({ ...f.job, status: 'cancelled' }); await current.promise })
+  f.expectStatus('cancelled')
+})
+it('keeps the durable generation status when submitting a recovery request fails', async () => {
+  vi.useFakeTimers()
+  vi.spyOn(questionCodeApi, 'job').mockResolvedValue(undefined)
+  const f = generationPair()
+  f.regenerateQuestionCode.mockResolvedValueOnce({ ok: false, error: '恢复请求未提交' })
+  await act(async () => { fireEvent.click(f.view.getByRole('button', { name: '检查并恢复生成' })) })
+  f.expectStatus('generating')
+  expect(f.view.getByText('恢复请求未提交')).toBeTruthy()
+})
+it('shows the latest recovery refusal without overwriting the durable failure', async () => {
+  vi.useFakeTimers()
+  const f = generationPair()
+  vi.spyOn(questionCodeApi, 'job').mockImplementation(async jobId => ({ ...f.job, jobId, status: 'failed', message: '原生成任务已失败' }))
+  let finish!: (value: { ok: false; error: string }) => void
+  const submitted = new Promise<{ ok: false; error: string }>(resolve => { finish = resolve })
+  f.regenerateQuestionCode.mockReturnValueOnce(submitted).mockResolvedValueOnce({ ok: false, error: '当前恢复请求失败' })
+  await act(async () => { await vi.advanceTimersByTimeAsync(800) })
+  f.expectStatus('failed')
+  await act(async () => { fireEvent.click(f.view.getByRole('button', { name: '重新生成本题实验' })) })
+  f.view.rerender(f.pair({ ...f.data, visualization: { ...f.data.visualization, jobId: 'newer-generation' } }))
+  await act(async () => { await vi.advanceTimersByTimeAsync(800) })
+  await act(async () => { fireEvent.click(f.view.getByRole('button', { name: '重新生成本题实验' })) })
+  await act(async () => { finish({ ok: false, error: '旧恢复请求失败' }); await submitted })
+  f.expectStatus('failed')
+  expect(f.view.getByText('当前恢复请求失败')).toBeTruthy()
+  expect(f.view.getAllByText('原生成任务已失败')).toHaveLength(2)
+  expect(f.view.queryByText('旧恢复请求失败')).toBeNull()
+})
+it('does not turn a durable ready record into a published artifact or an isolated pass', async () => {
+  vi.useFakeTimers()
+  const completion = deferredJob()
+  vi.spyOn(questionCodeApi, 'job').mockReturnValue(completion.promise)
+  const f = generationPair()
+  await act(async () => { await vi.advanceTimersByTimeAsync(800) })
+  await act(async () => {
+    completion.resolve({ ...f.job, status: 'ready', validation: { passed: true, checks: [] } }); await completion.promise
+  })
+  f.expectStatus('publishing')
+  expect(f.view.container.querySelector('[data-preview-status="published"]')).toBeNull()
+  expect(f.view.container.querySelector('iframe')).toBeNull()
+  expect(f.view.queryByText('隔离验收通过')).toBeNull()
+})
 const authoredScene = createMechanicsScene({ sceneId: 'exact-question', revision: 0, model: 'projectile_motion',
   title: '20 米高处水平抛出', position: { x: 0, y: 20, z: 0 }, velocity: { x: 20, y: 0, z: 0 } })
 const scene = { ...authoredScene, metadata: { ...authoredScene.metadata, sourceQuestionId: asQuestionId('exact-question') } }
@@ -161,7 +355,7 @@ it.each(['failed', 'ready'] as const)('updates the compact attachment after a la
     ownerSessionId: f.ref.ownerSessionId, sceneId: scene.id, sceneRevision: scene.revision, deadlineAt: Date.now() + 600_000 } })
   const turn = store.turn
   const view = render(<SceneTurnCard turn={turn} seq={1} openFile={vi.fn()} t={t} usePhysicsSceneTurn={sceneTurnHook(turn)}
-    openScenePreview={openScenePreview} openSceneInLab={f.openSceneInLab} {...sessionSeats} />)
+    questionCodeOwner={f.questionCodeOwner} openScenePreview={openScenePreview} openSceneInLab={f.openSceneInLab} {...sessionSeats} />)
   await waitFor(() => { expect(view.container.querySelector('[data-preview-status="generating"]')).not.toBeNull() })
   act(() => { store.publish({ ...f.data, visualization: status === 'ready' ? f.ref : {
     status: 'failed', jobId: 'direct-job', ownerSessionId: f.ref.ownerSessionId,

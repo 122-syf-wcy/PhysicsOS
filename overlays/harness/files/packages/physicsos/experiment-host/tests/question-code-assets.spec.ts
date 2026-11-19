@@ -206,6 +206,42 @@ it('permits honestly native-only drawing without a forced image request and stil
   expect(() => assets.files(binding, native, 'canvas { background: url(https://other.example/image.png) }', true)).toThrow('IMAGE_BINDING_INVALID')
 })
 
+/** Short equivalent of the synthetic author's accessible Canvas and label slots. */
+const nativeTuples = `export function renderFrame(snapshot) {
+  const board=document.createElement('canvas'), ctx=board.getContext('2d');
+  board.setAttribute('role','img'); board.setAttribute('aria-label','Engine apparatus');
+  document.getElementById('canvas').replaceChildren(board);
+  for(const q of snapshot.view.labels || []) {
+    const sign=q.below?1:-1;
+    for(const pair of [[0,sign],[-1,sign],[1,-sign]]) {
+      const dx=pair[0],dy=pair[1];
+      ctx.beginPath(); ctx.arc(snapshot.view.opticalObjects[0].at.x+dx, snapshot.view.opticalObjects[0].at.y+dy, 3, 0, 6.28); ctx.fill();
+    }
+    for(const pair of [[1,0]]) { const dx=pair[0]; }
+  }
+}`
+it.each([
+  ['direct scalar guard', nativeTuples],
+  ['captured scalar guard', nativeTuples.replace('const sign=q.below?1:-1;', 'function direction(){return q.below?1:-1;} const sign=direction();')],
+] as const)('proves native tuple elements within their loop with a %s', (_name, source) => {
+  expect(new QuestionCodeAssets().files(binding, source, '', true).size).toBe(0)
+})
+it.each([
+  ['a DOM tuple element', nativeTuples.replace('[[0,sign],[-1,sign],[1,-sign]]', '[[0,sign],board]')],
+  ['a DOM conditional result', nativeTuples.replace('q.below?1:-1', 'q.below?1:board')],
+  ['a captured DOM result', nativeTuples.replace('const sign=q.below?1:-1;', 'function direction(){return q.below?1:board;} const sign=direction();')],
+  ['an arrow instead of a scalar conditional', nativeTuples.replace('q.below?1:-1', '()=>q.below?1:-1')],
+  ['a function-valued tuple', nativeTuples.replace('[[0,sign],[-1,sign],[1,-sign]]', '[()=>[0,sign]]')],
+  ['a shadowed tuple', nativeTuples.replace('const dx=pair[0],dy=pair[1];', 'const pair=board; const dx=pair[0],dy=pair[1];')],
+  ['a contaminated tuple', nativeTuples.replace('const dx=pair[0],dy=pair[1];', 'pair[0]=board; const dx=pair[0],dy=pair[1];')],
+  ['an out-of-scope tuple declaration', nativeTuples + `\nconst pair=document.getElementById('canvas'); pair['innerHTML']='<img src="./unknown.png">';`],
+  ['a cyclic helper result', nativeTuples.replace('q.below?1:-1', 'cycle()') + '\nfunction cycle(){return again();} function again(){return cycle();}'],
+  ['an over-deep conditional', nativeTuples.replace('q.below?1:-1', Array.from({ length: 65 }).reduce<string>(value => `q.below?(${value}):1`, '1'))],
+  ['a URI attribute beside accessibility', nativeTuples.replace("board.setAttribute('role','img');", "board.setAttribute('href','./unknown.svg');")],
+] as const)('does not prove %s as native tuple data', (_name, source) => {
+  expect(() => new QuestionCodeAssets().files(binding, source, '', true)).toThrow('IMAGE_BINDING_INVALID')
+})
+
 it('recognizes only native typed fallback evidence, not an error message naming a rate limit', async () => {
   const claimed = new QuestionCodeAssets({ imageProvider: async () => { throw new Error('IMAGE_RATE_LIMIT') } })
   await expect(claimed.generate(input)).rejects.toThrow('IMAGE_RATE_LIMIT')

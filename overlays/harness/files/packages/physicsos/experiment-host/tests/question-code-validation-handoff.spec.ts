@@ -60,11 +60,12 @@ async function setup() {
   const { sha256: _digest, ...fields } = original
   const source = { ...fields, generationId: 'gen-frozen', requestSha256: 'b'.repeat(64) }
   const row: QuestionCodeRecord = { ...source, sha256: createHash('sha256').update(canonicalQuestionJson(source)).digest('hex') }
-  await domain.table('artifacts').put(row.id, row)
-  const candidate = artifacts.describe('parent-session', row.id, row.sha256)
   const submitted = await jobs.submit({ id: row.generationId!, ownerSessionId: row.ownerSessionId, ownerKey: row.ownerKey,
     sceneId: row.sceneId, sceneRevision: row.sceneRevision, sceneSha256: row.sceneSha256, requestSha256: source.requestSha256 })
-  const started = await jobs.startAttempt(submitted)
+  const started = await jobs.claim(submitted.id)
+  if (started === undefined) throw new Error('fixture generation was not claimed')
+  await domain.table('artifacts').put(row.id, row)
+  const candidate = artifacts.describe('parent-session', row.id, row.sha256)
   await jobs.recordCandidate(submitted.id, started.epoch, { candidateSha256: row.sha256 })
   let current = { scene, ref: candidate }
   const sourceFence = (binding: ValidationSourceBinding): void => {

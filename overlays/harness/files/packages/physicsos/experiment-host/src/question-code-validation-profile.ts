@@ -1,8 +1,8 @@
-import { pickEngine, domainOfEngine } from '@physicsos/physics-runtime'
+import { pickEngine, domainOfEngine, prepareMagneticMotionValidation } from '@physicsos/physics-runtime'
 import { OpticsEngine, resolveOpticalImaging } from '@physicsos/engine-optics'
 import { parsePhysicsScene } from '@physicsos/physics-scene'
 import {
-  MECHANICS_VALIDATION_PROFILE, OPTICS_VALIDATION_PROFILE, UNSUPPORTED_VALIDATION_PROFILE,
+  MECHANICS_VALIDATION_PROFILE, OPTICS_VALIDATION_PROFILE, MAGNETIC_VALIDATION_PROFILE, UNSUPPORTED_VALIDATION_PROFILE,
   type QuestionCodeValidationProfile,
 } from '@physicsos/shared'
 import registry from './experiment-registry.json' with { type: 'json' }
@@ -16,6 +16,10 @@ export function selectQuestionCodeValidationProfile(scene: unknown, experimentId
     const selected = pickEngine(parsed.value).entry?.engine
     if (selected === undefined || domainOfEngine(selected) !== template.domain) return UNSUPPORTED_VALIDATION_PROFILE
     if (selected.engineId === 'engine-mechanics' && selected.domain === 'mechanics') return MECHANICS_VALIDATION_PROFILE
+    if (template.domain === 'magnetic' && selected.engineId === 'engine-magnetic' && selected.engineVersion === '1.0.0') {
+      return prepareMagneticMotionValidation(parsed.value, experimentId) === undefined
+        ? UNSUPPORTED_VALIDATION_PROFILE : MAGNETIC_VALIDATION_PROFILE
+    }
     // This policy verifies only the finite real-image thin-lens contract. Mirror,
     // focal/virtual-image, pinhole/refraction and other engines stay blocked.
     if (template.domain !== 'optics' || selected.engineId !== 'engine-optics' || selected.engineVersion !== '1.0.0') return UNSUPPORTED_VALIDATION_PROFILE

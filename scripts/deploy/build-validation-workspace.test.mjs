@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join, posix, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import test from 'node:test'
-import { buildValidationWorkspace, compiledExports, PACKAGES } from './build-validation-workspace.mjs'
+import { buildValidationWorkspace, compiledExports, PACKAGES, VIEWPORT_OUTPUTS } from './build-validation-workspace.mjs'
 
 const repository = fileURLToPath(new URL('../../', import.meta.url))
 
@@ -23,7 +23,7 @@ test('worker Docker build inputs and every compiler entry exist in the actual re
     assert.ok(copy, `compiler input has no Docker context mapping: ${input}`)
     await access(join(repository, copy.source, input.slice(copy.target.length)))
   }
-  const viewport = copies.find(row => 'viewport/mechanics-workspace-runtime.ts'.startsWith(row.target + '/'))
+  const viewport = copies.find(row => 'viewport/physics/mechanics-workspace-runtime.ts'.startsWith(row.target + '/'))
   assert.equal(resolve(repository, viewport.source), resolve(repository, 'overlays/harness/files/packages/client/ui-physicsos/src/client/physics'))
   const worker = copies.find(row => row.target === 'tools/validation-worker')
   assert.equal(worker.source, 'tools/validation-worker')
@@ -48,6 +48,11 @@ test('assembled workspace uses ESM and resolves bare package imports through the
     await writeFile(join(output, 'index.js'), 'export const ready = true;\n')
     await writeFile(join(output, 'json.js'), `export const sourcePackage = ${JSON.stringify(name)};\n`)
   }
+  for (const relative of VIEWPORT_OUTPUTS) {
+    const target = join(root, 'dist', relative)
+    await mkdir(dirname(target), { recursive: true })
+    await writeFile(target, 'export const fixtureOnly = true;\n')
+  }
   await buildValidationWorkspace(root)
   const packageRoot = JSON.parse(await readFile(join(root, 'dist/package.json'), 'utf8'))
   assert.equal(packageRoot.type, 'module')
@@ -55,4 +60,6 @@ test('assembled workspace uses ESM and resolves bare package imports through the
   await mkdir(dirname(consumer), { recursive: true })
   await writeFile(consumer, "export { sourcePackage } from '@physicsos/physics-workbench/capture';\n")
   assert.equal((await import(pathToFileURL(consumer).href)).sourcePackage, 'physics-workbench')
+  await rm(join(root, 'dist/viewport/physics-runtime-bridge.js'))
+  await assert.rejects(buildValidationWorkspace(root), /missing compiled Lab runtime: viewport\/physics-runtime-bridge\.js/)
 })

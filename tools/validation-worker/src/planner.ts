@@ -11,7 +11,12 @@
  * snapshot. Nothing is re-solved and nothing is invented.
  */
 import { planFrames, wireSnapshot, type FramePlan, type FrameSource, type SnapshotLike } from './frame-plan.ts'
-import { MECHANICS_VALIDATION_PROFILE, OPTICS_VALIDATION_PROFILE, type QuestionCodeValidationProfile } from '../../../packages/shared/src/validation-profile.ts'
+import { MECHANICS_VALIDATION_PROFILE, OPTICS_VALIDATION_PROFILE, MAGNETIC_VALIDATION_PROFILE, type QuestionCodeValidationProfile } from '../../../packages/shared/src/validation-profile.ts'
+import { prepareMagneticMotionValidation } from '../../../packages/physics-runtime/src/index.ts'
+import { parsePhysicsScene } from '../../../packages/physics-scene/src/index.ts'
+import { canonicalValue } from '../../../packages/physics-units/src/index.ts'
+import { derivedVector, toCanonicalVector } from '../../../packages/physics-core/src/index.ts'
+import { verifyMagneticScene } from '../../../packages/physics-verifier/src/index.ts'
 import { staticOpticsFacts } from './static-optics.ts'
 
 export type DomainRuntimeLoader = (domain: string) => Promise<((scene: Record<string, unknown>) => FrameSource | null) | null>
@@ -111,6 +116,94 @@ function planStaticOptics(runtime: FrameSource, scene: Record<string, unknown>, 
   }
 }
 
+const sameFacts = (left: unknown, right: unknown): boolean => left === undefined || right === undefined
+  ? left === right : JSON.stringify(wireSnapshot(left)) === JSON.stringify(wireSnapshot(right))
+const near = (left: number, right: number): boolean => Number.isFinite(left) && Number.isFinite(right) && Math.abs(left - right) <= 1e-6
+
+/** Samples physical quarter-periods exactly; the generic millisecond sampler is inapplicable. */
+function planMagneticMotion(runtime: FrameSource, scene: Record<string, unknown>, experimentId: string): SceneFramePlan {
+  const parsed = parsePhysicsScene(scene)
+  const prepared = parsed.ok ? prepareMagneticMotionValidation(parsed.value, experimentId) : undefined
+  if (!parsed.ok || prepared === undefined) throw new PlannerError('PROFILE_UNSUPPORTED', '仅支持已注册、真实验证通过的二维单粒子全局匀强磁场圆周运动。')
+  if (runtime.seek === undefined || runtime.editParameter === undefined || runtime.captureRaw === undefined) {
+    throw new PlannerError('PROFILE_UNSUPPORTED', '磁场运行时缺少真实 seek、v0 改参或原始引擎结果。')
+  }
+  const frozen = parsed.value, period = prepared.plan.endTime
+  const capture = () => {
+    const raw = runtime.captureRaw!()
+    if (raw.scene === undefined || raw.request === undefined || raw.result === undefined || raw.state === undefined
+      || raw.engineInfo.id !== prepared.plan.engineId || raw.engineInfo.version !== prepared.plan.engineVersion
+      || raw.cursor.kind !== 'time' || raw.result.metadata.engineId !== raw.engineInfo.id
+      || raw.result.metadata.engineVersion !== raw.engineInfo.version || raw.result.sceneId !== raw.scene.id
+      || raw.result.sceneRevision !== raw.scene.revision || raw.request.sceneId !== raw.scene.id
+      || raw.request.sceneRevision !== raw.scene.revision
+      || verifyMagneticScene(raw.scene, raw.result, { request: raw.request }).status !== 'passed'
+      || raw.result.verification.status !== 'passed') {
+      throw new PlannerError('INVALID_SNAPSHOT', '缺少对应场景修订、真实验证通过的磁场原始结果。')
+    }
+    return { ...raw, scene: raw.scene, request: raw.request, result: raw.result, state: raw.state, cursor: raw.cursor }
+  }
+  const initial = capture()
+  if (!sameFacts(initial.scene, frozen)) throw new PlannerError('PROFILE_UNSUPPORTED', '磁场运行时没有使用 canonical frozen scene。')
+  const checkedFrame = (snapshot: SnapshotLike, expectedTime: number, expectedScene: typeof frozen) => {
+    const raw = capture(), view = snapshot.view as SnapshotLike['view'] & { readonly extent?: { readonly width: number; readonly height: number } }
+    const particle = view.particles?.[0], object = raw.state.objects.find(item => item.id === expectedScene.particles[0]!.id)
+    if (snapshot.domain !== 'magnetic' || snapshot.status !== 'verified' || snapshot.sceneRevision !== expectedScene.revision
+      || !sameFacts(raw.scene, expectedScene) || snapshot.clock.time !== expectedTime || snapshot.clock.total !== period
+      || raw.cursor.kind !== 'time' || canonicalValue(raw.cursor.time) !== expectedTime
+      || canonicalValue(raw.state.time) !== expectedTime || view.bodies?.length !== 0 || view.particles?.length !== 1
+      || particle?.id !== expectedScene.particles[0]!.id || object?.position === undefined || view.extent === undefined
+      || !Array.isArray(snapshot.verification) || snapshot.verification.length === 0
+      || !snapshot.verification.every(check => typeof check === 'object' && check !== null && 'status' in check && check.status === 'passed')) {
+      throw new PlannerError('INVALID_SNAPSHOT', '磁场帧没有精确对应引擎时刻、修订或唯一粒子。')
+    }
+    const position = toCanonicalVector(object.position).vectorSI
+    const center = toCanonicalVector(derivedVector(raw.result.derivedQuantities, 'orbit_center')).vectorSI
+    // Verify the bridge's existing box-centred cm mapping; do not put raw SI on the wire.
+    if (!near(particle.at.x, view.extent.width / 2 + (position.x - center.x) * 100)
+      || !near(particle.at.y, view.extent.height / 2 + (position.y - center.y) * 100)) {
+      throw new PlannerError('INVALID_SNAPSHOT', '磁场粒子视图不是运行时已有的圆心平移厘米坐标。')
+    }
+    return contributionSnapshot(snapshot, experimentId)
+  }
+  const frames = [0, period / 4, period / 2, 3 * period / 4].map((time, index) => ({
+    frameId: `f${index}`, snapshot: checkedFrame(runtime.seek!(time), time, frozen),
+  }))
+  const inspector = runtime.getSnapshot().inspector?.flatMap(section => section.parameters ?? [])
+  const speed = inspector?.find(item => item.id === 'v0')
+  const from = speed?.value, to = typeof from === 'number' ? from * 1.1 : Number.NaN
+  if (!(typeof from === 'number' && from > 0 && Number.isFinite(to) && to > from)) throw new PlannerError('NO_PARAMETER', '缺少可核对的真实 v0 参数。')
+  runtime.editParameter('v0', to)
+  const after = capture(), changedSupport = prepareMagneticMotionValidation(after.scene, experimentId)
+  const beforeParticle = frozen.particles[0]!, afterParticle = after.scene.particles[0]
+  const velocity = toCanonicalVector(beforeParticle.velocity).vectorSI
+  const changedVelocity = afterParticle === undefined ? undefined : toCanonicalVector(afterParticle.velocity).vectorSI
+  const { revision: _revision, metadata: _metadata, particles: _particles, ...beforeRest } = frozen
+  const { revision: _nextRevision, metadata: _nextMetadata, particles: _nextParticles, ...afterRest } = after.scene
+  if (changedSupport === undefined || after.scene.revision !== frozen.revision + 1
+    || after.result.sceneRevision !== after.scene.revision || sameFacts(initial.result, after.result)
+    || !sameFacts(beforeRest, afterRest) || afterParticle === undefined
+    || !sameFacts({ ...beforeParticle, velocity: undefined }, { ...afterParticle, velocity: undefined })
+    || changedVelocity === undefined || !near(changedVelocity.x, velocity.x * 1.1)
+    || !near(changedVelocity.y, velocity.y * 1.1) || !near(changedVelocity.z, velocity.z * 1.1)
+    || changedSupport.plan.endTime !== period) {
+    throw new PlannerError('INVALID_SNAPSHOT', 'v0 改参没有生成仅改变速度的新修订与真实引擎结果。')
+  }
+  const changedSnapshot = runtime.seek(period / 4)
+  const nextSpeed = changedSnapshot.inspector?.flatMap(section => section.parameters ?? []).find(item => item.id === 'v0')
+  const changedFrame = { frameId: 'f-changed', snapshot: checkedFrame(changedSnapshot, period / 4, after.scene) }
+  const baseView = frames[0]!.snapshot.view as Record<string, unknown>, changedView = changedFrame.snapshot.view as Record<string, unknown>
+  const baseScale = (baseView.overlay as Record<string, unknown> | undefined)?.scale
+  const nextScale = (changedView.overlay as Record<string, unknown> | undefined)?.scale
+  if (nextSpeed?.value !== to || baseView.extent === undefined || baseView.grid === undefined || baseView.field === undefined || baseScale === undefined
+    || !sameFacts(baseView.extent, changedView.extent) || !sameFacts(baseView.grid, changedView.grid)
+    || !sameFacts(baseView.field, changedView.field) || !sameFacts(baseScale, nextScale)
+    || sameFacts((frames[1]!.snapshot.view as SnapshotLike['view']).particles, changedView.particles)) {
+    throw new PlannerError('INVALID_SNAPSHOT', 'v0 改参未保持固定视口/B 纹理，或粒子仍是旧改参快照。')
+  }
+  return { validationProfile: MAGNETIC_VALIDATION_PROFILE, frames, changedFrame, parameter: { id: 'v0', from, to }, notes: [] }
+}
+
 /**
  * Resolve the plan for one scene through an already-resolved runtime factory.
  * The template identity comes from the app's bound artifact, not scene metadata.
@@ -129,6 +222,7 @@ export function planScene(
   const base = runtime.getSnapshot()
   if (base.status === 'failed' || !Number.isSafeInteger(base.sceneRevision) || Number(base.sceneRevision) < 0) throw new PlannerError('INVALID_SNAPSHOT', '运行时没有提供有效的实验帧身份。')
   if (base.domain === 'optics') return planStaticOptics(runtime, scene, experimentId)
+  if (base.domain === 'magnetic') return planMagneticMotion(runtime, scene, experimentId)
   if (base.domain !== 'mechanics') throw new PlannerError('PROFILE_UNSUPPORTED', '该运行时没有受支持的原生几何验收策略。')
   const rawIdentity = runtime.captureRaw?.().engineInfo
   if (rawIdentity !== undefined && rawIdentity.id !== 'engine-mechanics') throw new PlannerError('PROFILE_UNSUPPORTED', '该力学变体尚无原生几何验收策略。')

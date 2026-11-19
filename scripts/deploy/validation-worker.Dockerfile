@@ -30,7 +30,10 @@ COPY packages ./packages
 COPY tools/validation-worker ./tools/validation-worker
 # Reuse the actual Lab adapters and their relative module graph. There is no
 # separate repository-root viewport implementation.
-COPY overlays/harness/files/packages/client/ui-physicsos/src/client/physics ./viewport
+COPY overlays/harness/files/packages/client/ui-physicsos/src/client/physics ./viewport/physics
+COPY overlays/harness/files/packages/client/ui-physicsos/src/client/physics-runtime-bridge.ts ./viewport/physics-runtime-bridge.ts
+COPY overlays/harness/files/packages/client/ui-physicsos/src/client/lab-view-model.ts ./viewport/lab-view-model.ts
+COPY overlays/harness/files/packages/client/ui-physicsos/src/client/prototype/magnetic-scene.ts ./viewport/prototype/magnetic-scene.ts
 # Give NodeNext the same ESM context as the source worker and Lab package.
 COPY tools/validation-worker/package.json ./package.json
 COPY scripts/deploy/build-validation-workspace.mjs ./build-workspace.mjs
@@ -42,7 +45,7 @@ RUN npm install --no-audit --no-fund --ignore-scripts --save-exact \
     && node -e "const v=require('playwright-core/package.json').version; if(v!=='1.62.1'){console.error('playwright-core drift: '+v);process.exit(1)}" \
     && test -f dist/tools/validation-worker/src/server.js \
     && test -f dist/node_modules/@physicsos/physics-scene/src/index.js \
-    && node --input-type=module -e "const m=await import('./dist/viewport/mechanics-workspace-runtime.js'); if(typeof m.createMechanicsWorkspaceRuntime!=='function')throw Error('Lab mechanics viewport export missing'); const r=await import('./dist/node_modules/@physicsos/physics-runtime/src/index.js'); if(typeof r.pickEngine!=='function'||typeof r.domainOfEngine!=='function')throw Error('Shared runtime dispatcher missing'); console.log('canonical Lab viewport imports verified')"
+    && node --input-type=module -e "const m=await import('./dist/viewport/physics/mechanics-workspace-runtime.js'); if(typeof m.createMechanicsWorkspaceRuntime!=='function')throw Error('Lab mechanics viewport export missing'); const o=await import('./dist/viewport/physics/optics-workspace-runtime.js'); if(typeof o.createOpticsWorkspaceRuntime!=='function')throw Error('Lab optics viewport export missing'); const r=await import('./dist/node_modules/@physicsos/physics-runtime/src/index.js'); if(typeof r.pickEngine!=='function'||typeof r.domainOfEngine!=='function')throw Error('Shared runtime dispatcher missing'); const {workspaceRuntimeLoader}=await import('./dist/tools/validation-worker/src/server.js'); const {planScene}=await import('./dist/tools/validation-worker/src/planner.js'); const {createMagneticScene}=await import('./dist/node_modules/@physicsos/physics-scene/src/index.js'); const scene=createMagneticScene({sceneId:'magnetic-build-gate',charge:1.6e-19,mass:1.67e-27,velocity:{x:1e6,y:0,z:0},magneticFieldStrength:0.4,magneticFieldDirection:'out_of_page'}); const factory=await workspaceRuntimeLoader(process.cwd()+'/dist')(scene); if(factory===null)throw Error('Canonical magnetic runtime loader unavailable'); const plan=planScene(scene,factory,'magnetic-circular'); if(plan.validationProfile.id!=='magnetic-uniform-circular-native-motion'||plan.frames.length!==4||plan.parameter?.id!=='v0'||plan.parameter.from!==1e6||plan.parameter.to!==1.1e6)throw Error('Canonical magnetic planning failed'); console.log('canonical Lab viewport imports and magnetic planning verified')"
 
 FROM ${PLAYWRIGHT_IMAGE} AS runtime
 WORKDIR /app

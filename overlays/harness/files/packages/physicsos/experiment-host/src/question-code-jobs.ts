@@ -57,6 +57,8 @@ const validationValue = (value: QuestionCodeValidation): string => JSON.stringif
   value.checks.map(check => [check.name, check.passed, check.detail]), value.screenshotRef, value.finishedAt])
 const sameValidation = (left: QuestionCodeValidation, right: QuestionCodeValidation): boolean => validationValue(left) === validationValue(right)
 const archiveWritesByDomain = new WeakMap<Domain<typeof questionCodeDomain>, Map<string, Promise<void>>>()
+// Startup belongs to the acquired writer/domain, not to wrappers or request reads.
+const startupsByDomain = new WeakMap<Domain<typeof questionCodeDomain>, Promise<void>>()
 
 /**
  * One authoritative job store over the `jobs` table. Every mutation is
@@ -110,6 +112,56 @@ export class QuestionCodeJobs {
   }
 
   /**
+   * Reconcile the acquired writer's restored jobs before exposing any producer.
+   * Never run this from a constructor, poller or request. Repeated startup on
+   * this domain shares one barrier, so it cannot interrupt this process's work.
+   */
+  initialize(): Promise<void> {
+    let startup = startupsByDomain.get(this.domain)
+    if (startup === undefined) {
+      startup = this.reconcileInterrupted()
+      startupsByDomain.set(this.domain, startup)
+    }
+    return startup
+  }
+
+  private async reconcileInterrupted(): Promise<void> {
+    const jobs = this.domain.table('jobs')
+    for (const [id, restored] of jobs.entries()) {
+      if (!isLive(restored.status)) continue
+      await jobs.update(id, current => {
+        // A write since startup took its snapshot belongs to this process.
+        if (current !== restored) return current
+        const attempt = current.attempts.at(-1)
+        const sources = [...this.domain.table('artifacts').entries()].map(([, row]) => row)
+          .filter(row => attempt !== undefined && (attempt.status === 'running' || attempt.status === 'infrastructure-failed')
+            && this.matchesSource(current, row) && (attempt.candidateSha256 === undefined || attempt.candidateSha256 === row.sha256))
+        // Recover even the crash between freezing the artifact and recording
+        // its digest. Ambiguous or mismatched artifacts cannot authorize retry.
+        const source = sources.length === 1 ? sources[0] : undefined
+        if (source !== undefined && current.status === 'queued' && attempt?.status === 'infrastructure-failed'
+          && attempt.candidateSha256 === source.sha256) return current
+        const at = this.now().toISOString()
+        const code = source === undefined ? 'GENERATION_INTERRUPTED' : 'VALIDATION_INTERRUPTED'
+        this.revokeJobTickets(id)
+        return {
+          ...current,
+          status: source === undefined ? 'failed' : 'queued',
+          code,
+          message: source === undefined ? '生成进程已中断，请手动重新生成。' : '验收进程已中断，冻结候选可重新验收。',
+          leaseEpoch: current.leaseEpoch + 1,
+          attempts: current.attempts.map((value, index) => ({
+            ...value,
+            ...(index === current.attempts.length - 1 && source !== undefined ? { candidateSha256: source.sha256 } : {}),
+            ...(value.status === 'running' ? { status: 'infrastructure-failed' as const, code, finishedAt: at } : {}),
+          })),
+          updatedAt: at,
+        }
+      })
+    }
+  }
+
+  /**
    * Accept a job unless a live one already covers the same generation id.
    * A finished job with the same id is returned as-is: the artifact table
    * already owns the immutable result, and re-running would mint a new one.
@@ -120,7 +172,8 @@ export class QuestionCodeJobs {
       if (existing.ownerSessionId !== input.ownerSessionId || existing.ownerKey !== input.ownerKey) {
         throw new QuestionCodeJobError('NOT_FOUND', '未找到该生成任务。')
       }
-      return existing
+      if (!this.matchesJob(existing, input)) throw new QuestionCodeJobError('STALE_SOURCE', '生成任务已绑定其他题目或请求。')
+      return this.withHistory(existing)
     }
     const at = this.now().toISOString()
     const job: QuestionCodeJobRecord = {
@@ -145,13 +198,94 @@ export class QuestionCodeJobs {
     return this.withHistory(job)
   }
 
-  /** Claim queued work, or reclaim a running attempt whose lease expired. */
+  /** Claim queued generation only. Frozen sources have a validation-only retry. */
   async claim(id: string): Promise<{ job: QuestionCodeJob; epoch: number } | undefined> {
     const job = this.domain.table('jobs').get(id)
-    if (job === undefined || !isLive(job.status)) return undefined
-    const attempt = job.attempts.at(-1)
-    if ((job.status === 'running' || job.status === 'validating') && attempt?.status === 'running') return undefined
+    if (job?.status !== 'queued' || job.attempts.at(-1)?.candidateSha256 !== undefined
+      || [...this.domain.table('artifacts').entries()].some(([, row]) => this.matchesSource(job, row))) return undefined
     return await this.startAttempt(job)
+  }
+
+  /**
+   * Run the synchronous session append in the job's serialized update slot.
+   * A separate preflight read could miss a queued cancellation or lease change.
+   * The job/candidate must already be durable; publishing does not rewrite it.
+   */
+  async publishGeneration(input: SubmitJobInput, epoch: number, append: () => void,
+    candidate?: { readonly artifactId: string; readonly sha256: string }): Promise<void> {
+    const appended = Symbol('generation appended')
+    try {
+      await this.domain.table('jobs').update(input.id, job => {
+        if (job.ownerKey !== input.ownerKey || job.ownerSessionId !== input.ownerSessionId) {
+          throw new QuestionCodeJobError('NOT_FOUND', '未找到该生成任务。')
+        }
+        if (!this.matchesJob(job, input)) throw new QuestionCodeJobError('STALE_SOURCE', '题目或生成请求已变化。')
+        if (job.leaseEpoch !== epoch) throw new QuestionCodeJobError('STALE_LEASE', '任务已被新的执行者接管。')
+        const attempt = job.attempts.at(-1)
+        if (candidate === undefined) {
+          if (job.status !== 'running' || attempt?.status !== 'running') throw new QuestionCodeJobError('NOT_LIVE', '生成任务已经结束。')
+        } else {
+          const row = this.domain.table('artifacts').get(candidate.artifactId)
+          if (row === undefined || row.rendererKind !== 'independent' || row.sha256 !== candidate.sha256
+            || !questionCodeJobMatchesArtifact(job, row)) {
+            throw new QuestionCodeJobError('CANDIDATE_MISMATCH', '发布结果与冻结源不一致。')
+          }
+          const preview = (job.status === 'candidate' || job.status === 'validating') && attempt?.status === 'running'
+            || job.status === 'queued' && attempt?.status === 'infrastructure-failed'
+          const accepted = job.status === 'ready' && attempt?.status === 'passed'
+            && job.resultRef === candidate.artifactId && job.resultSha256 === candidate.sha256
+          if (!preview && !accepted) throw new QuestionCodeJobError('NOT_LIVE', '任务已经结束，旧候选不会发布。')
+        }
+        append()
+        // Even returning `job` writes it to the backend. Exit the update
+        // before that redundant write can fail after an observable append.
+        throw appended
+      })
+    } catch (error) {
+      if (error !== appended) throw error
+    }
+  }
+
+  /** Reattach an exact frozen source before offering validation-only retry. */
+  async recoverFrozenGeneration(input: SubmitJobInput): Promise<{
+    readonly epoch: number; readonly artifactId: string; readonly sha256: string; readonly experimentId: string
+  } | undefined> {
+    const jobs = this.domain.table('jobs'), artifacts = this.domain.table('artifacts')
+    const job = jobs.get(input.id), attempt = job?.attempts.at(-1)
+    if (job === undefined || !this.matchesJob(job, input)
+      || !(job.status === 'queued' && attempt?.status === 'infrastructure-failed'
+        || job.status === 'ready' && attempt?.status === 'passed')) return undefined
+    const sources = [...artifacts.entries()].map(([, row]) => row)
+      .filter(row => this.matchesSource(job, row) && (attempt.candidateSha256 === undefined || attempt.candidateSha256 === row.sha256))
+    const source = sources.length === 1 ? sources[0] : undefined
+    if (source === undefined || job.status === 'ready' && (job.resultRef !== source.id || job.resultSha256 !== source.sha256
+      || attempt.candidateSha256 !== source.sha256)) return undefined
+    if (attempt.candidateSha256 === undefined) {
+      // The artifact may have committed even when recording its digest failed.
+      await jobs.update(input.id, current => {
+        const last = current.attempts.at(-1)
+        if (current.leaseEpoch !== job.leaseEpoch || !this.matchesJob(current, input) || current.status !== 'queued'
+          || last?.status !== 'infrastructure-failed' || artifacts.get(source.id) !== source
+          || last.candidateSha256 !== undefined && last.candidateSha256 !== source.sha256) {
+          throw new QuestionCodeJobError('STALE_LEASE', '冻结候选已经变更。')
+        }
+        return { ...current, attempts: [...current.attempts.slice(0, -1), { ...last, candidateSha256: source.sha256 }], updatedAt: this.now().toISOString() }
+      })
+    }
+    return { epoch: job.leaseEpoch, artifactId: source.id, sha256: source.sha256, experimentId: source.experimentId }
+  }
+
+  private matchesJob(job: QuestionCodeJobRecord, input: SubmitJobInput): boolean {
+    return job.id === input.id && job.ownerKey === input.ownerKey && job.ownerSessionId === input.ownerSessionId
+      && job.sceneId === input.sceneId && job.sceneRevision === input.sceneRevision
+      && job.sceneSha256 === input.sceneSha256 && job.requestSha256 === input.requestSha256
+  }
+
+  private matchesSource(job: QuestionCodeJobRecord, row: QuestionCodeRecord): boolean {
+    return row.rendererKind === 'independent' && row.generationId === job.id && row.ownerKey === job.ownerKey
+      && row.ownerSessionId === job.ownerSessionId && row.sceneId === job.sceneId
+      && row.sceneRevision === job.sceneRevision && row.sceneSha256 === job.sceneSha256
+      && row.requestSha256 === job.requestSha256
   }
 
   /**
@@ -238,6 +372,12 @@ export class QuestionCodeJobs {
     const next = await this.domain.table('jobs').update(job.id, current => {
       if (current.leaseEpoch !== job.leaseEpoch) throw new QuestionCodeJobError('STALE_LEASE', '任务已被新的执行者接管。')
       if (current.status === 'validating') throw new QuestionCodeJobError('VALIDATION_BUSY', '候选正在隔离验收。')
+      const previous = current.attempts.at(-1)
+      if (current.status !== 'queued' && !(current.status === 'failed' && previous?.status === 'rejected')
+        || previous?.status === 'running' || previous?.candidateSha256 !== undefined
+        || [...this.domain.table('artifacts').entries()].some(([, row]) => this.matchesSource(current, row))) {
+        throw new QuestionCodeJobError('NOT_LIVE', '任务不能开始新的生成尝试。')
+      }
       if (current.attempts.length >= 2) throw new QuestionCodeJobError('NOT_LIVE', '生成任务的重试次数已用尽。')
       const at = this.now().toISOString()
       const attempt: JobAttempt = { index: current.attempts.length, status: 'running', startedAt: at }
@@ -387,7 +527,10 @@ export class QuestionCodeJobs {
     return this.domain.table('jobs').update(id, job => {
       if (!isLive(job.status) || expectedEpoch !== undefined && job.leaseEpoch !== expectedEpoch) return job
       this.revokeJobTickets(id)
-      return { ...job, status: 'superseded', code: 'SUPERSEDED', message: reason, leaseEpoch: job.leaseEpoch + 1, updatedAt: this.now().toISOString() }
+      const at = this.now().toISOString()
+      const attempts = job.attempts.map(attempt => attempt.status === 'running'
+        ? { ...attempt, status: 'cancelled' as const, code: 'SUPERSEDED', finishedAt: at } : attempt)
+      return { ...job, status: 'superseded', attempts, code: 'SUPERSEDED', message: reason, leaseEpoch: job.leaseEpoch + 1, updatedAt: at }
     })
   }
 
@@ -519,7 +662,7 @@ export class QuestionCodeJobs {
     }
   }
 
-  /** Jobs left mid-attempt by a restart: queued again after the lease window. */
+  /** Diagnostic age view only; startup recovery never guesses liveness from age. */
   stale(now = this.now(), leaseMs = 10 * 60 * 1000): QuestionCodeJob[] {
     return [...this.domain.table('jobs').entries()]
       .map(([, job]) => job)

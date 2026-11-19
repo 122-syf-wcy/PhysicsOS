@@ -8,7 +8,7 @@ export function sameQuestionCodeRef(a: CodeExperimentRef, b: CodeExperimentRef):
     && a.experimentId === b.experimentId && a.childSessionId === b.childSessionId
     && a.rendererKind === b.rendererKind
 }
-export function questionCodeRefMatches(ref: CodeVisualizationState, scene: PhysicsScene, owner: string | undefined): boolean {
+export function questionCodeRefMatches(ref: CodeVisualizationState, scene: { readonly id: string; readonly revision: number }, owner: string | undefined): boolean {
   return owner !== undefined && ref.ownerSessionId === owner && ref.sceneId === scene.id && ref.sceneRevision === scene.revision
 }
 /** Renderer metadata is a separate copy; the question's physical facts are never rewritten. */
@@ -55,6 +55,34 @@ export interface QuestionCodeJobView {
   readonly attempts: readonly { readonly index: number; readonly status: string }[]
   readonly validation?: { readonly passed: boolean; readonly checks: readonly { readonly name: string; readonly passed: boolean }[] }
   readonly updatedAt: string
+}
+/** Only the generating marker's current job may change its displayed lifecycle. */
+export function questionCodeGenerationJobMatches(job: QuestionCodeJobView | undefined, visualization: CodeVisualizationState | undefined): boolean {
+  return job !== undefined && visualization?.status === 'generating' && job.jobId === visualization.jobId
+    && job.sceneId === visualization.sceneId && job.sceneRevision === visualization.sceneRevision
+}
+export type QuestionCodeGenerationStatus = CodeVisualizationState['status'] | 'historical' | 'owner-mismatch' | 'stale'
+  | 'interrupted' | 'cancelled' | 'superseded' | 'publishing'
+/** Shared attachment/preview lifecycle; a job record cannot supply an artifact or validation pass. */
+export function questionCodeGenerationStatus(
+  visualization: CodeVisualizationState | undefined,
+  scene: { readonly id: string; readonly revision: number },
+  owner: string | undefined,
+  now: number,
+  job?: QuestionCodeJobView,
+): QuestionCodeGenerationStatus {
+  if (visualization === undefined) return 'historical'
+  if (visualization.ownerSessionId !== owner) return 'owner-mismatch'
+  if (!questionCodeRefMatches(visualization, scene, owner)) return 'stale'
+  if (visualization.status !== 'generating') return visualization.status
+  if (questionCodeGenerationJobMatches(job, visualization)) {
+    if (job?.status === 'failed' || job?.status === 'cancelled' || job?.status === 'superseded') return job.status
+    if (job?.status === 'queued' && (job.code === 'VALIDATION_INTERRUPTED' || job.code === 'GENERATION_PUBLICATION_FAILED')) return 'interrupted'
+    // The published immutable reference must still arrive through the scene projection.
+    if (job?.status === 'ready') return 'publishing'
+  }
+  return visualization.deadlineAt === undefined || !Number.isFinite(visualization.deadlineAt) || visualization.deadlineAt <= now
+    ? 'interrupted' : 'generating'
 }
 export function questionCodeJobMatches(job: QuestionCodeJobView | undefined, ref: CodeExperimentRef, jobId: string | undefined): boolean {
   return job !== undefined && job.jobId === jobId && job.sceneId === ref.sceneId

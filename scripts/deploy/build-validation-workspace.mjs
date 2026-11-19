@@ -29,6 +29,19 @@ export const PACKAGES = [
   'engine-thermal', 'engine-wave',
 ]
 
+/** Canonical Lab modules whose preserved relative graph the worker loads. */
+export const VIEWPORT_OUTPUTS = [
+  'viewport/physics/mechanics-workspace-runtime.js',
+  'viewport/physics/optics-workspace-runtime.js',
+  'viewport/physics/magnetic-workspace-runtime.js',
+  'viewport/physics/magnetic-clock.js',
+  'viewport/physics/scene-visual-model.js',
+  'viewport/physics/verified-result.js',
+  'viewport/physics/bridge-helpers.js',
+  'viewport/physics-runtime-bridge.js',
+  'viewport/prototype/magnetic-scene.js',
+]
+
 /** Preserve canonical package subpath aliases while changing emitted TS targets to JS. */
 export function compiledExports(value) {
   if (typeof value === 'string') {
@@ -69,6 +82,11 @@ export async function buildValidationWorkspace(root) {
       main: './src/index.js',
       exports: compiledExports(manifest.exports),
     }, null, 2))
+  }
+  for (const relative of VIEWPORT_OUTPUTS) {
+    try { await readFile(join(dist, relative)) } catch (cause) {
+      throw new Error(`missing compiled Lab runtime: ${relative}; preserve its relative Docker source graph`, { cause })
+    }
   }
   console.log(`validation workspace: ${PACKAGES.length} packages at ${modules}`)
 }

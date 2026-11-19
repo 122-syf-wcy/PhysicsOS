@@ -75,10 +75,10 @@ async function resetProbe(frame: Frame, probeKey: string): Promise<void> {
   }, probeKey)
 }
 
-const sampleFrame = (snapshot: Record<string, unknown>, paint: FramePaint, opticsProfile = false): BrowserFrame => {
+const sampleFrame = (snapshot: Record<string, unknown>, paint: FramePaint, opticsProfile = false, magneticProfile = false): BrowserFrame => {
   const time = (snapshot.clock as { time?: unknown } | undefined)?.time
-  const engineBody = bodyOf(snapshot)
-  const engineGround = groundOf(snapshot)
+  const engineBody = bodyOf(snapshot, magneticProfile)
+  const engineGround = magneticProfile ? undefined : groundOf(snapshot)
   const optics = opticsProfile ? staticOpticsFacts(snapshot) : undefined
   return {
     time: typeof time === 'number' && Number.isFinite(time) ? time : Number.NaN,
@@ -88,6 +88,7 @@ const sampleFrame = (snapshot: Record<string, unknown>, paint: FramePaint, optic
     drawnBodies: paint.drawnBodies,
     drawnGrounds: paint.drawnGrounds,
     ...(opticsProfile ? { drawnSegments: paint.drawnSegments, drawnTriangles: paint.drawnTriangles, drawnTexts: paint.drawnTexts, drawnSurfaces: paint.drawnSurfaces, snapshotSha256: sha256(JSON.stringify(snapshot)) } : {}),
+    ...(magneticProfile ? { snapshotSha256: sha256(JSON.stringify(snapshot)) } : {}),
     ...(optics === undefined ? {} : { optics }),
     ...(paint.taintedSurfaces > 0 ? { taintedSurfaces: paint.taintedSurfaces } : {}),
     paintHash: sha256(paint.paintHash),
@@ -146,6 +147,7 @@ export async function validateCandidate(options: DriverOptions): Promise<DriverR
   // One init script fixes ordering: standard anonymous asset CORS first, then
   // native paint observations. Renderer bytes and browser security are intact.
   const opticsProfile = options.validationProfile?.id === 'optics-thin-lens-real-static'
+  const magneticProfile = options.validationProfile?.id === 'magnetic-uniform-circular-native-motion'
   await context.addInitScript({ content: `${anonymousImagePolicyScript(candidateOrigin)}\n${canvasDrawProbeScript(probeKey, opticsProfile)}` })
   const page = await context.newPage()
   // No cookies or storage are ever injected; block anything outside the
@@ -199,7 +201,7 @@ export async function validateCandidate(options: DriverOptions): Promise<DriverR
       await inner.waitForTimeout(120)
       const paint = await observeFrame(inner, probeKey)
       nativeSurface &&= paint.nativeSurface
-      sampled.push(sampleFrame(frame.snapshot, paint, opticsProfile))
+      sampled.push(sampleFrame(frame.snapshot, paint, opticsProfile, magneticProfile))
     }
     // The changed frame needs actual geometry too, not just a different hash.
     let changedPaintHash: string | undefined
@@ -244,7 +246,7 @@ export async function validateCandidate(options: DriverOptions): Promise<DriverR
         await inner.waitForTimeout(120)
         const paint = await observeFrame(inner, probeKey)
         nativeSurface &&= paint.nativeSurface
-        changedSample = sampleFrame(changedFrame.snapshot, paint, opticsProfile)
+        changedSample = sampleFrame(changedFrame.snapshot, paint, opticsProfile, magneticProfile)
         originalPaintHash = sampled[0]?.paintHash
         changedPaintHash = changedSample.paintHash
         parameterChanged = true
@@ -306,9 +308,14 @@ export async function validateCandidate(options: DriverOptions): Promise<DriverR
   }
 }
 
-const bodyOf = (snapshot: Record<string, unknown>): { x: number; y: number } | undefined => {
-  const view = snapshot.view as { bodies?: { at?: { x?: unknown; y?: unknown } }[] } | undefined
-  const at = view?.bodies?.[0]?.at
+const bodyOf = (snapshot: Record<string, unknown>, magneticProfile = false): { x: number; y: number } | undefined => {
+  const view = snapshot.view as { bodies?: { at?: { x?: unknown; y?: unknown } }[]; particles?: { at?: { x?: unknown; y?: unknown } }[] } | undefined
+  // Only the server-bound magnetic policy reads the bridge's unique cm particle.
+  // Do not fall back to a child body or convert this existing wire geometry to SI.
+  const at = magneticProfile
+    ? snapshot.domain === 'magnetic' && snapshot.experimentId === 'magnetic-circular' && view?.bodies?.length === 0 && view.particles?.length === 1
+      ? view.particles[0]?.at : undefined
+    : view?.bodies?.[0]?.at
   return typeof at?.x === 'number' && Number.isFinite(at.x) && typeof at.y === 'number' && Number.isFinite(at.y)
     ? { x: at.x, y: at.y } : undefined
 }

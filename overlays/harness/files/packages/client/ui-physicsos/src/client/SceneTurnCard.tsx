@@ -24,7 +24,7 @@ export type SceneTurnCardProps =
 
 /** Render this Turn's newest scene beside its answer, or nothing when it had none. */
 export function SceneTurnCard({
-  turn, t, openSceneInLab, openScenePreview, recordAttempt, endTurnHygiene, usePhysicsSceneTurn,
+  turn, t, openSceneInLab, openScenePreview, recordAttempt, questionCodeOwner, endTurnHygiene, usePhysicsSceneTurn,
 }: SceneTurnCardProps) {
   const data = usePhysicsSceneTurn(String(turn.turn))
   /* The turn closed — this seat only exists once `turn/end` is in the log. That
@@ -39,6 +39,7 @@ export function SceneTurnCard({
       presentation="attachment"
       t={t}
       openSceneInLab={openSceneInLab}
+      {...questionCodeOwner === undefined ? {} : { questionCodeOwner }}
       {...openScenePreview === undefined ? {} : { openScenePreview }}
       {...recordAttempt === undefined ? {} : { recordAttempt }}
     />

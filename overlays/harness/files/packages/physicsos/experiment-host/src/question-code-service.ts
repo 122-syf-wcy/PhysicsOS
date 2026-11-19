@@ -445,11 +445,11 @@ function validateIndependentDrawing(source: string): void {
   const step = (): void => { if (++work > 100_000) throw new DrawingValidationError('analysis_limit') }
   const contextKey = (expression: string, fn: DrawingFunction, seen: Set<string>): string =>
     JSON.stringify([fn.name, expression, [...seen].sort()])
-  const nodes = new Map<string, string[]>(), classifications = new Map<string, number>()
+  const nodes = new Map<string, string[]>()
   const nodeIdentities = (expression: string, fn: DrawingFunction, seen: Set<string> = new Set()): string[] => {
-    step()
     const key = contextKey(expression, fn, seen), cached = nodes.get(key)
     if (cached !== undefined) return cached
+    step()
     const result = resolveNodeIdentities(expression, fn, seen)
     if (nodes.size < 4_096) nodes.set(key, result)
     return result
@@ -499,21 +499,48 @@ function validateIndependentDrawing(source: string): void {
     }
     if (mounted.size === before) break
   }
-  const classify = (expression: string, fn: DrawingFunction, seen: Set<string> = new Set()): number => {
+  interface ClassificationTrace { dependencies: Set<string>; complete: boolean; deepest: number }
+  interface Classification { value: number; dependencies: Set<string>; depth: number }
+  const classifications = new Map<string, Classification>()
+  const boundedClassifications = new Map<string, number>()
+  const mergeTrace = (parent: ClassificationTrace | undefined, child: ClassificationTrace): void => {
+    if (!parent) return
+    for (const dependency of child.dependencies) parent.dependencies.add(dependency)
+    parent.complete &&= child.complete
+    parent.deepest = Math.max(parent.deepest, child.deepest)
+  }
+  const classify = (expression: string, fn: DrawingFunction, seen: Set<string> = new Set(), parent?: ClassificationTrace): number => {
+    const key = JSON.stringify([fn.name, expression]), cached = classifications.get(key)
+    // Reuse a completed proof only if this path cannot cut any dependency or
+    // hit the depth bound. In particular, cyclic/partial zeroes are not cached.
+    if (cached !== undefined && seen.size + cached.depth <= 64 && [...cached.dependencies].every(dependency => !seen.has(dependency))) {
+      mergeTrace(parent, { dependencies: cached.dependencies, complete: true, deepest: seen.size + cached.depth })
+      return cached.value
+    }
+    const exactKey = contextKey(expression, fn, seen), bounded = boundedClassifications.get(exactKey)
+    if (bounded !== undefined) {
+      // A bounded/cyclic result can save work only along the identical path.
+      if (parent) parent.complete = false
+      return bounded
+    }
     step()
-    const key = contextKey(expression, fn, seen), cached = classifications.get(key)
-    if (cached !== undefined) return cached
-    const result = resolveClassification(expression, fn, seen)
-    // Include the full traversal context: neither zero nor positive evidence
-    // is borrowed from a different helper/parameter dependency path.
-    if (classifications.size < 4_096) classifications.set(key, result)
+    const trace: ClassificationTrace = { dependencies: new Set(), complete: seen.size <= 64, deepest: seen.size }
+    const result = resolveClassification(expression, fn, seen, trace)
+    // Retain the existing entry/depth bounds across both proof caches.
+    if (classifications.size + boundedClassifications.size < 4_096) {
+      if (trace.complete && trace.dependencies.size <= 64) classifications.set(key, {
+        value: result, dependencies: trace.dependencies, depth: trace.deepest - seen.size,
+      })
+      else boundedClassifications.set(exactKey, result)
+    }
+    mergeTrace(parent, trace)
     return result
   }
-  const resolveClassification = (expression: string, fn: DrawingFunction, seen: Set<string>): number => {
+  const resolveClassification = (expression: string, fn: DrawingFunction, seen: Set<string>, trace: ClassificationTrace): number => {
     if (seen.size > 64) return 0
     // In a same-object guard, only the RHS is the value; the frame operand controls access to its view.
     const guardedView = drawingViewGuard(expression)
-    if (guardedView !== undefined) return classify(`${guardedView}.view`, fn, seen)
+    if (guardedView !== undefined) return classify(`${guardedView}.view`, fn, seen, trace)
     let value = 0
     const text = expression.split('')
     // A local helper's result must itself depend on data; merely passing data to a constant helper is insufficient.
@@ -521,31 +548,34 @@ function validateIndependentDrawing(source: string): void {
       const callee = functions.get(call.name)
       if (!callee || expression[call.start - 1] === '.') continue
       const key = `return:${callee.name}`
-      if (!seen.has(key)) {
+      trace.dependencies.add(key)
+      if (seen.has(key)) trace.complete = false
+      else {
         const next = new Set(seen).add(key)
-        if (callee.expression) value |= classify(callee.code, callee, next)
+        if (callee.expression) value |= classify(callee.code, callee, next, trace)
         else for (const match of callee.code.matchAll(/\breturn\s*/g)) {
           const start = match.index + match[0].length
-          value |= classify(callee.code.slice(start, drawingExpressionEnd(callee.code, start)), callee, next)
+          value |= classify(callee.code.slice(start, drawingExpressionEnd(callee.code, start)), callee, next, trace)
         }
       }
       text.fill(' ', call.start, call.end)
     }
     for (const match of text.join('').matchAll(/(?<![\w$.])([A-Za-z_$][\w$]*)((?:\s*\??\.\s*[A-Za-z_$][\w$]*)*)/g)) {
       const name = match[1] ?? '', key = `${fn.name}:${name}`
-      if (seen.has(key)) continue
+      trace.dependencies.add(key)
+      if (seen.has(key)) { trace.complete = false; continue }
       const next = new Set(seen).add(key)
       let kind = 0
       const binding = fn.bindings.get(name)
-      if (binding !== undefined) kind = classify(binding, fn, next)
+      if (binding !== undefined) kind = classify(binding, fn, next, trace)
       else {
         const parameter = fn.parameters.findIndex(names => names.includes(name))
         if (fn === entry && parameter === 0) kind = name === 'view' ? DRAW_VIEW : DRAW_FRAME
-        else if (parameter >= 0) for (const call of incoming.get(fn.name) ?? []) kind |= classify(call.arguments[parameter] ?? '', call.caller, next)
+        else if (parameter >= 0) for (const call of incoming.get(fn.name) ?? []) kind |= classify(call.arguments[parameter] ?? '', call.caller, next, trace)
         else {
           const assigned = assignedGlobals.get(name)
-          if (assigned) kind = classify(assigned.value, assigned.fn, next)
-          else if (globals.has(name)) kind = classify(globals.get(name) ?? '', fn, next)
+          if (assigned) kind = classify(assigned.value, assigned.fn, next, trace)
+          else if (globals.has(name)) kind = classify(globals.get(name) ?? '', fn, next, trace)
         }
       }
       for (const property of drawingNames(match[2] ?? '')) {

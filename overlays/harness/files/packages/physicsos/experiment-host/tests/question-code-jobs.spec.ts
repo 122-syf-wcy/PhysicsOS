@@ -482,6 +482,208 @@ describe('question-code jobs', () => {
     expect(reopened.get(job.id, submit.ownerKey).status).not.toBe('ready')
   })
 
+  it('reconciles restored generation only at explicit startup, without a time heuristic or automatic retry', async () => {
+    const jobs = await store(() => new Date('2026-11-14T00:00:00Z'))
+    const started = await jobs.claim((await jobs.submit(submit)).id)
+    const interrupted = structuredClone(jobs.get(submit.id, submit.ownerKey))
+    await close?.(); close = undefined
+    const reopened = await store(() => new Date('2026-11-14T00:00:00Z'))
+    expect(reopened.get(submit.id, submit.ownerKey)).toEqual(interrupted)
+    const startup = reopened.initialize()
+    expect(reopened.initialize()).toBe(startup)
+    await startup
+    const failed = reopened.get(submit.id, submit.ownerKey)
+    expect(failed).toMatchObject({ status: 'failed', code: 'GENERATION_INTERRUPTED', leaseEpoch: started!.epoch + 1,
+      attempts: [{ index: 0, status: 'infrastructure-failed', code: 'GENERATION_INTERRUPTED',
+        startedAt: interrupted.attempts[0]!.startedAt, finishedAt: '2026-11-14T00:00:00.000Z' }] })
+    expect(failed.resultRef).toBeUndefined()
+    expect(failed.validation).toBeUndefined()
+    await expect(reopened.claim(submit.id)).resolves.toBeUndefined()
+    await expect(reopened.startAttempt(failed)).rejects.toMatchObject({ code: 'NOT_LIVE' })
+    await expect(reopened.publishGeneration(submit, started!.epoch, () => { throw new Error('must not append') }))
+      .rejects.toMatchObject({ code: 'STALE_LEASE' })
+    const domain = (reopened as unknown as { domain: Awaited<ReturnType<typeof openQuestionCodeDomain>> }).domain
+    expect(legacyJobSchema.safeParse(domain.table('jobs').get(submit.id)).success).toBe(true)
+    await close?.(); close = undefined
+    const again = await store()
+    await again.initialize()
+    expect(again.get(submit.id, submit.ownerKey)).toEqual(failed)
+  })
+
+  it('terminates an orphan queued before its first attempt instead of leaving unscheduled work forever', async () => {
+    const jobs = await store(), queued = await jobs.submit(submit)
+    await close?.(); close = undefined
+    const reopened = await store()
+    await reopened.initialize()
+    expect(reopened.get(queued.id, submit.ownerKey)).toMatchObject({ status: 'failed', code: 'GENERATION_INTERRUPTED',
+      leaseEpoch: queued.leaseEpoch + 1, attempts: [] })
+    await expect(reopened.claim(queued.id)).resolves.toBeUndefined()
+  })
+
+  it('shares startup across wrappers and never cancels leases acquired by this process after startup', async () => {
+    const jobs = await store(), domain = (jobs as unknown as { domain: Awaited<ReturnType<typeof openQuestionCodeDomain>> }).domain
+    await jobs.initialize()
+    const started = await jobs.claim((await jobs.submit(submit)).id)
+    const before = structuredClone(jobs.get(submit.id, submit.ownerKey))
+    const wrapper = new QuestionCodeJobs(domain)
+    expect(wrapper.get(submit.id, submit.ownerKey)).toEqual(before)
+    expect(wrapper.initialize()).toBe(jobs.initialize())
+    await wrapper.initialize()
+    expect(wrapper.get(submit.id, submit.ownerKey)).toEqual(before)
+    await jobs.recordCandidate(submit.id, started!.epoch, { candidateSha256: 'c'.repeat(64) })
+    expect(jobs.get(submit.id, submit.ownerKey).status).toBe('candidate')
+  })
+
+  it.each(['artifact-before-candidate', 'candidate', 'validating'] as const)(
+    'retains a restored %s source for validation-only retry and invalidates old tickets and publishers', async stage => {
+      const jobs = await store(), started = await jobs.claim((await jobs.submit(submit)).id)
+      await frozenCandidate(jobs)
+      let ticket: ReturnType<QuestionCodeJobs['issueTicket']> | undefined
+      if (stage !== 'artifact-before-candidate') {
+        await jobs.recordCandidate(submit.id, started!.epoch, { candidateSha256: 'c'.repeat(64) })
+        ticket = jobs.issueTicket(submit.id, started!.epoch)
+        jobs.redeemTicket(ticket.token, submit.id, ticket.candidateSha256)
+      }
+      if (stage === 'validating') await jobs.recordValidation(submit.id, started!.epoch, {
+        passed: true, candidateSha256: 'c'.repeat(64), checks: [{ name: 'render', passed: true }], screenshotRef: 'old-screenshot',
+      })
+      const before = jobs.get(submit.id, submit.ownerKey)
+      const oldDomain = (jobs as unknown as { domain: Awaited<ReturnType<typeof openQuestionCodeDomain>> }).domain
+      const artifact = structuredClone(oldDomain.table('artifacts').get(ARTIFACT))
+      await close?.(); close = undefined
+      const reopened = await store()
+      await reopened.initialize()
+      const current = reopened.get(submit.id, submit.ownerKey)
+      expect(current).toMatchObject({ status: 'queued', code: 'VALIDATION_INTERRUPTED', leaseEpoch: started!.epoch + 1,
+        attempts: [{ index: 0, status: 'infrastructure-failed', candidateSha256: 'c'.repeat(64) }] })
+      expect(current.attempts[0]!.startedAt).toBe(before.attempts[0]!.startedAt)
+      expect(current.attempts[0]!.finishedAt).toBeDefined()
+      expect(current.validation).toEqual(before.validation)
+      expect(current.resultRef).toBeUndefined()
+      const domain = (reopened as unknown as { domain: Awaited<ReturnType<typeof openQuestionCodeDomain>> }).domain
+      expect(domain.table('artifacts').get(ARTIFACT)).toEqual(artifact)
+      expect(domain.table('validation_history').size).toBe(0)
+      if (ticket !== undefined) expect(() => reopened.validationTicket(ticket.token, ticket.candidateSha256)).toThrow(QuestionCodeJobError)
+      await expect(reopened.recordValidation(submit.id, started!.epoch, { passed: true,
+        candidateSha256: 'c'.repeat(64), checks: [{ name: 'late', passed: true }] })).rejects.toMatchObject({ code: 'STALE_LEASE' })
+      const append = vi.fn()
+      await expect(reopened.publishGeneration(submit, started!.epoch, append, { artifactId: ARTIFACT, sha256: 'c'.repeat(64) }))
+        .rejects.toMatchObject({ code: 'STALE_LEASE' })
+      expect(append).not.toHaveBeenCalled()
+      await expect(reopened.claim(submit.id)).resolves.toBeUndefined()
+      await expect(reopened.startAttempt(current)).rejects.toMatchObject({ code: 'NOT_LIVE' })
+      const retry = await reopened.claimValidation(submit.id, submit.ownerKey, () => {})
+      expect(retry.job.attempts).toHaveLength(1)
+      expect(retry.job.attempts[0]!.candidateSha256).toBe('c'.repeat(64))
+      if (before.validation !== undefined) expect(retry.job.validationHistory).toEqual([before.validation])
+      await expect(reopened.finish(submit.id, retry.epoch, { status: 'passed', resultRef: ARTIFACT, resultSha256: 'c'.repeat(64) }))
+        .rejects.toMatchObject({ code: 'CANDIDATE_MISMATCH' })
+    })
+
+  it.each([{ ownerKey: 'user-b' }, { ownerSessionId: 'session-2' }, { generationId: 'another-job' },
+    { sceneId: 'scene-2' }, { sceneRevision: 4 }, { sceneSha256: 'f'.repeat(64) }, { requestSha256: 'f'.repeat(64) },
+    { sha256: 'f'.repeat(64) }])('never recovers an unrelated frozen source as this generation %#', async mismatch => {
+    const jobs = await store(), started = await jobs.claim((await jobs.submit(submit)).id)
+    await jobs.recordCandidate(submit.id, started!.epoch, { candidateSha256: 'c'.repeat(64) })
+    await frozenCandidate(jobs, mismatch)
+    await close?.(); close = undefined
+    const reopened = await store()
+    await reopened.initialize()
+    expect(reopened.get(submit.id, submit.ownerKey)).toMatchObject({ status: 'failed', code: 'GENERATION_INTERRUPTED',
+      leaseEpoch: started!.epoch + 1, attempts: [{ status: 'infrastructure-failed', candidateSha256: 'c'.repeat(64) }] })
+    await expect(reopened.claim(submit.id)).resolves.toBeUndefined()
+    const domain = (reopened as unknown as { domain: Awaited<ReturnType<typeof openQuestionCodeDomain>> }).domain
+    expect(domain.table('artifacts').get(ARTIFACT)).toMatchObject(mismatch)
+  })
+
+  it('preserves validation history and the exhausted generation budget across interrupted revalidation and ready restart', async () => {
+    const jobs = await store(), { job: rejected } = await rejectedCandidate(jobs, true)
+    const claimed = await jobs.claimValidation(submit.id, submit.ownerKey, () => {})
+    await jobs.recordValidation(submit.id, claimed.epoch, { passed: true, candidateSha256: 'c'.repeat(64),
+      checks: [{ name: 'second-render', passed: true }], screenshotRef: 'second-screenshot' })
+    const before = structuredClone(jobs.get(submit.id, submit.ownerKey))
+    await close?.(); close = undefined
+    const reopened = await store()
+    await reopened.initialize()
+    const recovered = reopened.get(submit.id, submit.ownerKey)
+    expect(recovered.status).toBe('queued')
+    expect(recovered.validation).toEqual(before.validation)
+    expect(recovered.validationHistory).toEqual([rejected.validation])
+    expect(recovered.attempts).toHaveLength(2)
+    expect(recovered.attempts[0]).toEqual(before.attempts[0])
+    const retry = await reopened.claimValidation(submit.id, submit.ownerKey, () => {})
+    expect(retry.job.validationHistory).toEqual([rejected.validation, before.validation])
+    expect(retry.job.attempts).toHaveLength(2)
+    await expect(reopened.finish(submit.id, retry.epoch, { status: 'passed', resultRef: ARTIFACT, resultSha256: 'c'.repeat(64) }))
+      .rejects.toMatchObject({ code: 'CANDIDATE_MISMATCH' })
+    await reopened.recordValidation(submit.id, retry.epoch, { passed: true, candidateSha256: 'c'.repeat(64), checks: [{ name: 'fresh-render', passed: true }] })
+    const ready = await reopened.finish(submit.id, retry.epoch, { status: 'passed', resultRef: ARTIFACT, resultSha256: 'c'.repeat(64) })
+    await close?.(); close = undefined
+    const again = await store()
+    await again.initialize()
+    expect(again.get(submit.id, submit.ownerKey)).toEqual(ready)
+    const domain = (again as unknown as { domain: Awaited<ReturnType<typeof openQuestionCodeDomain>> }).domain
+    expect(domain.table('jobs').get(submit.id)).not.toHaveProperty('validationHistory')
+    expect(legacyJobSchema.safeParse(domain.table('jobs').get(submit.id)).success).toBe(true)
+  })
+
+  it.each([{ ownerKey: 'user-b' }, { ownerSessionId: 'session-2' }, { sceneId: 'scene-2' }, { sceneRevision: 4 },
+    { sceneSha256: 'f'.repeat(64) }, { requestSha256: 'f'.repeat(64) }])('fences a publisher with a mismatched durable source %#', async mismatch => {
+    const jobs = await store(), started = await jobs.claim((await jobs.submit(submit)).id), append = vi.fn()
+    await expect(jobs.publishGeneration({ ...submit, ...mismatch }, started!.epoch, append)).rejects.toBeInstanceOf(QuestionCodeJobError)
+    expect(append).not.toHaveBeenCalled()
+    expect(jobs.get(submit.id, submit.ownerKey).status).toBe('running')
+  })
+
+  it('publishes a durable candidate without rewriting the job after the scene append', async () => {
+    const jobs = await store(), started = await jobs.claim((await jobs.submit(submit)).id)
+    await jobs.recordCandidate(submit.id, started!.epoch, { candidateSha256: 'c'.repeat(64) })
+    await frozenCandidate(jobs)
+    const domain = (jobs as unknown as { domain: Awaited<ReturnType<typeof openQuestionCodeDomain>> }).domain
+    const unit = (domain as unknown as { unit: { putRecord(table: string, key: string, record: unknown): Promise<void> } }).unit
+    const write = vi.spyOn(unit, 'putRecord').mockRejectedValue(new Error('unexpected publication write'))
+    const append = vi.fn()
+    try {
+      await jobs.publishGeneration(submit, started!.epoch, append, { artifactId: ARTIFACT, sha256: 'c'.repeat(64) })
+      expect(append).toHaveBeenCalledOnce()
+      expect(write).not.toHaveBeenCalled()
+      expect(jobs.get(submit.id, submit.ownerKey).status).toBe('candidate')
+    } finally { write.mockRestore() }
+  })
+
+  it('orders the actual ready append behind queued cancellation instead of checking a stale preflight read', async () => {
+    const jobs = await store(), started = await jobs.claim((await jobs.submit(submit)).id)
+    await jobs.recordCandidate(submit.id, started!.epoch, { candidateSha256: 'c'.repeat(64) })
+    await frozenCandidate(jobs)
+    const domain = (jobs as unknown as { domain: Awaited<ReturnType<typeof openQuestionCodeDomain>> }).domain
+    const unit = (domain as unknown as { unit: { putRecord(table: string, key: string, record: unknown): Promise<void> } }).unit
+    const put = unit.putRecord.bind(unit), entered = Promise.withResolvers<void>(), release = Promise.withResolvers<void>()
+    const write = vi.spyOn(unit, 'putRecord').mockImplementationOnce(async (table, key, record) => {
+      entered.resolve(); await release.promise; await put(table, key, record)
+    })
+    const blocker = domain.table('jobs').update(submit.id, current => current)
+    let cancelled: Promise<unknown> | undefined, publication: Promise<unknown> | undefined
+    const append = vi.fn()
+    try {
+      await entered.promise
+      cancelled = jobs.cancel(submit.id, submit.ownerKey)
+      publication = jobs.publishGeneration(submit, started!.epoch, append, { artifactId: ARTIFACT, sha256: 'c'.repeat(64) })
+      // Observe rejection before releasing the barrier so it cannot become unhandled.
+      const observed = publication.then(() => ({ published: true }), error => ({ error }))
+      expect(jobs.get(submit.id, submit.ownerKey).status).toBe('candidate')
+      expect(append).not.toHaveBeenCalled()
+      release.resolve()
+      await blocker; await cancelled
+      expect(await observed).toMatchObject({ error: { code: 'STALE_LEASE' } })
+      expect(append).not.toHaveBeenCalled()
+      expect(jobs.get(submit.id, submit.ownerKey).status).toBe('cancelled')
+    } finally {
+      release.resolve()
+      await Promise.allSettled([blocker, cancelled, publication])
+      write.mockRestore()
+    }
+  })
+
   it('keeps the domain readable with a pre-existing artifact row', async () => {
     const jobs = await store()
     const domain = (jobs as unknown as { domain: { table(name: string): { put(key: string, value: unknown): Promise<unknown> } } }).domain

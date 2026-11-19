@@ -24,7 +24,7 @@ import type { FrameSource } from './physics/frame-source.ts'
 import { QuestionCodeCanvas } from './experiments/QuestionCodeCanvas.tsx'
 import { useExperimentSession } from './experiments/use-experiment-session.ts'
 import { QuestionCodeControls } from './experiments/QuestionCodeControls.tsx'
-import type { QuestionCodeOwnerStore } from './experiments/question-code-context.ts'
+import { useQuestionCodeGeneration, type QuestionCodeOwnerStore } from './experiments/question-code-context.ts'
 import { withQuestionCodeVisualization, questionCodeSceneIdentity, type QuestionCodeRegenerate } from './experiments/question-code-api.ts'
 import { MathText } from './physics/MathText.tsx'
 import { formatTimeIn, timeScaleOf } from './physics/time-format.ts'
@@ -90,10 +90,11 @@ export const SceneCardBody = memo(function SceneCardBody(props: SceneCardBodyPro
   return props.presentation === 'attachment' ? <SceneAttachment {...props} /> : <SceneRuntimeBody {...props} />
 })
 
-function SceneAttachment({ data, t, openScenePreview, recordAttempt }: SceneCardBodyProps) {
+function SceneAttachment({ data, t, openScenePreview, recordAttempt, questionCodeOwner }: SceneCardBodyProps) {
+  const generation = useQuestionCodeGeneration(data.visualization, { id: data.sceneId, revision: data.revision }, questionCodeOwner)
   const title = data.visualization?.status === 'ready' && data.visualization.rendererKind === 'independent'
     ? data.visualization.title : data.title
-  const status = data.visualization?.status === 'ready' ? 'published' : data.visualization?.status ?? 'historical'
+  const status = generation.status === 'ready' ? 'published' : generation.status
   const verification: WorkspaceSnapshot['verification'] = (data.solve?.verification?.checks ?? []).map(check => ({
     id: check.id, label: check.id, status: check.passed ? 'passed' : 'failed',
     ...(check.message === undefined ? {} : { detail: check.message }),
@@ -105,7 +106,7 @@ function SceneAttachment({ data, t, openScenePreview, recordAttempt }: SceneCard
       <span className={css.attachmentStatus} data-preview-status={status}>{t(`chatPreview.status.${status}`)}</span>
       <IconChevronRightOutlineMedium size={15} />
     </button>
-    {data.visualization?.status === 'failed' ? <p className={css.attachmentFailure} role="status">{data.visualization.message}</p> : null}
+    {generation.message === undefined ? null : <p className={css.attachmentFailure} role="status">{generation.message}</p>}
     {data.solve === undefined ? null : <SolveSection solve={data.solve} verification={verification} domain={data.domain}
       initiallyExpanded={false} bodyId={undefined} drawn={EMPTY_DRAWN} activeToken={null} onToggle={() => {}}
       sceneTitle={data.title} revision={data.revision} recordAttempt={recordAttempt} t={t} />}
@@ -551,7 +552,7 @@ function SolveSection({
  * same answer block while it is still running.
  */
 export const SceneChatCard = memo(function SceneChatCard({
-  node, t, openSceneInLab, openScenePreview, recordAttempt, useChat,
+  node, t, openSceneInLab, openScenePreview, recordAttempt, questionCodeOwner, useChat,
 }: SceneChatCardProps) {
   const superseded = useChat((snapshot) => {
     /* The Turn card covers this answer once the Turn closes. This card is what
@@ -589,6 +590,7 @@ export const SceneChatCard = memo(function SceneChatCard({
   })
   if (superseded) return null
   return <SceneCardBody data={node.data} presentation="attachment" t={t} openSceneInLab={openSceneInLab}
+    {...(questionCodeOwner === undefined ? {} : { questionCodeOwner })}
     {...(openScenePreview === undefined ? {} : { openScenePreview })}
     {...(recordAttempt === undefined ? {} : { recordAttempt })} />
 })

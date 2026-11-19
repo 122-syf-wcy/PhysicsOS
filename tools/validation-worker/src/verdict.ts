@@ -31,6 +31,8 @@ export interface Observation {
   readonly parameterControl?: ParameterControlEvidence
   /** Chosen by the trusted server plan, never read from the candidate page. */
   readonly validationProfile?: QuestionCodeValidationProfile
+  /** Trusted worker-planned edit, independent of the candidate's messages. */
+  readonly parameter?: import('./planner.ts').SceneFramePlan['parameter']
   readonly parameterChanged?: boolean
   readonly changedPaintHash?: string
   readonly originalPaintHash?: string
@@ -136,7 +138,7 @@ function groundBodyTrack(frames: readonly SampledFrame[], changedFrame?: Sampled
  * ground anchor for the SAME primitive through EVERY ordinary/changed frame.
  * Static trajectory dots and body-fitted projections are never evidence.
  */
-function bodyTrack(frames: readonly SampledFrame[], changedFrame?: SampledFrame): readonly DrawnBody[] | undefined {
+function bodyTrack(frames: readonly SampledFrame[], changedFrame?: SampledFrame, allowGround = true): readonly DrawnBody[] | undefined {
   const first = frames[0]
   const allFrames = changedFrame === undefined ? frames : [...frames, changedFrame]
   if (first === undefined || !allFrames.every(validBody)) return undefined
@@ -151,7 +153,7 @@ function bodyTrack(frames: readonly SampledFrame[], changedFrame?: SampledFrame)
     }
     if (track.length === allFrames.length) return track
   }
-  return groundBodyTrack(frames, changedFrame)
+  return allowGround ? groundBodyTrack(frames, changedFrame) : undefined
 }
 
 /** All checks are mandatory; absent evidence is never filtered out as a pass. */
@@ -215,28 +217,39 @@ export function evaluateObservation(observation: Observation): { passed: boolean
     return { passed: checks.every(check => check.passed), validationProfile, checks }
   }
 
-  const track = bodyTrack(observation.frames)
+  const magnetic = validationProfile.id === 'magnetic-uniform-circular-native-motion'
+  const track = bodyTrack(observation.frames, undefined, !magnetic)
   checks.push({
     name: 'geometry-follows-engine',
     passed: track !== undefined,
     detail: track !== undefined ? undefined
       : !observation.frames.every(validBody) ? '引擎帧缺少完整、有限的 x/y，无法核对几何。'
-        : '缺少逐帧一致的真实绘制证据，或位置/投影不一致；须有世界坐标或独立地面锚点，stamp、SVG 或未知像素投影不能放行，产品验收仍阻断。',
+        : magnetic ? '缺少固定非奇异 CTM 下相同 surface/drawIndex 的原生粒子圆实绘；磁场不接受地面替代、像素预投影或逐帧平移。'
+          : '缺少逐帧一致的真实绘制证据，或位置/投影不一致；须有世界坐标或独立地面锚点，stamp、SVG 或未知像素投影不能放行，产品验收仍阻断。',
   })
 
   const times = observation.frames.map(frame => frame.time)
   const paints = new Set(observation.frames.map(frame => frame.paintHash))
   const moved = track !== undefined && track.some(draw => !pixelClose(draw.pixelX, track[0]!.pixelX) || !pixelClose(draw.pixelY, track[0]!.pixelY))
+  const quarterSamples = !magnetic || observation.frames.length === 4 && times[0] === 0 && finite(times[1]) && times[1]! > 0
+    && times[2] === times[1]! * 2 && Math.abs(times[3]! / times[1]! - 3) <= 8 * Number.EPSILON
+    && observation.frames.every(frame => frame.revision === observation.frames[0]?.revision && /^[a-f0-9]{64}$/.test(frame.snapshotSha256 ?? ''))
   checks.push({
     name: 'motion-sampled',
-    passed: observation.frames.length >= 2 && times.every(time => finite(time) && time >= 0)
+    passed: quarterSamples && observation.frames.length >= 2 && times.every(time => finite(time) && time >= 0)
       && new Set(times).size >= 2 && paints.size > 1 && moved,
     detail: !moved ? '没有观察到随引擎位置变化的同一真实绘制主体；背景或文字变化不算运动。' : paints.size <= 1 ? '不同时刻画出了同一张静止画面。' : undefined,
   })
 
   const changedGeometry = observation.changedFrame !== undefined
-    && bodyTrack(observation.frames, observation.changedFrame) !== undefined
-  const changed = observation.parameterChanged === true && changedGeometry
+    && bodyTrack(observation.frames, observation.changedFrame, !magnetic) !== undefined
+  const edit = observation.parameter, first = observation.frames[0], phase = observation.frames[1], next = observation.changedFrame
+  const magneticChanged = !magnetic || quarterSamples && edit?.id === 'v0' && finite(edit.from) && edit.from > 0 && edit.to === edit.from * 1.1
+    && first !== undefined && phase !== undefined && next !== undefined && Number.isSafeInteger(first.revision)
+    && next.revision === first.revision! + 1 && next.time === phase.time && validBody(next) && validBody(phase)
+    && (!close(next.engineBody!.x, phase.engineBody!.x) || !close(next.engineBody!.y, phase.engineBody!.y))
+    && /^[a-f0-9]{64}$/.test(next.snapshotSha256 ?? '') && next.snapshotSha256 !== phase.snapshotSha256
+  const changed = observation.parameterChanged === true && changedGeometry && magneticChanged
     && observation.changedPaintHash !== undefined
     && observation.originalPaintHash !== undefined
     && observation.changedPaintHash === observation.changedFrame?.paintHash
@@ -249,7 +262,8 @@ export function evaluateObservation(observation: Observation): { passed: boolean
     passed: changed,
     detail: changed ? undefined
       : observation.parameterChanged !== true ? '没有观察到改参后的真实快照。'
-        : !changedGeometry ? '改参帧缺少可核对的真实几何，或位置/投影与引擎不一致。'
+        : !magneticChanged ? 'v0 × 1.1 的新修订、精确四分之一周期与真实变化快照不匹配。'
+          : !changedGeometry ? '改参帧缺少可核对的真实几何，或位置/投影与引擎不一致。'
           : '改参后画面没有可核对的变化，疑似没有使用新快照。',
   })
 

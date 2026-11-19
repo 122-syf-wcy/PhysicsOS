@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 afterEach(() => { vi.useRealTimers() })
 import { requestCandidateValidation, validationWorkerFromEnv } from '../src/question-code-validation.ts'
-import { MECHANICS_VALIDATION_PROFILE, OPTICS_VALIDATION_PROFILE, requiredValidationChecks, validationProfileKey, type QuestionCodeValidationProfile } from '@physicsos/shared'
-import { createMechanicsScene, createOpticalBenchScene } from '@physicsos/physics-scene'
+import { MECHANICS_VALIDATION_PROFILE, OPTICS_VALIDATION_PROFILE, MAGNETIC_VALIDATION_PROFILE, requiredValidationChecks, validationProfileKey, type QuestionCodeValidationProfile } from '@physicsos/shared'
+import { createMechanicsScene, createOpticalBenchScene, createMagneticScene } from '@physicsos/physics-scene'
 
 const checksFor = (profile = MECHANICS_VALIDATION_PROFILE as QuestionCodeValidationProfile, fail?: string) => requiredValidationChecks(profile).map(name => ({
   name, passed: name !== fail, ...(name === 'profile-binding' ? { detail: validationProfileKey(profile) } : {}),
@@ -157,6 +157,22 @@ describe('candidate validation request', () => {
       .toMatchObject({ kind: 'infrastructure', code: 'WORKER_BAD_REPORT' })
     expect(await requestCandidateValidation(config, { ...input, scene: { id: 'forged', domain: 'optics' }, experimentId: 'convex-lens' }, respond(report({}, OPTICS_VALIDATION_PROFILE))))
       .toMatchObject({ kind: 'infrastructure', code: 'WORKER_BAD_REPORT' })
+  })
+
+  it('requires the exact magnetic policy/version/check inventory even with pinned-frame input', async () => {
+    const scene = createMagneticScene({ sceneId: '03-field-out-of-page', revision: 7, velocity: { x: 1e6, y: 0, z: 0 },
+      magneticFieldStrength: 0.4, magneticFieldDirection: 'out_of_page' })
+    const bound = { ...input, scene: { ...scene }, experimentId: 'magnetic-circular' }
+    const fetchMock = vi.fn(respond(report({}, MAGNETIC_VALIDATION_PROFILE)))
+    expect(await requestCandidateValidation(config, bound, fetchMock)).toMatchObject({ kind: 'passed', validationProfile: MAGNETIC_VALIDATION_PROFILE })
+    const sent = JSON.parse(String((fetchMock.mock.calls[0] as [string, RequestInit])[1].body))
+    expect(sent.validationProfile).toEqual(MAGNETIC_VALIDATION_PROFILE)
+    for (const invalid of [report(), report({}, OPTICS_VALIDATION_PROFILE),
+      report({ validationProfile: { ...MAGNETIC_VALIDATION_PROFILE, version: 2 } }, MAGNETIC_VALIDATION_PROFILE),
+      report({ checks: checksFor(MAGNETIC_VALIDATION_PROFILE).filter(check => check.name !== 'motion-sampled') }, MAGNETIC_VALIDATION_PROFILE),
+      report({ checks: checksFor(MAGNETIC_VALIDATION_PROFILE).map(check => check.name === 'profile-binding' ? { ...check, detail: 'mechanics-native-motion@1' } : check) }, MAGNETIC_VALIDATION_PROFILE)]) {
+      expect(await requestCandidateValidation(config, bound, respond(invalid))).toMatchObject({ kind: 'infrastructure', code: 'WORKER_BAD_REPORT' })
+    }
   })
 
   it('is unconfigured (fail closed) without both url and a long token', () => {

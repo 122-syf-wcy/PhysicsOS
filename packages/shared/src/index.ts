@@ -40,6 +40,7 @@ export { PhysicsOSError, UnimplementedError } from './errors.ts'
 export {
   MECHANICS_VALIDATION_PROFILE,
   OPTICS_VALIDATION_PROFILE,
+  MAGNETIC_VALIDATION_PROFILE,
   UNSUPPORTED_VALIDATION_PROFILE,
   isQuestionCodeValidationProfile,
   requiredValidationChecks,

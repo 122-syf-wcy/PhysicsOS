@@ -5,7 +5,7 @@ import { CommunityExperimentFrame, type CommunityFrameStatus } from './Community
 import type { ExperimentSession } from './experiment-session.ts'
 import { questionCodeApi, questionCodeJobMatches, questionCodeValidationPassed, questionCodeRefMatches, questionCodeSceneIdentity, questionCodeSceneSha256, sameQuestionCodeRef, type QuestionCodeJobView, type QuestionCodeRegenerate } from './question-code-api.ts'
 import { IconTime, IconUnverified, IconVerified } from '../icons/physics-icons.tsx'
-import { useQuestionCodeOwner, type QuestionCodeOwnerStore } from './question-code-context.ts'
+import { useQuestionCodeGeneration, type QuestionCodeOwnerStore } from './question-code-context.ts'
 import css from '../SceneChatCard.module.css'
 import workbenchCss from './QuestionCodeWorkbench.module.css'
 
@@ -23,13 +23,15 @@ interface Props {
 export function QuestionCodeCanvas({
   presentation, visualization, scene, session, regenerateQuestionCode, questionCodeOwner, hasVerifiedSolution = false,
 }: Props) {
-  const owner = useQuestionCodeOwner(questionCodeOwner)
+  const generation = useQuestionCodeGeneration(visualization, scene, questionCodeOwner)
+  const { owner } = generation
   const [attempt, setAttempt] = useState(0)
   const [loaded, setLoaded] = useState<{ entryUrl: string; source: CodeVisualizationSource; key: string; jobId?: string }>()
-  const [error, setError] = useState('')
-  const [regenerating, setRegenerating] = useState(false)
+  const [failure, setFailure] = useState<{ readonly scope: string; readonly message: string }>()
+  const [regeneratingScope, setRegeneratingScope] = useState<string>()
+  const regeneration = useRef<{ scope: string } | undefined>(undefined)
+  const [regenerationFailure, setRegenerationFailure] = useState<{ scope: string; message: string }>()
   const [frameStatus, setFrameStatus] = useState<CommunityFrameStatus>('loading')
-  const [now, setNow] = useState(Date.now)
   /* A private preview handshake and an isolated-validation pass are separate. */
   const [job, setJob] = useState<QuestionCodeJobView>()
   const [validating, setValidating] = useState(false)
@@ -39,16 +41,18 @@ export function QuestionCodeCanvas({
   const independent = ref?.rendererKind === 'independent'
   const bound = visualization === undefined || questionCodeRefMatches(visualization, scene, owner)
   const sceneIdentity = questionCodeSceneIdentity(scene)
-  const key = ref === undefined ? '' : `${owner}:${ref.artifactId}:${ref.sha256}:${ref.sceneSha256}:${ref.sceneId}:${ref.sceneRevision}:${ref.rendererKind ?? 'legacy'}:${attempt}:${sceneIdentity}`
-  const generatingJobId = visualization?.status === 'generating' ? visualization.jobId : undefined
-  const trackingJobId = !bound ? undefined : generatingJobId ?? (loaded?.key === key ? loaded.jobId : undefined)
-  const deadlineAt = visualization?.status === 'generating' ? visualization.deadlineAt : undefined
+  const key = ref === undefined ? '' : `${generation.bindingKey}:${ref.artifactId}:${ref.sha256}:${ref.sceneSha256}:${ref.sceneId}:${ref.sceneRevision}:${ref.rendererKind ?? 'legacy'}:${attempt}:${sceneIdentity}`
+  const scope = JSON.stringify([generation.bindingKey, sceneIdentity, visualization?.status, key])
+  const error = failure?.scope === scope ? failure.message : ''
+  const regenerationError = regenerationFailure?.scope === scope ? regenerationFailure.message : ''
+  const setError = (message: string): void => { setFailure({ scope, message }) }
+  const regenerating = regeneratingScope === scope
   useEffect(() => {
-    setNow(Date.now())
-    if (deadlineAt === undefined || deadlineAt <= Date.now()) return
-    const timer = setTimeout(() => { setNow(Date.now()) }, Math.min(2_147_483_647, deadlineAt - Date.now() + 1))
-    return () => { clearTimeout(timer) }
-  }, [visualization?.status, deadlineAt])
+    setRegeneratingScope(current => current === scope ? current : undefined)
+    setRegenerationFailure(current => current?.scope === scope ? current : undefined)
+    return () => { if (regeneration.current?.scope === scope) regeneration.current = undefined }
+  }, [scope])
+  const trackingJobId = bound && loaded?.key === key ? loaded.jobId : undefined
   useEffect(() => {
     setJob(undefined)
     setValidationError('')
@@ -101,10 +105,8 @@ export function QuestionCodeCanvas({
     })
     return () => { abort.abort(); if (refresh !== undefined) clearTimeout(refresh) }
   }, [key, independent, bound, session])
-  const status = visualization !== undefined && visualization.ownerSessionId !== owner ? 'owner-mismatch'
-    : !bound ? 'stale' : error ? 'failed'
-      : visualization?.status === 'generating' && (deadlineAt === undefined || deadlineAt <= now) ? 'interrupted'
-        : ref !== undefined && !independent ? 'upgrade-required' : visualization?.status ?? 'historical'
+  const status = generation.status === 'owner-mismatch' || generation.status === 'stale' ? generation.status
+    : error && ref !== undefined ? 'failed' : ref !== undefined && !independent ? 'upgrade-required' : generation.status
   const ready = bound && independent && loaded?.key === key && session !== undefined
   const matchingJob = ref !== undefined && questionCodeJobMatches(job, ref, trackingJobId)
   const isolated = ref !== undefined && questionCodeValidationPassed(job, ref, trackingJobId)
@@ -138,23 +140,35 @@ export function QuestionCodeCanvas({
       if (!abort.signal.aborted) setValidating(false)
     })
   }
-  const title = error || (status === 'historical' ? '这段历史记录还没有本题代码实验'
+  const title = (ref === undefined ? '' : error) || (status === 'historical' ? '这段历史记录还没有本题代码实验'
     : status === 'generating' ? '正在生成本题实验'
       : status === 'interrupted' ? '本题实验生成已中断，可重新生成'
         : status === 'failed' ? '本题实验生成失败'
-          : status === 'owner-mismatch' ? '请在生成本题实验的学习会话中查看'
-            : status === 'stale' ? '题目条件已更新，请重新生成本题实验'
-              : status === 'upgrade-required' ? '这份历史实验可以升级为独立画面'
-                : (session === undefined ? '这个场景暂时无法连接物理引擎' : '正在载入本题实验'))
+          : status === 'cancelled' ? '本题实验生成已取消，可重新生成'
+            : status === 'superseded' ? '这次生成已被替换，请查看最新实验'
+              : status === 'publishing' ? '实验候选已保存，等待关联本题画面'
+                : status === 'owner-mismatch' ? '请在生成本题实验的学习会话中查看'
+                  : status === 'stale' ? '题目条件已更新，请重新生成本题实验'
+                    : status === 'upgrade-required' ? '这份历史实验可以升级为独立画面'
+                      : (session === undefined ? '这个场景暂时无法连接物理引擎' : '正在载入本题实验'))
   const regenerate = (): void => {
-    if (regenerateQuestionCode === undefined || regenerating) return
-    setRegenerating(true)
-    void Promise.resolve(regenerateQuestionCode(scene.id)).then((result) => {
-      if (!result.ok) setError(result.error)
-    }).catch(() => { setError('未能提交生成请求，请稍后重试。') }).finally(() => { setRegenerating(false) })
+    if (regenerateQuestionCode === undefined || regeneration.current?.scope === scope) return
+    const request = { scope }
+    regeneration.current = request
+    setRegenerationFailure(undefined)
+    setRegeneratingScope(scope)
+    void Promise.resolve().then(() => regenerateQuestionCode(scene.id)).then((result) => {
+      if (!result.ok && regeneration.current === request) setRegenerationFailure({ scope, message: result.error })
+    }).catch(() => {
+      if (regeneration.current === request) setRegenerationFailure({ scope, message: '未能提交生成请求，请稍后重试。' })
+    }).finally(() => {
+      if (regeneration.current !== request) return
+      regeneration.current = undefined
+      setRegeneratingScope(undefined)
+    })
   }
   return <div className={`${css.codeCanvas} ${presentation === 'workbench' ? workbenchCss.canvas : ''}`} data-question-code-layout={independent ? 'independent' : 'pending'}
-    data-question-code-status={ready ? frameStatus === 'failed' ? 'render-failed' : frameStatus : status}>
+    data-question-code-status={ready ? frameStatus === 'failed' ? 'render-failed' : frameStatus : status === 'ready' ? 'loading' : status}>
     {!hasVerifiedSolution ? <div className={`${css.scopeNote} ${presentation === 'workbench' ? workbenchCss.scopeNote : ''}`} data-question-scope="scene">
       <strong>当前场景演示</strong>
       <span>展示已保存的条件与运动过程，尚未包含整道题的求解验证。</span>
@@ -183,14 +197,15 @@ export function QuestionCodeCanvas({
       </div> : null}
     </div> : <div className={`${css.codeStatus} ${presentation === 'workbench' ? workbenchCss.status : ''}`} role={error || status === 'failed' ? 'alert' : 'status'}>
       <span className={css.codeMark} aria-hidden="true">{'</>'}</span><strong>{title}</strong>
-      <p>{status === 'failed' && visualization?.status === 'failed' ? visualization.message
-        : status === 'generating' ? job?.status === 'validating'
+      <p>{status === 'failed' && generation.message !== undefined ? generation.message : error && ref === undefined ? error
+        : status === 'generating' ? generation.job?.status === 'validating'
           ? '正在隔离浏览器中检查画面、运动与改参效果；验收结果会单独标记。'
-          : job?.status === 'candidate' ? '实验代码已生成，等待隔离验收。'
-            : job !== undefined && job.attempts.length > 1 ? '第一次未通过，正在按诊断修复；完成后会自动验收。'
+          : generation.job?.status === 'candidate' ? '实验代码已生成，等待隔离验收。'
+            : generation.job !== undefined && generation.job.attempts.length > 1 ? '第一次未通过，正在按诊断修复；完成后会自动验收。'
               : '正在制作本题场景素材与实验画面，完成后即可探索条件变化。'
           : status === 'upgrade-required' ? '点击升级，为这道题生成完整的独立实验。原题条件和已验证答案会继续保留。'
             : !hasVerifiedSolution ? '已保存的场景条件已保留。' : '本题的条件、解题步骤和物理验证已保留。'}</p>
+      {!ready && regenerationError && bound ? <p role="alert">{regenerationError}</p> : null}
       {error && bound && independent ? <button type="button" onClick={() => { setAttempt(value => value + 1) }}>重新载入本题实验</button> : null}
     </div>}
     {ready || (regenerateQuestionCode !== undefined && status !== 'owner-mismatch') ? <div className={`${css.codeActions} ${presentation === 'workbench' ? workbenchCss.actions : ''}`}>
@@ -199,8 +214,11 @@ export function QuestionCodeCanvas({
           {loaded.source.stylesheet ? <details><summary>样式</summary><pre><code>{loaded.source.stylesheet}</code></pre></details> : null}
         </div>
       </details> : null}
+      {ready && regenerationError ? <span role="alert">{regenerationError}</span> : null}
       {regenerateQuestionCode !== undefined && status !== 'owner-mismatch' ? <button type="button" disabled={regenerating} onClick={regenerate}>
-        {regenerating ? '正在提交…' : status === 'generating' ? '检查并恢复生成' : status === 'upgrade-required' ? '升级为独立实验' : visualization === undefined ? '生成本题实验' : '重新生成本题实验'}
+        {regenerating ? '正在提交…' : status === 'generating' || status === 'publishing'
+          || status === 'interrupted' && generation.job?.status === 'queued' ? '检查并恢复生成'
+          : status === 'upgrade-required' ? '升级为独立实验' : visualization === undefined ? '生成本题实验' : '重新生成本题实验'}
       </button> : null}
     </div> : null}
   </div>

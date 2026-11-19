@@ -53,6 +53,8 @@ import { WaveEngine, createWaveSimulationRequest } from '@physicsos/engine-wave'
 import { ModernPhysicsEngine, createModernSimulationRequest } from '@physicsos/engine-modern'
 import { assertSimulationPlan, check, summarizeVerification } from '@physicsos/physics-core'
 
+export { prepareMagneticMotionValidation } from './magnetic-motion-validation.ts'
+
 type AnyEngine = PhysicsEngine<PhysicsScene, PhysicsEventLike>
 type RequestBuilder = (
   scene: PhysicsScene,
