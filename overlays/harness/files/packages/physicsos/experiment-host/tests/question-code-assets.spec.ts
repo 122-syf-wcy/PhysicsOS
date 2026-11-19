@@ -259,8 +259,9 @@ it('reports native author repair reasons without loosening the closed asset chec
   expect(validate(draw).size).toBe(0)
   expect(() => validate(draw.replace("vector.role === 'velocity'", '/velocity/.test(vector.role)')))
     .toThrow(expect.objectContaining({ code: 'IMAGE_BINDING_INVALID', sourceValidationReason: 'native_asset_syntax' }))
-  expect(() => validate(draw.replace('view.visible[vector.observable] === true', 'shown(view.visible, vector.observable)')
-    + '\nfunction shown(vis, observable) { return vis[observable] === true; }'))
+  const helper = '\nfunction shown(vis, observable) { return vis[observable] === true; }'
+  expect(validate(draw.replace('view.visible[vector.observable] === true', 'shown(view.visible, vector.observable)') + helper).size).toBe(0)
+  expect(() => validate(draw.replace('view.visible[vector.observable] === true', 'shown(board, vector.observable)') + helper))
     .toThrow(expect.objectContaining({ code: 'IMAGE_BINDING_INVALID', sourceValidationReason: 'native_asset_receiver' }))
   expect(() => validate(draw.replace('view.visible[vector.observable] === true', 'view.visible[vector.observable] = board')))
     .toThrow('IMAGE_BINDING_INVALID')
