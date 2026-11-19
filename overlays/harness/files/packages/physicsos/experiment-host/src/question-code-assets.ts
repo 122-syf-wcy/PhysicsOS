@@ -113,6 +113,9 @@ function validateNativeAssets(source: string): void {
   const tokens = assetTokens(source, true)
   if (!tokens) throw nativeFailure('native_asset_syntax')
   const value = (index: number): string | undefined => tokens[index]?.value
+  // The lexer emits each punctuation character separately. Neither ==/===
+  // nor => is a write to the binding or computed property on its left.
+  const assignmentAt = (index: number): boolean => value(index) === '=' && !['=', '>'].includes(value(index + 1) ?? '')
   const closes = new Map<number, number>(), stack: number[] = [], mentions = new Map<string, number[]>(), tokenPositions = new Map<AssetToken, number>()
   const scopeAt: number[] = [], scopeParents = new Map<number, number>()
   let scope = -1
@@ -282,7 +285,7 @@ function validateNativeAssets(source: string): void {
       depth++
       end = value(end) === '[' ? (closes.get(end) ?? end) + 1 : end + 2
     }
-    if (value(end) !== '=') continue
+    if (!assignmentAt(end)) continue
     if (!depth) binding.changed = true
     else binding.writes.push({ value: tokens.slice(end + 1, expressionEnd(end + 1, tokens[index]!.depth)), depth })
   }
@@ -320,10 +323,11 @@ function validateNativeAssets(source: string): void {
       })) : unknown
     } else origin = binding.initial ? readExpression(binding.initial, binding.index, next) : unknown
     if (origin.kind === 'pure' && (['[', '{'].includes(binding.initial?.[0]?.value ?? '') || !origin.owners?.size)) origin = { ...origin, owners: new Set([...origin.owners ?? [], binding]) }
-    const written = binding.writes.map(write => readExpression(write.value, binding.index, next)).filter(safeOrigin)
+    const writeOrigins = binding.writes.map(write => readExpression(write.value, binding.index, next))
+    const written = writeOrigins.filter(safeOrigin)
     if (origin.kind === 'pure' && written.length) origin = { ...origin, owners: new Set([...origin.owners ?? [], ...written.flatMap(value => [...value.owners ?? []])]) }
     if (!ignoreWrites && [...origin.owners ?? []].some(owner => dirtyOwners.has(owner))) return unknown
-    if (!ignoreWrites && binding.writes.length && (origin.kind === 'json' || binding.writes.some(write => !safeOrigin(readExpression(write.value, binding.index, next))))) return unknown
+    if (!ignoreWrites && binding.writes.length && (origin.kind === 'json' || written.length !== writeOrigins.length)) return unknown
     return origin
   }
   const readingFunctions = new Set<ReadFunction>()
@@ -410,6 +414,7 @@ function validateNativeAssets(source: string): void {
   for (let pass = 0; pass < 64; pass++) {
     const before = dirtyOwners.size, hadChangedFrame: boolean = frameChanged
     for (const names of readBindings.values()) for (const matches of names.values()) for (const binding of matches) {
+      if (binding.writes.length === 0) continue
       const origin = readBinding(binding, new Set(), true)
       if (origin.frame && binding.writes.some(write => origin.kind === 'json' || write.depth > 1)) frameChanged = true
       if (binding.writes.some(write => origin.kind === 'json' || !safeOrigin(readExpression(write.value, binding.index)))) {
@@ -470,7 +475,7 @@ function validateNativeAssets(source: string): void {
       const receiver = tokens.slice(receiverStart(index - 1), index)
       if (!safeOrigin(readExpression(receiver, index))) throw nativeFailure('native_asset_receiver')
       if (['constructor', 'prototype', '__proto__'].includes(literal(tokens.slice(index + 1, end)) ?? '')) reject()
-      const writes = value(end! + 1) === '=' || ['+', '-', '*', '/', '%', '&', '|', '^'].includes(value(end! + 1) ?? '') && ['=', value(end! + 1)].includes(value(end! + 2) ?? '')
+      const writes = assignmentAt(end! + 1) || ['+', '-', '*', '/', '%', '&', '|', '^'].includes(value(end! + 1) ?? '') && ['=', value(end! + 1)].includes(value(end! + 2) ?? '')
       if (writes) {
         const receiver = value(index - 1)!
         if (!visibleData(receiver, index) || ['.', ']', ')'].includes(value(index - 2) ?? '')) reject()

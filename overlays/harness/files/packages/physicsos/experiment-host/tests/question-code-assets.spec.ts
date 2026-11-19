@@ -250,17 +250,20 @@ it('reports native author repair reasons without loosening the closed asset chec
     document.getElementById('canvas').replaceChildren(board);
     const ctx = board.getContext('2d');
     for (const vector of view.vectors) {
-      if (view.visible[vector.observable] !== true) continue;
-      ctx.strokeStyle = vector.role === 'velocity' ? '#335577' : '#b63b1e';
-      ctx.beginPath(); ctx.moveTo(vector.from.x, vector.from.y); ctx.lineTo(vector.to.x, vector.to.y); ctx.stroke();
+      if (view.visible[vector.observable] === true) {
+        ctx.strokeStyle = vector.role === 'velocity' ? '#335577' : '#b63b1e';
+        ctx.beginPath(); ctx.moveTo(vector.from.x, vector.from.y); ctx.lineTo(vector.to.x, vector.to.y); ctx.stroke();
+      }
     }
   }`
   expect(validate(draw).size).toBe(0)
   expect(() => validate(draw.replace("vector.role === 'velocity'", '/velocity/.test(vector.role)')))
     .toThrow(expect.objectContaining({ code: 'IMAGE_BINDING_INVALID', sourceValidationReason: 'native_asset_syntax' }))
-  expect(() => validate(draw.replace('view.visible[vector.observable] !== true', '!shown(view.visible, vector.observable)')
+  expect(() => validate(draw.replace('view.visible[vector.observable] === true', 'shown(view.visible, vector.observable)')
     + '\nfunction shown(vis, observable) { return vis[observable] === true; }'))
     .toThrow(expect.objectContaining({ code: 'IMAGE_BINDING_INVALID', sourceValidationReason: 'native_asset_receiver' }))
+  expect(() => validate(draw.replace('view.visible[vector.observable] === true', 'view.visible[vector.observable] = board')))
+    .toThrow('IMAGE_BINDING_INVALID')
 })
 
 it('recognizes only native typed fallback evidence, not an error message naming a rate limit', async () => {
