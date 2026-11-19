@@ -65,6 +65,16 @@ const jobIsCurrent = (job: CodeChildJob): boolean => {
     && marker.sceneRevision === job.scene.revision
 }
 
+// The value-schema DSL cannot express JSON Schema length/pattern keywords.
+// Keep the documented bounds at the execution seam before any native IO.
+const visualTextWithin = (value: unknown, maximum: number, required = true): boolean =>
+  value === undefined ? !required : typeof value === 'string' && value.length <= maximum && !value.includes('\0') && value.trim().length > 0
+const visualTagsWithin = (value: unknown): boolean => value === undefined || Array.isArray(value)
+  && value.length <= 12 && value.every(item => visualTextWithin(item, 40))
+const visualMetadataWithin = (value: { theme?: unknown; purpose?: unknown; tags?: unknown; style?: unknown }): boolean =>
+  visualTextWithin(value.theme, 120, false) && visualTextWithin(value.purpose, 120, false)
+  && visualTagsWithin(value.tags) && visualTextWithin(value.style, 80, false)
+
 /**
  * Register `physics_write_experiment_code` on the child. Writes are staged
  * per call and committed only when the registry reports the call succeeded,
@@ -116,17 +126,18 @@ export function registerAssetTool(child: Context, job: CodeChildJob, assets: Ass
     timeoutMs: 185_000,
     description: '通过独立图片渠道制作可视化环境/材质，并自动保存到素材库。先检索适配素材，确实缺失时调用；返回本任务可用的path/cssPath。图片只表现外观，物理数据与科学标注由引擎/代码绘制。',
     parameters: {
-      prompt: { type: 'string', required: true, maxLength: 5000, description: '美术构图、材质、灯光和留白；不得含文字、公式、箭头、轨迹或测量结果。每任务最多2次（失败也计数）。' },
+      prompt: { type: 'string', required: true, description: '最多5000字符的美术构图、材质、灯光和留白；不得含文字、公式、箭头、轨迹或测量结果。每任务最多2次（失败也计数）。' },
       kind: { type: 'string', required: true, enum: ['environment', 'material'], description: 'environment为场景背景，material为器材外观素材。' },
-      theme: { type: 'string', maxLength: 120, description: '可复用主题，例如“单摆实验器材”，不要包含题目全文或账号信息。' },
-      purpose: { type: 'string', maxLength: 120, description: '素材用途，例如“教学场景背景”或“实验器材外观”。' },
-      tags: { type: 'array', maxItems: 12, items: { type: 'string', maxLength: 40 }, description: '简洁的检索标签。' },
-      style: { type: 'string', maxLength: 80, description: '外观风格，不用于声明物理模型或正确性。' },
+      theme: { type: 'string', description: '最多120字符的可复用主题，例如“单摆实验器材”，不要包含题目全文或账号信息。' },
+      purpose: { type: 'string', description: '最多120字符的素材用途，例如“教学场景背景”或“实验器材外观”。' },
+      tags: { type: 'array', items: { type: 'string' }, description: '最多12个简洁检索标签，每个最多40字符。' },
+      style: { type: 'string', description: '最多80字符的外观风格，不用于声明物理模型或正确性。' },
     },
     output: { schema: { type: 'object', additionalProperties: true }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] },
     execute: async (args, exec) => {
       if (job.signal.aborted || exec.signal.aborted) throw new HarnessError('素材生成已取消。', 'IMAGE_ABORTED')
       if (!jobIsCurrent(job)) throw new HarnessError('题目生成任务已更新。', 'STALE_GENERATION')
+      if (!visualTextWithin(args.prompt, 5000) || !visualMetadataWithin(args)) throw new HarnessError('素材参数超过已声明边界。', 'IMAGE_INPUT_INVALID')
       try {
         const generated = await assets.generateAsset({
           ownerSessionId: owner, generationId: job.generationId, scene: job.scene.scene,
@@ -175,15 +186,16 @@ export function registerMaterialTools(child: Context, job: CodeChildJob, assets:
     name: 'physics_search_visual_materials',
     description: '检索当前账号或已授权学校的可复用图片，返回候选ID、摘要、主题、用途和尺寸。选择合适候选后调用physics_use_visual_material获得本任务路径。',
     parameters: {
-      query: { type: 'string', required: true, minLength: 1, maxLength: 240, description: '物理主题和画面需求，不是题目全文。' },
+      query: { type: 'string', required: true, description: '1–240字符的物理主题和画面需求，不是题目全文。' },
       kind: { type: 'string', enum: ['environment', 'material'], description: '按场景背景或器材外观筛选。' },
-      purpose: { type: 'string', maxLength: 120, description: '需要素材发挥的教学用途。' },
-      tags: { type: 'array', maxItems: 12, items: { type: 'string', maxLength: 40 } },
-      style: { type: 'string', maxLength: 80, description: '需要匹配的视觉风格。' },
+      purpose: { type: 'string', description: '最多120字符的教学用途。' },
+      tags: { type: 'array', items: { type: 'string' }, description: '最多12个标签，每个最多40字符。' },
+      style: { type: 'string', description: '最多80字符的匹配视觉风格。' },
     },
     output: { schema: { type: 'object', additionalProperties: true }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] },
     execute: async (args, exec) => {
       const signal = assertMaterialJob(job, exec)
+      if (!visualTextWithin(args.query, 240) || !visualMetadataWithin(args)) throw new HarnessError('素材检索参数超过已声明边界。', 'MATERIAL_INPUT_INVALID')
       try {
         const found = await assets.searchMaterials!({ ownerSessionId: owner, generationId: job.generationId, scene: job.scene.scene,
           query: args.query, ...(args.kind === undefined ? {} : { kind: args.kind }), ...(args.purpose === undefined ? {} : { purpose: args.purpose }),
@@ -198,12 +210,13 @@ export function registerMaterialTools(child: Context, job: CodeChildJob, assets:
     name: 'physics_use_visual_material',
     description: '把选中的授权素材绑定到当前可视化，返回可在renderer/CSS中使用的path/cssPath。保留原始素材，复用不调用生图模型。',
     parameters: {
-      materialId: { type: 'string', required: true, minLength: 1, maxLength: 128, description: '检索返回的素材ID。' },
-      sha256: { type: 'string', required: true, pattern: '^[a-f0-9]{64}$', description: '同一候选返回的不可变图片摘要。' },
+      materialId: { type: 'string', required: true, description: '检索返回的素材ID，1–128字符。' },
+      sha256: { type: 'string', required: true, description: '同一候选返回的64位小写十六进制不可变图片摘要。' },
     },
     output: { schema: { type: 'object', additionalProperties: true }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] },
     execute: async (args, exec) => {
       const signal = assertMaterialJob(job, exec)
+      if (!visualTextWithin(args.materialId, 128) || !/^[a-f0-9]{64}$/.test(args.sha256)) throw new HarnessError('素材绑定参数超过已声明边界。', 'MATERIAL_INPUT_INVALID')
       try {
         const used = await assets.useMaterial!({ ownerSessionId: owner, generationId: job.generationId, scene: job.scene.scene,
           materialId: args.materialId, sha256: args.sha256, signal })

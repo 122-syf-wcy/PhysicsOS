@@ -38,7 +38,6 @@
     "@deepseek-ai/cordis": "workspace:^"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "workspace:^",
-    "vite-tsconfig-paths": "6.1.1"
+    "@deepseek-ai/cordis": "workspace:^"
   }
 }

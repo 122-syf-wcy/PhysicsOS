@@ -14,7 +14,7 @@ import {
   manifest,
   legacyFiles,
 } from './fixtures.ts'
-import { host } from './support.ts'
+import { host, overwriteFrozenTestArchive } from './support.ts'
 import { experimentStateSchema } from '../src/domain.ts'
 let root: string
 let loaded: Awaited<ReturnType<typeof host>> | undefined
@@ -165,7 +165,7 @@ describe('immutable upload, review and release service', () => {
     failing.mockRestore()
     expect(service.list(admin).active?.id).toBe(a.id)
     expect(service.list(admin).items.find(item => item.id === b.id)?.status).toBe('pending')
-    await writeFile(join(root, 'files', b.id, 'archive.zip'), 'tampered')
+    await overwriteFrozenTestArchive(root, b.id, 'tampered')
     await expect(
       service.review(admin, b.id, { action: 'approve', expectedSha256: b.sha256 }),
     ).rejects.toMatchObject({ code: 'INTEGRITY_MISMATCH' })
@@ -204,7 +204,7 @@ async function seedLegacy() {
   const item = await service.upload(contributor, uploadBody())
   const bytes = zip(Object.entries(legacyFiles()).map(([name, data]) => ({ name, data })))
   const digest = crypto.createHash('sha256').update(bytes).digest('hex')
-  await writeFile(join(root, 'files', item.id, 'archive.zip'), bytes)
+  await overwriteFrozenTestArchive(root, item.id, bytes)
   const state = structuredClone(domain.table('state').get('convex-lens')!)
   const record = state.packages[0]!
   record.sha256 = digest

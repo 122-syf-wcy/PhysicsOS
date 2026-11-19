@@ -199,7 +199,8 @@ class RuntimeDeltaTests(unittest.TestCase):
             prefix = 'packages/a'
             (root / prefix / 'lib').mkdir(parents=True)
             (root / prefix / 'lib/index.js').write_text('import library from "fixture-library"; export { library }')
-            (root / prefix / 'package.json').write_text(json.dumps({'name': 'a', 'dependencies': {'fixture-library': '1.0.0'}}))
+            (root / prefix / 'package.json').write_text(json.dumps({'name': 'a', 'dependencies': {'fixture-library': '1.0.0'},
+                                                                  'devDependencies': {'@types/pg': '^8.23.1'}}))
             library = root / prefix / 'node_modules/fixture-library'
             library.mkdir(parents=True)
             (library / 'package.json').write_text(json.dumps({'name': 'fixture-library', 'version': '1.0.0', 'main': 'index.js'}))
@@ -207,7 +208,10 @@ class RuntimeDeltaTests(unittest.TestCase):
             request = {'root': str(root), 'selections': [{'root': prefix, 'mode': 'host', 'items': ['lib', 'package.json']}]}
             result = subprocess.run(['node', '-e', runtime.INVENTORY_JS], input=json.dumps(request), text=True, capture_output=True)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(json.loads(result.stdout)['packages'][prefix]['resolvedBare']['fixture-library'], {'name': 'fixture-library', 'version': '1.0.0'})
+            package = json.loads(result.stdout)['packages'][prefix]
+            self.assertEqual(package['resolvedBare']['fixture-library'], {'name': 'fixture-library', 'version': '1.0.0'})
+            self.assertEqual(package['devDependencies'], {'@types/pg': '^8.23.1'})
+            self.assertEqual(package['nodeRequests'], ['fixture-library'])
 
     def test_import_only_exports_and_prefix_only_builtins_are_checked_without_execution(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -586,6 +590,102 @@ class RegistryReuseTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'graph/resolution/integrity'):
             runtime.validate_registry_lock(changed, before, additions, {})
 
+    type_importer = 'packages/physicsos/experiment-host'
+    type_owner = runtime.HARNESS + '/' + type_importer
+
+    def type_only_lock_fixture(self):
+        candidate, base = self.inventories()
+        base[self.type_owner] = {'mode': 'host', 'nodeRequests': [], 'clientRequests': [], 'resolvedBare': {}, 'devDependencies': {}}
+        candidate[self.type_owner] = {**base[self.type_owner], 'devDependencies': {'@types/pg': '^8.23.1'}}
+        additions = runtime.registry_additions(candidate, base, {})
+        type_ref = {'specifier': '^8.23.1', 'version': '8.23.1'}
+        runtime_ref = {'specifier': '1.0.0', 'version': '1.0.0'}
+        graph = {'packages': {key: {'resolution': {'integrity': 'sha512-fixture'}}
+                              for key in ['@types/pg@8.23.1', 'fixture-native@1.0.0']},
+                 'snapshots': {'@types/pg@8.23.1': {}, 'fixture-native@1.0.0': {}}}
+        before = {'graph': graph, 'importers': {
+            'packages/physicsos/health-host': {'devDependencies': {'@types/pg': type_ref}},
+            'packages/attachment/fixture': {'dependencies': {'fixture-native': runtime_ref}},
+            self.type_importer: {}, self.prefix.removeprefix(runtime.HARNESS + '/'): {}}}
+        after = copy.deepcopy(before)
+        after['importers'][self.type_importer]['devDependencies'] = {'@types/pg': copy.deepcopy(type_ref)}
+        after['importers'][self.prefix.removeprefix(runtime.HARNESS + '/')]['dependencies'] = {'fixture-native': runtime_ref}
+        return after, before, additions, {'before_packages': base, 'candidate_packages': candidate}
+
+    def test_registry_lock_accepts_exact_type_only_dev_addition_without_runtime_link(self):
+        after, before, additions, inventories = self.type_only_lock_fixture()
+        runtime.validate_registry_lock(after, before, additions, {}, **inventories)
+        self.assertEqual([row['name'] for row in additions], ['fixture-native'])
+        update = runtime.workspace_updates(inventories['candidate_packages'], inventories['before_packages'], {}, self.proof())
+        self.assertEqual([row['link'] for row in update['links']], [self.prefix + '/node_modules/fixture-native'])
+        self.assertIn({'from': self.type_owner, 'dependencies': []}, update['checks'])
+
+    def test_registry_lock_refuses_type_exception_for_compiled_runtime_use_or_missing_inventory(self):
+        for side in ['before_packages', 'candidate_packages']:
+            for field, request in [('nodeRequests', '@types/pg'), ('clientRequests', '@types/pg/subpath')]:
+                with self.subTest(side=side, field=field), self.assertRaisesRegex(ValueError, 'compiled runtime request'):
+                    after, before, additions, inventories = self.type_only_lock_fixture()
+                    inventories[side][self.type_owner] = {**inventories[side][self.type_owner], field: [request]}
+                    runtime.validate_registry_lock(after, before, additions, {}, **inventories)
+        after, before, additions, inventories = self.type_only_lock_fixture()
+        with self.assertRaisesRegex(ValueError, 'audited runtime request/link'):
+            runtime.validate_registry_lock(after, before, additions, {}, **inventories, retained_rows=[{'name': '@types/pg'}])
+        with self.assertRaisesRegex(ValueError, 'new explicit declaration in an inventoried host'):
+            runtime.validate_registry_lock(after, before, additions, {})
+        for change in [{'mode': 'files'}, {'devDependencies': {}}, {'devDependencies': {'@types/pg': '8.23.1'}},
+                       {'optionalDependencies': {'@types/pg': '^8.23.1'}}]:
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                after, before, additions, inventories = self.type_only_lock_fixture()
+                inventories['candidate_packages'][self.type_owner].update(change)
+                runtime.validate_registry_lock(after, before, additions, {}, **inventories)
+
+    def test_registry_lock_type_exception_does_not_relax_other_importer_changes(self):
+        for mutation in ['non-type', 'other-type', 'runtime-field', 'wrong-importer', 'existing-ref']:
+            with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                after, before, additions, inventories = self.type_only_lock_fixture()
+                importer = after['importers'][self.type_importer]
+                if mutation in ('non-type', 'other-type'):
+                    name = 'vite-tsconfig-paths' if mutation == 'non-type' else '@types/other'
+                    ref = {'specifier': '1.0.0', 'version': '1.0.0'}
+                    key = name + '@1.0.0'
+                    for lock in (before, after):
+                        lock['graph']['packages'][key] = {'resolution': {'integrity': 'sha512-fixture'}}
+                        lock['graph']['snapshots'][key] = {}
+                        lock['importers']['packages/physicsos/health-host']['devDependencies'][name] = ref
+                    importer['devDependencies'][name] = ref
+                    inventories['candidate_packages'][self.type_owner]['devDependencies'][name] = '1.0.0'
+                elif mutation == 'runtime-field':
+                    importer['dependencies'] = importer.pop('devDependencies')
+                elif mutation == 'wrong-importer':
+                    after['importers']['packages/physicsos/model-pool-host'] = {'devDependencies': importer.pop('devDependencies')}
+                    before['importers']['packages/physicsos/model-pool-host'] = {}
+                else:
+                    before['importers'][self.type_importer]['devDependencies'] = {'@types/pg': {'specifier': '8.23.1', 'version': '8.23.1'}}
+                runtime.validate_registry_lock(after, before, additions, {}, **inventories)
+
+    def test_registry_lock_type_exception_requires_exact_reachable_integrity_locked_snapshot(self):
+        for mutation, error in [('version', 'dev-only lock importer change'), ('peer-variant', 'dev-only lock importer change'),
+                                ('integrity-drift', 'graph/resolution/integrity'), ('no-integrity', 'reachable baseline'),
+                                ('orphan', 'reachable baseline'), ('missing-snapshot', 'version/snapshot')]:
+            with self.subTest(mutation=mutation), self.assertRaisesRegex(ValueError, error):
+                after, before, additions, inventories = self.type_only_lock_fixture()
+                key = '@types/pg@8.23.1'
+                ref = after['importers'][self.type_importer]['devDependencies']['@types/pg']
+                if mutation in ('version', 'peer-variant'):
+                    ref['version'] = '8.23.2' if mutation == 'version' else '8.23.1(peer@1.0.0)'
+                elif mutation == 'integrity-drift':
+                    after['graph']['packages'][key]['resolution']['integrity'] = 'sha512-other'
+                elif mutation == 'no-integrity':
+                    for lock in (before, after):
+                        lock['graph']['packages'][key]['resolution'].clear()
+                elif mutation == 'orphan':
+                    for lock in (before, after):
+                        del lock['importers']['packages/physicsos/health-host']
+                else:
+                    for lock in (before, after):
+                        del lock['graph']['snapshots'][key]
+                runtime.validate_registry_lock(after, before, additions, {}, **inventories)
+
     def test_registry_policies_pin_absent_root_metadata_to_exact_base_source_attestation(self):
         lock = runtime.HARNESS + '/pnpm-lock.yaml'
         workspace = runtime.HARNESS + '/pnpm-workspace.yaml'
@@ -637,6 +737,178 @@ class RegistryReuseTests(unittest.TestCase):
     def observe(self, root, rows, phase):
         code = runtime.REGISTRY_CODE + r'''let input='';process.stdin.on('data',b=>input+=b);process.stdin.on('end',()=>{const d=JSON.parse(input);console.log(JSON.stringify(observeRegistry(d.root,d.rows,d.phase)));});'''
         return subprocess.run(['node', '-e', code], input=json.dumps({'root': str(root), 'rows': rows, 'phase': phase}), text=True, capture_output=True)
+
+    def make_import_only_fixture(self, root, linked):
+        rows, addon = self.make_physical_fixture(root, linked)
+        request = 'fixture-native/lazy'
+        manifest = root / self.target / 'package.json'
+        meta = json.loads(manifest.read_text())
+        meta['exports'] = {'.': './index.cjs', './lazy': {'import': './lazy.mjs'}}
+        manifest.write_text(json.dumps(meta))
+        (root / self.target / 'lazy.mjs').write_text('throw Error("ESM dependency code must not execute during audit")')
+        origin = root / self.prefix / 'lib/index.js'
+        origin.write_text('export * from "fixture-native/lazy"; import("fixture-native/lazy");')
+        rows[0]['request'] = request
+        if linked:
+            inventory = {'root': str(root), 'selections': [{'root': self.prefix, 'mode': 'host', 'items': ['lib', 'package.json']}]}
+            result = subprocess.run(['node', '-e', runtime.INVENTORY_JS], input=json.dumps(inventory), text=True, capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            rows[0]['resolved'] = json.loads(result.stdout)['packages'][self.prefix]['resolvedBare'][request]
+            self.assertIsNotNone(rows[0]['resolved'])
+        return rows, addon
+
+    def resolve_registry(self, root, row, owner=None, from_file=False, error_code=None):
+        mock = '' if error_code is None else 'require("module").createRequire=()=>({resolve(){const e=Error("fixture resolver failure");e.code=' + json.dumps(error_code) + ';throw e;}});'
+        driver = r'''let input='';process.stdin.on('data',b=>input+=b);process.stdin.on('end',()=>{const d=JSON.parse(input),row=d.row;console.log(JSON.stringify(registryResolve(d.root,d.owner,row.request,row.target,d.fromFile,row.resolved?.importEntries)));});'''
+        return subprocess.run(['node', '-e', mock + runtime.REGISTRY_CODE + driver], input=json.dumps({'root': str(root), 'row': row, 'owner': owner or row['from'], 'fromFile': from_file}), text=True, capture_output=True)
+
+    def test_registry_import_only_subpath_matches_inventory_and_cold_physical_proof(self):
+        with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b:
+            base, candidate = pathlib.Path(a).resolve(), pathlib.Path(b).resolve()
+            rows, _ = self.make_import_only_fixture(candidate, linked=True)
+            self.make_import_only_fixture(base, linked=False)
+            entry = {'path': self.target + '/lazy.mjs', 'sha256': sha((candidate / self.target / 'lazy.mjs').read_bytes())}
+            self.assertEqual(rows[0]['resolved']['importEntries'], [{'owner': self.prefix + '/lib/index.js', **entry}])
+            strict_require = copy.deepcopy(rows[0])
+            del strict_require['resolved']['importEntries']
+            rejected = self.resolve_registry(candidate, strict_require)
+            self.assertNotEqual(rejected.returncode, 0)
+            self.assertIn('ERR_PACKAGE_PATH_NOT_EXPORTED', rejected.stderr)
+            observed = self.observe(candidate, rows, 'after')
+            self.assertEqual(observed.returncode, 0, observed.stderr)
+            physical = json.loads(observed.stdout)['artifacts']
+            self.assertEqual(physical['requests'][0]['entries'], {'import': entry})
+            self.assertTrue(any(name.endswith('.node') for name in physical['entries']))
+            before = self.observe(base, physical['requests'], 'before')
+            self.assertEqual(before.returncode, 0, before.stderr)
+            self.assertEqual(json.loads(before.stdout)['artifacts'], physical)
+            proof = self.proof(physical)
+            runtime.validate_registry_reuse_proof(proof)
+            applied = self.apply(base, proof)
+            self.assertEqual(applied.returncode, 0, applied.stderr)
+            cold = subprocess.run(['node', '-e', runtime.REGISTRY_VERIFY_JS], input=json.dumps({'root': str(base), 'proof': proof, 'phase': 'after'}), text=True, capture_output=True)
+            self.assertEqual(cold.returncode, 0, cold.stderr)
+
+    def test_registry_import_only_inventory_rejects_a_real_require_origin(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary).resolve()
+            self.make_import_only_fixture(root, linked=True)
+            (root / self.prefix / 'lib/index.js').write_text('import("fixture-native/lazy"); require("fixture-native/lazy");')
+            request = {'root': str(root), 'selections': [{'root': self.prefix, 'mode': 'host', 'items': ['lib', 'package.json']}]}
+            result = subprocess.run(['node', '-e', runtime.INVENTORY_JS], input=json.dumps(request), text=True, capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            package = json.loads(result.stdout)['packages'][self.prefix]
+            self.assertIsNone(package['resolvedBare']['fixture-native/lazy'])
+            before = {**package, 'nodeRequests': [], 'nodeRequestOrigins': {}, 'resolvedBare': {}}
+            with self.assertRaisesRegex(ValueError, 'New Node runtime entry/version is unresolved'):
+                runtime.registry_additions({self.prefix: package}, {self.prefix: before}, {})
+
+    def test_registry_conditional_require_and_import_entries_cannot_be_swapped(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary).resolve()
+            rows, _ = self.make_physical_fixture(root, linked=True)
+            (root / self.prefix / 'lib/index.js').write_text('module.exports = require("fixture-native");')
+            manifest = root / self.target / 'package.json'
+            meta = json.loads(manifest.read_text())
+            meta['exports'] = {'.': {'require': './index.cjs', 'import': './index.mjs'}}
+            manifest.write_text(json.dumps(meta))
+            (root / self.target / 'index.mjs').write_text('throw Error("ESM dependency code must not execute during audit")')
+            observed = self.observe(root, rows, 'after')
+            self.assertEqual(observed.returncode, 0, observed.stderr)
+            physical = json.loads(observed.stdout)['artifacts']
+            entries = physical['requests'][0]['entries']
+            self.assertEqual(entries['require']['path'], self.target + '/index.cjs')
+            self.assertEqual(entries['import']['path'], self.target + '/index.mjs')
+            for kind, other in [('require', 'import'), ('import', 'require')]:
+                with self.subTest(kind=kind):
+                    changed = copy.deepcopy(physical)
+                    changed['requests'][0]['entries'][kind] = entries[other]
+                    proof = self.proof(changed)
+                    rejected = subprocess.run(['node', '-e', runtime.REGISTRY_VERIFY_JS], input=json.dumps({'root': str(root), 'proof': proof, 'phase': 'after'}), text=True, capture_output=True)
+                    self.assertNotEqual(rejected.returncode, 0)
+                    self.assertIn('Registry bytes/realpath/transitive/native assets or ABI changed', rejected.stderr)
+
+    def test_registry_import_only_rejects_missing_stale_and_invalid_resolution_evidence(self):
+        for mutation in ['no-proof', 'empty-proof', 'hash', 'path', 'require-branch', 'missing-entry', 'missing-package', 'invalid-export', 'unexported']:
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as temporary:
+                root = pathlib.Path(temporary).resolve()
+                rows, _ = self.make_import_only_fixture(root, linked=True)
+                row = rows[0]
+                if mutation == 'no-proof':
+                    del row['resolved']['importEntries']
+                elif mutation == 'empty-proof':
+                    row['resolved']['importEntries'] = []
+                elif mutation in ('hash', 'path'):
+                    entry = row['resolved']['importEntries'][0]
+                    entry['sha256' if mutation == 'hash' else 'path'] = sha('wrong entry') if mutation == 'hash' else self.target + '/index.cjs'
+                elif mutation == 'missing-entry':
+                    (root / self.target / 'lazy.mjs').unlink()
+                elif mutation == 'missing-package':
+                    shutil.rmtree(root / self.target)
+                else:
+                    manifest = root / self.target / 'package.json'
+                    meta = json.loads(manifest.read_text())
+                    if mutation == 'require-branch':
+                        meta['exports']['./lazy']['require'] = './index.cjs'
+                    elif mutation == 'invalid-export':
+                        meta['exports']['./lazy']['import'] = '../escaped.mjs'
+                    else:
+                        del meta['exports']['./lazy']
+                    manifest.write_text(json.dumps(meta))
+                rejected = self.resolve_registry(root, row)
+                self.assertNotEqual(rejected.returncode, 0)
+                if mutation == 'missing-package':
+                    self.assertIn('MODULE_NOT_FOUND', rejected.stderr)
+                elif mutation == 'require-branch':
+                    self.assertIn('Require resolution contradicts', rejected.stderr)
+
+    def test_registry_import_only_rejects_escaped_entries_and_wrong_real_parents(self):
+        for mutation in ['entry-escape', 'parent-missing', 'parent-symlink', 'foreign-origin', 'nested-shadow']:
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as temporary:
+                root = pathlib.Path(temporary).resolve()
+                rows, addon = self.make_import_only_fixture(root, linked=True)
+                row, owner, from_file = rows[0], None, False
+                if mutation == 'entry-escape':
+                    escaped = addon / 'escaped.mjs'
+                    escaped.write_text('throw Error("escaped dependency must not execute")')
+                    entry = root / self.target / 'lazy.mjs'
+                    entry.unlink()
+                    entry.symlink_to(os.path.relpath(escaped, entry.parent))
+                elif mutation == 'parent-missing':
+                    owner, from_file = self.prefix + '/lib/absent.js', True
+                    row['resolved']['importEntries'][0]['owner'] = owner
+                elif mutation == 'parent-symlink':
+                    owner, from_file = self.prefix + '/lib/index.js', True
+                    origin = root / owner
+                    real = origin.with_name('real.js')
+                    origin.rename(real)
+                    origin.symlink_to(real.name)
+                elif mutation == 'foreign-origin':
+                    row['resolved']['importEntries'][0]['owner'] = runtime.HARNESS + '/packages/other/lib/index.js'
+                else:
+                    shadow = root / runtime.HARNESS / 'node_modules/.pnpm/fixture-shadow@1.0.0/node_modules/fixture-native'
+                    shadow.mkdir(parents=True)
+                    (shadow / 'package.json').write_text(json.dumps({'name': 'fixture-native', 'version': '1.0.0', 'exports': {'./lazy': {'import': './lazy.mjs'}}}))
+                    (shadow / 'lazy.mjs').write_text('throw Error("shadow dependency must not execute")')
+                    link = root / self.prefix / 'lib/node_modules/fixture-native'
+                    link.parent.mkdir()
+                    link.symlink_to(os.path.relpath(shadow, link.parent))
+                rejected = self.resolve_registry(root, row, owner, from_file)
+                self.assertNotEqual(rejected.returncode, 0)
+                if mutation == 'parent-symlink':
+                    self.assertIn('Registry resolver parent is not a real application file', rejected.stderr)
+                elif mutation == 'nested-shadow':
+                    self.assertIn('Registry entry is absent or escaped its package', rejected.stderr)
+
+    def test_registry_import_only_never_suppresses_missing_auth_or_unknown_require_errors(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary).resolve()
+            rows, _ = self.make_import_only_fixture(root, linked=True)
+            for code in ['MODULE_NOT_FOUND', 'EACCES', 'ERR_ACCESS_DENIED', 'ERR_FIXTURE_UNKNOWN']:
+                with self.subTest(code=code):
+                    rejected = self.resolve_registry(root, rows[0], error_code=code)
+                    self.assertNotEqual(rejected.returncode, 0)
+                    self.assertIn(code, rejected.stderr)
 
     def apply(self, root, proof, deleted=None):
         updater = root / 'updater.cjs'

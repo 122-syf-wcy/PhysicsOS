@@ -13,18 +13,17 @@ const neverHook = (() => { throw new Error('unused header hook') }) as never
 
 afterEach(cleanup)
 
-function mount(empty = false) {
+function mount(empty = false, initialState: 'idle' | 'ready' = 'ready') {
   const createWorkspace = vi.fn(async (name: string) => ({ id: 'account-new', name }))
   const renameWorkspace = vi.fn(async (_id: string, _name: string) => {})
   const selectWorkspace = vi.fn(async (_id: WorkspaceId) => {})
-  const items = empty ? [] : [
+  const items = (empty ? [] : [
     { workspaceId: wid('account-one'), title: '高一物理', sessionIds: [sid('session-one')], path: '/srv/private-account-one' },
     { workspaceId: wid('account-two'), title: '高二物理', sessionIds: [], path: '/srv/private-account-two' },
-  ]
-  render(<HeaderWorkspace t={t} createWorkspace={createWorkspace} renameWorkspace={renameWorkspace} selectWorkspace={selectWorkspace}
+  ]).map(item => ({ ...item, createdAt: '2026-11-15T00:00:00Z', updatedAt: '2026-11-15T00:00:00Z' }))
+  const header = (state = initialState) => <HeaderWorkspace t={t} createWorkspace={createWorkspace} renameWorkspace={renameWorkspace} selectWorkspace={selectWorkspace}
     useWorkspaces={selector => selector({
-      items: items.map(item => ({ ...item, createdAt: '2026-11-15T00:00:00Z', updatedAt: '2026-11-15T00:00:00Z' })),
-      archivedSessionIds: [], pinnedSessionIds: [], state: 'idle', phase: 'ready', error: null,
+      items, archivedSessionIds: [], pinnedSessionIds: [], state, phase: 'ready', error: null,
     })}
     useSessions={selector => selector({
       ids: empty ? [] : [sid('session-one')],
@@ -33,16 +32,23 @@ function mount(empty = false) {
       } },
       phase: 'ready', projectionsBySession: {},
     })}
-    usePanelInfo={neverHook} useSessionStatus={neverHook} useSessionRetainInfo={neverHook} useResource={neverHook} />)
+    usePanelInfo={neverHook} useSessionStatus={neverHook} useSessionRetainInfo={neverHook} useResource={neverHook} />
+  const view = render(header())
   fireEvent.click(screen.getByRole('button', { name: /^我的工作区/ }))
-  return { createWorkspace, renameWorkspace, selectWorkspace }
+  return { createWorkspace, renameWorkspace, selectWorkspace, markReady: () => view.rerender(header('ready')) }
 }
 
 describe('student account header workspace boundary', () => {
   it('selects only account workspaces and never renders host paths or a directory picker', async () => {
-    const actions = mount()
+    const actions = mount(false, 'idle')
     const panel = screen.getByRole('dialog', { name: '我的工作区' })
     expect(panel.closest('header')).toBeNull()
+    expect(within(panel).getByRole('status').textContent).toBe('正在核对工作区状态…')
+    expect(within(panel).queryByText('高一物理')).toBeNull()
+    expect(within(panel).queryByRole('button', { name: '打开' })).toBeNull()
+    expect(within(panel).queryByPlaceholderText('例如：高一物理备课')).toBeNull()
+    actions.markReady()
+    expect(within(panel).queryByRole('status')).toBeNull()
     expect(within(panel).getByText('高一物理')).toBeTruthy()
     expect(within(panel).getByText('高二物理')).toBeTruthy()
     expect(document.body.textContent).not.toContain('/srv/')

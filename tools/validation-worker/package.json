@@ -16,11 +16,11 @@
     "lint": "eslint .",
     "test": "vitest run",
     "build": "tsc -p tsconfig.build.json",
-    "start": "node dist/server.js"
+    "start": "node dist/tools/validation-worker/src/server.js"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1"
   },
   "build": "tsc -p tsconfig.build.json",
-  "start": "node dist/server.js"
+  "start": "node dist/tools/validation-worker/src/server.js"
 }

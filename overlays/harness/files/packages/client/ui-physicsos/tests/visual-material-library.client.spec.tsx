@@ -63,7 +63,11 @@ describe('authenticated visual material library', () => {
     expect(screen.queryByRole('button', { name: 'Share with school' })).toBeNull()
     fireEvent.change(screen.getByLabelText('Keywords'), { target: { value: 'lens' } })
     fireEvent.submit(screen.getByRole('form', { name: 'Search' }))
-    await waitFor(() => { expect(client.search).toHaveBeenLastCalledWith(expect.objectContaining({ query: 'lens', cursor: undefined }), expect.any(AbortSignal)) })
+    await waitFor(() => {
+      const request = vi.mocked(client.search).mock.lastCall
+      expect(request).toEqual([expect.objectContaining({ query: 'lens', limit: 12 }), expect.any(AbortSignal)])
+      expect(request?.[0]).not.toHaveProperty('cursor')
+    })
   })
   it('uses current revision and a fresh operation ID for sharing, tags, soft deletion and restore', async () => {
     const client = api()

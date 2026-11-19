@@ -14,6 +14,17 @@ import { visualMaterialSearchPlan } from '../src/visual-material-domain.ts'
 import { visualMaterialTableNames, visualMaterialSqlIdentifier } from '../src/visual-material-schema.ts'
 
 const optedIn = process.env.PHYSICSOS_VISUAL_MATERIAL_PG_TEST === '1' && !!process.env.PHYSICSOS_VISUAL_MATERIAL_PG_TEST_URL
+interface ExplainNode {
+  readonly 'Node Type': string
+  readonly 'Relation Name'?: string
+  readonly 'Index Name'?: string
+  readonly 'Index Cond'?: string
+  readonly Plans?: readonly ExplainNode[]
+}
+interface ExplainRow {
+  readonly 'QUERY PLAN': readonly { readonly Plan: ExplainNode }[]
+}
+const explainNodes = (node: ExplainNode): readonly ExplainNode[] => [node, ...(node.Plans ?? []).flatMap(explainNodes)]
 function pngOf(): Buffer {
   const chunk = (type: string, data: Buffer): Buffer => {
     const size = Buffer.alloc(4), crc = Buffer.alloc(4), tag = Buffer.from(type)
@@ -58,9 +69,36 @@ it.skipIf(!optedIn)('PostgreSQL indexes/relevance/access/idempotence/rollback/re
     try {
       await explainClient.query('BEGIN')
       await explainClient.query('SET LOCAL enable_seqscan = off')
-      const plan = compileVisualMaterialSearch(schema, actor, visualMaterialSearchPlan({ query: '实验室' }))
-      const explained = await explainClient.query(`EXPLAIN (FORMAT JSON) ${plan.text}`, [...plan.values])
-      expect(JSON.stringify(explained.rows)).toMatch(/terms_gin/)
+      const searchPlan = visualMaterialSearchPlan({ query: '实验室' })
+      const plan = compileVisualMaterialSearch(schema, actor, searchPlan)
+      const compiledRows = await explainClient.query<{ id: string }>(plan.text, [...plan.values])
+      expect(compiledRows.rows).toHaveLength(2)
+      expect(compiledRows.rows[0]?.id).toBe(first.id)
+      const explained = await explainClient.query<ExplainRow>(`EXPLAIN (FORMAT JSON) ${plan.text}`, [...plan.values])
+      const fullRoot = explained.rows[0]?.['QUERY PLAN'][0]?.Plan
+      expect(fullRoot).toBeDefined()
+      const fullNodes = explainNodes(fullRoot!)
+      // Two rows can favor lifecycle/owner B-tree + term lookups; full-query index choice is cost-based.
+      expect(fullNodes.some(node => node['Index Name']?.startsWith('physicsos_vm_'))).toBe(true)
+      expect(fullNodes.filter(node => node['Node Type'] === 'Seq Scan')).toHaveLength(0)
+      const materialNodes = fullNodes.filter(node => node['Relation Name'] === 'physicsos_visual_materials')
+      expect(materialNodes.length).toBeGreaterThan(0)
+      expect(materialNodes.every(node => ['Index Scan', 'Index Only Scan', 'Bitmap Heap Scan'].includes(node['Node Type']))).toBe(true)
+      // Eligibility probe removes competing ACL/order paths; only this probe disables ordinary B-tree scans.
+      await explainClient.query('SET LOCAL enable_indexscan = off')
+      await explainClient.query('SET LOCAL enable_indexonlyscan = off')
+      await explainClient.query('SET LOCAL enable_bitmapscan = on')
+      const eligibleSql = `SELECT "id" FROM ${t.material} WHERE "terms" && $1::text[]`
+      const eligibleValues = [[...searchPlan.queryTerms]]
+      const eligibleRows = await explainClient.query<{ id: string }>(eligibleSql, eligibleValues)
+      expect(eligibleRows.rows.map(row => row.id).sort()).toEqual(compiledRows.rows.map(row => row.id).sort())
+      const eligible = await explainClient.query<ExplainRow>(`EXPLAIN (FORMAT JSON) ${eligibleSql}`, eligibleValues)
+      const eligibleRoot = eligible.rows[0]?.['QUERY PLAN'][0]?.Plan
+      expect(eligibleRoot).toBeDefined()
+      const ginNodes = explainNodes(eligibleRoot!).filter(node => node['Index Name'] === 'physicsos_vm_terms_gin')
+      expect(ginNodes).toHaveLength(1)
+      expect(ginNodes[0]?.['Node Type']).toBe('Bitmap Index Scan')
+      expect(ginNodes[0]?.['Index Cond']).toMatch(/terms\s*&&/)
       await explainClient.query('COMMIT')
     } catch (error) { await explainClient.query('ROLLBACK'); throw error }
     finally { explainClient.release() }

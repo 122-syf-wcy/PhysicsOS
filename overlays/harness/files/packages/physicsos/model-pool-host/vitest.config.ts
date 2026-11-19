@@ -1,15 +1,16 @@
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import tsconfigPaths from 'vite-tsconfig-paths'
 
-const vendorRoot = fileURLToPath(
-  new URL('../../../../../../vendor/deepseek-harness/', import.meta.url),
-)
+const materializedRoot = new URL('../../../', import.meta.url)
+const vendorRoot = fileURLToPath(existsSync(new URL('tsconfig.base.json', materializedRoot))
+  ? materializedRoot
+  : new URL('../../../../../../vendor/deepseek-harness/', import.meta.url))
 
 export default {
   root: vendorRoot,
-  plugins: [tsconfigPaths({ projects: [path.join(vendorRoot, 'tsconfig.base.json')] })],
   resolve: {
+    tsconfigPaths: true,
     alias: {
       '@deepseek-ai/cordis': path.join(vendorRoot, 'vendor/cordis/src/index.ts'),
       '@deepseek-ai/cosmokit': path.join(vendorRoot, 'vendor/cosmokit/src/index.ts'),

@@ -930,7 +930,7 @@ export class QuestionCodeArtifactService implements QuestionCodeArtifacts {
   }
   private assetFence(input: QuestionAssetScope, binding: AssetBinding, signal: AbortSignal): () => void {
     return () => {
-      signal.throwIfAborted()
+      if (signal.aborted) throw new ExperimentError(499, 'IMAGE_ABORTED', '素材请求已取消。')
       if (canonicalQuestionJson(this.assetBinding(input)) !== canonicalQuestionJson(binding)) throw new ExperimentError(409, 'STALE_GENERATION', '素材请求的账号或场景已变化。')
     }
   }

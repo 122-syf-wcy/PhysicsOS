@@ -13,6 +13,7 @@ export const choices = [
       { value: 'smaller', label: 'v < u：缩小的像' },
       { value: 'same', label: 'v = u：等大的像' },
       { value: 'larger', label: 'v > u：放大的像' },
+      { value: 'custom', label: '自定义' },
     ],
   },
 ]

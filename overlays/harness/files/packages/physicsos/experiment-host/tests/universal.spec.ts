@@ -77,6 +77,9 @@ describe('registered experiment V3 package boundary', () => {
     }
   })
   it('accepts a registered static renderer and preserves its target and V3 protocol', async () => {
+    const profile = experimentCatalog.find((profile) => profile.id === 'pinhole')!
+    expect(parameters).toEqual(profile.parameters)
+    expect(choices).toEqual(profile.choices)
     const result = await validateArchive(archiveOf())
     expect(result.manifest).toMatchObject({
       experimentId: 'pinhole',
@@ -182,6 +185,7 @@ describe('registered experiment V3 package boundary', () => {
     }
   })
   it('retains ZIP traversal and remote-script rejection for V3', async () => {
+    expect((await validateArchive(archiveOf())).manifest.protocolVersion).toBe(3)
     await expect(
       validateArchive(
         zip([

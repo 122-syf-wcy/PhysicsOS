@@ -2,7 +2,7 @@ import { createServer } from 'node:http'
 import { createHash } from 'node:crypto'
 import { runInNewContext } from 'node:vm'
 import { parseFragment, type DefaultTreeAdapterTypes } from 'parse5'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -22,7 +22,7 @@ import {
   type ListEnvelope,
   type ErrorEnvelope,
 } from './fixtures.ts'
-import { host } from './support.ts'
+import { host, overwriteFrozenTestArchive } from './support.ts'
 import { universalFiles } from './universal-fixtures.ts'
 let loaded: Awaited<ReturnType<typeof host>> | undefined
 let root: string
@@ -243,7 +243,7 @@ describe('experiment REST and credential-free asset boundary', () => {
         )
       ).status,
     ).toBe(404)
-    await writeFile(join(root, 'files', item.id, 'archive.zip'), Buffer.from('tampered'))
+    await overwriteFrozenTestArchive(root, item.id, Buffer.from('tampered'))
     const corrupt = await call(`/packages/${item.id}/archive`, undefined, 'admin')
     expect(corrupt.status).toBe(409)
     expect((await jsonOf<ErrorEnvelope>(corrupt)).error.code).toBe('INTEGRITY_MISMATCH')
@@ -474,6 +474,9 @@ describe('registered experiment routes', () => {
   it('uploads, previews and publishes V3 for its exact selected experiment without changing lens', async () => {
     const { base, call } = await setup()
     const archive = zip(Object.entries(universalFiles()).map(([name, data]) => ({ name, data })))
+    expect((await validateArchive(archive)).manifest).toMatchObject({
+      experimentId: 'pinhole', protocolVersion: 3,
+    })
     const wrongTarget = await call('/convex-lens/packages', uploadBody(archive))
     expect(wrongTarget.status).toBe(400)
     expect((await jsonOf<ErrorEnvelope>(wrongTarget)).error.code).toBe('EXPERIMENT_MISMATCH')

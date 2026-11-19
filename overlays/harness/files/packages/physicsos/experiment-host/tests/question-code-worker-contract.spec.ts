@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { chromium } from '@playwright/test'
 import type { Browser } from '@playwright/test'
 import { createMechanicsScene, type PhysicsScene } from '@physicsos/physics-scene'
+import { MECHANICS_VALIDATION_PROFILE, type QuestionCodeValidationProfile } from '@physicsos/shared'
 import { requestCandidateValidation } from '../src/question-code-validation.ts'
 import { questionSceneSha256 } from '../src/question-code-service.ts'
 
@@ -25,7 +26,7 @@ const frozen = () => createMechanicsScene({ sceneId: 'canonical-handoff', revisi
   now: '2026-11-16T00:00:00Z', sourceQuestionId: 'frozen-source', title: 'Frozen upward motion' })
 
 type Frame = { frameId: string; snapshot: Record<string, unknown> }
-type Plan = { frames: readonly Frame[]; changedFrame?: Frame; notes: readonly string[] }
+type Plan = { validationProfile: QuestionCodeValidationProfile; frames: readonly Frame[]; changedFrame?: Frame; notes: readonly string[] }
 type Runtime = { getSnapshot(): unknown; seek(time: number): unknown; editParameter(id: string, value: number): unknown }
 const workers: { close(): Promise<void> }[] = []
 afterEach(async () => { for (const worker of workers.splice(0)) await worker.close(); vi.clearAllMocks() })
@@ -42,24 +43,31 @@ async function workerWithRealPlanner() {
   const { universalContributionSnapshot } = await import(/* @vite-ignore */ protocolFile) as { universalContributionSnapshot(frame: unknown, experimentId: string): Record<string, unknown> }
   const browser = { close: vi.fn(async () => {}), newContext: vi.fn(async () => { throw new Error('browser contract probe') }) } as unknown as Browser
   vi.mocked(chromium.launch).mockResolvedValue(browser)
-  const plans: Plan[] = [], canonical: Record<string, unknown>[] = []
+  const plans: Plan[] = [], canonical: Record<string, unknown>[] = [], policySnapshots: Record<string, unknown>[] = []
   const worker = await startValidationWorker({ token, screenshots: false, planner: (scene, templateId) => {
     const observe = (frame: unknown) => { canonical.push(universalContributionSnapshot(frame, templateId)); return frame }
     const plan = planScene(scene, value => {
       const runtime = createMechanicsWorkspaceRuntime(value as unknown as PhysicsScene)
-      return { getSnapshot: () => observe(runtime.getSnapshot()), seek: (time: number) => observe(runtime.seek(time)),
+      let policyRead = true
+      return { getSnapshot: () => {
+        const frame = runtime.getSnapshot()
+        // Profile selection inspects the real base once before planFrames reads
+        // its transport base. Keep both observations and assert their equality.
+        if (policyRead) { policyRead = false; policySnapshots.push(universalContributionSnapshot(frame, templateId)); return frame }
+        return observe(frame)
+      }, seek: (time: number) => observe(runtime.seek(time)),
         editParameter: (id: string, next: number) => observe(runtime.editParameter(id, next)) }
     }, templateId)
     plans.push(plan)
     return plan
   } })
   workers.push(worker)
-  return { worker, plans, canonical }
+  return { worker, plans, canonical, policySnapshots }
 }
 
 describe('validation worker request contract', () => {
   it('plans canonical V3 frames from the frozen scene and bound template without changing engine facts', async () => {
-    const { worker, plans, canonical } = await workerWithRealPlanner(), scene = frozen()
+    const { worker, plans, canonical, policySnapshots } = await workerWithRealPlanner(), scene = frozen()
     const { isUniversalSnapshot } = await import(/* @vite-ignore */ contractFile) as { isUniversalSnapshot(frame: unknown, experimentId: string): boolean }
     // Stop at the browser boundary only after the handler plans real frames.
     const outcome = await requestCandidateValidation({ url: `http://127.0.0.1:${worker.port}`, token }, {
@@ -71,6 +79,7 @@ describe('validation worker request contract', () => {
     expect(outcome).toMatchObject({ kind: 'infrastructure', code: 'WORKER_500' })
     expect(plans).toHaveLength(1)
     const plan = plans[0]!
+    expect(plan.validationProfile).toEqual(MECHANICS_VALIDATION_PROFILE)
     expect(plan.frames.length).toBeGreaterThanOrEqual(2)
     const positions = plan.frames.map(frame => JSON.stringify((frame.snapshot.view as { bodies?: unknown[] }).bodies))
     expect(new Set(positions).size).toBeGreaterThanOrEqual(2)
@@ -80,6 +89,7 @@ describe('validation worker request contract', () => {
     expect(plan.frames[0]?.snapshot.clock).toMatchObject({ time: 0 })
     const snapshots = [...plan.frames, plan.changedFrame!].map(frame => frame.snapshot)
     expect(snapshots).toEqual(canonical)
+    expect(policySnapshots).toEqual([snapshots[0]])
     expect(snapshots.every(frame => isUniversalSnapshot(frame, experimentId))).toBe(true)
     expect(snapshots.every(frame => isUniversalSnapshot(frame, 'wrong-template'))).toBe(false)
     expect(plan.frames[0]?.snapshot.revision).toBe(scene.revision)

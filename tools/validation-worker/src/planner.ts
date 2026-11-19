@@ -11,7 +11,7 @@
  * snapshot. Nothing is re-solved and nothing is invented.
  */
 import { planFrames, wireSnapshot, type FramePlan, type FrameSource, type SnapshotLike } from './frame-plan.ts'
-import { MECHANICS_VALIDATION_PROFILE, OPTICS_VALIDATION_PROFILE, type QuestionCodeValidationProfile } from '@physicsos/shared'
+import { MECHANICS_VALIDATION_PROFILE, OPTICS_VALIDATION_PROFILE, type QuestionCodeValidationProfile } from '../../../packages/shared/src/validation-profile.ts'
 import { staticOpticsFacts } from './static-optics.ts'
 
 export type DomainRuntimeLoader = (domain: string) => Promise<((scene: Record<string, unknown>) => FrameSource | null) | null>

@@ -505,10 +505,9 @@ describe('PhysicsOS overlay presentation', () => {
     expect(items[0]!.kind).toBe('experiment')
 
     const openSurface = vi.fn()
-    const removeRecent = vi.fn()
-    const useRecentExperiments = ((
-      selector: (s: ReturnType<typeof surface.recent.getSnapshot>) => unknown,
-    ) => selector(surface.recent.getSnapshot())) as never
+    const removeRecent = vi.fn(surface.removeRecent)
+    const useRecentExperiments: RecentSpacesProps['useRecentExperiments'] = selector =>
+      selector(useSyncExternalStore(surface.recent.subscribe, surface.recent.getSnapshot))
     render(
       <RecentSpaces
         wide
@@ -530,14 +529,19 @@ describe('PhysicsOS overlay presentation', () => {
       sceneId: items[0]!.sceneId,
       scene: items[0]!.scene,
     })
-    fireEvent.click(screen.getByRole('button', { name: '从列表移除' }))
-    expect(removeRecent).toHaveBeenCalledWith(items[0]!.sceneId)
+    fireEvent.click(screen.getByRole('button', { name: '从列表移除 · 速度选择器' }))
+    const confirm = screen.getByRole('dialog', { name: '移除最近记录' })
+    expect(removeRecent).not.toHaveBeenCalled()
+    fireEvent.click(within(confirm).getByRole('button', { name: '确认移除' }))
+    expect(removeRecent).toHaveBeenCalledExactlyOnceWith(items[0]!.sceneId)
+    expect(screen.queryByRole('button', { name: /^速度选择器/ })).toBeNull()
+    expect(screen.getByText('暂无最近空间')).toBeTruthy()
   })
 
   it('lists past conversations in 历史对话 and reopens one on click', () => {
     const now = Date.now()
     const useSessions = sessionsHook({
-      ids: ['s1', 's2', 's3', 's4'],
+      ids: ['s1', 's2', 's3', 's4', 's5'],
       byId: {
         s1: {
           id: 's1', displayTitle: '磁场题解答', updatedAt: now - 120_000,
@@ -564,20 +568,25 @@ describe('PhysicsOS overlay presentation', () => {
     })
     const openSession = vi.fn()
     const archiveSession = vi.fn()
-    render(
-      <RecentSpaces
+    function History() {
+      const [archived, setArchived] = useState(['s5'])
+      return <RecentSpaces
         wide
         requestSceneInCanvas={vi.fn()}
         openSurface={vi.fn()}
         removeRecent={vi.fn()}
         openSession={openSession}
-        archiveSession={archiveSession}
+        archiveSession={id => {
+          archiveSession(id)
+          setArchived(previous => [...previous, id])
+        }}
         useRecentExperiments={emptyRecent}
         t={t}
         useSessions={useSessions}
-        useWorkspaces={workspacesHook(['s5'])}
-      />,
-    )
+        useWorkspaces={workspacesHook(archived)}
+      />
+    }
+    render(<History />)
     /* Newest first; the blank session, the subagent run, and the archived row
        are not listed. */
     const names = screen.getAllByRole('button').map(b => b.textContent)
@@ -586,13 +595,16 @@ describe('PhysicsOS overlay presentation', () => {
     expect(names.some(n => n?.includes('空白会话'))).toBe(false)
     expect(names.some(n => n?.includes('子代理运行'))).toBe(false)
     expect(names.some(n => n?.includes('已归档会话'))).toBe(false)
-    expect(screen.getByRole('button', { name: /磁场题解答/ }).getAttribute('aria-current')).toBe('true')
+    expect(screen.getByRole('button', { name: /^磁场题解答/ }).getAttribute('aria-current')).toBe('true')
 
-    fireEvent.click(screen.getByRole('button', { name: /平抛运动讨论/ }))
-    expect(openSession).toHaveBeenCalledWith('s2')
+    fireEvent.click(screen.getByRole('button', { name: /^平抛运动讨论/ }))
+    expect(openSession).toHaveBeenCalledExactlyOnceWith('s2')
 
-    fireEvent.click(screen.getAllByRole('button', { name: '归档' })[1]!)
-    expect(archiveSession).toHaveBeenCalledWith('s1')
+    fireEvent.click(screen.getByRole('button', { name: '归档 · 磁场题解答' }))
+    expect(archiveSession).toHaveBeenCalledExactlyOnceWith('s1')
+    expect(openSession).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('button', { name: /^磁场题解答/ })).toBeNull()
+    expect(screen.getByRole('button', { name: /^平抛运动讨论/ })).toBeTruthy()
   })
 
   it('persists recent scenes through storage so a reload can restore them', () => {

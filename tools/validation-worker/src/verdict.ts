@@ -5,7 +5,7 @@
  * unattributable evidence fails closed, including a frame with only stamps.
  */
 import type { BrowserFrame, DrawnBody, DrawnGround, ParameterControlEvidence } from './types.ts'
-import { MECHANICS_VALIDATION_PROFILE, UNSUPPORTED_VALIDATION_PROFILE, isQuestionCodeValidationProfile, validationProfileKey, type QuestionCodeValidationProfile, type QuestionCodeValidationCheckName } from '@physicsos/shared'
+import { MECHANICS_VALIDATION_PROFILE, UNSUPPORTED_VALIDATION_PROFILE, isQuestionCodeValidationProfile, validationProfileKey, type QuestionCodeValidationProfile, type QuestionCodeValidationCheckName } from '../../../packages/shared/src/validation-profile.ts'
 import { opticsGeometry, opticsParameterChanged, opticsSemanticState, opticsStaticStable } from './optics-verdict.ts'
 
 export type CheckName = QuestionCodeValidationCheckName

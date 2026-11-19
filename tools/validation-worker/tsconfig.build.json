@@ -18,11 +18,11 @@
     "resolveJsonModule": true,
     "noEmit": false,
     "outDir": "dist",
-    "rootDir": "src",
+    "rootDir": "../..",
     "declaration": false,
     "declarationMap": false,
     "sourceMap": false,
     "types": ["node"]
   },
-  "include": ["src"]
+  "include": ["src", "../../packages/shared/src/validation-profile.ts"]
 }

@@ -21,7 +21,7 @@ import { validateCandidate, type CandidateAssets } from './driver.ts'
 import { evaluateObservation } from './verdict.ts'
 import type { HostFrame } from './page.ts'
 import type { BrowserResult } from './types.ts'
-import { MECHANICS_VALIDATION_PROFILE, UNSUPPORTED_VALIDATION_PROFILE, isQuestionCodeValidationProfile, requiredValidationChecks, validationProfileKey, type QuestionCodeValidationProfile } from '@physicsos/shared'
+import { MECHANICS_VALIDATION_PROFILE, UNSUPPORTED_VALIDATION_PROFILE, isQuestionCodeValidationProfile, requiredValidationChecks, validationProfileKey, type QuestionCodeValidationProfile } from '../../../packages/shared/src/validation-profile.ts'
 import { PlannerError } from './planner.ts'
 
 const MAX_BODY = 512 * 1024
@@ -286,8 +286,8 @@ export async function startValidationWorker(options: WorkerOptions): Promise<{ s
   }
 }
 
-/* Entry point: `node dist/server.js` with the token in the environment. The
-   token is never logged; only the bound port is announced. */
+/* `npm start` runs the standalone emitted entry; Docker uses its preserved
+   workspace path. The environment token is never logged. */
 /**
  * Loader over the compiled viewport modules the image ships.
  *

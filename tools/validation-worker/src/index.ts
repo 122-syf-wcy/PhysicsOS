@@ -8,4 +8,4 @@ export { planFrames, sampleTimes, type FramePlan, type FrameSource, type Planned
 export { planScene, DOMAIN_RUNTIME_MODULES, PlannerError, type DomainRuntimeLoader, type SceneFramePlan } from './planner.ts'
 export { staticOpticsFacts } from './static-optics.ts'
 export { opticsGeometry, opticsSemanticState, opticsStaticStable, opticsParameterChanged } from './optics-verdict.ts'
-export { MECHANICS_VALIDATION_PROFILE, OPTICS_VALIDATION_PROFILE, UNSUPPORTED_VALIDATION_PROFILE, requiredValidationChecks, type QuestionCodeValidationProfile } from '@physicsos/shared'
+export { MECHANICS_VALIDATION_PROFILE, OPTICS_VALIDATION_PROFILE, UNSUPPORTED_VALIDATION_PROFILE, requiredValidationChecks, type QuestionCodeValidationProfile } from '../../../packages/shared/src/validation-profile.ts'

@@ -430,7 +430,22 @@ def baseline_registry_reachable(lock):
     return seen
 
 
-def validate_registry_lock(candidate, before, additions, workspace_paths):
+def validate_type_only_importer(owner, name, specifier, before_packages, candidate_packages, requests):
+    if any(row['name'] == name for row in requests):
+        raise ValueError('Type-only devDependency has an audited runtime request/link')
+    for packages, expected in [(before_packages, None), (candidate_packages, specifier)]:
+        package = (packages or {}).get(owner, {})
+        dev = package.get('devDependencies', {})
+        if (package.get('mode') != 'host' or not all(isinstance(package.get(k), list) for k in ('nodeRequests', 'clientRequests'))
+                or (name in dev) != (expected is not None) or dev.get(name) != expected):
+            raise ValueError('Type-only devDependency must be a new explicit declaration in an inventoried host')
+        if (any(name in package.get(field, {}) for field in ('dependencies', 'peerDependencies', 'optionalDependencies'))
+                or any(request == name or request.startswith(name + '/') for meta in packages.values()
+                       for field in ('nodeRequests', 'clientRequests') for request in meta.get(field, []))):
+            raise ValueError('Type-only devDependency has a compiled runtime request/declaration')
+
+
+def validate_registry_lock(candidate, before, additions, workspace_paths, *, before_packages=None, candidate_packages=None, retained_rows=()):
     if not isinstance(candidate.get('graph'), dict) or candidate['graph'] != before.get('graph') or not candidate['graph'].get('packages') or not candidate['graph'].get('snapshots'):
         raise ValueError('External registry lock graph/resolution/integrity/policy changed; a full runtime build is required')
     new, old = candidate.get('importers', {}), before.get('importers', {})
@@ -448,18 +463,28 @@ def validate_registry_lock(candidate, before, additions, workspace_paths):
                 previous, current = left.get(name), right.get(name)
                 if previous == current:
                     continue
-                if name in workspace_paths:
+                if (importer, field, name) == ('packages/physicsos/experiment-host', 'devDependencies', '@types/pg'):
+                    # This compiler-only declaration cannot create a registry proof row or runtime link.
+                    specifier, resolved_version = '^8.23.1', '8.23.1'
+                    if (importer not in old or name in left or name in workspace_paths
+                            or current != {'specifier': specifier, 'version': resolved_version}
+                            or any(name in m.get(k, {}) for m in (a, b) for k in ('dependencies', 'optionalDependencies'))):
+                        raise ValueError('Unreviewed @types/pg dev-only lock importer change')
+                    validate_type_only_importer(HARNESS + '/' + importer, name, specifier, before_packages, candidate_packages, [*additions, *retained_rows])
+                elif name in workspace_paths:
                     owner = HARNESS + '/' + importer if importer != '.' else HARNESS
                     target = workspace_paths[name]
                     if not isinstance(current, dict) or not current.get('version', '').startswith('link:') or posixpath.normpath(posixpath.join(owner, current['version'][5:])) != target:
                         raise ValueError('Workspace lock link does not match the actual workspace')
                     continue
-                row = expected.get((importer, name))
-                if previous is not None or not row or not isinstance(current, dict) or current.get('specifier') != row['specifier']:
-                    raise ValueError('Existing/new external lock importer changed without an audited Node addition')
+                else:
+                    row = expected.get((importer, name))
+                    if previous is not None or not row or not isinstance(current, dict) or current.get('specifier') != row['specifier']:
+                        raise ValueError('Existing/new external lock importer changed without an audited Node addition')
+                    resolved_version = row['resolved']['version']
                 version = current.get('version', '')
-                if not isinstance(version, str) or version.split('(', 1)[0] != row['resolved']['version'] or name + '@' + version not in candidate['graph']['snapshots'] or name + '@' + version.split('(', 1)[0] not in candidate['graph']['packages']:
-                    raise ValueError('New importer resolved version/snapshot differs from the installed artifact')
+                if not isinstance(version, str) or version.split('(', 1)[0] != resolved_version or name + '@' + version not in candidate['graph']['snapshots'] or name + '@' + version.split('(', 1)[0] not in candidate['graph']['packages']:
+                    raise ValueError('New importer resolved version/snapshot differs from the audited dependency')
                 package = before['graph']['packages'][name + '@' + version.split('(', 1)[0]]
                 resolution = package.get('resolution') if isinstance(package, dict) else None
                 if name + '@' + version not in reachable or not isinstance(resolution, dict) or not isinstance(resolution.get('integrity'), str) or not resolution['integrity']:
@@ -559,7 +584,7 @@ const safe=n=>{if(!n||p.isAbsolute(n)||n.split('/').includes('..')||/[\\\0\r\n]/
 const repositoryDocs=new Set(['CLAUDE.md','packages/CLAUDE.md','vendor/CLAUDE.md'].map(n=>'vendor/deepseek-harness/'+n));
 const skip=n=>repositoryDocs.has(n)||n.startsWith('vendor/deepseek-harness/snapshots/')||n.split('/').some(x=>['.agents','.claude','.cursor','node_modules','.git','tests','test','__tests__','fixtures','__fixtures__','__snapshots__','.home','.ssh','secrets','.turbo','.vite','__pycache__','preview'].includes(x)||x==='.env'||x.startsWith('.env.'))||/\.(?:pem|key|p12|pfx|log|pid|tsbuildinfo|map|spec\.ts|test\.ts|spec\.tsx|test\.tsx)$/.test(n);
 const visit=n=>{safe(n);if(skip(n))return;const abs=p.resolve(root,n);if(!abs.startsWith(root+'/'))throw Error('Inventory escaped root');let st;try{st=f.lstatSync(abs)}catch(error){if(error.code==='ENOENT')return;throw error}if(st.isSymbolicLink())throw Error('Runtime export contains source link');if(st.isDirectory()){for(const name of f.readdirSync(abs))visit(n+'/'+name);}else if(st.isFile()){const bytes=f.readFileSync(abs);files[n]={sha256:c.createHash('sha256').update(bytes).digest('hex'),bytes:bytes.length,mode:st.mode&511};}else throw Error('Non-file runtime code');};
-const pkg=n=>{const file=p.join(root,n,'package.json');if(!f.existsSync(file))return;const m=JSON.parse(f.readFileSync(file));if(m.name)workspace[m.name]=n;return {name:m.name,version:m.version,dependencies:m.dependencies||{},peerDependencies:m.peerDependencies||{},optionalDependencies:m.optionalDependencies||{}};};
+const pkg=n=>{const file=p.join(root,n,'package.json');if(!f.existsSync(file))return;const m=JSON.parse(f.readFileSync(file));if(m.name)workspace[m.name]=n;return {name:m.name,version:m.version,dependencies:m.dependencies||{},peerDependencies:m.peerDependencies||{},optionalDependencies:m.optionalDependencies||{},devDependencies:m.devDependencies||{}};};
 for(const row of doc.selections||[]){safe(row.root);for(const item of row.items||[])visit(item==='.'?row.root:row.root+'/'+safe(item));const m=pkg(row.root);if(m){m.mode=row.mode||'host';packages[row.root]=m;}}
 for(const name of doc.exact||[])visit(safe(name));
 if((doc.exact||[]).includes('package.json'))packages['']=pkg('');
@@ -658,15 +683,49 @@ function registryRelative(root,a){const n=p.relative(root,a);if(!n||p.isAbsolute
 function registryVirtual(root,a){const n=registryRelative(root,a),prefix=n.startsWith('node_modules/.pnpm/')?'node_modules/.pnpm/':'vendor/deepseek-harness/node_modules/.pnpm/';return p.join(root,prefix,n.slice(prefix.length).split('/')[0],'node_modules');}
 function registryABI(){const report=process.report.getReport(),h=report.header,sharedLibraries=(report.sharedObjects||[]).filter(name=>!/^linux-(?:vdso|gate)\.so\.\d+$/.test(name)).sort().map(name=>{if(!['/lib/','/lib64/','/usr/lib/'].some(prefix=>name.startsWith(prefix)))throw Error('Unreviewed external Node ABI library');const realpath=f.realpathSync(name);if(!['/lib/','/lib64/','/usr/lib/'].some(prefix=>realpath.startsWith(prefix))||!f.statSync(realpath).isFile())throw Error('Node ABI library escaped its system roots');return{path:name,realpath,sha256:registryHash(f.readFileSync(realpath))};});return{node:process.versions.node,modules:process.versions.modules,napi:process.versions.napi,arch:process.arch,platform:process.platform,libc:h.glibcVersionRuntime?'glibc':'musl',glibcVersion:h.glibcVersionRuntime||null,nodeSha256:registryHash(f.readFileSync(process.execPath)),sharedLibraries};}
 function registryEntry(root,a,target){const real=f.realpathSync(a),name=registryRelative(root,real),st=f.lstatSync(real);if(!st.isFile()||!name.startsWith(target+'/'))throw Error('Registry entry is absent or escaped its package');return{path:name,sha256:registryHash(f.readFileSync(real))};}
-function registryResolve(root,owner,request,target,fromFile=false){const parent=fromFile?p.join(root,owner):p.join(root,owner,'package.json'),req=createRequire(parent),required=registryEntry(root,req.resolve(request),target);const code='import {pathToFileURL,fileURLToPath} from "node:url";process.stdout.write(fileURLToPath(import.meta.resolve(process.argv[1],pathToFileURL(process.argv[2]).href)));';const r=spawnSync(process.execPath,['--experimental-import-meta-resolve','--input-type=module','-e',code,request,parent],{encoding:'utf8',env:{},maxBuffer:1024*1024});if(r.status!==0)throw Error('ESM registry entry is unresolved');return{require:required,import:registryEntry(root,r.stdout,target)};}
+function registryResolve(root,owner,request,target,fromFile=false,importEntries){
+''' + IMPORT_RESOLUTION_JS + r'''
+  const importOnly=importEntries!==undefined,parent=fromFile?p.join(root,owner):p.join(root,owner,'package.json');
+  if(importOnly){
+    if(!Array.isArray(importEntries)||!importEntries.length)throw Error('Audited ESM origin entries are missing');
+    const owners=new Set();
+    for(const entry of importEntries){
+      if(!entry||typeof entry.owner!=='string'||p.isAbsolute(entry.owner)||!entry.owner.includes('/lib/')||entry.owner.split('/').some(x=>!x||x==='.'||x==='..')||/[\\\0\r\n]/.test(entry.owner)||owners.has(entry.owner))throw Error('Unsafe or duplicate audited ESM origin');
+      owners.add(entry.owner);
+      if(typeof entry.path!=='string'||typeof entry.sha256!=='string'||!/^[a-f0-9]{64}$/.test(entry.sha256))throw Error('Audited ESM entry path/hash is missing');
+      if(!fromFile&&owner!==target&&!entry.owner.startsWith(owner+'/lib/'))throw Error('Audited ESM origin escaped its compiled package');
+    }
+    if(fromFile&&!owners.has(owner))throw Error('Compiled ESM origin is not covered by the audited inventory');
+  }
+  // The base may not have the new importer link yet; its package self-resolution
+  // must still match every entry established at the candidate's compiled origins.
+  const parents=[parent];
+  if(importOnly&&!fromFile&&owner!==target)parents.push(...importEntries.map(entry=>p.join(root,entry.owner)));
+  let required;
+  for(const file of parents){
+    if(!file.startsWith(root+'/')||f.realpathSync(file)!==file||!f.lstatSync(file).isFile())throw Error('Registry resolver parent is not a real application file');
+    let resolved;
+    try{resolved=createRequire(file).resolve(request);}
+    catch(error){if(!importOnly||error.code!=='ERR_PACKAGE_PATH_NOT_EXPORTED')throw error;}
+    if(resolved!==undefined){
+      if(importOnly)throw Error('Require resolution contradicts the audited ESM-only inventory');
+      required=registryEntry(root,resolved,target);
+    }
+  }
+  const imports=resolveImportEntries(root,parents.map(file=>({request,owner:p.relative(root,file)})));
+  if(imports.some(entry=>entry===null))throw Error('ESM registry entry is unresolved');
+  const entries=imports.map(entry=>registryEntry(root,p.join(root,entry.path),target)),imported=entries[0];
+  if(entries.some(entry=>registryJSON(entry)!==registryJSON(imported))||importOnly&&importEntries.some(entry=>entry.path!==imported.path||entry.sha256!==imported.sha256))throw Error('Resolved registry entry differs from the audited ESM inventory');
+  return{...(required?{require:required}:{}),import:imported};
+}
 function registryLink(root,from,name,target){const relative=(from?from+'/':'')+'node_modules/'+name;if(p.isAbsolute(relative)||relative.split('/').some(x=>!x||x==='.'||x==='..')||/[\\\0\r\n]/.test(relative))throw Error('Unsafe registry importer link');const a=p.join(root,relative);let parent=p.dirname(a);while(parent!==root){let st;try{st=f.lstatSync(parent)}catch(error){if(error.code!=='ENOENT')throw error}if(st&&!st.isDirectory())throw Error('Registry importer parent is a link/non-directory');parent=p.dirname(parent);if(!parent.startsWith(root))throw Error('Registry importer parent escaped root');}let st;try{st=f.lstatSync(a)}catch(error){if(error.code!=='ENOENT')throw error;return{type:'absent'}}if(!st.isSymbolicLink())throw Error('Refusing a real registry dependency directory');const raw=f.readlinkSync(a);if(p.isAbsolute(raw)||/[\\\0\r\n]/.test(raw))throw Error('External registry importer link');const real=registryRelative(root,f.realpathSync(a));if(real!==target)throw Error('Registry importer link points to a different artifact');return{type:'symlink',target:raw,realpath:real};}
 function observeRegistry(root,rows,phase){root=f.realpathSync(root);const entries={},packages={},virtuals=new Set(),seen=new Set();
 function visit(a){const name=registryRelative(root,a);if(seen.has(name))return;seen.add(name);const st=f.lstatSync(a),mode=st.mode&511;if(st.mode&3584)throw Error('Special registry artifact permissions');if(st.isSymbolicLink()){const target=f.readlinkSync(a);if(!target||p.isAbsolute(target)||/[\\\0\r\n]/.test(target))throw Error('External registry artifact link');registryRelative(root,p.resolve(p.dirname(a),target));const real=f.realpathSync(a),realpath=registryRelative(root,real);entries[name]={type:'symlink',mode,target,realpath};if(f.statSync(real).isDirectory())scanVirtual(registryVirtual(root,real));visit(real);}else{if(f.realpathSync(a)!==a)throw Error('Registry artifact ancestor is a symlink');if(st.isDirectory()){entries[name]={type:'dir',mode};for(const n of f.readdirSync(a).sort())visit(p.join(a,n));}else if(st.isFile()){entries[name]={type:'file',mode,bytes:st.size,sha256:registryHash(f.readFileSync(a))};}else throw Error('Special registry artifact file');}}
 function packageMeta(a,modules,name){const real=f.realpathSync(a),relative=registryRelative(root,real),manifest=p.join(real,'package.json');if(!f.lstatSync(real).isDirectory()||!f.lstatSync(manifest).isFile())throw Error('Registry package manifest/root is absent');const m=JSON.parse(f.readFileSync(manifest));if(m.name!==name||typeof m.version!=='string')throw Error('Registry package name/version differs');if(packages[relative])return;const dependencies={};packages[relative]={name:m.name,version:m.version,dependencies};for(const field of ['dependencies','optionalDependencies','peerDependencies'])for(const dep of Object.keys(m[field]||{}).sort()){const target=p.join(modules,dep);let st;try{st=f.lstatSync(target)}catch(error){if(error.code!=='ENOENT')throw error}if(!st){if(field==='dependencies'||field==='peerDependencies'&&!m.peerDependenciesMeta?.[dep]?.optional)throw Error('Required transitive registry dependency is absent');dependencies[field+':'+dep]=null;continue;}const actual=f.realpathSync(target),n=registryRelative(root,actual),meta=JSON.parse(f.readFileSync(p.join(actual,'package.json')));if(meta.name!==dep)throw Error('Transitive registry dependency name differs');dependencies[field+':'+dep]={target:n,name:meta.name,version:meta.version};scanVirtual(registryVirtual(root,actual));}}
 function scanVirtual(modules){if(virtuals.has(modules))return;virtuals.add(modules);if(f.realpathSync(modules)!==modules||!f.lstatSync(modules).isDirectory())throw Error('Registry virtual store parent is not a real directory');for(const name of f.readdirSync(modules).sort()){const a=p.join(modules,name);visit(a);if(name.startsWith('@')){for(const n of f.readdirSync(a).sort())packageMeta(p.join(a,n),modules,name+'/'+n);}else packageMeta(a,modules,name);}}
-const requests=[],links=[];for(const row of rows){const name=row.name,request=row.request,from=row.from;if(typeof from!=='string'||p.isAbsolute(from)||from.split('/').some(x=>x==='.'||x==='..')||typeof name!=='string'||!/^(@[A-Za-z0-9_.-]+\/)?[A-Za-z0-9_.-]+$/.test(name))throw Error('Invalid registry request');let target=row.target;if(!target){const link=p.join(root,from,'node_modules',name);target=registryRelative(root,f.realpathSync(link));}const a=p.join(root,target);if(registryRelative(root,f.realpathSync(a))!==target)throw Error('Registry target realpath changed');scanVirtual(registryVirtual(root,a));const meta=packages[target];if(!meta||meta.name!==name||meta.version!==row.resolved?.version)throw Error('Installed registry version differs');const state=registryLink(root,from,name,target),actual=registryResolve(root,target,request,target);if(phase!=='before'){if(state.type!=='symlink')throw Error('Audited registry importer link is absent');const m=JSON.parse(f.readFileSync(p.join(root,from,'package.json'))),spec={...m.dependencies,...m.peerDependencies}[name];if(spec!==row.specifier||registryJSON(registryResolve(root,from,request,target))!==registryJSON(actual))throw Error('Actual importer resolved entry/spec differs');}requests.push({from,request,name,specifier:row.specifier,resolved:row.resolved,target,entries:actual});links.push({from,request,state});}
+const requests=[],links=[];for(const row of rows){const name=row.name,request=row.request,from=row.from;if(typeof from!=='string'||p.isAbsolute(from)||from.split('/').some(x=>x==='.'||x==='..')||typeof name!=='string'||!/^(@[A-Za-z0-9_.-]+\/)?[A-Za-z0-9_.-]+$/.test(name))throw Error('Invalid registry request');let target=row.target;if(!target){const link=p.join(root,from,'node_modules',name);target=registryRelative(root,f.realpathSync(link));}const a=p.join(root,target);if(registryRelative(root,f.realpathSync(a))!==target)throw Error('Registry target realpath changed');scanVirtual(registryVirtual(root,a));const meta=packages[target];if(!meta||meta.name!==name||meta.version!==row.resolved?.version)throw Error('Installed registry version differs');const state=registryLink(root,from,name,target),actual=registryResolve(root,target,request,target,false,row.resolved?.importEntries);if(phase!=='before'){if(state.type!=='symlink')throw Error('Audited registry importer link is absent');const m=JSON.parse(f.readFileSync(p.join(root,from,'package.json'))),spec={...m.dependencies,...m.peerDependencies}[name];if(spec!==row.specifier||registryJSON(registryResolve(root,from,request,target,false,row.resolved?.importEntries))!==registryJSON(actual))throw Error('Actual importer resolved entry/spec differs');}requests.push({from,request,name,specifier:row.specifier,resolved:row.resolved,target,entries:actual});links.push({from,request,state});}
 return{artifacts:{abi:registryABI(),entries,packages,requests},links};}
-function checkRegistryOrigins(root,proof){for(const row of proof.origins||[]){if(typeof row.owner!=='string'||!row.owner.startsWith(row.from+'/lib/')||p.isAbsolute(row.owner)||row.owner.split('/').some(x=>!x||x==='.'||x==='..'))throw Error('Unsafe Node request origin');const want=proof.requests.find(v=>v.from===row.from&&v.request===row.request);if(!want||registryJSON(registryResolve(root,row.owner,row.request,row.target,true))!==registryJSON(want.entries))throw Error('Actual compiled Node resolver differs from the audited artifact');}}
+function checkRegistryOrigins(root,proof){for(const row of proof.origins||[]){if(typeof row.owner!=='string'||!row.owner.startsWith(row.from+'/lib/')||p.isAbsolute(row.owner)||row.owner.split('/').some(x=>!x||x==='.'||x==='..'))throw Error('Unsafe Node request origin');const want=proof.requests.find(v=>v.from===row.from&&v.request===row.request);if(!want||registryJSON(registryResolve(root,row.owner,row.request,row.target,true,want.resolved?.importEntries))!==registryJSON(want.entries))throw Error('Actual compiled Node resolver differs from the audited artifact');}}
 function checkRegistry(root,proof,phase){root=f.realpathSync(root);if(proof.schemaVersion!==1||registryHash(registryJSON(proof.artifacts))!==proof.artifactDigest)throw Error('Registry artifact proof digest changed');const observed=observeRegistry(root,proof.requests,phase);if(registryJSON(observed.artifacts)!==registryJSON(proof.artifacts))throw Error('Registry bytes/realpath/transitive/native assets or ABI changed');if(phase==='before')for(const [i,row]of proof.requests.entries())if(registryJSON(observed.links[i].state)!==registryJSON(row.beforeLink))throw Error('Registry link absence/base state changed');if(phase!=='before')checkRegistryOrigins(root,proof);return observed;}
 '''
 
@@ -906,7 +965,8 @@ def collect_registry_reuse(args, source, plan, base, candidate, before, baseline
     if base_proof['artifacts'] != physical or base_proof['parser'] != candidate_proof['parser']:
         raise ValueError('Base/candidate registry bytes, entry, transitive/native assets, realpath or ABI differ; a full runtime build is required')
     validate_registry_sources(source, baseline, base, base_proof['policies'], candidate_proof['policies'])
-    validate_registry_lock(candidate_proof['lock'], base_proof['lock'], additions, candidate['workspace'])
+    validate_registry_lock(candidate_proof['lock'], base_proof['lock'], additions, candidate['workspace'],
+                           before_packages=before['packages'], candidate_packages=candidate['packages'], retained_rows=retained_rows)
     receipt = read_builder_json(args.builder, 'physicsos-development-builder.json')
     if receipt.get('builderImage') != builder_identity['image'] or receipt.get('dependencyFingerprint') != source.get('dependencyFingerprint') or any(receipt.get(key) is not True for key in ['completeDevelopmentDependencies', 'lockedDependenciesVerified', 'nativeProbeVerified']):
         raise ValueError('Current locked development-builder evidence does not match registry reuse')

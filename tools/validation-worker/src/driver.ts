@@ -9,7 +9,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import type { Browser, BrowserContext, Frame, Page } from '@playwright/test'
 import type { BrowserFrame, BrowserResult, DrawnBody, DrawnGround, DrawnSegment, DrawnTriangle, DrawnText, DrawnSurface } from './types.ts'
-import type { QuestionCodeValidationProfile } from '@physicsos/shared'
+import type { QuestionCodeValidationProfile } from '../../../packages/shared/src/validation-profile.ts'
 import { staticOpticsFacts } from './static-optics.ts'
 import { canvasDrawProbeScript } from './draw-probe.ts'
 import { anonymousImagePolicyScript } from './image-policy.ts'
