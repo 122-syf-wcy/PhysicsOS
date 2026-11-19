@@ -29,6 +29,18 @@ const TEACHING_TOOLS_LABEL = 'physicsos.teaching-tools.bridge'
 const TEACHING_MODE_ENV = 'PHYSICSOS_TEACHING_TOOLS_MODE'
 const ACTIVITY_CAPACITY_ENV = 'PHYSICSOS_ACTIVITY_QUERY_CAPACITY_VERIFIED'
 const ACTIVITY_CAPACITY_PROVED = Symbol('activityCapacityProved')
+// Database/Redis readiness can precede learning-host's asynchronous startup.
+// Probe for the actual protected handlers on the pinned app, not a generic
+// 404/401 or a fixed sleep. The public authenticated acceptance still follows.
+export const TEACHING_ROUTES_READINESS_SCRIPT = `const origin = 'http://127.0.0.1:3080';
+async function check(path, matches) {
+  const response = await fetch(origin + path, { redirect: 'error', signal: AbortSignal.timeout(2000) });
+  return response.status === 401 && /application\\/json/i.test(response.headers.get('content-type') ?? '') && matches(await response.json());
+}
+Promise.all([
+  check('/physicsos/learning/capabilities', value => value?.error === '学习能力状态暂不可读取。'),
+  check('/physicsos/activity/v1/capabilities', value => value?.error?.code === 'UNAUTHENTICATED'),
+]).then(results => { if (!results.every(Boolean)) process.exitCode = 1; }, () => { process.exitCode = 1; });`
 const TEACHING_ENV_KEYS = [TEACHING_MODE_ENV, ACTIVITY_CAPACITY_ENV]
 const ACTIVITY_PROOF_MAX_BYTES = 1024 * 1024
 const ACTIVITY_BASELINE_KEYS = ['PHYSICSOS_ACTIVITY_BASE_DAILY_USERS', 'PHYSICSOS_ACTIVITY_EVENTS_PER_USER_DAY',
@@ -960,7 +972,7 @@ export async function releaseSwitch(input, dependencies = {}) {
     } while (Date.now() < deadline)
     throw new Error('Exact validation worker did not become healthy')
   }
-  const waitForImage = async (expected, signal, expectedWorker) => {
+  const waitForImage = async (expected, signal, expectedWorker, needTeachingRoutes = false) => {
     const deadline = Date.now() + (plan.timeoutMs ?? 150_000)
     do {
       aborted(signal)
@@ -977,6 +989,9 @@ export async function releaseSwitch(input, dependencies = {}) {
         await docker([...compose, 'exec', '-T', 'app', 'node', '-e', RESTORE_READINESS_SCRIPT, 'http://127.0.0.1:3080/readyz', '2000'], { timeoutMs: 5000 })
         await writerLease(source, docker, compose, 1, app)
         if (source.validationWorker) await verifiedWorker(expectedWorker)
+        if (needTeachingRoutes) {
+          await docker(['exec', app.Id, 'node', '-e', TEACHING_ROUTES_READINESS_SCRIPT], { timeoutMs: 5000 })
+        }
         return
       } catch {
         if (Date.now() >= deadline) break
@@ -1219,7 +1234,7 @@ export async function releaseSwitch(input, dependencies = {}) {
     await docker([...compose, 'start', 'redis'])
     aborted(plan.signal)
     await recreateApp(plan.candidateImage, plan.validationWorker?.candidateImage)
-    await waitForImage(plan.candidateImage, plan.signal, plan.validationWorker?.candidateImage)
+    await waitForImage(plan.candidateImage, plan.signal, plan.validationWorker?.candidateImage, plan.teachingTools !== undefined)
     phase = 'acceptance'
     const capacity = teachingBindings(plan, plan.candidateImage)?.[ACTIVITY_CAPACITY_ENV]
     const checks = await verifyAuthenticatedRead({ ...plan.acceptance, signal: plan.signal }, dependencies,

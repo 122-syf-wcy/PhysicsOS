@@ -4,8 +4,9 @@ import { chmod, lstat, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFil
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
+import { runInNewContext } from 'node:vm'
 import { REQUIRED_SECRETS } from './backup-lib.mjs'
-import { envWithBoundAppImage, envWithTeachingToolsMode, guardTeachingToolsCompatibility, releaseSwitch, verifyActivityCapacityProof } from './release-switch.mjs'
+import { envWithBoundAppImage, envWithTeachingToolsMode, guardTeachingToolsCompatibility, releaseSwitch, TEACHING_ROUTES_READINESS_SCRIPT, verifyActivityCapacityProof } from './release-switch.mjs'
 
 const LEGACY = `sha256:${'a'.repeat(64)}`
 const BRIDGE = `sha256:${'b'.repeat(64)}`
@@ -194,7 +195,7 @@ async function switchFixture(t, stage = 'enabled', { oldLabel = CAPABILITY, oldF
   if (stage === 'enabled') input.teachingTools.activityCapacity = await writeCapacityProof(root)
   const ids = { app: 'a'.repeat(64), postgres: 'b'.repeat(64), redis: 'c'.repeat(64) }
   const state = { image: BRIDGE, runtimeMode: 'bridge', runtimeFlag: oldFlag ?? 'false', app: true, postgres: true, redis: true,
-    calls: [], requests: [], launches: [], captures: 0 }
+    calls: [], requests: [], launches: [], captures: 0, teachingProbes: 0 }
   const labels = id => image(id, id === FEATURE ? CAPABILITY : oldLabel).Config
   const docker = async (args, options = {}) => {
     state.calls.push(args)
@@ -233,6 +234,12 @@ async function switchFixture(t, stage = 'enabled', { oldLabel = CAPABILITY, oldF
       return bytes('')
     }
     if (args.includes('exec') && args.some(arg => arg.includes('pg_locks'))) return bytes({ count: state.app ? 1 : 0, ownerMatches: true })
+    if (args.includes(TEACHING_ROUTES_READINESS_SCRIPT)) {
+      assert.equal(args[1], ids.app)
+      assert.equal(state.image, FEATURE)
+      if (++state.teachingProbes <= (state.delayedTeachingProbes ?? 0)) throw new Error('Teaching routes are not mounted')
+      return bytes('')
+    }
     if (args.includes('exec') && args.includes('app')) return bytes('')
     throw new Error('Unexpected fixture Docker command')
   }
@@ -289,6 +296,52 @@ for (const [stage, flag] of [['bridge', false], ['enabled', true]]) {
     assert.equal((await lstat(fixture.envPath)).mode & 0o777, 0o400)
   })
 }
+
+test('waits for both protected routes on the exact candidate before public acceptance', async t => {
+  const f = await switchFixture(t, 'bridge', { oldLabel: '' })
+  f.input.intervalMs = 5
+  f.state.delayedTeachingProbes = 2
+  const result = await f.switchRelease()
+  assert.equal(result.deployed, true)
+  assert.equal(f.state.teachingProbes, 3)
+  assert.equal(f.state.requests.filter(request => request.app === FEATURE && request.pathname === '/physicsos/auth/login').length, 1)
+})
+
+test('a missing learning route times out and restores the old app without attempting its gate', async t => {
+  const f = await switchFixture(t, 'bridge', { oldLabel: '' })
+  f.input.intervalMs = 5
+  f.input.timeoutMs = 30
+  f.state.delayedTeachingProbes = Infinity
+  await assert.rejects(f.switchRelease(), error => error.rollbackHealthy === true)
+  assert.ok(f.state.teachingProbes >= 1)
+  assert.equal(f.state.image, BRIDGE)
+  assert.equal(f.state.requests.some(request => request.app === FEATURE), false)
+})
+
+test('route readiness rejects fallback pages, unprotected routes and generic authentication errors', async () => {
+  const paths = ['/physicsos/learning/capabilities', '/physicsos/activity/v1/capabilities']
+  const good = [{ error: '学习能力状态暂不可读取。' }, { error: { code: 'UNAUTHENTICATED' } }]
+  for (const variant of ['mounted', 'missing', 'unprotected', 'generic', 'html']) {
+    const process = {}, seen = []
+    await runInNewContext(TEACHING_ROUTES_READINESS_SCRIPT, { AbortSignal, process, fetch: async (url, init) => {
+      const path = new URL(url)
+      assert.equal(path.origin, 'http://127.0.0.1:3080')
+      assert.equal(init.redirect, 'error')
+      const index = paths.indexOf(path.pathname)
+      assert.notEqual(index, -1)
+      seen.push(path.pathname)
+      if (index === 1 && variant !== 'mounted') {
+        if (variant === 'missing') return new Response('404', { status: 404 })
+        if (variant === 'unprotected') return Response.json(good[index])
+        if (variant === 'html') return new Response('<html>login</html>', { status: 401 })
+        return Response.json({ error: 'sign in' }, { status: 401 })
+      }
+      return Response.json(good[index], { status: 401 })
+    } })
+    assert.deepEqual(seen, paths)
+    assert.equal(process.exitCode, variant === 'mounted' ? undefined : 1)
+  }
+})
 
 test('a proof changed during old-app authentication fails the immutable recheck before any stop', async t => {
   const fixture = await switchFixture(t)
