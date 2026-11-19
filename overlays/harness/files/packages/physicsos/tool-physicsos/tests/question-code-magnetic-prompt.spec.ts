@@ -29,6 +29,17 @@ describe('magnetic native author contract', () => {
     expect(text).toContain('10次')
   })
 
+  it('tells the author how to fix the two observed native asset refusals', () => {
+    const initial = questionCodePrompt(style, snapshot, undefined, undefined, [])
+    expect(initial).toContain("vector.role === 'velocity'")
+    expect(initial).toContain('禁止正则字面量和RegExp')
+    expect(initial).toContain('可见性直接在入口读view.visible[vector.observable]')
+    const syntax = questionCodePrompt(style, snapshot, undefined, { code: 'IMAGE_BINDING_INVALID', reason: 'native_asset_syntax' }, [])
+    expect(syntax).toContain('禁止正则字面量和 RegExp')
+    const receiver = questionCodePrompt(style, snapshot, undefined, { code: 'IMAGE_BINDING_INVALID', reason: 'native_asset_receiver' }, [])
+    expect(receiver).toContain('不要把可见性表作为参数传给动态索引助手')
+  })
+
   it('does not apply the uniform magnetic contract to another domain or template', () => {
     for (const [context, scene] of [
       [{ ...style, experimentId: 'velocity-selector' }, snapshot],

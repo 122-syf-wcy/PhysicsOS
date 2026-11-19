@@ -20,8 +20,8 @@ const THIN_LENS_NATIVE_GUIDANCE = `薄透镜绘制契约：Canvas2D，不用SVG/
 
 const MAGNETIC_NATIVE_GUIDANCE = `匀强磁场圆周绘制：Canvas2D读取view.particles中的真实粒子p.at；该坐标已由平台按轨道圆心平移并转为cm视图坐标，禁止再乘100或使用原始SI位置。view.bodies为空，不造物块或地面。
 按view.origin/extent确定固定正等比camera；背景先用像素坐标绘制，再ctx.setTransform(d*s,0,0,-d*s,d*ox,d*oy)；粒子直接ctx.beginPath();ctx.arc(p.at.x,p.at.y,Math.max(p.radius,4/s),0,2*Math.PI);ctx.fill()，半径仍为视图单位。不要point(p.at)后画像素arc，也不要逐帧translate(p.at)再arc(0,0)。
-Canvas只创建并挂载一次；renderFrame清空重画同一Canvas，不要每帧replaceChildren或重建。Canvas backing与CSS显示保持相同宽高比。保持稳定CTM及固定绘制顺序；场符号按view.field.direction绘制、数量与次序不随时间或v0变化，粒子不可被后画背景遮盖。方向/速度/洛伦兹力/轨迹只读快照，禁止重算圆周运动。帧time允许纳秒量级，禁止按毫秒取整或只显示首尾相同位置。
-平台已有v0数值参数与V3提交，保留#parameters及真实inspector值，不自建另一套求解器；改参只画新snapshot，resize用最后snapshot重绘，完成绘制才返回。`
+Canvas只创建并挂载一次；renderFrame清空重画同一Canvas，不要每帧replaceChildren或重建。Canvas backing与CSS显示保持相同宽高比。保持稳定CTM及固定绘制顺序；场符号按view.field.direction绘制、数量与次序不随时间或v0变化。先画背景/轨迹线，再以固定fill顺序画粒子，最后画箭头和字，不覆盖粒子。方向/速度/洛伦兹力/轨迹只读快照，禁止重算圆周运动。帧time允许纳秒量级，禁止按毫秒取整或只显示首尾相同位置。
+在renderFrame内按view.visible[vector.observable]判断，再把可绘制的向量传给助手。颜色/图例按vector.role === 'velocity'或'force'区分，别用正则从标签猜物理意义。平台已有v0数值参数与V3提交，保留#parameters及真实inspector值；改参只画新snapshot，resize用最后snapshot重绘。`
 
 const FOCUS: Readonly<Record<string, string>> = {
   mechanics: '力的方向不等同速度。有真实运动才跟随平台帧，静态受力图不强造轨迹。',

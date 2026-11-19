@@ -105,6 +105,8 @@ export const SOURCE_VALIDATION_HINTS = {
   legacy_renderer: '删除旧平台绘图调用，直接在 #canvas 中绘制 snapshot.view 提供的几何。',
   missing_engine_geometry: '实际绘图坐标必须来自当前 snapshot.view 的物体、轨迹或装置几何；常量背景与未调用绘图函数不算画面。',
   missing_native_drawing: '在 #canvas 中挂载自己的 Canvas 2D 或原生 SVG，完成当前帧绘图后再返回。',
+  native_asset_syntax: '原生绘图源码含有受限词法结构。禁止正则字面量和 RegExp；请用明确的字符串相等判断或 includes，模板内只读取数据或算术。',
+  native_asset_receiver: '封闭检查无法证明某个计算属性的接收者是纯数据。向量可见性保持在读到 snapshot 的入口内，直接用 view.visible[vector.observable]，不要把可见性表作为参数传给动态索引助手。',
 } as const
 
 export type TrustedSourceValidationReason = keyof typeof SOURCE_VALIDATION_HINTS

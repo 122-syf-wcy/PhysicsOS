@@ -242,6 +242,27 @@ it.each([
   expect(() => new QuestionCodeAssets().files(binding, source, '', true)).toThrow('IMAGE_BINDING_INVALID')
 })
 
+it('reports native author repair reasons without loosening the closed asset checks', () => {
+  const assets = new QuestionCodeAssets()
+  const validate = (source: string) => assets.files(binding, source, '', true)
+  const draw = `export function renderFrame(snapshot) {
+    const view = snapshot.view, board = document.createElement('canvas');
+    document.getElementById('canvas').replaceChildren(board);
+    const ctx = board.getContext('2d');
+    for (const vector of view.vectors) {
+      if (view.visible[vector.observable] !== true) continue;
+      ctx.strokeStyle = vector.role === 'velocity' ? '#335577' : '#b63b1e';
+      ctx.beginPath(); ctx.moveTo(vector.from.x, vector.from.y); ctx.lineTo(vector.to.x, vector.to.y); ctx.stroke();
+    }
+  }`
+  expect(validate(draw).size).toBe(0)
+  expect(() => validate(draw.replace("vector.role === 'velocity'", '/velocity/.test(vector.role)')))
+    .toThrow(expect.objectContaining({ code: 'IMAGE_BINDING_INVALID', sourceValidationReason: 'native_asset_syntax' }))
+  expect(() => validate(draw.replace('view.visible[vector.observable] !== true', '!shown(view.visible, vector.observable)')
+    + '\nfunction shown(vis, observable) { return vis[observable] === true; }'))
+    .toThrow(expect.objectContaining({ code: 'IMAGE_BINDING_INVALID', sourceValidationReason: 'native_asset_receiver' }))
+})
+
 it('recognizes only native typed fallback evidence, not an error message naming a rate limit', async () => {
   const claimed = new QuestionCodeAssets({ imageProvider: async () => { throw new Error('IMAGE_RATE_LIMIT') } })
   await expect(claimed.generate(input)).rejects.toThrow('IMAGE_RATE_LIMIT')

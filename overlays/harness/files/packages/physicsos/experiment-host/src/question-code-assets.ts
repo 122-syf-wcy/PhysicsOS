@@ -29,6 +29,8 @@ interface StoredAsset { descriptor: QuestionAssetDescriptor; bytes: Buffer; prom
 interface AssetJob { binding: AssetBinding; expires: number; attempts: number; assets: StoredAsset[]; fallbackCode?: QuestionAssetFallback['code'] }
 const MAX_IMAGE = 6 * 1024 * 1024, MAX_BODY = 10 * 1024 * 1024, MAX_MEMORY = 64 * 1024 * 1024
 const failure = (code: string): Error => Object.assign(new Error(code), { code })
+const nativeFailure = (sourceValidationReason: 'native_asset_syntax' | 'native_asset_receiver'): Error =>
+  Object.assign(failure('IMAGE_BINDING_INVALID'), { sourceValidationReason })
 const digest = (bytes: Buffer): string => createHash('sha256').update(bytes).digest('hex')
 const sameBinding = (a: AssetBinding, b: AssetBinding): boolean =>
   a.ownerKey === b.ownerKey && a.ownerSessionId === b.ownerSessionId
@@ -109,7 +111,7 @@ const safePaint = (value: string | undefined): boolean => value !== undefined &&
 /** Native-only source has no dynamic DOM dispatch or URI-capable sinks. */
 function validateNativeAssets(source: string): void {
   const tokens = assetTokens(source, true)
-  if (!tokens) throw failure('IMAGE_BINDING_INVALID')
+  if (!tokens) throw nativeFailure('native_asset_syntax')
   const value = (index: number): string | undefined => tokens[index]?.value
   const closes = new Map<number, number>(), stack: number[] = [], mentions = new Map<string, number[]>(), tokenPositions = new Map<AssetToken, number>()
   const scopeAt: number[] = [], scopeParents = new Map<number, number>()
@@ -466,7 +468,7 @@ function validateNativeAssets(source: string): void {
       if (end === undefined) reject()
       if (value(end! + 1) === '(') reject()
       const receiver = tokens.slice(receiverStart(index - 1), index)
-      if (!safeOrigin(readExpression(receiver, index))) reject()
+      if (!safeOrigin(readExpression(receiver, index))) throw nativeFailure('native_asset_receiver')
       if (['constructor', 'prototype', '__proto__'].includes(literal(tokens.slice(index + 1, end)) ?? '')) reject()
       const writes = value(end! + 1) === '=' || ['+', '-', '*', '/', '%', '&', '|', '^'].includes(value(end! + 1) ?? '') && ['=', value(end! + 1)].includes(value(end! + 2) ?? '')
       if (writes) {

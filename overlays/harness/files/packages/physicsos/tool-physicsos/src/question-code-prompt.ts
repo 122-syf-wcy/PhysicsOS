@@ -87,8 +87,8 @@ export function questionCodePrompt(
     'drawScene禁putLabel/fillText/strokeText；labels.push({text:vector.symbol,p:point(vector.to,t)})及body.label/view.labels同队列，入口最后标注，p已投影。物块r=Math.max(8,body.size*t.s)按rotation旋转，used保留旋转包围区，颜色vector.role。',
     QUESTION_CODE_LABEL_EXAMPLE.replace(/\n/g, ''),
     '图适题才显示；path写Image.src字符串、cssPath写CSS url。禁伪造mode:native/故障/任意URL；已有图禁重生。',
-    images.length ? '' : '无图片时用字面DOM tag/attr；computed仅纯数据/真实Frame JSON链，DOM用点号字面操作，禁借用call/apply/bind、HTML/URI。未知访问改map/push或明确数据const；SVG色用本地色表，模板仅纯读取/算术。',
-    repair?.code === 'IMAGE_BINDING_INVALID' ? '图片绑定拒绝：删除图片/HTML/URI与未知computed sink；native用字面DOM tag/attr和map/push几何处理，已有图片仅复用真实path。replace错误文件再提交。' : '',
+    images.length ? '' : '无图片时用字面DOM tag/attr；computed仅纯数据/真实Frame JSON链，DOM用点号字面操作，禁借用call/apply/bind、HTML/URI。禁止正则字面量和RegExp。可见性直接在入口读view.visible[vector.observable]，禁传表给动态索引助手。模板只纯读取/算术。',
+    repair?.code === 'IMAGE_BINDING_INVALID' ? '素材或原生绘图边界拒绝（即使没有图片）。无图时检查正则、间接计算索引、HTML/URI；已有图片仅复用真实path。按可信原因replace错误文件，再提交。' : '',
     // The focused incline contract already carries the exact surface, origin,
     // visibility and trajectory rules; the generic mechanics prose repeats them.
     snapshot.domain === 'mechanics' && style.experimentId === 'incline' ? ''
